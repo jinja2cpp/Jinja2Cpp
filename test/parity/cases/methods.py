@@ -21,6 +21,7 @@ CASES = [
     ("str_count", "{{ s.count('l') }}"),
     ("str_format", "{{ '{}-{}'.format(1, 2) }}"),
     ("str_format_named", "{{ '{a}!'.format(a=5) }}"),
+    ("str_format_map", "{{ '{a}!'.format_map({'a': 5}) }}"),
     ("str_isdigit", "{{ '123'.isdigit() }}"),
     ("str_zfill", "{{ '7'.zfill(3) }}"),
     ("str_center", "[{{ 'a'.center(5, '*') }}]"),

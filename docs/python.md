@@ -4,7 +4,7 @@
 API is Jinja2's, so `import jinja2cpp as jinja2` works for the subset below, and what is outside
 the subset goes to real Jinja2 when it is installed (see "Fallback"). This page describes phases
 P1b and P2 of docs/tasks/0248 (docs/tasks/0353, 0354). Streaming and the wheels are later phases
-(0355-0357).
+(0355, 0356); since 0357 the module is built on the library's public API only.
 
 ## Install and test
 
@@ -33,11 +33,40 @@ first C++ exception): `LD_PRELOAD="$(gcc -print-file-name=libasan.so) $(gcc -pri
 ASAN_OPTIONS=detect_leaks=0`.
 `.github/workflows/python.yml` runs the tests that way, then runs `pip install .`.
 
+The module uses the library's public API only (`include/jinja2cpp/`, docs/tasks/0357).
 `JINJA2CPP_BUILD_PYTHON` links the library statically and position-independent into the
-module, which uses its private headers (`src/host_object.h`). nanobind is pinned in
+module, as the wheel carries it. nanobind is pinned in
 `thirdparty/internal_deps.cmake` and `pyproject.toml` (one version; the configure step checks
 that they agree). pyproject.toml also turns on the built-in big-integer backend, so that
 integer arithmetic beyond 64 bits is exact, as in Python.
+
+### Building against an installed library
+
+`python/` also builds alone, against an installed `jinja2cpp` package found with
+`find_package(jinja2cpp)`; nanobind then comes from the build's Python (`pip install
+nanobind==3.1.0`, the pin of `pyproject.toml`). For a static library, install it position-independent,
+with the initial-exec model for its hot thread-locals (a module the interpreter loads with
+`dlopen` would otherwise pay a call into the loader on each access to them) and the built-in big
+integers, as the wheel has them:
+
+```bash
+cmake -S . -B build-lib -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_TESTS=OFF \
+      -DJINJA2CPP_PIC=ON -DJINJA2CPP_TLS_INITIAL_EXEC=ON -DJINJA2CPP_WITH_BIGINT=boost \
+      -DCMAKE_INSTALL_PREFIX="$PREFIX"
+cmake --build build-lib && cmake --install build-lib
+cmake -S python -B build-module -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PREFIX" \
+      -DPython_EXECUTABLE="$(command -v python3)"
+cmake --build build-module
+cd build-module && PYTHONPATH=$PWD python3 -m pytest ../python/tests
+```
+
+A shared library works too (`-DJINJA2CPP_BUILD_SHARED=ON`, without `JINJA2CPP_TLS_INITIAL_EXEC`).
+Without the big integers the module configures with a warning, and integer arithmetic beyond
+int64 is not exact (docs/tasks/0272). `-DJINJA2CPP_STRICT_WARNINGS=ON` turns the library's
+warnings, as errors, on for the module's own code. The `installed` job of `python.yml` builds the
+module this way and checks that every header it includes comes from the installed prefix,
+nanobind, Python or the system, never from the checkout's `include/` or `src/`
+(`python/check_includes.py`).
 
 ### Validation against Jinja2
 
@@ -345,8 +374,8 @@ inside the adapters that let the engine read Python objects, not in generated co
   Jinja2's `OverflowError("Range too big. The sandbox blocks ranges larger than MAX_RANGE
   (100000).")`.
 - **The engine's own values** (the template's strings, numbers, lists, dicts, `loop`, `cycler`,
-  macros) have no Python attributes. The environment holds an `IEngineSandboxPolicy` (src/sandbox_policy.h,
-  the engine's side of the public `ISandboxPolicy` the module moves to in 0357 S3) that the engine asks where a native value's attribute is
+  macros) have no Python attributes. The environment's settings hold a public `ISandboxPolicy`
+  (`jinja2cpp/sandbox_policy.h`, `Settings::sandboxPolicy`, docs/tasks/0357 B7) that the engine asks where a native value's attribute is
   missing, after it finds one of its methods, and at `str.format`. A private name (`__class__`,
   `__init__`, `_x`) on one is asked of `is_safe_attribute` with a stand-in object of the Python
   type and is refused with the same undefined; so is a public name when the subclass's

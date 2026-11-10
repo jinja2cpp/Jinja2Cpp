@@ -68,9 +68,14 @@ option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
 option(JINJA2CPP_VERBOSE "Add extra debug output to the build scripts" OFF)
 option(JINJA2CPP_INSTALL "Add installation rules for JinjaCpp targets" ${JINJA2CPP_IS_MAIN_PROJECT})
 # The Python module jinja2cpp._jinja2cpp (docs/python.md, docs/tasks/0353), which pyproject.toml
-# builds for the wheel. It links its own static copy of the library, which it reaches through
-# private headers (src/host_object.h), so the library is built static and position-independent
+# builds for the wheel. It uses the public API only (docs/tasks/0357); the wheel carries its own
+# static copy of the library, so the library is built static and position-independent
 option(JINJA2CPP_BUILD_PYTHON "Build the Python module (python/); pyproject.toml turns it on" OFF)
+# The library's hot thread-locals with the initial-exec TLS model (JINJA2CPP_HOT_TLS in
+# src/recursion_guard.h): for a static library linked into a module the interpreter loads with
+# dlopen, where the default model costs a call into the loader per access. JINJA2CPP_BUILD_PYTHON
+# turns it on; set it when installing a static library for python/ built alone
+option(JINJA2CPP_TLS_INITIAL_EXEC "Use the initial-exec TLS model for the library's thread-locals (a static library for a Python module; GCC/Clang on ELF)" OFF)
 
 if (DEFINED BUILD_SHARED_LIBS)
     set(JINJA2CPP_BUILD_SHARED ${BUILD_SHARED_LIBS})
@@ -83,15 +88,17 @@ endif ()
 
 if (JINJA2CPP_BUILD_PYTHON)
     if (JINJA2CPP_BUILD_SHARED)
-        message(FATAL_ERROR "JINJA2CPP_BUILD_PYTHON links the library statically: the module uses internal symbols a shared library hides")
+        # A module built alone (python/CMakeLists.txt) may link an installed shared library
+        message(FATAL_ERROR "JINJA2CPP_BUILD_PYTHON builds the wheel's module, which links the library statically")
     endif ()
     set(JINJA2CPP_PIC ON)
-    # In a module the interpreter loads with dlopen, the thread-locals that every render step
-    # reads would use the dynamic TLS model, a call into the loader per access
-    # (JINJA2CPP_HOT_TLS in src/recursion_guard.h)
-    if (UNIX AND NOT APPLE)
-        add_compile_definitions(JINJA2CPP_HOT_TLS_INITIAL_EXEC)
+    set(JINJA2CPP_TLS_INITIAL_EXEC ON)
+endif ()
+if (JINJA2CPP_TLS_INITIAL_EXEC AND UNIX AND NOT APPLE)
+    if (JINJA2CPP_BUILD_SHARED)
+        message(FATAL_ERROR "JINJA2CPP_TLS_INITIAL_EXEC is for a static library linked into a module")
     endif ()
+    add_compile_definitions(JINJA2CPP_HOT_TLS_INITIAL_EXEC)
 endif ()
 
 if (NOT JINJA2CPP_DEPS_MODE)
@@ -531,7 +538,6 @@ if (JINJA2CPP_BUILD_TESTS)
         test/fwd_test.cpp
         test/global_functions_test.cpp
         test/helpers_tests.cpp
-        test/host_object_test.cpp
         test/public_host_object_test.cpp
         test/public_sandbox_policy_test.cpp
         test/sandbox_policy_test.cpp

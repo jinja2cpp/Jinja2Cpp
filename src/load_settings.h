@@ -103,7 +103,7 @@ private:
 // (TemplateEnvImpl::GetLoadSettings), instead of each copying the settings and rebuilding the delimiters
 struct LoadSettings
 {
-    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr, Dialect templateDialect = Dialect::Jinja2, std::shared_ptr<const IEngineSandboxPolicy> policy = nullptr)
+    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr, Dialect templateDialect = Dialect::Jinja2)
         : settings(setts)
         , narrow(setts)
         , wide(setts)
@@ -115,8 +115,7 @@ struct LoadSettings
         , dialect(templateDialect == Dialect::Jinja2 && setts.immutableContainers ? Dialect::ImmutableSandbox : templateDialect)
         , environmentDialect(templateDialect)
         , bigIntBackend(backend)
-        , sandboxPolicy(policy || !setts.sandboxPolicy ? policy : MakeEngineSandboxPolicy(setts.sandboxPolicy))
-        , environmentSandboxPolicy(std::move(policy))
+        , sandboxPolicy(setts.sandboxPolicy ? MakeEngineSandboxPolicy(setts.sandboxPolicy) : nullptr)
         , promptEscaper(AutoescapePromptEscaper(settings))
     {
     }
@@ -148,11 +147,9 @@ struct LoadSettings
     Dialect environmentDialect;
     // The big-integer arithmetic the template's renders use (TemplateEnv::SetBigIntBackend); null for none
     const BigIntBackend* bigIntBackend;
-    // The sandbox of templates loaded with these settings (src/sandbox_policy.h): the environment's own (the Python
-    // module's, until 0357 S3) or a bridge over Settings::sandboxPolicy; null for none
+    // The sandbox of templates loaded with these settings (src/sandbox_policy.h): a bridge over Settings::sandboxPolicy,
+    // null for none
     std::shared_ptr<const IEngineSandboxPolicy> sandboxPolicy;
-    // The environment's own (TemplateEnvImpl::SetSandboxPolicy), without the bridge: what its next LoadSettings starts from
-    std::shared_ptr<const IEngineSandboxPolicy> environmentSandboxPolicy;
     // The escaper of AutoescapeMode::Prompt, null in HTML mode: chosen once here, so a render only copies it into its
     // callback (docs/tasks/0358). Points into settings.promptEscaper, or to the one without patterns
     const PromptEscaperImpl* promptEscaper;

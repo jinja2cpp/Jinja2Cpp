@@ -30,8 +30,9 @@
 using namespace jinja2;
 
 // The public host object interface (docs/tasks/0357 B1, B2) through public headers only: a toy object of a "host
-// language" written in C++, with each operation of IHostObject switchable, read by templates (test/host_object_test.cpp
-// does the same against the engine's private interface)
+// language" written in C++, with each operation of IHostObject switchable, read by templates. The engine's own host
+// seam (IEngineHostObject, src/host_object.h) is tested through this bridge (src/public_host_object.cpp), its only
+// implementation
 namespace
 {
 // NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): a test's spec, read for clarity, not size
@@ -389,6 +390,9 @@ TEST(PublicHostObjectTest, AttributeBeforeItemAndItemBeforeAttribute)
     typed.typeKeys = true;
     const ValuesMap typedParams{ { "k", MakeToy(typed) } };
     EXPECT_EQ("list-key map-key list-key", Render("{{ k[[1]] }} {{ k[{}] }} {{ k[(1,)] }}", typedParams));
+    EXPECT_EQ(L"list-key map-key", RenderW(L"{{ k[[1]] }} {{ k[{}] }}", typedParams));
+    // A native dict takes none of these keys
+    EXPECT_EQ("True", Render("{{ {}[[1]] is undefined }}", {}));
 }
 
 TEST(PublicHostObjectTest, SliceAsksTheObject)
@@ -440,6 +444,15 @@ TEST(PublicHostObjectTest, MarkupLikeObjectUnderAutoescape)
     EXPECT_EQ("<b>Тоу</b> &lt;plain&gt;", Render("{{ m }} {{ p }}", params, { UndefinedPolicy::Default, true }));
     EXPECT_EQ(L"<b>Тоу</b> &lt;plain&gt;", RenderW(L"{% autoescape true %}{{ m }} {{ p }}{% endautoescape %}", params));
     EXPECT_EQ("<b>Тоу</b>|Тоу|&lt;b&gt;Тоу&lt;/b&gt;|<plain>", Render("{{ m|safe }}|{{ m|striptags }}|{{ m|forceescape }}|{{ m|string }}", params));
+    EXPECT_EQ(L"<b>Тоу</b>|Тоу", RenderW(L"{{ m|safe }}|{{ m|striptags }}", params));
+    // join escapes the rest when an item has __html__; a delimiter with it, and the operands of
+    // `~`, are converted with str() first, so they do not
+    EXPECT_EQ("<b>Тоу</b>&lt;i&gt;|&lt;i&gt;&lt;plain&gt;&lt;plain&gt;|&lt;plain&gt;&lt;i&gt;|&lt;i&gt;&lt;plain&gt;&lt;plain&gt;|<plain><i>",
+              Render("{% autoescape true %}{{ [m, '<i>']|join }}|{{ ['<i>', p]|join(m) }}|{{ m ~ '<i>' }}|{{ '<i>' ~ p ~ m }}{% endautoescape %}|{{ m ~ '<i>' }}", params));
+    EXPECT_EQ(L"<b>Тоу</b>&lt;i&gt;", RenderW(L"{% autoescape true %}{{ [m, '<i>']|join }}{% endautoescape %}", params));
+    // xmlattr takes escape() of each value, which is __html__() of one that has it (docs/tasks/0367)
+    EXPECT_EQ(R"( a="<b>Тоу</b>" b="&lt;plain&gt;")", Render("{{ dict(a=m, b=p)|xmlattr }}", params));
+    EXPECT_EQ(LR"( a="<b>Тоу</b>" b="&lt;plain&gt;")", RenderW(L"{% autoescape true %}{{ dict(a=m, b=p)|xmlattr }}{% endautoescape %}", params));
 }
 
 TEST(PublicHostObjectTest, IdentityHoldsAcrossCalls)
@@ -467,6 +480,8 @@ TEST(PublicHostObjectTest, IdentityHoldsAcrossCalls)
     EXPECT_EQ(*object.GetIf<GenericMap>(), *map);
     // An object with an identity of its own is the key
     EXPECT_EQ("2 one two|True False", Render("{% set d = {o: 'one', other: 'two'} %}{{ d|length }} {{ d[o2] }} {{ d[other] }}|{{ o in d }} {{ 1 in d }}", params));
+    // Two views of one object are one key; another object is another key
+    EXPECT_EQ("2 one two|True False|[<Toy>, <Toy>]", Render("{% set d = {o: 'one', other: 'two'} %}{% set d2 = {o: 'x', o2: 'one'} %}{{ d|length }} {{ d2[o] }} {{ d[other] }}|{{ o in d }} {{ 1 in d }}|{{ [o, o2, other]|unique|list }}", params));
     ToySpec unhashable;
     unhashable.hashable = false;
     EXPECT_NE(std::string::npos, Render("{{ {u: 1} }}", { { "u", MakeToy(unhashable) } }).find("unhashable type: 'Toy'"));
@@ -485,7 +500,7 @@ TEST(PublicHostObjectTest, MappingReadsAsAMap)
     spec.contains = std::vector<std::string>{ "a", "b" };
     spec.len = 2;
     const ValuesMap params{ { "m", MakeToy(spec) }, { "o", MakeToy(Rich()) } };
-    EXPECT_EQ("True False|[('a', 1), ('b', 'x')]|[('b', 'x'), ('a', 1)]|{\"a\": 1, \"b\": \"x\"}", Render("{{ m is mapping }} {{ o is mapping }}|{{ m|dictsort }}|{{ m|items|list }}|{{ m|tojson }}", params));
+    EXPECT_EQ("True False|[('a', 1), ('b', 'x')]|[('b', 'x'), ('a', 1)]|{\"a\": 1, \"b\": \"x\"}| b=\"x\" a=\"1\"", Render("{{ m is mapping }} {{ o is mapping }}|{{ m|dictsort }}|{{ m|items|list }}|{{ m|tojson }}|{{ m|xmlattr }}", params));
     EXPECT_EQ("True False attr-keys 1 ['b', 'a'] 2 Тоу", Render("{{ 'a' in m }} {{ 'keys' in m }} {{ m.keys }} {{ m.a }} {{ m|list }} {{ m|length }} {{ m }}", params));
     EXPECT_EQ(L"[('a', 1), ('b', 'x')]", RenderW(L"{{ m|dictsort }}", params));
     EXPECT_NE(std::string::npos, Render("{{ o|dictsort }}", params).find("'Toy' object has no attribute 'items'"));
@@ -622,6 +637,10 @@ TEST(PublicHostObjectTest, ContainsThenIterationAndReversed)
     const ValuesMap params{ { "c", MakeToy(withContains) }, { "i", MakeToy(withIteration) }, { "o", MakeToy() }, { "x", MakeToy(sequence) } };
     EXPECT_EQ("True False True False", Render("{{ 'a' in c }} {{ 'b' in c }} {{ 2 in i }} {{ 3 in i }}", params));
     EXPECT_NE(std::string::npos, Render("{{ 1 in o }}", params).find("argument of type 'Toy' is not iterable"));
+    // A host object in a list is found by its __eq__
+    ToySpec equalsTwo;
+    equalsTwo.equalsInt = 2;
+    EXPECT_EQ("True False", Render("{{ 2 in [x] }} {{ 3 in [x] }}", { { "x", MakeToy(equalsTwo) } }));
     EXPECT_EQ("3|[3, 2, 1]", Render("{{ x|last }}|{{ x|reverse|list }}", params));
     EXPECT_NE(std::string::npos, Render("{{ o|last }}", params).find("'Toy' object is not reversible"));
 }
@@ -653,6 +672,8 @@ TEST(PublicHostObjectTest, CallsWithPositionalAndKeywordArguments)
     const ValuesMap params{ { "f", MakeToy(spec) }, { "o", MakeToy() } };
     EXPECT_EQ("called(2,k=v) called(0) True False", Render("{{ f(1, 2, k='v') }} {{ f.method() }} {{ f is callable }} {{ o is callable }}", params));
     EXPECT_EQ(L"called(1)", RenderW(L"{{ f(1) }}", params));
+    // A call block passes caller=, as to any callable
+    EXPECT_EQ("called(1,caller=<callable>)", Render("{% call f(1) %}body{% endcall %}", params));
     EXPECT_NE(std::string::npos, Render("{{ o() }}", params).find("'Toy' object is not callable"));
 }
 
@@ -1864,4 +1885,156 @@ TEST(PublicHostObjectTest, ALentMacroFailsWithThePublicError)
                                   return Value("no error");
                               }) } };
     EXPECT_EQ("code " + std::to_string(static_cast<int>(ErrorCode::UndefinedError)), Render("{% macro m() %}{{ missing.x }}{% endmacro %}{{ call(m) }}", params, { UndefinedPolicy::Strict }));
+}
+
+// str.format's .attr part is Python's getattr: the attribute only, never the item (0317)
+TEST(PublicHostObjectTest, FormatFieldAttributeIsGetattr)
+{
+    const ValuesMap params{ { "x", MakeToy(Rich()) } };
+    EXPECT_EQ("attr-name|attr-both|item-key", Render("{{ '{0.name}|{0.both}|{0[key]}'.format(x) }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ '{0.key}'.format(x) }}", params).find("has no attribute 'key'"));
+    EXPECT_EQ(L"attr-name", RenderW(L"{{ '{0.name}'.format(x) }}", params));
+}
+
+// The dict's key outlives every other reference to the object: the key stays valid after the callable's value is gone
+TEST(PublicHostObjectTest, KeyKeepsTheObjectAlive)
+{
+    const ValuesMap params{ { "mk", UserCallable([](const UserCallableParams&) { return MakeToy(); }, {}) } };
+    EXPECT_EQ("1 [<Toy>] Тоу 1", Render("{% set d = {mk(): 1} %}{{ d|length }} {{ d|list }} {% for k in d %}{{ k }} {{ d[k] }}{% endfor %}", params));
+}
+
+TEST(PublicHostObjectTest, PublicViewReadsAttributes)
+{
+    // A host object handed to the host's public API is a map of its attributes
+    const auto toy = MakeToy(Rich());
+    const auto* map = toy.GetIf<GenericMap>();
+    ASSERT_NE(nullptr, map);
+    EXPECT_TRUE(map->HasValue("name"));
+    EXPECT_EQ("attr-name", map->GetValueByName("name").AsString());
+    EXPECT_EQ("item-key", map->GetValueByName("key").AsString());
+}
+
+// docs/tasks/0362: where Python asks the object or raises, generic filters and tests do not guess
+
+TEST(PublicHostObjectTest, LastAndReverseAskReversed)
+{
+    ToySpec sequence;
+    sequence.sequence = std::vector<int64_t>{ 1, 2, 3 };
+    ToySpec empty;
+    empty.sequence = std::vector<int64_t>{};
+    ToySpec iterator;
+    iterator.iteration = std::vector<Value>{ Value(1), Value("b") };
+    const ValuesMap params{ { "x", MakeToy(sequence) }, { "e", MakeToy(empty) }, { "it", MakeToy(iterator) } };
+    EXPECT_EQ("3|[3, 2, 1]|True", Render("{{ x|last }}|{{ x|reverse|list }}|{{ e|last is undefined }}", params));
+    EXPECT_EQ(L"3", RenderW(L"{{ x|last }}", params));
+    // last is next(reversed(x)): an iterator is not reversible; reverse falls back to list(x)
+    EXPECT_NE(std::string::npos, Render("{{ it|last }}", params).find("'Toy' object is not reversible"));
+    EXPECT_EQ("['b', 1]", Render("{{ it|reverse|list }}", params));
+    // That fallback is a list, not a reversed() iterator (docs/tasks/0383)
+    EXPECT_EQ("1|2", Render("{{ it|reverse|last }}|{{ it|reverse|length }}", params));
+    EXPECT_NE(std::wstring::npos, RenderW(L"{{ it|last }}", params).find(L"'Toy' object is not reversible"));
+}
+
+TEST(PublicHostObjectTest, OddAndEvenTakeTheRemainder)
+{
+    // `x is odd` is x % 2 == 1, and the object has no __mod__
+    const ValuesMap params{ { "o", MakeToy() } };
+    EXPECT_NE(std::string::npos, Render("{{ o is odd }}", params).find("unsupported operand type(s) for %: 'Toy' and 'int'"));
+    EXPECT_NE(std::string::npos, Render("{{ o is even }}", params).find("unsupported operand type(s) for %: 'Toy' and 'int'"));
+    EXPECT_NE(std::wstring::npos, RenderW(L"{{ o is odd }}", params).find(L"unsupported operand type(s) for %: 'Toy' and 'int'"));
+}
+
+TEST(PublicHostObjectTest, UrlencodeIteratesPairsOrQuotesStr)
+{
+    ToySpec pairs;
+    pairs.iteration = std::vector<Value>{ Value(ValuesList{ Value("a"), Value("b c") }), Value("de") };
+    ToySpec items;
+    items.iteration = std::vector<Value>{ Value(1) };
+    const ValuesMap params{ { "o", MakeToy() }, { "p", MakeToy(pairs) }, { "i", MakeToy(items) } };
+    // Without __iter__ the object is quoted as str(); an iterable gives the pairs, each
+    // unpacked as `k, v` (a two-character string too)
+    EXPECT_EQ("%D0%A2%D0%BE%D1%83|a=b+c&d=e", Render("{{ o|urlencode }}|{{ p|urlencode }}", params));
+    EXPECT_EQ(L"a=b+c&d=e", RenderW(L"{{ p|urlencode }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ i|urlencode }}", params).find("cannot unpack non-iterable int object"));
+}
+
+TEST(PublicHostObjectTest, CallBlockWritesTheResultAsIs)
+{
+    ToySpec markup;
+    markup.callable = true;
+    markup.callResult = Value("<s>");
+    ToySpec number;
+    number.callable = true;
+    number.callResult = Value(5);
+    const ValuesMap params{ { "f", MakeToy(markup) }, { "n", MakeToy(number) } };
+    // Only a string joins the output. Jinja2 yields it unescaped; Jinja2C++ escapes a plain
+    // string under autoescape, a deliberate divergence (docs/tasks/0362)
+    EXPECT_EQ("<s>|&lt;s&gt;", Render("{% call f() %}x{% endcall %}|{% autoescape true %}{% call f() %}x{% endcall %}{% endautoescape %}", params));
+    EXPECT_EQ(L"&lt;s&gt;", RenderW(L"{% autoescape true %}{% call f() %}x{% endcall %}{% endautoescape %}", params));
+    EXPECT_NE(std::string::npos, Render("{% call n() %}x{% endcall %}", params).find("expected str instance, int found"));
+    // An engine object with a call operator is called, and refuses caller= as Python's does
+    EXPECT_NE(std::string::npos, Render("{% set j = joiner() %}{% call j() %}x{% endcall %}", params).find("Joiner.__call__() got an unexpected keyword argument 'caller'"));
+}
+
+TEST(PublicHostObjectTest, ListOrTupleIsAJsonArrayAndASequence)
+{
+    ToySpec spec;
+    spec.listOrTuple = true;
+    spec.iteration = std::vector<Value>{ Value(1), Value("b") };
+    spec.len = 2;
+    spec.attrs = { { "__getitem__", Value(true) } };
+    ToySpec sized;
+    sized.len = 1;
+    const ValuesMap params{ { "l", MakeToy(spec) }, { "s", MakeToy(sized) } };
+    EXPECT_EQ("[1, \"b\"] True False", Render("{{ l|tojson }} {{ l is sequence }} {{ s is sequence }}", params));
+    EXPECT_EQ(L"[1, \"b\"]", RenderW(L"{{ l|tojson }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ s|tojson }}", params).find("Object of type Toy is not JSON serializable"));
+}
+
+// A method that may change its receiver (append) is the host's own attribute: the engine never
+// copies the object to change the copy
+TEST(PublicHostObjectTest, MutatingMethodNameCallsTheObject)
+{
+    ToySpec method;
+    method.callable = true;
+    ToySpec spec = Rich();
+    spec.attrs.emplace("append", MakeToy(method));
+    spec.listOrTuple = true;
+    const ValuesMap params{ { "x", MakeToy(spec) } };
+    EXPECT_EQ("called(1) attr-name", Render("{{ x.append(1) }} {{ x.name }}", params));
+    EXPECT_EQ(L"called(1)", RenderW(L"{{ x.append(1) }}", params));
+}
+
+// A list or tuple has the operators, ordering and `%` of the engine's own (0353)
+TEST(PublicHostObjectTest, ListOrTupleOperatesAsTheEnginesOwn)
+{
+    // Comparing two toys makes each spec's `seen` hold the other toy: a cycle the test breaks at its end
+    std::vector<std::shared_ptr<ToySpec>> specs;
+    auto items = [&specs](std::vector<Value> values, bool tuple) {
+        auto spec = std::make_shared<ToySpec>();
+        spec->listOrTuple = true;
+        spec->tuple = tuple;
+        spec->len = values.size();
+        spec->iteration = std::move(values);
+        specs.push_back(spec);
+        return MakeToy(spec);
+    };
+    const Value one(1);
+    const Value two(2);
+    const ValuesMap params{ { "l", items({ one }, false) },
+                            { "m", items({ two }, false) },
+                            { "t", items({ one, two }, true) },
+                            { "u", items({ one }, true) },
+                            { "ls", Value(ValuesList{ items({ two }, true), items({ one }, true) }) } };
+    EXPECT_EQ("[1, 2] [1, 3] (1, 2, 1, 2) (1, 1) True False", Render("{{ l + m }} {{ l + [3] }} {{ t * 2 }} {{ 2 * u }} {{ l < m }} {{ t < (1, 2) }}", params));
+    EXPECT_EQ("[1, 2] 1 2", Render("{{ ls|sort|map('first')|list }} {{ ls|min|first }} {{ ls|max|first }}", params));
+    // A list is one argument, printed with str()
+    EXPECT_EQ("1 1-2 Тоу x", Render("{{ '%s' % u }} {{ '%s-%s' % t }} {{ '%s' % l }} {{ 'x' % l }}", params));
+    EXPECT_EQ(L"1-2", RenderW(L"{{ '%s-%s' % t }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ l + u }}", params).find("can only concatenate list (not \"tuple\") to list"));
+    EXPECT_NE(std::string::npos, Render("{{ l - m }}", params).find("unsupported operand type(s) for -: 'list' and 'list'"));
+    for (const auto& spec : specs)
+    {
+        spec->seen.clear();
+    }
 }

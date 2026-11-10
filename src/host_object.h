@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -19,13 +18,13 @@ inline namespace v2
 struct CallParams;
 class RenderContext;
 
-// An object of a host language the template reads as that language reads it: a Python object
-// of the drop-in module (docs/tasks/0248, 0352). The module links the library statically and
-// builds on this private interface, so the public headers do not change for it (0248 D3);
-// 0357 moves the module to the public API before the G1 freeze.
+// An object of a host language the template reads as that language reads it (docs/tasks/0248,
+// 0352). The engine's side of the public jinja2::IHostObject (jinja2cpp/host_object.h): the one
+// implementation outside the tests is the bridge of src/public_host_object.cpp. No host reaches
+// this interface itself; the Python module uses the public API only (docs/tasks/0357).
 //
 // A host object is a map value whose accessor is a HostObjectAccessor (IMapAccessor::
-// GetHostObject), marked in the value (MapAdapter::MarkAsHost, MakeEngineHostValue) so that native
+// GetHostObject), marked in the value (MapAdapter::MarkAsHost, made by the bridge in src/public_host_object.cpp) so that native
 // maps pay no virtual call for the check; ValueStorage has no alternative of its own for it. The engine asks the object
 // where Python asks the object:
 // - printing: Str(), and Repr() inside a container; Html() under autoescape when IsMarkupLike()
@@ -146,30 +145,6 @@ public:
     bool GetIteration(ListAdapter& items) const override;
 };
 
-// The accessor that owns a host object of type T, in one allocation with it
-template<typename T>
-class HostObjectHolder final : public HostObjectAccessor
-{
-public:
-    template<typename... Args>
-    explicit HostObjectHolder(Args&&... args)
-        : m_object(std::forward<Args>(args)...)
-    {
-    }
-
-    [[nodiscard]] const IEngineHostObject* GetHostObject() const override { return &m_object; }
-
-private:
-    T m_object;
-};
-
-// A value of a new host object of type T, made from args
-template<typename T, typename... Args>
-InternalValue MakeEngineHostValue(Args&&... args)
-{
-    return InternalValue(MapAdapter(MakeRef<HostObjectHolder<T>>(std::forward<Args>(args)...)).MarkAsHost());
-}
-
 // The host object a value carries; null for every other value
 inline const IEngineHostObject* GetHostObject(const InternalValue& value)
 {
@@ -203,20 +178,6 @@ std::optional<ListAdapter> AsSequence(const IEngineHostObject& host);
 // x == other by Python's rules: left.__eq__, then right.__eq__, then identity. Null hosts
 // stand for operands that are no host objects
 bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue);
-
-// The function of a jinja2::UserCallable made by EngineUserCallable
-struct EngineCallableBody
-{
-    InternalValue callable;
-    // A call through the public API, outside a template, which has no values of the engine to
-    // pass: refused with std::logic_error
-    Value operator()(const UserCallableParams& params) const;
-};
-// A jinja2::UserCallable for TemplateEnv::AddFilter, AddTest and Settings::finalize that the
-// engine takes back as `callable` itself (InputValueConvertor::ConvertUserCallable): a
-// Callable of kind UserCallable, called with the engine's values, so the arguments of a host's
-// filter keep their identity (the Python module, docs/tasks/0353)
-UserCallable EngineUserCallable(InternalValue callable);
 } // namespace host
 
 } // namespace v2

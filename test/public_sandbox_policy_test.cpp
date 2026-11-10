@@ -145,6 +145,20 @@ TEST(PublicSandboxPolicyTest, ThePolicyIsAskedAboutAttributesAndMethodsFoundOrNo
     EXPECT_NE(std::find(asked.begin(), asked.end(), "split of 'a b'"), asked.end());
 }
 
+// Every path to a method of an engine value asks: the call, a method kept and called later, a read through [] and
+// |attr (they moved here from the engine's own policy tests with TemplateEnvImpl::SetSandboxPolicy, 0357 S4)
+TEST(PublicSandboxPolicyTest, EveryPathToAMethodAsksThePolicy)
+{
+    TemplateEnv env;
+    env.GetSettings().sandboxPolicy = std::make_shared<const ToyPolicy>();
+    for (const char* source : { "{{ 'x'.upper() }}", "{% set f = 'x'.upper %}{{ f() }}", "{{ 'x'['upper']() }}", "{{ ('x'|attr('upper'))() }}" })
+    {
+        EXPECT_EQ("replaced", RenderOrError(env, source)) << source;
+    }
+    // A method the policy leaves alone is the engine's
+    EXPECT_EQ("x|False", RenderOrError(env, "{{ 'X'.lower() }}|{{ 'x'.absent is defined }}"));
+}
+
 // A template object reaches the policy with its class: `loop` and a namespace as snapshots, a macro and a global
 // function as empty maps of class "Macro" and "function" (0357 S3)
 TEST(PublicSandboxPolicyTest, TemplateObjectsReachThePolicyWithTheirClass)

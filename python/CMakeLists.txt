@@ -1,5 +1,33 @@
 # The Python module jinja2cpp._jinja2cpp (docs/python.md, docs/tasks/0353): nanobind, CPython 3.12
-# stable ABI (abi3), linking the library built static and position-independent in this build
+# stable ABI (abi3). Built two ways, both on the library's public API only (docs/tasks/0357):
+# - from the root CMakeLists.txt (JINJA2CPP_BUILD_PYTHON, the wheel), linking the library this build
+#   makes, static and position-independent;
+# - alone, `cmake -S python -DCMAKE_PREFIX_PATH=<prefix>`, against an installed jinja2cpp package
+#   (find_package), which the CI-python workflow checks
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    cmake_minimum_required(VERSION 3.23.0..4.0)
+    project(jinja2cpp_python LANGUAGES CXX)
+    find_package(jinja2cpp 2.0 REQUIRED CONFIG)
+    set(LIB_TARGET_NAME jinja2cpp::jinja2cpp)
+    set(JINJA2CPP_CXX_STANDARD 17 CACHE STRING "C++ standard of the module: 17 (default), 20, 23 or 26")
+    option(JINJA2CPP_STRICT_WARNINGS "Treat the module's warnings as errors" OFF)
+    set(JINJA2CPP_TARGET_CXX_FLAGS "")
+    if (JINJA2CPP_STRICT_WARNINGS)
+        # The library's own set (the root CMakeLists.txt)
+        if (MSVC)
+            set(JINJA2CPP_TARGET_CXX_FLAGS /W4 /WX /external:W0 /wd4702)
+        else ()
+            set(JINJA2CPP_TARGET_CXX_FLAGS -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
+                -Wnon-virtual-dtor -Woverloaded-virtual -Wold-style-cast -Wimplicit-fallthrough -Werror)
+        endif ()
+    endif ()
+    if (NOT jinja2cpp_BIGINT STREQUAL "boost")
+        message(WARNING "jinja2cpp in ${jinja2cpp_DIR} has no built-in big integers (jinja2cpp_BIGINT=${jinja2cpp_BIGINT}): "
+            "Python's int is exact up to int64 only. Build it with -DJINJA2CPP_WITH_BIGINT=boost, as the wheel is")
+    endif ()
+    message(STATUS "Jinja2C++ Python module: jinja2cpp ${jinja2cpp_VERSION} from ${jinja2cpp_DIR}")
+endif ()
+
 find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module OPTIONAL_COMPONENTS Development.SABIModule)
 
 # nanobind: exactly the version thirdparty/internal_deps.cmake pins (JINJA2CPP_NANOBIND_VERSION).

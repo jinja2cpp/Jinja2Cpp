@@ -1,3 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the methods area (cases/methods.py).
 # Format and kinds: test/parity/README.md.
 
+methods.str_format_map                 rejects     0443 str.format_map is missing from the engine's string methods; Python Jinja2 has it
