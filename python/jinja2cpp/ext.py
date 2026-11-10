@@ -118,8 +118,9 @@ def _remove_globals(env: t.Any) -> None:
 
 
 # What follows the key of a %-conversion: flags, width, .precision, length modifier, type (printf-style formatting)
-_PERCENT_SPEC = re.compile(r"[#0\- +]*(?P<width>\*|[0-9]+)?(?:\.(?P<precision>\*|[0-9]+))?[hlL]?(?P<type>.?)", re.DOTALL)
-_NUMBER_TYPES = frozenset("diouxXeEfFgGc")
+_PERCENT_SPEC = re.compile(r"[#0\- +]*(?P<width>\*|[0-9]+)?(?P<dot>\.(?P<precision>\*|[0-9]*))?[hlL]?(?P<type>.?)", re.DOTALL)
+# The types a precision pads with digits (%c ignores one)
+_NUMBER_TYPES = frozenset("diouxXeEfFgG")
 
 
 def _check_percent_size(translated: str, variables: t.Mapping[str, t.Any]) -> None:
@@ -162,6 +163,8 @@ def _check_percent_size(translated: str, variables: t.Mapping[str, t.Any]) -> No
             continue
         width, precision = match.group("width"), match.group("precision")
         size = int(width) if width not in (None, "*") else 0
+        # A bare dot is a precision of zero (%.s)
+        precision = "0" if match.group("dot") and not precision else precision
         has_precision = precision not in (None, "*")
         if has_precision and kind in _NUMBER_TYPES:
             size = max(size, int(precision))

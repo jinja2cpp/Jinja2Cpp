@@ -257,6 +257,8 @@ def test_formatting_a_translation_checks_what_fits_in_one_pass():
     env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
     env.install_null_translations(newstyle=False)
     assert env.from_string("{{ gettext('%(a).1s%(a).1s%(a).1s|%((b))s', a=s, **{'(b)': 2}) }}").render(s="y" * 30000000) == "yyy|2"
+    # a bare dot is precision zero, and %c ignores a precision
+    assert env.from_string("{{ gettext('[%(a).s%(a).s]%(c).1000000000c', a=s, c=65) }}").render(s="y" * 30000000) == "[]A"
     started = time.perf_counter()
     with pytest.raises(ValueError, match="incomplete format key"):
         env.from_string("{{ gettext(t, a=1) }}").render(t="%(" * 80000)
