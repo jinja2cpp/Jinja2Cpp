@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -422,6 +423,48 @@ TEST_F(TemplateModuleTest, CycleMadeInACall)
     auto module = Make("{% set l = [{'a': []}] %}{% macro c() %}{% set _ = l[0].a.append(l[0]) %}{{ l[0].a|length }}{% endmacro %}");
     EXPECT_EQ("1", Call(module.exports["c"]).AsString());
     EXPECT_EQ("2", Call(module.exports["c"]).AsString());
+}
+
+// A call that stores into a container the module holds does not walk all of it: calls stay
+// linear in their count, not quadratic (docs/tasks/0450). Timed: n calls against 4n, where a
+// walk of the whole container per call takes 16 times as long
+TEST_F(TemplateModuleTest, StoresIntoModuleContainersStayLinear)
+{
+    const char* const sources[] = {
+        "{% set cache = [] %}{% macro m(a, k) %}{% set _ = cache.append([1]) %}{% endmacro %}",
+        "{% set cache = [] %}{% macro m(a, k) %}{% set _ = cache.append({'n': a.name}) %}{% endmacro %}",
+        "{% set cache = [] %}{% macro m(a, k) %}{% set _ = cache.append(a.items) %}{% endmacro %}",
+        // A string that views the text of the list it was read from, which it keeps alive
+        "{% set cache = [] %}{% macro m(a, k) %}{% set _ = cache.append(a.items[0]) %}{% endmacro %}",
+        "{% set cache = {} %}{% macro m(a, k) %}{% set _ = cache.update({k: [a.n]}) %}{% endmacro %}",
+        "{% set ns = namespace(log=[]) %}{% macro m(a, k) %}{% set _ = ns.log.append([a.n]) %}{% endmacro %}",
+    };
+    jinja2::ValuesMap arg;
+    arg["name"] = std::string("a name long enough to live on the heap");
+    arg["n"] = int64_t{ 1 };
+    jinja2::ValuesList items;
+    items.emplace_back(std::string("an item long enough to live on the heap"));
+    arg["items"] = std::move(items);
+    for (const auto* source : sources)
+    {
+        auto time = [&](int calls) {
+            auto module = Make(source);
+            const auto& fn = module.exports["m"];
+            const auto start = std::chrono::steady_clock::now();
+            for (int call = 0; call != calls; ++call)
+            {
+                jinja2::ValuesList pos;
+                pos.emplace_back(arg);
+                pos.emplace_back(int64_t{ call });
+                Call(fn, std::move(pos));
+            }
+            return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        };
+        // The shorter run twice, so that a slow first one (a cold cache) does not pass a quadratic walk
+        const auto small = std::min(time(1000), time(1000));
+        const auto large = time(4000);
+        EXPECT_LT(large, small * 9) << source << ": 1000 calls " << small << " s, 4000 calls " << large << " s";
+    }
 }
 
 // A dict with keys that are not strings is copied as its public view spells them, as str()
