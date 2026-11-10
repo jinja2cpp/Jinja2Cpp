@@ -10,9 +10,14 @@
 
 #include <gtest/gtest.h>
 
+#if defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+#endif
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <thread>
 #include <utility>
@@ -684,67 +689,94 @@ struct DeepValues
 };
 
 constexpr std::size_t DeepArgument = 200000;
+
+#if defined(__linux__) || defined(__APPLE__)
+void* RunJob(void* job)
+{
+    (*static_cast<const std::function<void()>*>(job))();
+    return nullptr;
+}
+#endif
+
+// On a thread of a known stack, which the copy of DeepArgument levels surely overflows: a main
+// thread's may be deep enough for it (8 MB on macOS, with a Release build's small frames)
+void RunOnSmallStack(const std::function<void()>& job)
+{
+#if defined(__linux__) || defined(__APPLE__)
+    pthread_attr_t attr;
+    ASSERT_EQ(0, pthread_attr_init(&attr));
+    ASSERT_EQ(0, pthread_attr_setstacksize(&attr, std::size_t{ 2 } * 1024 * 1024));
+    pthread_t thread{};
+    ASSERT_EQ(0, pthread_create(&thread, &attr, RunJob, const_cast<std::function<void()>*>(&job)));
+    pthread_join(thread, nullptr);
+    pthread_attr_destroy(&attr);
+#else
+    job();
+#endif
+}
 } // namespace
 
 // The host's value is copied for the module, a copy that recursed once per level and
 // overflowed the stack; it stops with RecursionLimitExceeded as a render does (docs/tasks/0418)
 TEST_F(TemplateModuleTest, DeepArgumentFails)
 {
-    auto module = Make("{% macro m(p) %}{{ p|length }}{% endmacro %}");
-    for (const bool asMap : { false, true })
-    {
-        // Moved, never copied, and destroyed by DestroyDeep: Value's own copy and destructor recurse
-        DeepValues kept;
-        const auto callError = [&module, &kept, asMap](bool asKeyword) {
-            jinja2::UserCallableParams params;
-            if (asKeyword)
-            {
-                params.extraKwArgs = jinja2::ValuesMap{};
-                params.extraKwArgs.GetIf<jinja2::ValuesMap>()->emplace("p", DeepValue(DeepArgument, asMap));
-            }
-            else
-            {
-                params.extraPosArgs = jinja2::ValuesList{};
-                params.extraPosArgs.GetIf<jinja2::ValuesList>()->push_back(DeepValue(DeepArgument, asMap));
-            }
-            auto code = jinja2::ErrorCode::Unspecified;
-            try
-            {
-                module.exports["m"].As<jinja2::UserCallable>().callable(params);
-            }
-            catch (const jinja2::BadResultAccess<>& failure)
-            {
-                code = failure.error().GetCode();
-            }
-            kept.values.push_back(std::move(asKeyword ? params.extraKwArgs : params.extraPosArgs));
-            return code;
-        };
-        EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, callError(false));
-        EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, callError(true));
+    RunOnSmallStack([this] {
+        auto module = Make("{% macro m(p) %}{{ p|length }}{% endmacro %}");
+        for (const bool asMap : { false, true })
+        {
+            // Moved, never copied, and destroyed by DestroyDeep: Value's own copy and destructor recurse
+            DeepValues kept;
+            const auto callError = [&module, &kept, asMap](bool asKeyword) {
+                jinja2::UserCallableParams params;
+                if (asKeyword)
+                {
+                    params.extraKwArgs = jinja2::ValuesMap{};
+                    params.extraKwArgs.GetIf<jinja2::ValuesMap>()->emplace("p", DeepValue(DeepArgument, asMap));
+                }
+                else
+                {
+                    params.extraPosArgs = jinja2::ValuesList{};
+                    params.extraPosArgs.GetIf<jinja2::ValuesList>()->push_back(DeepValue(DeepArgument, asMap));
+                }
+                auto code = jinja2::ErrorCode::Unspecified;
+                try
+                {
+                    module.exports["m"].As<jinja2::UserCallable>().callable(params);
+                }
+                catch (const jinja2::BadResultAccess<>& failure)
+                {
+                    code = failure.error().GetCode();
+                }
+                kept.values.push_back(std::move(asKeyword ? params.extraKwArgs : params.extraPosArgs));
+                return code;
+            };
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, callError(false));
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, callError(true));
 
-        auto tpl = Load("{{ p|length }}");
-        jinja2::ValuesMap params;
-        params.emplace("p", DeepValue(DeepArgument, asMap));
-        auto failed = tpl.MakeModule(params);
-        kept.values.emplace_back(std::move(params));
-        ASSERT_FALSE(failed);
-        EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, failed.error().GetCode()) << failed.error().ToString();
+            auto tpl = Load("{{ p|length }}");
+            jinja2::ValuesMap params;
+            params.emplace("p", DeepValue(DeepArgument, asMap));
+            auto failed = tpl.MakeModule(params);
+            kept.values.emplace_back(std::move(params));
+            ASSERT_FALSE(failed);
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, failed.error().GetCode()) << failed.error().ToString();
 
-        // A global of the environment the module copies too. The environment is never
-        // destroyed, which would recurse; it stays reachable, so it does not leak
-        static auto* const env = new jinja2::TemplateEnv();
-        env->AddGlobal(asMap ? "pm" : "pl", DeepValue(DeepArgument, asMap));
-        jinja2::Template withGlobal(env);
-        ASSERT_TRUE(!!withGlobal.Load("{{ 1 }}"));
-        auto globalFailed = withGlobal.MakeModule();
-        ASSERT_FALSE(globalFailed);
-        EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, globalFailed.error().GetCode()) << globalFailed.error().ToString();
+            // A global of the environment the module copies too. The environment is never
+            // destroyed, which would recurse; it stays reachable, so it does not leak
+            static auto* const env = new jinja2::TemplateEnv();
+            env->AddGlobal(asMap ? "pm" : "pl", DeepValue(DeepArgument, asMap));
+            jinja2::Template withGlobal(env);
+            ASSERT_TRUE(!!withGlobal.Load("{{ 1 }}"));
+            auto globalFailed = withGlobal.MakeModule();
+            ASSERT_FALSE(globalFailed);
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, globalFailed.error().GetCode()) << globalFailed.error().ToString();
 
-        // Within the stack, it is the macro's
-        const auto nested = DeepValue(500, asMap, 7);
-        EXPECT_EQ("1", Call(module.exports["m"], { nested }).AsString());
-        auto made = tpl.MakeModule({ { "p", nested } });
-        ASSERT_TRUE(!!made);
-        EXPECT_EQ("1", made->body);
-    }
+            // Within the stack, it is the macro's
+            const auto nested = DeepValue(500, asMap, 7);
+            EXPECT_EQ("1", Call(module.exports["m"], { nested }).AsString());
+            auto made = tpl.MakeModule({ { "p", nested } });
+            ASSERT_TRUE(!!made);
+            EXPECT_EQ("1", made->body);
+        }
+    });
 }
