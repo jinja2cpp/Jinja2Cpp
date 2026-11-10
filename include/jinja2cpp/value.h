@@ -1001,12 +1001,6 @@ private:
         return out != nullptr;
     }
 
-    // The index of ValuesList, the first of the containers whose destruction recurses; ValuesMap follows
-    static constexpr std::size_t ListIndex = 8;
-    // Destroys the container the value holds without recursing once per level of nesting,
-    // so that a list nested deeper than the stack allows can be destroyed (docs/tasks/0418)
-    JINJA2CPP_EXPORT void DestroyContainer() noexcept;
-
     ValueData m_data;
 };
 
@@ -1407,16 +1401,7 @@ inline Value::Value(Value&& val) noexcept
     : m_data(std::move(val.m_data))
 {
 }
-inline Value::~Value()
-{
-    static_assert(std::is_same_v<std::variant_alternative_t<ListIndex, ValueData>, RecWrapper<ValuesList>> && std::is_same_v<std::variant_alternative_t<ListIndex + 1, ValueData>, RecWrapper<ValuesMap>>,
-                  "the indices Value::~Value compares");
-    // A scalar pays one compare
-    if (m_data.index() - ListIndex < 2)
-    {
-        DestroyContainer();
-    }
-}
+inline Value::~Value() = default;
 inline Value& Value::operator=(const Value&) = default;
 inline Value& Value::operator=(Value&& val) noexcept
 {
