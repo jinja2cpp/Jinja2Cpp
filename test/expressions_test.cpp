@@ -376,6 +376,9 @@ TEST(ExpressionTest, CyclesThroughObjects)
     EXPECT_EQ("1", render("{% set l = [] %}{% set d = dict(a=l) %}{% for p in d|dictsort %}{% do l.append(p) %}{% endfor %}{{ l|length }}"));
     EXPECT_EQ("True", render("{% set ns = namespace() %}{% set ns.j = joiner(ns) %}{{ ns.j() }}{{ ns.j() is sameas ns }}"));
     EXPECT_EQ("TrueFalse", render("{% set ns = namespace() %}{% for i in [1, 1] %}{{ loop.changed(ns) }}{% set ns.lp = loop %}{% endfor %}"));
+    // An undefined attribute of `loop` keeps the loop's frame, which holds the items (docs/tasks/0444)
+    EXPECT_EQ("False", render("{% set ns = namespace(c=none) %}{% for x in [ns] %}{% set ns.c = loop.nope %}{% endfor %}{{ ns.c is defined }}"));
+    EXPECT_EQ("1", render("{% set l = [] %}{% for x in [l] %}{% do l.append(loop.nope) %}{% endfor %}{{ l|length }}"));
     // A cycler keeps its position through the collector's view of it
     EXPECT_EQ("a,b,a|1|b", render("{% set c = cycler('a', 'b') %}{{ c.next() }},{{ c.next() }},{{ c.next() }}|{{ c.pos }}|{{ c.current }}"));
 }
