@@ -73,8 +73,13 @@ against a build with all four off, `-fno-stack-protector -fcf-protection=none -f
 | Render | +6.58% | +4.64% | +2.34% |
 | worst row | Render/expressions +12.09% | Render/expressions +8.94% | Load/plain_text +3.34% |
 
-**Every group is far above the +0.5% line the perf track set; `-fstack-protector-strong` is the largest
-part, then the rest (most likely `endbr64` from `-fcf-protection`; not separated).** They are instruction
-counts, not cycles: canary checks and `endbr64` are cheap per instruction. The flags stay in as decided;
-the perf track decides whether any is dropped, or limited to the Load path and the parts that handle
-template text.
+`-fstack-protector-strong` is the largest part, then the rest (most likely `endbr64` from
+`-fcf-protection`; not separated). They are instruction counts, not cycles: canary checks and `endbr64`
+are cheap per instruction.
+
+**Hardening exception (perf track, 2026-11-10).** Every flag stays ON, `-fstack-protector-strong`
+included (not a distro's weaker level), for every build we make, the Python wheel too: template text is
+untrusted, and the canary is the flag that matters most. The table above is the recorded worst case
+(against a build with no hardening at all); Ubuntu, Debian and Fedora GCC already enable all four, so
+most Linux users and the CI count job pay nothing new, and a CI count row that moves more than +0.5%
+goes back to the perf track. Winning the canary cost back without dropping the flag is task 0454.
