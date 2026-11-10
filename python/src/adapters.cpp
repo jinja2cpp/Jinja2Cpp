@@ -430,7 +430,7 @@ bool PyHost::IsIterable() const
 
 std::optional<jinja2::GenericList> PyHost::Iterate() const
 {
-    // A list or tuple is read by index (Len and ItemAtTo); the rest, and a dict's keys, through iter()
+    // An exact list or tuple is read by index (Len and ItemAtTo); the rest, a subclass and a dict's keys, through iter()
     PyObject* iterator = PyObject_GetIter(m_object);
     if (!iterator)
     {
@@ -544,6 +544,14 @@ bool PyHost::IsMapping() const
 bool PyHost::IsSequence() const
 {
     return m_kind == Kind::List || m_kind == Kind::Tuple || PyList_Check(m_object) || PyTuple_Check(m_object);
+}
+
+// Only an exact list or tuple is read by index. A subclass is iterated through iter(), as Python iterates it: its own
+// __iter__ when it overrides it, else the base type's iterator, which reads the items without the subclass's
+// __getitem__
+bool PyHost::IteratesByIndex() const
+{
+    return m_kind == Kind::List || m_kind == Kind::Tuple;
 }
 
 bool PyHost::IsTuple() const

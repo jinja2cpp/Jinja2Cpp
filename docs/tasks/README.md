@@ -508,7 +508,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0438](0438-sandbox-arms-cold-without-policy.md) | Sandbox checks cost nothing when no policy is installed | perf | low | open |
 | [0439](0439-python-lent-engine-callable-name.md) | Python module: an engine callable lent to Python prints without its name | parity | low | open |
 | [0440](0440-python-module-call-poll.md) | Python module: Ctrl-C does not stop `Template.module` or a call of a module's macro | parity | low | open |
-| [0441](0441-host-sequence-own-iteration.md) | A host sequence with its own iteration is iterated by index | api | medium | open |
+| [0441](0441-host-sequence-own-iteration.md) | A host sequence with its own iteration is iterated by index | api | medium | done |
 | [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
 | [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | open |
 | [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | done |
@@ -519,3 +519,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | open |
 | [0450](0450-module-call-collector-quadratic.md) | A module whose calls grow a module-level container walks all of it on every call | robustness | medium | open |
 | [0451](0451-python-module-trans-percent-and-range.md) | Python module: `{% trans %}100%{% endtrans %}` prints `100%%`; `range()` prints nothing | api | low | open |
+| [0453](0453-host-sequence-subclass-pprint.md) | pprint of a host list subclass that overrides `__iter__` | api | low | open |
