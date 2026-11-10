@@ -430,8 +430,7 @@ bool PyHost::IsIterable() const
 
 std::optional<jinja2::GenericList> PyHost::Iterate() const
 {
-    // A list or tuple is read by index (Len and ItemAtTo) unless it overrides __iter__; the rest, and a dict's keys,
-    // through iter()
+    // An exact list or tuple is read by index (Len and ItemAtTo); the rest, a subclass and a dict's keys, through iter()
     PyObject* iterator = PyObject_GetIter(m_object);
     if (!iterator)
     {
@@ -547,16 +546,12 @@ bool PyHost::IsSequence() const
     return m_kind == Kind::List || m_kind == Kind::Tuple || PyList_Check(m_object) || PyTuple_Check(m_object);
 }
 
-// A list or tuple subclass that overrides __iter__ is iterated through it, as Python iterates it
+// Only an exact list or tuple is read by index. A subclass is iterated through iter(), as Python iterates it: its own
+// __iter__ when it overrides it, else the base type's iterator, which reads the items without the subclass's
+// __getitem__
 bool PyHost::IteratesByIndex() const
 {
-    if (m_kind == Kind::List || m_kind == Kind::Tuple)
-    {
-        return true;
-    }
-    // The limited API reads the slot through PyType_GetSlot, static types included (3.10+)
-    PyTypeObject* base = PyList_Check(m_object) ? &PyList_Type : &PyTuple_Type;
-    return PyType_GetSlot(Py_TYPE(m_object), Py_tp_iter) == PyType_GetSlot(base, Py_tp_iter);
+    return m_kind == Kind::List || m_kind == Kind::Tuple;
 }
 
 bool PyHost::IsTuple() const

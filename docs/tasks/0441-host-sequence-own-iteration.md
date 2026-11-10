@@ -31,10 +31,11 @@ before the G1 freeze or goes through `IHostObject2`.
 `test/public_host_object_test.cpp` for a C++ host that iterates by its own `Iterate`.
 
 **Progress (2026-11-10).** `IHostObject::IteratesByIndex()` (true by default) is checked where
-`HostBridge::Iterate` picks `HostSequenceList`; `PyHost` answers false for a list or tuple
-subclass whose `tp_iter` slot is not the base type's (read with `PyType_GetSlot`, as the module
-builds on the limited API). The probe gives `xy`, as Jinja2 does; items by index (`l[1]`), `len`
-and `loop.length` stay the list's own, also as in Jinja2. Rows: `python/tests/test_values.py`
-(list and tuple subclass, a plain subclass) and
-`PublicHostObjectTest.SequenceThatIteratesByItsOwnIterate`. Decision record:
-docs/api-2.0.md section 7 item 10.
+`HostBridge::Iterate` picks `HostSequenceList`. `PyHost` answers true only for an exact `list`
+or `tuple`: a subclass is iterated through `iter()`, which is its own `__iter__` when it has one,
+and otherwise the base type's iterator, which (unlike `ItemAtTo`, which calls `__getitem__`) reads
+the items without a subclass's `__getitem__`, as Python does. The probe gives `xy`. Rows:
+`python/tests/test_values.py::test_list_and_tuple_subclasses_iterate_as_python_does` (contexts
+built afresh per engine, since a deep copy of a list subclass is rebuilt from its `__iter__`) and
+`PublicHostObjectTest.SequenceThatIteratesByItsOwnIterate`. Decision record: docs/api-2.0.md
+section 7 item 10. `loop.length` and operators over such a subclass still differ: task 0452.

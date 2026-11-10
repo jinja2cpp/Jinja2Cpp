@@ -69,6 +69,18 @@ class OwnIterTuple(tuple):
         return iter(["x", "y"])
 
 
+class OwnItemList(list):
+    """Overrides only __getitem__: Python's list iterator still gives the list's own items"""
+
+    def __getitem__(self, index):
+        return "G"
+
+
+class OwnItemTuple(tuple):
+    def __getitem__(self, index):
+        return "G"
+
+
 class PlainSubList(list):
     pass
 
@@ -96,12 +108,6 @@ CASES = [
     # a loop follows the live end of a list the template changes (verifier N3)
     ("{% for x in l %}{{ loop.length }}{{ x }}{% do l.pop() %}{% endfor %}", {"l": [1, 2, 3, 4]}),
     ("{% for x in l %}{{ x }}{% if l|length < 4 %}{% do l.append(9) %}{% endif %}{% endfor %}", {"l": [1, 2]}),
-    # a list or tuple subclass that overrides __iter__ is iterated through it; one that does not, by index (task 0441)
-    ("{% for i in l %}{{ i }}{% endfor %}|{% for i in t %}{{ i }}{% endfor %}|{% for i in p %}{{ i }}{% endfor %}",
-     {"l": OwnIterList([1, 2, 3]), "t": OwnIterTuple((1, 2, 3)), "p": PlainSubList([1, 2, 3])}),
-    ("{{ l|join('-') }} {{ l|list }} {{ l[1] }} {{ l|length }} {{ t|list }} {{ 'x' in l }} {{ l|first }}",
-     {"l": OwnIterList([1, 2, 3]), "t": OwnIterTuple((1, 2, 3))}),
-    ("{% for i in l %}{{ loop.index }}/{{ loop.length }}{% endfor %}", {"l": OwnIterList([1, 2, 3])}),
     # mutation is seen both ways
     ("{% do l.append(3) %}{% do d.update(z=1) %}{{ l }} {{ d }}", {"l": [1], "d": {"a": 0}}),
     # objects: attributes, methods, str/repr, __html__, getattr before getitem
@@ -275,3 +281,33 @@ def test_undefined_items_and_dictsort_pairs_reach_python_as_in_jinja2():
     ]
     for source, f in cases:
         assert jinja2cpp.Template(source).render(f=f) == jinja2.Template(source).render(f=f), source
+
+
+# Built afresh for each engine: render_both deep-copies its context, and a deep copy of a list subclass is rebuilt from
+# its __iter__, which would hide what these rows check (task 0441)
+SUBCLASS_CASES = [
+    "{% for i in l %}{{ i }}{% endfor %}|{% for i in t %}{{ i }}{% endfor %}|{% for i in p %}{{ i }}{% endfor %}",
+    "{{ l|join('-') }} {{ l|list }} {{ l[1] }} {{ l|length }} {{ t|list }} {{ 'x' in l }} {{ l|first }} {{ l|sort }}",
+    "{% for i in g %}{{ i }}{% endfor %}|{% for i in gt %}{{ i }}{% endfor %}|{{ g|list }} {{ g|join }} {{ g|first }}",
+    "{{ g|sort }} {{ g|sum }} {{ g|reverse|list }} {{ g[0] }} {{ gt[0] }}",
+    "{% for i in p %}{{ i }}{{ p.pop() if loop.first else '' }}{% endfor %}",
+]
+
+
+def _subclass_context():
+    return {
+        "l": OwnIterList([1, 2, 3]),
+        "t": OwnIterTuple((1, 2, 3)),
+        "p": PlainSubList([1, 2, 3]),
+        "g": OwnItemList([1, 2, 3]),
+        "gt": OwnItemTuple((1, 2, 3)),
+    }
+
+
+@pytest.mark.parametrize("source", SUBCLASS_CASES)
+def test_list_and_tuple_subclasses_iterate_as_python_does(source):
+    results = []
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        results.append(env.from_string(source).render(**_subclass_context()))
+    assert results[0] == results[1], f"{source!r}: jinja2cpp {results[0]!r}, Jinja2 {results[1]!r}"
