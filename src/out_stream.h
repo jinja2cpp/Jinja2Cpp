@@ -128,6 +128,31 @@ public:
         }
         return written;
     }
+    // Each piece of output goes to the sink on its own (RenderOptions::writeEachPiece): a body flushes the
+    // stream after each of its nodes. Only the render's own stream is set; a stream that gathers a part of
+    // the output (a `{% set %}` block, a macro's result) never is
+    void WriteEachPiece() noexcept { m_eachPiece = true; }
+    [[nodiscard]] bool WritesEachPiece() const noexcept { return m_eachPiece; }
+    // A macro's output is one piece in Jinja2, as it is the value its call returns: the macro's body does not
+    // flush the stream while this lives
+    class PieceHold
+    {
+    public:
+        explicit PieceHold(OutStream& os) noexcept
+            : m_os(os)
+            , m_eachPiece(std::exchange(os.m_eachPiece, false))
+        {
+        }
+        ~PieceHold() { m_os.m_eachPiece = m_eachPiece; }
+        PieceHold(const PieceHold&) = delete;
+        PieceHold& operator=(const PieceHold&) = delete;
+        PieceHold(PieceHold&&) = delete;
+        PieceHold& operator=(PieceHold&&) = delete;
+
+    private:
+        OutStream& m_os;
+        bool m_eachPiece;
+    };
     // The sink a writer stream made from this one passes on (ReachesSink)
     [[nodiscard]] void* SinkToPassOn() const { return m_sink; }
 
@@ -202,6 +227,7 @@ private:
     void* m_sink = nullptr;
     size_t m_sinkWritten = 0;
     size_t m_charSize = 1;
+    bool m_eachPiece = false;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer

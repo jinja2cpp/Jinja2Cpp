@@ -1067,6 +1067,12 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
     }
 
+    if (lexer.PeekNextToken() == '-')
+    {
+        // Jinja2's parse_block: `{% block foo-bar %}`
+        return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, lexer.PeekNextToken(),
+                                 "Block names in Jinja have to be valid Python identifiers and may not contain hyphens, use an underscore instead.");
+    }
     const auto blockName = m_nodes.MakeText(lexer.GetAsString(nextTok));
     // Its body reads names where it is rendered, and may be rendered again by `self` and `super()`
     m_names.AddReadOfAll();

@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "convert.h"
+#include "generate.h"
 
 #include <exception>
 #include <functional>
@@ -14,6 +15,7 @@ namespace jinja2cpp_py
 // BaseException a callable raised that the engine absorbed (RenderState::abort) stops it too
 inline void PollSignals()
 {
+    PollLazyRender();
     if (const auto* render = CurrentRender(); render && render->abort)
     {
         std::rethrow_exception(render->abort);

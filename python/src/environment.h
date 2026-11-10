@@ -140,6 +140,9 @@ public:
     // the engine's sink receives (up to 512 characters), in order; an error comes after the chunks
     // written before it
     void RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const;
+    // The same into the engine's sink, which gets each piece of output on its own: Jinja2's items (Template.generate,
+    // generate.cpp)
+    void RenderToSink(jinja2::OutputSink& sink, nb::args args, nb::kwargs kwargs) const;
     // The environment, checked to be alive
     PyEnvironment& LiveEnvironment() const;
     // Template.make_module of the Python layer (template_module.cpp): (body, exports) for the
@@ -162,7 +165,7 @@ public:
 
 private:
     template<typename Target>
-    void RenderWith(Target& target, nb::args args, nb::kwargs kwargs) const;
+    void RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bool eachPiece = false) const;
     jinja2::Template m_template;
     nb::object m_environment;
     nb::object m_globals;

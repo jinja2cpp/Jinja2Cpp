@@ -26,6 +26,7 @@ std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::RenderWithOptions(Targ
         hooks.poll = &options.poll;
     }
     hooks.generationSpans = options.generationSpans;
+    hooks.writeEachPiece = options.writeEachPiece;
     if (options.generationSpans)
     {
         options.generationSpans->clear();

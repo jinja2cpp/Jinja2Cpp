@@ -69,6 +69,7 @@ nanobind_add_module(_jinja2cpp STABLE_ABI NB_STATIC NB_SUPPRESS_WARNINGS NOMINSI
     src/context.cpp
     src/environment.cpp
     src/errors.cpp
+    src/generate.cpp
     src/loaders.cpp
     src/template_module.cpp
 )

@@ -82,11 +82,17 @@ public:
         // try costs nothing until something throws, and the handler needs nothing the loop
         // does not keep anyway
         bool failed = false;
+        // Read once a body: the loop tests a register (RenderOptions::writeEachPiece)
+        const bool eachPiece = os.WritesEachPiece();
         try
         {
             for (; child != end; ++child)
             {
                 nodes[*child].Render(os, values);
+                if (eachPiece)
+                {
+                    os.Flush();
+                }
                 if (values.HasLoopControl())
                 {
                     return;

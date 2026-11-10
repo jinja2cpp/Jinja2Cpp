@@ -1154,6 +1154,8 @@ const JinjaMessageRow kJinjaMessageRows[] = {
       "Encountered unknown tag 'endif'." },
     { "\n{% unknown_tag %}", ErrorCode::UnexpectedStatement, 2,
       "Encountered unknown tag 'unknown_tag'." },
+    { "{% block foo-bar-baz %}{% endblock %}", ErrorCode::TemplateSyntaxError, 1,
+      "Block names in Jinja have to be valid Python identifiers and may not contain hyphens, use an underscore instead." },
     { "{% for x in y %}{% else %}{% else %}", ErrorCode::UnexpectedStatement, 1,
       "Encountered unknown tag 'else'. Jinja was looking for the following tags: 'endfor'. The innermost block that needs to be closed is 'for'." },
     { "{% for x in y %}{% if a %}{% endfor %}", ErrorCode::UnexpectedStatement, 1,

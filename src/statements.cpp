@@ -3772,6 +3772,7 @@ void BindMacroCall(const MacroArgBinder& binder, bool catchKwargs, bool catchVar
 void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context, size_t link) const
 {
     const RenderDepthGuard depthGuard;
+    const OutStream::PieceHold pieceHold(stream);
 
     const auto caught = m_caughtNames;
     const bool catchCaller = (caught & UsesCaller) != 0;

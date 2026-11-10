@@ -1,5 +1,7 @@
 #include "errors.h"
 
+#include "convert.h"
+
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/value.h>
@@ -32,6 +34,46 @@ std::string ParamText(const jinja2::ErrorInfo& error, size_t index)
         return *text;
     }
     return std::string();
+}
+
+// A frame of the template at `location` in front of the traceback of `exception` (jinja2cpp._debug), as Jinja2's
+// tracebacks show the template's line: `function` is Jinja2's name for the frame. Never fails: a frame that
+// cannot be made is left out
+void AddTemplateFrame(nb::handle exception, const jinja2::SourceLocation& location, nb::handle filename, const char* function)
+{
+    if (location.line == 0 || !exception)
+    {
+        return;
+    }
+    try
+    {
+        nb::object file = filename.is_none() ? (location.fileName.empty() ? nb::object(nb::none()) : MakeStr(location.fileName)) : nb::borrow(filename);
+        nb::module_::import_("jinja2cpp._debug").attr("add_template_frame")(exception, file, location.line, function);
+    }
+    catch (const nb::python_error&) // NOLINT(bugprone-empty-catch): the frame is a diagnostic only
+    {
+    }
+}
+
+// The file of the template the error is in: the source's, when the error is in that template
+nb::object FileOfError(const jinja2::ErrorInfo& error, const ErrorSource& source)
+{
+    const auto& name = error.GetErrorLocation().fileName;
+    if (name.empty() || (!source.name.is_none() && Utf8(source.name) == name))
+    {
+        return source.filename;
+    }
+    if (!source.environment.is_none())
+    {
+        try
+        {
+            return SourceOfTemplate(source.environment, name).filename;
+        }
+        catch (const nb::python_error&) // NOLINT(bugprone-empty-catch): a diagnostic only
+        {
+        }
+    }
+    return nb::none();
 }
 
 bool IsSyntaxError(ErrorCode code)
@@ -94,6 +136,12 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         {
             std::rethrow_exception(exception);
         }
+        catch (const nb::python_error& raised)
+        {
+            // A callable's exception, with the template's line between the caller's frames and the callable's
+            AddTemplateFrame(raised.value(), error.GetErrorLocation(), FileOfError(error, source), "top-level template code");
+            throw;
+        }
         catch (const jinja2::Exception& engine)
         {
             // A callable of the engine's own (ConfigureForChatTemplates' raise_exception) raised it,
@@ -110,23 +158,42 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
     const auto message = MakeStr(ErrorMessage(error));
     if (IsSyntaxError(code) || code == ErrorCode::UnknownFilter || code == ErrorCode::UnknownTest)
     {
-        const auto& type = code == ErrorCode::UnknownFilter || code == ErrorCode::UnknownTest ? names.templateAssertionError : names.templateSyntaxError;
-        const auto line = static_cast<int>(error.GetErrorLocation().line);
-        auto instance = type(message, line == 0 ? 1 : line, source.name, source.filename);
-        if (!source.source.is_none())
+        const bool assertion = code == ErrorCode::UnknownFilter || code == ErrorCode::UnknownTest || code == ErrorCode::TemplateAssertionError;
+        const auto& type = assertion ? names.templateAssertionError : names.templateSyntaxError;
+        const auto& location = error.GetErrorLocation();
+        // An error in another template than the one loaded or rendered (one it includes) is reported with that
+        // template's name, file and source, as Jinja2 reports it
+        const ErrorSource* where = &source;
+        ErrorSource other;
+        if (!location.fileName.empty() && !source.environment.is_none() && (source.name.is_none() || Utf8(source.name) != location.fileName))
         {
-            nb::setattr(instance, "source", source.source);
+            other = SourceOfTemplate(source.environment, location.fileName);
+            other.syntaxNote = source.syntaxNote;
+            where = &other;
         }
-        if (source.syntaxNote)
+        const auto line = static_cast<int>(location.line);
+        auto instance = type(message, line == 0 ? 1 : line, where->name, where->filename);
+        if (!where->source.is_none())
         {
-            instance.attr("add_note")(source.syntaxNote);
+            nb::setattr(instance, "source", where->source);
         }
+        if (where->syntaxNote)
+        {
+            instance.attr("add_note")(where->syntaxNote);
+        }
+        jinja2::SourceLocation frame = location;
+        frame.line = line == 0 ? 1U : location.line;
+        AddTemplateFrame(instance, frame, where->filename.is_none() ? where->name : where->filename, "template");
         Raise(type, instance);
     }
     switch (code)
     {
     case ErrorCode::TemplateNotFound:
     case ErrorCode::FileNotFound:
+        if (!error.GetExtraParams().empty())
+        {
+            RaiseTemplateNotFound(source.environment, ToPython(error.GetExtraParams()[0]));
+        }
         Raise(names.templateNotFound, names.templateNotFound(message));
     case ErrorCode::UndefinedError:
         Raise(names.undefinedError, names.undefinedError(message));
@@ -148,6 +215,14 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
     case ErrorCode::RecursionLimitExceeded:
         PyErr_SetString(PyExc_RecursionError, "maximum recursion depth exceeded");
         throw nb::python_error();
+    case ErrorCode::TemplateRuntimeError:
+        // Python's class of the error, when the engine names it (ExtraParams[1])
+        if (const auto kind = ParamText(error, 1); kind == "TypeError" || kind == "ValueError")
+        {
+            PyErr_SetObject(kind == "TypeError" ? PyExc_TypeError : PyExc_ValueError, message.ptr());
+            throw nb::python_error();
+        }
+        Raise(names.templateRuntimeError, names.templateRuntimeError(message));
     default:
         Raise(names.templateRuntimeError, names.templateRuntimeError(message));
     }
@@ -210,5 +285,11 @@ void RaiseTemplateNotFound(nb::handle name)
 {
     const auto& type = Names().templateNotFound;
     Raise(type, type(name));
+}
+
+void RaiseTemplateNotFound(nb::handle environment, nb::handle names)
+{
+    auto instance = nb::module_::import_("jinja2cpp.loaders").attr("_not_found")(environment, names);
+    Raise(reinterpret_cast<PyObject*>(Py_TYPE(instance.ptr())), instance);
 }
 } // namespace jinja2cpp_py

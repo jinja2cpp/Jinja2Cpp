@@ -3,6 +3,7 @@
 #include "convert.h"
 #include "environment.h"
 #include "errors.h"
+#include "generate.h"
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -182,6 +183,7 @@ NB_MODULE(_jinja2cpp, module) // NOLINT: nanobind's entry point
     module.doc() = "Jinja2C++ rendering Jinja2 templates (docs/python.md)";
     module.def("_check_sequence_size", &CheckFormatSize, "size"_a);
     BindEnvironment(module);
+    BindGenerate(module);
     BindTemplateModule(module);
     BindContext(module);
     nb::class_<TemplateValue>(module, "TemplateValue", nb::type_slots(g_templateValueSlots))

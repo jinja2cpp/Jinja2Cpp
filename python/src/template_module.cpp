@@ -226,6 +226,7 @@ public:
         catch (const jinja2::BadResultAccess<char>& failure)
         {
             ErrorSource where;
+            where.environment = m_environment;
             where.name = m_templateName;
             RaiseError(failure.error(), where);
         }
@@ -386,6 +387,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     if (!result)
     {
         ErrorSource where;
+        where.environment = m_environment;
         where.name = m_name;
         where.filename = m_filename;
         where.syntaxNote = kIncludedSyntaxNote;
@@ -407,6 +409,7 @@ nb::object PyTemplate::FindUndeclared() const
     if (!result)
     {
         ErrorSource where;
+        where.environment = m_environment;
         where.name = m_name;
         where.filename = m_filename;
         RaiseError(result.error(), where);
@@ -426,6 +429,7 @@ nb::object PyTemplate::FindReferenced() const
     if (!result)
     {
         ErrorSource where;
+        where.environment = m_environment;
         where.name = m_name;
         where.filename = m_filename;
         RaiseError(result.error(), where);

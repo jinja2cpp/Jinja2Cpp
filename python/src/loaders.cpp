@@ -264,6 +264,23 @@ public:
     }
     void Clear() const noexcept { m_entries.clear(); }
 
+    // The source of `name` for a diagnostic, read again from the loader: None when it fails
+    [[nodiscard]] nb::object Source(const std::string& name) const
+    {
+        try
+        {
+            const auto triple = nb::steal(PyObject_CallMethod(m_loader, "get_source", "OO", m_environment, MakeStr(name).ptr()));
+            if (!triple)
+            {
+                throw nb::python_error();
+            }
+            return triple[0];
+        }
+        catch (const nb::python_error&) // NOLINT(bugprone-empty-catch): the source is optional
+        {
+        }
+        return nb::none();
+    }
     [[nodiscard]] nb::object Filename(const std::string& name) const
     {
         auto found = m_entries.find(name);
@@ -393,6 +410,7 @@ public:
         ErrorSource source;
         source.name = MakeStr(name);
         source.filename = m_handler->Filename(name);
+        source.source = m_handler->Source(name);
         return source;
     }
 

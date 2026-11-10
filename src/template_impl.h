@@ -399,6 +399,8 @@ public:
         const std::function<void()>* poll = nullptr;
         // Where the render records its generation blocks (RenderOptions::generationSpans), or null
         std::vector<GenerationSpan>* generationSpans = nullptr;
+        // A sink's Write for each piece of output (RenderOptions::writeEachPiece)
+        bool writeEachPiece = false;
     };
 
     // The same with the public options: their globals, lent for the render and kept by any value a
@@ -539,6 +541,10 @@ public:
             [[maybe_unused]] std::conditional_t<hasHooks, detail::GenerationTracker, std::monostate> tracker;
             if constexpr (hasHooks)
             {
+                if (hooks->writeEachPiece)
+                {
+                    outStream.WriteEachPiece();
+                }
                 if (hooks->generationSpans)
                 {
                     tracker.root = &outStream;
