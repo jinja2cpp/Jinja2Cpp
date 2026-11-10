@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: api
 depends: [0357]
 touches: [src/public_host_object.cpp, python/src/adapters.cpp, python/src/adapters.h]
 shares: [include/jinja2cpp/host_object.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/827
 ---
 # A host sequence with its own iteration is iterated by index
 
