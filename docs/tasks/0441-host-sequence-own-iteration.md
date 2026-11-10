@@ -38,4 +38,4 @@ the items without a subclass's `__getitem__`, as Python does. The probe gives `x
 `python/tests/test_values.py::test_list_and_tuple_subclasses_iterate_as_python_does` (contexts
 built afresh per engine, since a deep copy of a list subclass is rebuilt from its `__iter__`) and
 `PublicHostObjectTest.SequenceThatIteratesByItsOwnIterate`. Decision record: docs/api-2.0.md
-section 7 item 10. `loop.length` and operators over such a subclass still differ: task 0452.
+section 7 item 10. `loop.length` and operators over such a subclass still differ: task 0453.
