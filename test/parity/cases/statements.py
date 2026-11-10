@@ -608,7 +608,8 @@ CASES = [
     ("print_autoescape", "{% print h, h | safe %}", {"env": {"autoescape": True}, "ctx": {"h": "<b>"}}),
     ("print_autoescape_block", "{% autoescape true %}{% print '<', h %}{% endautoescape %}{% print h %}", {"ctx": {"h": "<b>"}}),
     ("print_volatile_autoescape", "{% autoescape on %}{% print '<', '<' | safe %}{% endautoescape %}", {"ctx": {"on": True}}),
-    ("print_finalize_none", "{% print none, 1 %}"),
+    ("print_none", "{% print none, 1 %}"),
+    ("print_finalize", "{% print none, x, '<' %}{{ none }}", {"env": {"autoescape": True, "finalize": "brackets"}}),
     ("print_name_elsewhere", "{% set print = 'p' %}{{ print }}{% for print in [1] %}{{ print }}{% endfor %}"),
     ("print_line_statement", "# print l | join(',')\n", {"env": {"line_statement_prefix": "#"}}),
     ("print_in_macro_and_loop", "{% macro m(v) %}{% print v * 2 %}{% endmacro %}{% for i in l %}{% print m(i) %};{% endfor %}"),
@@ -653,4 +654,10 @@ CASES = [
     ("if_expr_no_else_debug", "<{{ 1 if false }}>", {"env": {"undefined": "debug"}}),
     ("if_expr_no_else_chainable", "<{{ (1 if false).a.b }}>", {"env": {"undefined": "chainable"}}),
     ("if_expr_no_else_line", "\n\n{{ (1 if x > 5).y }}"),
+    # Python's compiler NFKC-normalises the names a template sets (its generated code is Python
+    # source), not those it reads from the context (0446)
+    ("name_nfkc_alias", "{% set ﬁ = 1 %}{{ fi }}|{% set 𝑥 = 2 %}{{ x }}"),
+    ("name_nfkc_context", "[{{ ﬁ }}]", {"ctx": {"fi": 5}}),
+    # parse_condexpr loops on `if`: `a if b if c` is `(a if b) if c` (0447)
+    ("if_expr_chained_if", "[{{ 1 if false if false }}|{{ 1 if true if true }}]"),
 ]

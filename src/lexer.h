@@ -385,10 +385,11 @@ private:
         {
             return ScanOperator(pos, end, tok);
         }
-        if (traits::is_letter(ch) || ch == '_')
+        // ASCII only: the locale's classes (a global locale an embedder sets) do not decide a name
+        if (traits::is_ascii(ch) && (traits::is_letter(ch) || ch == '_'))
         {
             auto last = pos + 1;
-            while (last != end && (traits::is_letter_or_digit(m_src[last]) || m_src[last] == '_'))
+            while (last != end && traits::is_ascii(m_src[last]) && (traits::is_letter_or_digit(m_src[last]) || m_src[last] == '_'))
             {
                 ++last;
             }

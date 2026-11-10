@@ -1179,13 +1179,15 @@ public:
     {
         refs(m_testExpr);
         refs(m_altValue);
+        refs(m_noElse);
     }
 
-    // line: where the conditional is in the source, for the undefined it gives without `else`
-    IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue, unsigned line)
+    // noElse: without `else`, what the conditional gives when its test is false (Jinja2's
+    // cond_expr_undefined), made once at load in a node of its own, so that this one owns nothing
+    IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue, NodeRef<ConstantExpression> noElse)
         : m_testExpr(std::move(testExpr))
         , m_altValue(std::move(altValue))
-        , m_line(line)
+        , m_noElse(noElse)
     {
     }
 
@@ -1207,7 +1209,7 @@ public:
 private:
     NodeRef<Expression> m_testExpr;
     NodeRef<Expression> m_altValue;
-    unsigned m_line = 0;
+    NodeRef<ConstantExpression> m_noElse;
     // How the test, the value and the alternative fold (FoldBits), by PrepareFold
     std::uint8_t m_testFold = 0;
     std::uint8_t m_valueFold = 0;

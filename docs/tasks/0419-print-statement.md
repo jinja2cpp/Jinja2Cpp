@@ -24,6 +24,6 @@ Jinja2 does in narrow and wide templates, and the module renders it without a fa
 **Result.** `print` is parsed where a statement name is expected (it stays a variable name
 elsewhere, as in Jinja2): each comma-separated expression becomes an output node made as
 `{{ }}`'s is (finalize, autoescape, volatile autoescape, dropped or guarded after `extends`, its
-unknown filters placed as an output tag's). Parity cases `statements.print_*` (16). The Python
+unknown filters placed as an output tag's). Parity cases `statements.print_*` (17). The Python
 module's tests had used `{% print %}` as the syntax the engine lacks; they now use a subscript of
 a literal by a tuple of slices, the one such syntax left (task 0445).

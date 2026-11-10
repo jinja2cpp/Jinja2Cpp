@@ -57,4 +57,6 @@ CASES = [
     ("minus_keeps_zero_width_space", "{{ 'a' -}}\u200b\ufeffb"),
     ("lstrip_blocks_unicode_space", "a\n\u00a0\u3000{% if true %}x{% endif %}", {"env": LB}),
     ("raw_minus_and_trim_blocks", "{% raw -%}  \n\n x{% endraw %}\n\ny", {"env": TB}),
+    # Python's \\s inside a tag: a no-break or an em space separates tokens (0447)
+    ("tag_unicode_space", "[{{\u00a0x }}|{{ x\u2003}}]", {"ctx": {"x": 3}}),
 ]

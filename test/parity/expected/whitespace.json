@@ -508,6 +508,16 @@
    },
    "templates": {},
    "output": "x\ny"
+  },
+  {
+   "id": "whitespace.tag_unicode_space",
+   "template": "[{{ x }}|{{ x }}]",
+   "context": {
+    "x": 3
+   },
+   "env": {},
+   "templates": {},
+   "output": "[3|3]"
   }
  ]
 }

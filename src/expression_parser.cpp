@@ -1,4 +1,5 @@
 #include "expression_parser.h"
+#include "undefined.h"
 
 #include "engine_errors.h"
 #include "error_handling.h"
@@ -1405,8 +1406,16 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
             altValue = *value;
         }
 
-        // Without `else` the line goes into the undefined it gives (IfExpression::EvaluateAltValue)
-        result = m_nodes.Make<IfExpression>(*testExpr, *altValue, *altValue ? 0U : lexer.LineOf(valueOffset));
+        // Without `else`, Jinja2's cond_expr_undefined: a jinja2.Undefined whatever the environment's
+        // undefined, which prints empty and whose attribute, item or call fails. Made here, so
+        // that a render copies it
+        NodeRef<ConstantExpression> noElse;
+        if (!*altValue)
+        {
+            noElse = m_nodes.Make<ConstantExpression>(MakeDefaultUndefinedWithHint("the inline if-expression on line " + std::to_string(lexer.LineOf(valueOffset))
+                                                                                   + " evaluated to false and no else section was defined."));
+        }
+        result = m_nodes.Make<IfExpression>(*testExpr, *altValue, noElse);
     }
     catch (const ParseError& error)
     {

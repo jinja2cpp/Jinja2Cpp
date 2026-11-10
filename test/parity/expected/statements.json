@@ -22357,7 +22357,7 @@
    "output": "<<"
   },
   {
-   "id": "statements.print_finalize_none",
+   "id": "statements.print_none",
    "template": "{% print none, 1 %}",
    "context": {
     "l": [
@@ -22395,6 +22395,49 @@
    "env": {},
    "templates": {},
    "output": "None1"
+  },
+  {
+   "id": "statements.print_finalize",
+   "template": "{% print none, x, '<' %}{{ none }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[None][3][&lt;][None]"
   },
   {
    "id": "statements.print_name_elsewhere",
@@ -24108,6 +24151,96 @@
     "type": "UndefinedError",
     "message": "the inline if-expression on line 3 evaluated to false and no else section was defined."
    }
+  },
+  {
+   "id": "statements.name_nfkc_alias",
+   "template": "{% set ﬁ = 1 %}{{ fi }}|{% set 𝑥 = 2 %}{{ x }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1|2"
+  },
+  {
+   "id": "statements.name_nfkc_context",
+   "template": "[{{ ﬁ }}]",
+   "context": {
+    "fi": 5
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "statements.if_expr_chained_if",
+   "template": "[{{ 1 if false if false }}|{{ 1 if true if true }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[|1]"
   }
  ]
 }

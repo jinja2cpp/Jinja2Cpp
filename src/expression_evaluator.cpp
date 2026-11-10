@@ -1626,15 +1626,9 @@ bool IfExpression::Evaluate(RenderContext& context)
     return ConvertToBool(context.Nodes()[m_testExpr].Evaluate(context));
 }
 
-// Without `else`, Jinja2's cond_expr_undefined: a jinja2.Undefined whatever the environment's
-// undefined, which prints empty and whose attribute, item or call fails
 InternalValue IfExpression::EvaluateAltValue(RenderContext& context)
 {
-    if (m_altValue)
-    {
-        return context.Nodes()[m_altValue].Evaluate(context);
-    }
-    return MakeDefaultUndefinedWithHint("the inline if-expression on line " + std::to_string(m_line) + " evaluated to false and no else section was defined.");
+    return m_altValue ? context.Nodes()[m_altValue].Evaluate(context) : context.Nodes()[m_noElse].GetValue();
 }
 
 /*

@@ -3,3 +3,5 @@
 #   <case id> <kind> <task> <reason>
 # The kind is the module's outcome (match where the C++ suite has a listed divergence).
 subscripts.tuple_of_slices_literal match 0445 the module falls back to Jinja2 for the template the engine cannot parse
+statements.if_expr_chained_if match 0447 the module falls back to Jinja2 for the template the engine cannot parse
+whitespace.tag_unicode_space match 0447 the module falls back to Jinja2 for the template the engine cannot parse
