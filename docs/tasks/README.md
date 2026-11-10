@@ -426,7 +426,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | open |
 | [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | done |
 | [0356](0356-python-module-wheels.md) | Python module P4: wheels for Linux, macOS and Windows; free-threaded audit | build | medium | open |
-| [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | in-progress |
+| [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | done |
 | [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | done |
 | [0359](0359-token-budget-filters.md) | Token budget filters: `count_tokens`, `truncate_tokens` and `pack` | api | medium | done |
 | [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | done |
@@ -510,3 +510,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0440](0440-python-module-call-poll.md) | Python module: Ctrl-C does not stop `Template.module` or a call of a module's macro | parity | low | open |
 | [0441](0441-host-sequence-own-iteration.md) | A host sequence with its own iteration is iterated by index | api | medium | open |
 | [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
+| [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | open |
+| [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | open |
