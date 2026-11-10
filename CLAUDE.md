@@ -96,17 +96,16 @@ owner threads always ask for it explicitly:
   `CMakeLists.txt`, `.github/workflows/` or the agent instructions (AGENTS.md,
   CLAUDE.md, REVIEW.md, `.claude/`). Skip other docs-only and task-only PRs, bench
   re-measures, mechanical clang-tidy batches and merge-steward train PRs.
-- When the diff touches the lexer, parsers, evaluator, loaders or escaping, also ask
-  for `@codex security review`, in a comment of its own. It is a separate Codex
-  product that must be enabled in the Codex settings (Review security
-  vulnerabilities). When it is not enabled the command is accepted but runs another
-  plain code review: from #683 to #815 no request started one, on drafts and on
-  ready PRs alike (#755). So check the hidden `codex-review-state` line in the
-  "Codex Review Summary" comment: only `security_review.status: completed` counts
-  as a security review. A receipt titled "Codex Review" is a code review. If the
-  status is still null after about 20 minutes, write "Codex security review: did
-  not run" in the PR body rather than counting the code review, and tell Ruslan
-  when the task's definition of done requires one.
+- Do not ask for `@codex security review`. Codex Security Review needs a ChatGPT Pro,
+  Business, Enterprise or Edu workspace, and this project's is Plus: the command is
+  accepted but runs another plain code review (#683 to #815) or nothing (#818). Codex's code
+  review still reports security issues it sees, and its findings count as usual.
+- When the diff touches the lexer, parsers, evaluator, loaders, escaping, the sandbox
+  or the Python module's host boundary, the owner thread runs its own security
+  review before reporting final: the `security-review` skill over the PR diff
+  (`git diff origin/master...HEAD`), or a `verifier` pass with that brief where the
+  skill is missing, judged against REVIEW.md's untrusted-input rules. Triage its findings like Codex P0/P1, and add `Security review: N
+  findings, M fixed, K declined` next to the verifier line in the PR body.
 - Re-request only after a substantive change (new logic, not nit fixes), at most
   twice per PR.
 - Triage: P0/P1 are blocking like a red-circle finding (fix, or reply with the traced

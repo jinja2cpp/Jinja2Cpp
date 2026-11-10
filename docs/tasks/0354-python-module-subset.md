@@ -30,5 +30,6 @@ plan (D1), Jinja2's sandbox, and an explicit answer for everything outside the s
 - **Docs:** `docs/python.md` with the subset table and the known differences.
 
 **Done when.** Every row of the Tier A table has a test. Fallback is tested both with and
-without Jinja2 installed. The sandbox passes Jinja2's `test_security.py` cases, and the PR
-had a Codex security review.
+without Jinja2 installed. The sandbox passes Jinja2's `test_security.py` cases, and the code
+had a security review (our own, per CLAUDE.md: Codex Security Review is not available
+on this project's plan).
