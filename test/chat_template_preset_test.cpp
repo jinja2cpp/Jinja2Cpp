@@ -350,7 +350,7 @@ TEST_P(GenerationSpansTest, Wide)
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Rows, GenerationSpansTest, ::testing::Values(
-    SpanCase{ "ab{% generation %}cd{% endgeneration %}e{% generation %}é€\U0001F600{% endgeneration %}", { { 2, 4 }, { 5, 8 } } },
+    SpanCase{ "ab{% generation %}cd{% endgeneration %}e{% generation %}\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80{% endgeneration %}", { { 2, 4 }, { 5, 8 } } },
     SpanCase{ "a{% generation %}b{% generation %}cc{% endgeneration %}d{% endgeneration %}", { { 1, 3 }, { 1, 5 } } },
     SpanCase{ "ab{% set x %}{% generation %}cd{% endgeneration %}{% endset %}", { { 2, 4 } } },
     SpanCase{ "ab{% set x %}q{% endset %}{% generation %}{{ x }}c{% endgeneration %}", { { 2, 4 } } },
@@ -389,7 +389,7 @@ TEST(ChatTemplatePreset, GenerationSpansRawUnitsAndTargets)
 {
     jinja2::TemplateEnv env;
     jinja2::ConfigureForChatTemplates(env);
-    const std::string source = "ab{% generation %}cd{% endgeneration %}e{% generation %}é€\U0001F600{% endgeneration %}";
+    const std::string source = "ab{% generation %}cd{% endgeneration %}e{% generation %}\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80{% endgeneration %}";
     jinja2::Template tpl(&env);
     ASSERT_TRUE(tpl.Load(source));
     std::vector<jinja2::GenerationSpan> spans;
@@ -447,10 +447,16 @@ TEST(ChatTemplatePreset, GenerationSpansOnErrorAndLimit)
     jinja2::Template failing(&env);
     ASSERT_TRUE(failing.Load("{% generation %}a{% endgeneration %}{% generation %}{{ raise_exception('x') }}{% endgeneration %}"));
     std::string out;
+    spans.push_back({ 7, 7 });
     ASSERT_FALSE(failing.RenderTo(out, {}, options));
-    ASSERT_EQ(spans.size(), 1U);
-    EXPECT_EQ(spans[0].start, 0U);
-    EXPECT_EQ(spans[0].end, 1U);
+    // No span may point into output the failed render did not leave
+    EXPECT_TRUE(spans.empty());
+    EXPECT_TRUE(out.empty());
+
+    jinja2::Template unloaded(&env);
+    spans.push_back({ 7, 7 });
+    ASSERT_FALSE(unloaded.RenderTo(out, {}, options));
+    EXPECT_TRUE(spans.empty());
 
     env.GetSettings().limits.maxSequenceSize = 3;
     jinja2::Template many(&env);
@@ -459,7 +465,7 @@ TEST(ChatTemplatePreset, GenerationSpansOnErrorAndLimit)
     auto result = many.RenderTo(out, {}, options);
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::ResourceLimitExceeded) << jinja2::ToString(result.error().ToString());
-    EXPECT_EQ(spans.size(), 3U);
+    EXPECT_TRUE(spans.empty());
 }
 
 TEST(ChatTemplatePreset, GenerationSpansPlainEnvironmentAndNoTag)

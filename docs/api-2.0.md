@@ -309,7 +309,8 @@ sandbox beyond what it lists.
 render clears it and appends the `[start, end)` range of each `{% generation %}` body, in the order
 the blocks end (inner before outer), as transformers' `generation_indices`. Offsets are in units of
 the output (UTF-8 bytes narrow, `wchar_t` units wide) counted from the first character the render
-writes; the host converts to code points or tokens (transformers counts `str` characters). A
+writes; the host converts to code points or tokens (transformers counts `str` characters). A failed
+render leaves the vector empty, as it leaves a string target empty. A
 buffered part in Jinja2 (a macro's result, a call block, a recursive loop) places its blocks where
 the buffer began, as transformers does. Considered: a field of `ChatTemplateOptions` (the mask is a
 property of a render, not of the environment) and a render overload returning the pairs (a second

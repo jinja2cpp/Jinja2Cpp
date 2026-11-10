@@ -93,13 +93,14 @@ struct RenderOptions
      * `apply_chat_template(return_assistant_tokens_mask=True)`. Null, the default, records nothing
      * and costs nothing.
      *
-     * - The vector is the host's and must live through the call. The render clears it first.
+     * - The vector is the host's and must live through the call; it is not shared with another
+     *   render running at the same time (a callable's render included). The render clears it first.
      * - Offsets are in units of the output (UTF-8 bytes for a narrow template, `wchar_t` units for a
      *   wide one) counted from the first character this render writes: a render that appends to a
      *   string already holding text counts from the end of that text, so add its size.
      * - The order is the order in which the blocks end, so a nested block comes before the block that
      *   holds it, as in transformers. A block whose body is empty gives an empty span.
-     * - A render that fails keeps the spans of the blocks that ended before the error.
+     * - A render that fails leaves the vector empty, as it leaves a string target without the output.
      * - Only `{% generation %}` records spans. A template without one leaves the vector empty; a
      *   host that wants the pre-check of `apply_chat_template` (an error when the template has no
      *   generation tag) can match the template source with transformers' regex

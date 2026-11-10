@@ -26,7 +26,17 @@ std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::RenderWithOptions(Targ
         hooks.poll = &options.poll;
     }
     hooks.generationSpans = options.generationSpans;
-    return RenderCore<true>(os, params, &hooks);
+    if (options.generationSpans)
+    {
+        options.generationSpans->clear();
+    }
+    auto error = RenderCore<true>(os, params, &hooks);
+    // A failed render keeps no spans: a string target holds no output then, and a span past its end is a trap
+    if (error && options.generationSpans)
+    {
+        options.generationSpans->clear();
+    }
+    return error;
 }
 
 template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::RenderWithOptions(std::string&, const ValuesMap&, const RenderOptions&) const;

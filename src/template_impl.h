@@ -536,12 +536,11 @@ public:
             const auto output = BeginOutput(os);
             OutStream outStream(os);
             // On the render's stack, so that it outlives every use of the callback's pointer to it
-            std::conditional_t<hasHooks, detail::GenerationTracker, std::monostate> tracker;
+            [[maybe_unused]] std::conditional_t<hasHooks, detail::GenerationTracker, std::monostate> tracker;
             if constexpr (hasHooks)
             {
                 if (hooks->generationSpans)
                 {
-                    hooks->generationSpans->clear();
                     tracker.root = &outStream;
                     tracker.base = output.start;
                     tracker.spans = hooks->generationSpans;
