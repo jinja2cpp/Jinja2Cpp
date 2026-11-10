@@ -56,6 +56,22 @@ class Box(collections.abc.Mapping):
         return len(self._items)
 
 
+
+class OwnIterList(list):
+    """A list subclass with its own iteration: Python loops through __iter__, items stay the list's (task 0441)"""
+
+    def __iter__(self):
+        return iter(["x", "y"])
+
+
+class OwnIterTuple(tuple):
+    def __iter__(self):
+        return iter(["x", "y"])
+
+
+class PlainSubList(list):
+    pass
+
 CASES = [
     # dict: items, attributes, methods, non-string keys, filters that want a mapping
     ("{{ d.a }} {{ d['a'] }} {{ d.get('z', 0) }} {{ d.items()|list }} {{ d|length }}", {"d": {"a": 1, "b": 2}}),
@@ -80,6 +96,12 @@ CASES = [
     # a loop follows the live end of a list the template changes (verifier N3)
     ("{% for x in l %}{{ loop.length }}{{ x }}{% do l.pop() %}{% endfor %}", {"l": [1, 2, 3, 4]}),
     ("{% for x in l %}{{ x }}{% if l|length < 4 %}{% do l.append(9) %}{% endif %}{% endfor %}", {"l": [1, 2]}),
+    # a list or tuple subclass that overrides __iter__ is iterated through it; one that does not, by index (task 0441)
+    ("{% for i in l %}{{ i }}{% endfor %}|{% for i in t %}{{ i }}{% endfor %}|{% for i in p %}{{ i }}{% endfor %}",
+     {"l": OwnIterList([1, 2, 3]), "t": OwnIterTuple((1, 2, 3)), "p": PlainSubList([1, 2, 3])}),
+    ("{{ l|join('-') }} {{ l|list }} {{ l[1] }} {{ l|length }} {{ t|list }} {{ 'x' in l }} {{ l|first }}",
+     {"l": OwnIterList([1, 2, 3]), "t": OwnIterTuple((1, 2, 3))}),
+    ("{% for i in l %}{{ loop.index }}/{{ loop.length }}{% endfor %}", {"l": OwnIterList([1, 2, 3])}),
     # mutation is seen both ways
     ("{% do l.append(3) %}{% do d.update(z=1) %}{{ l }} {{ d }}", {"l": [1], "d": {"a": 0}}),
     # objects: attributes, methods, str/repr, __html__, getattr before getitem

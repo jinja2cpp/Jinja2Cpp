@@ -626,6 +626,59 @@ TEST(PublicHostObjectTest, SinglePassIterationIsLazyAndNeverRewound)
     EXPECT_EQ(L"1,2,3,", RenderW(L"{% for i in it %}{{ i }},{% endfor %}", params));
 }
 
+namespace
+{
+// A sequence whose iter() differs from its items by index, as a Python list subclass that overrides __iter__
+class OwnIterationSequence final : public IHostObject
+{
+public:
+    explicit OwnIterationSequence(bool byIndex)
+        : m_byIndex(byIndex)
+    {
+    }
+
+    [[nodiscard]] const char* TypeName() const override { return "L"; }
+    [[nodiscard]] std::string Str() const override { return "l"; }
+    [[nodiscard]] std::string Repr() const override { return "<L>"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view /*name*/) const override { return std::nullopt; }
+    [[nodiscard]] bool IsSequence() const override { return true; }
+    [[nodiscard]] bool IteratesByIndex() const override { return m_byIndex; }
+    [[nodiscard]] std::optional<Value> GetItem(const Value& key) const override
+    {
+        if (!key.IsInt() || key.AsInt() < 0 || key.AsInt() >= 3)
+        {
+            return std::nullopt;
+        }
+        return Value(key.AsInt() + 1);
+    }
+    [[nodiscard]] std::optional<size_t> Len() const override { return 3; }
+    [[nodiscard]] bool ItemAtTo(size_t index, HostResult& out) const override
+    {
+        if (index >= 3)
+        {
+            return false;
+        }
+        out.Set(static_cast<int64_t>(index + 1));
+        return true;
+    }
+    [[nodiscard]] bool IsIterable() const override { return true; }
+    [[nodiscard]] std::optional<GenericList> Iterate() const override { return MakeList({ Value("x"), Value("y") }); }
+
+private:
+    bool m_byIndex;
+};
+} // namespace
+
+TEST(PublicHostObjectTest, SequenceThatIteratesByItsOwnIterate)
+{
+    const ValuesMap params{ { "own", MakeHostValue<OwnIterationSequence>(false) }, { "indexed", MakeHostValue<OwnIterationSequence>(true) } };
+    EXPECT_EQ("xy|123", Render("{% for i in own %}{{ i }}{% endfor %}|{% for i in indexed %}{{ i }}{% endfor %}", params));
+    EXPECT_EQ("x-y|['x', 'y']|2", Render("{{ own|join('-') }}|{{ own|list }}|{% for i in own %}{{ loop.length if loop.last }}{% endfor %}", params));
+    // Its items by index stay its own
+    EXPECT_EQ("2|3", Render("{{ own[1] }}|{{ own|length }}", params));
+    EXPECT_EQ(L"xy", RenderW(L"{% for i in own %}{{ i }}{% endfor %}", params));
+}
+
 TEST(PublicHostObjectTest, ContainsThenIterationAndReversed)
 {
     ToySpec withContains;

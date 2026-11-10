@@ -894,6 +894,11 @@ Recommend A now, C only if someone asks.
      (`nullptr` by default) and `GenericMap::GetObjectClass()`, giving `LoopContext`,
      `Namespace`, `Cycler` or `Joiner`. A sandbox policy gets a template macro or function as
      an empty map of class `Macro` or `function`. It adds a vtable slot before the freeze.
+   - **A sequence with its own iteration (task 0441, before the freeze).** The engine iterates
+     an `IsSequence` object with a `Len` by index only when `IHostObject::IteratesByIndex()`
+     (true by default) says so; otherwise through `Iterate`. The module answers false for a
+     `list` or `tuple` subclass that overrides `__iter__`, which Python loops through it. It
+     adds a vtable slot before the freeze.
 
 ## 8. Work breakdown
 
