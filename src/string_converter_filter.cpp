@@ -164,6 +164,7 @@ private:
         String result;
         for (size_t n = 0; n != parts.size(); ++n)
         {
+            CheckSequenceSize(uint64_t{ result.size() } + separator.size() + parts[n].size(), "a wrapped string");
             result += (n == 0 ? String() : separator) + parts[n];
         }
         return result;

@@ -29,3 +29,19 @@ fails with `ResourceLimitExceeded` (`UnexpectedException` until 0250 P3), never 
 **Done when.** The rows pass and the limits-on fuzz target (0267) reports no out-of-memory.
 
 **Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).
+
+## Result
+
+Probed on master with `limits.maxSequenceSize = 1000` (`GrowthOperationsCheckSizeFirst`).
+
+Already checked: string `*` and the `replace` filter (`RepeatString`, `PythonReplace`), list `+`
+(`ReserveHint`), `center`/`indent` filters, `ReserveHint` users, pprint, JSON and YAML output.
+`std::length_error` needed no mapping: `ResourceLimitError` derives from it and is reported as
+`ResourceLimitExceeded` at the render boundary.
+
+Fixed: list `append`, `extend`, `insert` and list `*` (`value_methods.cpp`, `value_visitors.h`);
+string `+` (`value_visitors.h`) and `~` (`JoinAsStrings`, `expression_evaluator.cpp`); the `join`
+filter (`filters.cpp`) and `str.join`/`str.replace`/`str.format` (`value_methods.cpp`); `%` totals
+(`python_format.cpp`); the str-method width cap, now the `maxSequenceSize` cap instead of a separate
+2^28 (`WidthArg`); `lipsum` (`global_functions.cpp`); `wordwrap` (`string_converter_filter.cpp`).
+`|length` of a string or dict no longer builds a list (`filters.cpp`).

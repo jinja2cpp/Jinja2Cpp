@@ -930,6 +930,7 @@ InternalValue JoinAsStrings(Span<const LookupResult> values)
     }
     if (allText)
     {
+        CheckSequenceSize(size, "a string");
         return InternalValue::MakeText<CharT>(size, [&values](Span<CharT> chars) {
             auto out = chars.begin();
             for (const auto& value : values)
@@ -941,11 +942,13 @@ InternalValue JoinAsStrings(Span<const LookupResult> values)
     }
 
     // The others are rendered straight onto the text before them
+    CheckSequenceSize(size, "a string");
     std::basic_string<CharT> result;
     result.reserve(size);
     for (const auto& value : values)
     {
         Apply<visitors::ValueRenderer<CharT>>(*value, result);
+        CheckSequenceSize(result.size(), "a string");
     }
     return InternalValue(TargetString(std::move(result)));
 }

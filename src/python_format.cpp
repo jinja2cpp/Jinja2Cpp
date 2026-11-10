@@ -583,7 +583,11 @@ public:
     {
         std::string result;
         result.reserve(format.size() + 16);
-        ParsePercentFormat(format, [&](const PercentDirective& directive) { Directive(format, directive, result); });
+        ParsePercentFormat(format, [&](const PercentDirective& directive) {
+            Directive(format, directive, result);
+            // One directive adds at most a clamped width, so the total is checked after each (docs/tasks/0263)
+            CheckSequenceSize(result.size(), "a formatted string");
+        });
         return Finish(std::move(result));
     }
 
@@ -594,6 +598,7 @@ public:
         for (const auto& directive : directives)
         {
             Directive(format, directive, result);
+            CheckSequenceSize(result.size(), "a formatted string");
         }
         return Finish(std::move(result));
     }

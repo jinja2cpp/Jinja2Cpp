@@ -411,6 +411,60 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
     EXPECT_FALSE(wide.RenderAsString({}).has_value());
 }
 
+// Every operation that grows a list or string checks the result size against the render's
+// limits.maxSequenceSize before it allocates (docs/tasks/0263), so a doubling loop or one
+// wide request ends in ResourceLimitExceeded and never in std::bad_alloc after seconds.
+TEST_F(RecursionLimitsTest, GrowthOperationsCheckSizeFirst)
+{
+    m_env.GetSettings().limits.maxSequenceSize = 1000;
+    const std::string templates[] = {
+        "{% set ns = namespace(l=[1]) %}{% for i in range(40) %}{% set ns.l = ns.l + ns.l %}{% endfor %}",
+        "{% set l = [1] %}{% for i in range(40) %}{% set _ = l.extend(l) %}{% endfor %}",
+        "{% set l = [1] %}{% for i in range(2000) %}{% set _ = l.insert(0, 1) %}{% endfor %}",
+        "{{ [1] * 2**40 }}",
+        "{{ [1] * 2000 }}",
+        "{{ [1] * 600 + [2] * 600 }}",
+        "{% set ns = namespace(s='x') %}{% for i in range(40) %}{% set ns.s = ns.s ~ ns.s %}{% endfor %}",
+        "{% set ns = namespace(s='x') %}{% for i in range(40) %}{% set ns.s = ns.s + ns.s %}{% endfor %}",
+        "{{ 'x'.center(2**27) }}",
+        "{{ 'x'.ljust(2**27) }}",
+        "{{ 'x'.rjust(2**27) }}",
+        "{{ 'x'.zfill(2**27) }}",
+        "{{ ('%(a)1000000s'*100) % {'a': 1} }}",
+        "{{ '%2000s' % 'a' }}",
+        "{{ '{:2000}'.format('a') }}",
+        "{{ '%2000s'|format('a') }}",
+        "{{ lipsum(300000) }}",
+        "{{ range(5000)|join }}",
+        "{{ range(5000)|join(',') }}",
+        "{{ ','.join(range(5000)|map('string')) }}",
+        "{{ ('x' * 600).replace('x', 'yy') }}",
+        "{{ ('x' * 600)|replace('x', 'yy') }}",
+        "{{ ('x ' * 600)|wordwrap(1) }}",
+        "{{ ('x' * 600)|center(2000) }}",
+    };
+    for (const auto& source : templates)
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode()) << source << ": " << result.error().ToString();
+    }
+    TemplateW wide(&m_env);
+    ASSERT_TRUE(wide.Load(L"{{ 'x'.center(2**27) }}{{ lipsum(300000) }}").has_value());
+    EXPECT_FALSE(wide.RenderAsString({}).has_value());
+    TemplateW wideDoubling(&m_env);
+    ASSERT_TRUE(wideDoubling.Load(L"{% set ns = namespace(s='x') %}{% for i in range(40) %}{% set ns.s = ns.s ~ ns.s %}{% endfor %}").has_value());
+    auto wideResult = wideDoubling.RenderAsString({});
+    ASSERT_FALSE(wideResult.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wideResult.error().GetCode());
+    // len() of a string or a dict is its size, without a list of its characters or keys
+    Template ok(&m_env);
+    ASSERT_TRUE(ok.Load("{{ ([1] * 3 + [2])|join }}{{ 'x'.center(5) }}{{ 'ab' ~ 'c' }}{{ ('%3s' % 'a') }}{{ range(3)|join(',') }}{{ 'h\xc3\xa9llo'|length }}{{ {'a': 1, 'b': 2}|length }}").has_value());
+    EXPECT_EQ("1112  x  abc  a0,1,252", ok.RenderAsString({}).value());
+}
+
 #if defined(__linux__) || defined(__APPLE__)
 namespace
 {
