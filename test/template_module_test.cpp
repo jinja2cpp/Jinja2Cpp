@@ -688,6 +688,15 @@ TEST_F(TemplateModuleTest, DeepArgumentFails)
         ASSERT_FALSE(failed);
         EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, failed.error().GetCode()) << failed.error().ToString();
 
+        // A global of the environment the module copies too
+        jinja2::TemplateEnv env;
+        env.AddGlobal("p", DeepValue(DeepArgument, asMap));
+        jinja2::Template withGlobal(&env);
+        ASSERT_TRUE(!!withGlobal.Load("{{ p|length }}"));
+        auto globalFailed = withGlobal.MakeModule();
+        ASSERT_FALSE(globalFailed);
+        EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, globalFailed.error().GetCode()) << globalFailed.error().ToString();
+
         // Within the stack, it is the macro's
         const auto nested = DeepValue(500, asMap, 7);
         EXPECT_EQ("1", Call(module.exports["m"], { nested }).AsString());

@@ -3,8 +3,8 @@ status: open
 priority: medium
 area: robustness
 depends: []
-touches: [src/statements.cpp]
-shares: []
+touches: [src/value_methods.cpp]
+shares: [test/expressions_test.cpp]
 ---
 # A loop frame the frame pool hands out leaks under the prompt_escape fuzzer
 

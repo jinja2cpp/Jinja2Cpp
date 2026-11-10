@@ -19,6 +19,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -1002,17 +1003,17 @@ private:
         return out != nullptr;
     }
 
-    // A ValuesList or ValuesMap that holds items: one whose destruction recurses
+    // The indices of the containers whose destruction recurses: ValuesList and ValuesMap
+    static constexpr std::size_t ListIndex = 8;
+    static constexpr std::size_t MapIndex = 9;
+    // A ValuesList or ValuesMap that holds items
     [[nodiscard]] bool IsFilledContainer() const noexcept;
-    // Whether the value holds a filled container
-    [[nodiscard]] bool HoldsFilledContainer() const noexcept;
-    // Whether destroying the value recurses more than twice: a container it holds holds a
-    // filled container
-    [[nodiscard]] bool HoldsNestedContainer() const noexcept;
     // Moves the filled containers the value holds to `pending`
-    void TakeFilledContainers(std::vector<Value>& pending) noexcept;
-    // Destroys the containers nested in the value one at a time, so that a list nested
-    // deeper than the stack allows is destroyed without recursing once per level (docs/tasks/0418)
+    void TakeFilledContainers(std::vector<Value>& pending);
+    // Destroys the container the value holds: recursively up to MaxRecursiveDestroy levels,
+    // and past them one container at a time, so that a list nested deeper than the stack
+    // allows is destroyed without recursing once per level (docs/tasks/0418)
+    void DestroyContainer() noexcept;
     void DestroyNested() noexcept;
 
     ValueData m_data;
@@ -1415,50 +1416,36 @@ inline Value::Value(Value&& val) noexcept
     : m_data(std::move(val.m_data))
 {
 }
+namespace detail
+{
+// The containers being destroyed on this thread, one inside the other (Value::DestroyContainer)
+inline thread_local unsigned t_valueDestroyDepth = 0;
+constexpr unsigned MaxRecursiveDestroy = 64;
+} // namespace detail
+
 inline Value::~Value()
 {
-    if (HoldsNestedContainer())
+    static_assert(std::is_same_v<std::variant_alternative_t<ListIndex, ValueData>, RecWrapper<ValuesList>> && std::is_same_v<std::variant_alternative_t<MapIndex, ValueData>, RecWrapper<ValuesMap>>,
+                  "the indices Value::~Value compares");
+    // A scalar pays one compare
+    if (m_data.index() - ListIndex < 2)
     {
-        DestroyNested();
+        DestroyContainer();
     }
 }
 inline bool Value::IsFilledContainer() const noexcept
 {
-    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&m_data))
+    if (const auto* list = std::get_if<ListIndex>(&m_data))
     {
         return !list->valueless_after_move() && !(*list)->empty();
     }
-    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&m_data))
+    if (const auto* map = std::get_if<MapIndex>(&m_data))
     {
         return !map->valueless_after_move() && !(*map)->empty();
     }
     return false;
 }
-inline bool Value::HoldsFilledContainer() const noexcept
-{
-    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&m_data))
-    {
-        return !list->valueless_after_move() && std::any_of((*list)->begin(), (*list)->end(), [](const Value& item) { return item.IsFilledContainer(); });
-    }
-    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&m_data))
-    {
-        return !map->valueless_after_move() && std::any_of((*map)->begin(), (*map)->end(), [](const auto& entry) { return entry.second.IsFilledContainer(); });
-    }
-    return false;
-}
-inline bool Value::HoldsNestedContainer() const noexcept
-{
-    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&m_data))
-    {
-        return !list->valueless_after_move() && std::any_of((*list)->begin(), (*list)->end(), [](const Value& item) { return item.HoldsFilledContainer(); });
-    }
-    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&m_data))
-    {
-        return !map->valueless_after_move() && std::any_of((*map)->begin(), (*map)->end(), [](const auto& entry) { return entry.second.HoldsFilledContainer(); });
-    }
-    return false;
-}
-inline void Value::TakeFilledContainers(std::vector<Value>& pending) noexcept
+inline void Value::TakeFilledContainers(std::vector<Value>& pending)
 {
     const auto take = [&pending](Value& item) {
         if (item.IsFilledContainer())
@@ -1466,14 +1453,14 @@ inline void Value::TakeFilledContainers(std::vector<Value>& pending) noexcept
             pending.push_back(std::move(item));
         }
     };
-    if (auto* list = std::get_if<RecWrapper<ValuesList>>(&m_data))
+    if (auto* list = std::get_if<ListIndex>(&m_data))
     {
         if (!list->valueless_after_move())
         {
             std::for_each((*list)->begin(), (*list)->end(), take);
         }
     }
-    else if (auto* map = std::get_if<RecWrapper<ValuesMap>>(&m_data))
+    else if (auto* map = std::get_if<MapIndex>(&m_data))
     {
         if (!map->valueless_after_move())
         {
@@ -1481,19 +1468,36 @@ inline void Value::TakeFilledContainers(std::vector<Value>& pending) noexcept
         }
     }
 }
+inline void Value::DestroyContainer() noexcept
+{
+    auto& depth = detail::t_valueDestroyDepth;
+    if (depth < detail::MaxRecursiveDestroy)
+    {
+        ++depth;
+        m_data.emplace<NoneValue>();
+        --depth;
+        return;
+    }
+    DestroyNested();
+}
 inline void Value::DestroyNested() noexcept
 {
-    // A value nested three deep or more: all of it is destroyed here, with nothing left that
-    // recurses. Out of memory for the list of pending containers terminates, as std::bad_alloc in a
-    // destructor would
+    // The nested containers move to a list and are destroyed one by one, each after its own
+    // filled containers have moved: none of them recurses. Out of memory for the list leaves
+    // the rest to the recursive destruction, as before
     std::vector<Value> pending;
-    TakeFilledContainers(pending);
-    while (!pending.empty())
+    try
     {
-        // Its own filled containers go to the list first: it is then destroyed without recursing
-        Value item = std::move(pending.back());
-        pending.pop_back();
-        item.TakeFilledContainers(pending);
+        TakeFilledContainers(pending);
+        while (!pending.empty())
+        {
+            Value item = std::move(pending.back());
+            pending.pop_back();
+            item.TakeFilledContainers(pending);
+        }
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch)
+    {
     }
 }
 inline Value& Value::operator=(const Value&) = default;

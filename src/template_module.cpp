@@ -401,7 +401,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             }
             for (const auto& [name, value] : *globals.source)
             {
-                globals.values[name] = visit(visitors::InputValueConvertor(true, false), value.GetData());
+                globals.values[name] = OwnedArgument(value);
             }
         }
 
