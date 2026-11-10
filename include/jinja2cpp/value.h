@@ -10,7 +10,6 @@
 #include <jinja2cpp/utils/ordered_map.h>
 #include <jinja2cpp/value_ptr.h>
 
-#include <algorithm>
 #include <atomic>
 #include <charconv>
 #include <cstddef>
@@ -1002,18 +1001,11 @@ private:
         return out != nullptr;
     }
 
-    // The indices of the containers whose destruction recurses: ValuesList and ValuesMap
+    // The index of ValuesList, the first of the containers whose destruction recurses; ValuesMap follows
     static constexpr std::size_t ListIndex = 8;
-    static constexpr std::size_t MapIndex = 9;
-    // A ValuesList or ValuesMap that holds items
-    [[nodiscard]] bool IsFilledContainer() const noexcept;
-    // Moves the filled containers the value holds to `pending`
-    void TakeFilledContainers(std::vector<Value>& pending);
-    // Destroys the container the value holds: recursively up to MaxRecursiveDestroy levels,
-    // and past them one container at a time, so that a list nested deeper than the stack
-    // allows is destroyed without recursing once per level (docs/tasks/0418)
-    void DestroyContainer() noexcept;
-    void DestroyNested() noexcept;
+    // Destroys the container the value holds without recursing once per level of nesting,
+    // so that a list nested deeper than the stack allows can be destroyed (docs/tasks/0418)
+    JINJA2CPP_EXPORT void DestroyContainer() noexcept;
 
     ValueData m_data;
 };
@@ -1415,96 +1407,14 @@ inline Value::Value(Value&& val) noexcept
     : m_data(std::move(val.m_data))
 {
 }
-namespace detail
-{
-// The containers being destroyed on this thread, one inside the other (Value::DestroyContainer)
-inline thread_local unsigned t_valueDestroyDepth = 0;
-constexpr unsigned MaxRecursiveDestroy = 64;
-} // namespace detail
-
 inline Value::~Value()
 {
-    static_assert(std::is_same_v<std::variant_alternative_t<ListIndex, ValueData>, RecWrapper<ValuesList>> && std::is_same_v<std::variant_alternative_t<MapIndex, ValueData>, RecWrapper<ValuesMap>>,
+    static_assert(std::is_same_v<std::variant_alternative_t<ListIndex, ValueData>, RecWrapper<ValuesList>> && std::is_same_v<std::variant_alternative_t<ListIndex + 1, ValueData>, RecWrapper<ValuesMap>>,
                   "the indices Value::~Value compares");
     // A scalar pays one compare
     if (m_data.index() - ListIndex < 2)
     {
         DestroyContainer();
-    }
-}
-inline bool Value::IsFilledContainer() const noexcept
-{
-    if (const auto* list = std::get_if<ListIndex>(&m_data))
-    {
-        return !list->valueless_after_move() && !(*list)->empty();
-    }
-    if (const auto* map = std::get_if<MapIndex>(&m_data))
-    {
-        return !map->valueless_after_move() && !(*map)->empty();
-    }
-    return false;
-}
-inline void Value::TakeFilledContainers(std::vector<Value>& pending)
-{
-    const auto take = [&pending](Value& item) {
-        if (item.IsFilledContainer())
-        {
-            pending.push_back(std::move(item));
-        }
-    };
-    if (auto* list = std::get_if<ListIndex>(&m_data))
-    {
-        if (!list->valueless_after_move())
-        {
-            std::for_each((*list)->begin(), (*list)->end(), take);
-        }
-    }
-    else if (auto* map = std::get_if<MapIndex>(&m_data))
-    {
-        if (!map->valueless_after_move())
-        {
-            std::for_each((*map)->begin(), (*map)->end(), [&take](auto& entry) { take(entry.second); });
-        }
-    }
-}
-inline void Value::DestroyContainer() noexcept
-{
-    auto& depth = detail::t_valueDestroyDepth;
-    if (depth < detail::MaxRecursiveDestroy)
-    {
-        ++depth;
-        // Moved out and destroyed here, with the depth counted; what stays is valueless
-        if (auto* list = std::get_if<ListIndex>(&m_data))
-        {
-            const RecWrapper<ValuesList> doomed(std::move(*list));
-        }
-        else if (auto* map = std::get_if<MapIndex>(&m_data))
-        {
-            const RecWrapper<ValuesMap> doomed(std::move(*map));
-        }
-        --depth;
-        return;
-    }
-    DestroyNested();
-}
-inline void Value::DestroyNested() noexcept
-{
-    // The nested containers move to a list and are destroyed one by one, each after its own
-    // filled containers have moved: none of them recurses. Out of memory for the list leaves
-    // the rest to the recursive destruction, as before
-    std::vector<Value> pending;
-    try
-    {
-        TakeFilledContainers(pending);
-        while (!pending.empty())
-        {
-            Value item = std::move(pending.back());
-            pending.pop_back();
-            item.TakeFilledContainers(pending);
-        }
-    }
-    catch (...) // NOLINT(bugprone-empty-catch)
-    {
     }
 }
 inline Value& Value::operator=(const Value&) = default;
