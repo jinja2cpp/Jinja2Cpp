@@ -198,6 +198,11 @@ InternalValue InvokeInModule(RenderContext& context, const Callable& callable, c
 // (docs/tasks/0418). What it copied so far is destroyed without recursing (Value::~Value)
 Value OwnedCopy(const Value& value)
 {
+    const auto& data = value.GetData();
+    if (!std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data))
+    {
+        return value;
+    }
     if (const auto* list = value.GetIf<ValuesList>())
     {
         if (StackNearlyExhausted())
@@ -232,6 +237,12 @@ Value OwnedCopy(const Value& value)
 // value the macro stores it in (a namespace) never refers to the host's
 InternalValue OwnedArgument(const Value& value)
 {
+    // A scalar or a host's list or map, converted by value as it is
+    const auto& data = value.GetData();
+    if (!std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data))
+    {
+        return visit(visitors::InputValueConvertor(true, false), data);
+    }
     Value copy = OwnedCopy(value);
     return visit(visitors::InputValueConvertor(true, false), copy.GetData());
 }
