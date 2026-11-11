@@ -64,6 +64,7 @@ struct ToySpec
     bool listOrTuple = false;
     bool tuple = false;
     bool number = false;
+    const char* typeName = "Toy";
     std::optional<Value> toInt;
     std::optional<Value> toFloat;
     // A call keeps the template callable it was handed as `caller`, for a later call to try
@@ -134,7 +135,7 @@ public:
     {
     }
 
-    [[nodiscard]] const char* TypeName() const override { return "Toy"; }
+    [[nodiscard]] const char* TypeName() const override { return m_spec->typeName; }
     [[nodiscard]] std::string Str() const override { return m_spec->str; }
     [[nodiscard]] std::string Repr() const override { return m_spec->repr; }
     [[nodiscard]] std::optional<Value> GetAttr(std::string_view name) const override { return Find(m_spec->attrs, std::string(name)); }
@@ -2074,8 +2075,8 @@ TEST(PublicHostObjectTest, ListOrTupleIsAJsonArrayAndASequence)
     EXPECT_NE(std::string::npos, Render("{{ s|tojson }}", params).find("Object of type Toy is not JSON serializable"));
 }
 
-// pprint reads a list or tuple through its iteration and breaks it as pformat does (0434); a tuple of one item keeps
-// its comma when its iteration has no size
+// pprint reads an exact list or tuple through its iteration and breaks it as pformat does (0434); a tuple of one item
+// keeps its comma when its iteration has no size
 TEST(PublicHostObjectTest, ListOrTuplePrettyPrints)
 {
     auto items = [](std::vector<Value> values, bool tuple, bool indexable) {
@@ -2085,6 +2086,7 @@ TEST(PublicHostObjectTest, ListOrTuplePrettyPrints)
         spec.len = values.size();
         spec.iteration = std::move(values);
         spec.indexable = indexable;
+        spec.typeName = tuple ? "tuple" : "list";
         return MakeToy(spec);
     };
     std::vector<Value> numbers;
@@ -2107,6 +2109,13 @@ TEST(PublicHostObjectTest, ListOrTuplePrettyPrints)
     EXPECT_EQ("29],)", tuple.substr(tuple.size() - 5));
     EXPECT_EQ("() [{'a': 2, 'b': 1}]", Render("{{ e|pprint }} {{ d|pprint }}", params));
     EXPECT_EQ(L"[{'a': 2, 'b': 1}]", RenderW(L"{{ d|pprint }}", params));
+    // Another class (a subclass) prints as its repr
+    ToySpec other;
+    other.listOrTuple = true;
+    other.len = numbers.size();
+    other.iteration = numbers;
+    other.indexable = true;
+    EXPECT_EQ("<Toy>", Render("{{ o|pprint }}", { { "o", MakeToy(other) } }));
 }
 
 // A method that may change its receiver (append) is the host's own attribute: the engine never

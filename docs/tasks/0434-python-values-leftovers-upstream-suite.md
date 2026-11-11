@@ -45,13 +45,12 @@ module can call `random.choice`; the C++ engine keeps its generator (record as d
 - `_undefined_name` and `_undefined_hint` are attributes of every undefined value outside the sandbox
   (`UndefinedField`); a ChainableUndefined keeps the first missing step. Pinned by
   `undefined.*undefined_name*` cases. An int key comes back as an int; other non-string keys as their repr.
-- `pprint` reads a host list or tuple (a subclass that keeps `__repr__` too, not a namedtuple) through
-  its iteration, so it breaks and sorts as `pformat`: also closes 0453 (`filters.pprint_wraps_context_list`
+- `pprint` reads an exact host `list` or `tuple` through its iteration, so it breaks and sorts as
+  `pformat`; a subclass keeps printing as its repr (0453 stays open for subclasses that keep `list.__repr__`) (`filters.pprint_wraps_context_list`
   through the module's corpus run).
 - Before the 2.0 freeze: `IHostObject::IsNumber`, `ToInt`, `ToFloat` (`is number`, `int`, `float`) and
   `jinja2::MacroAttributes(UserCallable)` for the module's macro attributes (docs/api-2.0.md, section 7).
 - Found on the way and fixed: an empty `GenericList` with an accessor never reached `end()`.
-- Left as they are: a list subclass with its own `__repr__` is still broken as a list by `pprint` (the
-  engine cannot see `__repr__`); `d['']._undefined_name` is None (an empty name means none); a list
+- Left as they are: `d['']._undefined_name` is None (an empty name means none); a list
   that contains itself ends in the size cap or RecursionError, where pformat prints
   `<Recursion on list ...>`.

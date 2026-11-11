@@ -307,8 +307,6 @@ SUBCLASS_CASES = [
     "{% for i in l %}{{ loop.length }}{{ loop.revindex }}{{ loop.revindex0 }}{{ loop.last }};{% endfor %}",
     "{% for i in t %}{{ loop.length }}{% endfor %}|{% for i in n %}{{ i }}{{ loop.length }}{{ loop.last }}{% endfor %}",
     "{{ l + ['z'] }} {{ l * 2 }} {{ t + ('z',) }} {{ l < [1, 3] }} {{ t > (1,) }} {{ '%s-%s-%s' % t }} {{ l|length }}",
-    # pprint iterates a subclass that keeps list.__repr__ or tuple.__repr__ (task 0453)
-    "{{ l|pprint }} {{ t|pprint }} {{ p|pprint }} {{ g|pprint }} {{ gt|pprint }} {{ [l, {'b': t, 'a': p}]|pprint }}",
 ]
 
 
@@ -332,8 +330,13 @@ def test_list_and_tuple_subclasses_iterate_as_python_does(source):
     assert results[0] == results[1], f"{source!r}: jinja2cpp {results[0]!r}, Jinja2 {results[1]!r}"
 
 
-# pprint breaks a Python list or tuple as pformat does (0434): a subclass that keeps list.__repr__ too, but a
-# namedtuple, whose __repr__ is its own, prints on one line
+class SecretList(list):
+    def __repr__(self):
+        return "<redacted>"
+
+
+# pprint breaks a Python list or tuple as pformat does (0434); a subclass prints as its repr, which may be its own (a
+# namedtuple, one that hides its items). A subclass that keeps list.__repr__ is docs/tasks/0453
 @pytest.mark.parametrize(
     "value",
     [
@@ -341,8 +344,11 @@ def test_list_and_tuple_subclasses_iterate_as_python_does(source):
         tuple(range(40)),
         (list(range(40)),),
         [[1] * 40, {"a": (1,) * 40}],
-        PlainSubList(range(40)),
+        PlainSubList(range(3)),
         Point(list(range(40)), 1),
+        SecretList(range(40)),
+        [SecretList(["pw"])] * 30,
+        {"k": SecretList(["pw"])},
         list(range(1000)),
     ],
 )

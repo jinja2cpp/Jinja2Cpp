@@ -209,9 +209,9 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     // _format: indent is the column the value starts at, allowance the columns the text
     // after it on its last line takes, level its nesting (1 for the value pformat prints)
     // A host's list or tuple as the engine's list of what iterating it gives, which pprint prints and breaks as a list
-    // of the engine: pprint finds list.__repr__ and tuple.__repr__, which a subclass keeps, and iterates the object
-    // (its own __iter__ too, docs/tasks/0453); a namedtuple (a tuple subclass with `_fields`) has a __repr__ of its
-    // own, which prints on one line
+    // of the engine, as pformat does. Only an exact `list` or `tuple`: a subclass may have a __repr__ of its own (a
+    // namedtuple, or one that hides its items), which the engine cannot see, so it prints as its Repr on one line
+    // (docs/tasks/0453)
     static std::optional<ListAdapter> HostSequence(const InternalValue& val)
     {
         const auto* host = GetHostObject(val);
@@ -219,7 +219,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             return std::nullopt;
         }
-        if (!host->IsSequence() || (host->IsTuple() && std::strcmp(host->TypeName(), "tuple") != 0 && host->GetAttr("_fields").has_value()))
+        if (!host->IsSequence() || std::strcmp(host->TypeName(), host->IsTuple() ? "tuple" : "list") != 0)
         {
             return std::nullopt;
         }
