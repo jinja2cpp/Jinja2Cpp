@@ -860,6 +860,18 @@ TEST(BorrowedCellsKept, ModuleTupleToAKeepUndefinedCallable)
     EXPECT_EQ("list;tuple;list;tuple;list;tuple;", seen);
 }
 
+TEST(BorrowedCellsKept, ModuleNamespaceStaysANamespace)
+{
+    // 0347 (Codex on #836): a namespace a module call hands out keeps its class, which the Python
+    // module turns into a namespace object rather than a dict
+    KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(namespace(x=l)) %}{% set _ = keep({'x': l}) %}{% endmacro %}");
+    m.Call(1);
+    const auto& ns = m.keeper.kept.at(0).As<GenericMap>();
+    ASSERT_NE(nullptr, ns.GetObjectClass());
+    EXPECT_STREQ("Namespace", ns.GetObjectClass());
+    EXPECT_EQ(nullptr, m.keeper.kept.at(1).As<GenericMap>().GetObjectClass());
+}
+
 TEST(BorrowedCellsKept, ModuleCellInsideAKeptListReadFromThreads)
 {
     // 0332, TSan: two threads call the module, which writes `l` in every call, while a third reads

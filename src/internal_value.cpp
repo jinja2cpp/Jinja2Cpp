@@ -1641,6 +1641,13 @@ public:
         const auto* view = dynamic_cast<const CallMapView*>(&other);
         return view != nullptr && view->Dict() == Dict();
     }
+    // A namespace stays one to the host (GenericMap::GetObjectClass, docs/tasks/0347)
+    [[nodiscard]] const char* GetObjectClass() const override
+    {
+        const auto map = m_identity ? std::nullopt : AsMap(m_container);
+        const auto* accessor = map ? map->GetAccessor() : nullptr;
+        return accessor ? accessor->GetObjectClass() : nullptr;
+    }
 
 private:
     [[nodiscard]] const TemplateDict* Dict() const
