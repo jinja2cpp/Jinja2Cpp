@@ -53,7 +53,7 @@ void CycleCollector::Finish() noexcept
     }
 }
 
-bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner)
+bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names)
 {
     auto* collector = s_current;
     if (!collector)
@@ -62,25 +62,40 @@ bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_
     }
     if (collector->m_module)
     {
-        collector->m_module->kept.Keep(std::move(object), std::move(owner));
+        collector->m_module->kept.Keep(std::move(object), std::move(owner), names);
         return true;
     }
     if (!collector->m_notes)
     {
         collector->m_notes = std::make_unique<Notes>();
     }
-    collector->m_notes->kept.Keep(std::move(object), std::move(owner));
+    collector->m_notes->kept.Keep(std::move(object), std::move(owner), names);
     return true;
 }
 
-void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner)
+void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names)
 {
     if (m_kept.size() >= m_pruneAt)
     {
-        m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const auto& entry) { return entry.first.expired(); }), m_kept.end());
+        m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const Entry& entry) { return entry.owner.expired(); }), m_kept.end());
         m_pruneAt = std::max(MinPruneAt, m_kept.size() * 2);
     }
-    m_kept.emplace_back(std::move(owner), std::move(object));
+    m_kept.push_back(Entry{ std::move(owner), std::move(object), names });
+}
+
+void KeptObjects::NoteNames() const
+{
+    for (const auto& entry : m_kept)
+    {
+        if (!entry.names)
+        {
+            continue;
+        }
+        for (const auto& [name, value] : *entry.names)
+        {
+            CycleCollector::NoteStore(value);
+        }
+    }
 }
 
 BorrowedCells* CycleCollector::CellsForWrite()

@@ -2478,7 +2478,7 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
         // reach, live as long as it does. Outside a render nothing would release the copy:
         // the closures read the frame as one whose names are undefined
         const bool isHeld = CaptureEscapes(capture);
-        if (isHeld ? CycleCollector::KeepUntilEnd(names, capture) : CycleCollector::KeepUntilEnd(capture, names))
+        if (isHeld ? CycleCollector::KeepUntilEnd(names, capture, names.get()) : CycleCollector::KeepUntilEnd(capture, names))
         {
             capture->names = names;
         }

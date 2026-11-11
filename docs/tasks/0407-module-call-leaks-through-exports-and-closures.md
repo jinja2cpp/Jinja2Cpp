@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: robustness
 depends: []
@@ -26,3 +26,20 @@ frame (ClosureCapture traversal or the module's KeptObjects).
 
 **Done when** both rows pass under LSan and the `d|list` result is either Python's or on the
 divergence allow-list with its reason.
+
+**Resolution (2026-11-11).** Both rows are `TemplateModuleTest` cases, LSan-clean.
+- `RenderDictWrittenThroughAHostCallIntoAModule` (1552 bytes on master c9fe6ed): the module's
+  `d.update` copied the render's dict through the host's lent view, and the render's `[1]`
+  inside it was exported as the module call's own data (a `CallListView` of the call's exports,
+  because a module call was running on the thread). The module's copy of `d` then held the
+  call's exports, which pin that copy: a cycle no collector sees. A lent view now reads in the
+  render that lent it (`LendFrameScope` makes the lease's collector current while the lease is
+  active, none after), so the render's list is a view of the render's data, never the call's.
+  `d|list` stays `['a']`: the host holds a read-only snapshot of the render's dict, so the
+  macro writes a copy of its own (docs/api-2.0.md 3.10, item 9), a deliberate divergence from
+  Python, which shares one dict. It cannot be a parity corpus case: it needs a host callable
+  that calls a module macro.
+- `SelfHoldingListCapturedByAStoredClosure` (112 bytes): the module's destructor released the
+  closures' kept copies of names before its walk, and the cycle in them had been noted only to
+  the call's collector. `KeptObjects` now knows which kept object is a copy of names
+  (`KeepUntilEnd`'s third argument) and the destructor notes their values first.

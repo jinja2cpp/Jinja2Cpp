@@ -21,13 +21,25 @@ inline namespace v2
 class KeptObjects
 {
 public:
-    // Throws std::bad_alloc
-    void Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner);
+    // `names`: the copy of a frame's names `object` is, or null. Throws std::bad_alloc
+    void Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     void Clear() noexcept { m_kept.clear(); }
+    // Notes to the collector running on this thread the values of the kept copies of names: a
+    // template module that goes releases them, and a cycle among their containers that a call
+    // made has no note left, as it went with that call's collector (docs/tasks/0407). Throws
+    // std::bad_alloc
+    void NoteNames() const;
 
 private:
+    struct Entry
+    {
+        std::weak_ptr<const void> owner;
+        std::shared_ptr<const void> object;
+        const InternalValueMap* names;
+    };
+
     static constexpr size_t MinPruneAt = 64;
-    std::vector<std::pair<std::weak_ptr<const void>, std::shared_ptr<const void>>> m_kept;
+    std::vector<Entry> m_kept;
     size_t m_pruneAt = MinPruneAt;
 };
 
@@ -126,7 +138,8 @@ public:
     // render. Throws std::bad_alloc
     // Released earlier once `owner` has expired: the copy is of no use without it, and a loop
     // that makes one per iteration stays in constant memory (pruned as Add prunes candidates)
-    static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner);
+    // `names`: the copy of a frame's names `object` is, or null (KeptObjects::NoteNames)
+    static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     // The collector of the render running on this thread, or null
     [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
     // Makes `collector`, a render's that is still running further down this thread's stack, the
