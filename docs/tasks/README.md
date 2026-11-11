@@ -334,9 +334,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0260](0260-public-headers-iosfwd.md) | Public headers include `<iostream>` where `<iosfwd>` would do | release | low | open |
 | [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
 | [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | done |
-| [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | open |
+| [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | in-progress |
 | [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | done |
-| [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | open |
+| [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | done |
 | [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | done |
 | [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | open |
 | [0268](0268-untrusted-mode-followups.md) | Untrusted mode: additive follow-ups after the freeze | api | low | open |
@@ -517,6 +517,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0447](0447-chained-if-unicode-space.md) | Chained else-less conditionals and Unicode spaces inside tags | parity | low | open |
 | [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | open |
 | [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | open |
-| [0450](0450-module-call-collector-quadratic.md) | A module whose calls grow a module-level container walks all of it on every call | robustness | medium | open |
+| [0450](0450-module-call-collector-quadratic.md) | A module whose calls grow a module-level container walks all of it on every call | robustness | medium | done |
 | [0451](0451-python-module-trans-percent-and-range.md) | Python module: `{% trans %}100%{% endtrans %}` prints `100%%`; `range()` prints nothing | api | low | open |
+| [0452](0452-str-expandtabs.md) | str.expandtabs is missing from the string methods | parity | low | open |
 | [0453](0453-host-sequence-subclass-pprint.md) | pprint of a host list subclass that overrides `__iter__` | api | low | open |
+| [0454](0454-stack-canary-hot-frames.md) | Hot frames that gain a stack canary under -fstack-protector-strong | perf | medium | open |
+| [0455](0455-debug-checks-by-contract-level.md) | RenderContext's debug-only invariants follow the contract level, not NDEBUG | robustness | low | open |
