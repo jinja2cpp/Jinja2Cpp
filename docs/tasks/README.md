@@ -416,7 +416,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0344](0344-debug-containers-test-job.md) | A test job with a checking standard library (iterator and reference invalidation) | ci | medium | done |
 | [0345](0345-latest-llvm-analysis-job.md) | A report-only job with the latest LLVM for trunk lifetime and cross-TU analyses | ci | low | done |
 | [0346](0346-global-item-link-dropped-on-another-thread.md) | A global's item adapter in a block the global let go of, dropped on another thread | robustness | high | done |
-| [0347](0347-module-cells-in-lazy-and-namespace-exports.md) | Module cells reached through a lazy list or a namespace are not pinned | robustness | medium | open |
+| [0347](0347-module-cells-in-lazy-and-namespace-exports.md) | Module cells reached through a lazy list or a namespace are not pinned | robustness | medium | done |
 | [0348](0348-generic-list-shared-accessor.md) | GenericList and GenericMap hold their accessor by a shared pointer | api | medium | done |
 | [0349](0349-ctu-analyzer-on-newest-llvm.md) | Run the cross-TU static analyzer on the newest LLVM and on libstdc++ | ci | low | open |
 | [0350](0350-tla-runs-in-ci.md) | Run the long TLC checks of the cell model in GitHub Actions, and halve the two-thread runs | ci | medium | done |
@@ -474,7 +474,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0404](0404-urlencode-non-dict-mapping.md) | urlencode of a Python Mapping that is not a dict | parity | low | open |
 | [0405](0405-python-globals-replaced-under-cache.md) | Templates cached before env.globals is replaced see the new dict | parity | low | open |
 | [0406](0406-python-environment-keep-bounded.md) | Bound the callables an Environment keeps alive | robustness | low | open |
-| [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | open |
+| [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | done |
 | [0408](0408-bench-gate-driver-capabilities.md) | Detect the base bench driver's features by a capability marker | ci | low | open |
 | [0409](0409-truncate-tokens-shrink-bound.md) | Bound the host calls of truncate_tokens' shrink loop | robustness | low | open |
 | [0410](0410-python-include-join-path.md) | `include`, `import` and `extends` do not call `env.join_path` | parity | low | open |
@@ -527,5 +527,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | in-progress |
 | [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
 | [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | open |
+| [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | open |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
 | [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
