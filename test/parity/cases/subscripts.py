@@ -84,5 +84,5 @@ CASES = [
     ("tuple_of_slices_folded_branch", "[{{ ()[:, :] if true else x }}|{{ ()[:, :] if false else 5 }}|{% autoescape x %}{{ ()[:, :] }}{% endautoescape %}]"),
     # Jinja2 folds a conditional whose test folds by the branch it picks; the engine decides that
     # only when it renders, so at load it rejects an unfolded tuple of slices there (0463)
-    ("tuple_of_slices_fold_by_choice", "[{{ (()[:, :] if 1 > 0 else x) is undefined and '' }}]"),
+    ("tuple_of_slices_fold_by_choice", "[{{ (()[:, :] if 1 > 0) is undefined and '' }}|{{ (()[:, :] if 1 > 0 else x) is undefined and '' }}]"),
 ]

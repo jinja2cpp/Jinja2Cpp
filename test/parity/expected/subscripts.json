@@ -2235,7 +2235,7 @@
   },
   {
    "id": "subscripts.tuple_of_slices_fold_by_choice",
-   "template": "[{{ (()[:, :] if 1 > 0 else x) is undefined and '' }}]",
+   "template": "[{{ (()[:, :] if 1 > 0) is undefined and '' }}|{{ (()[:, :] if 1 > 0 else x) is undefined and '' }}]",
    "context": {
     "l": [
      3,
@@ -2263,7 +2263,7 @@
    },
    "env": {},
    "templates": {},
-   "output": "[]"
+   "output": "[|]"
   }
  ]
 }

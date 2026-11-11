@@ -14,7 +14,7 @@ unfolded code is invalid Python. It decides with `Expression::IsFoldable` at loa
 whose test folds (`1 > 0`, a comparison of literals) is foldable only "by choice"
 (`PrepareFold` gives `FoldByChoice`, `IsFoldableAt` decides at render), so the engine rejects
 
-    {{ (()[:, :] if 1 > 0 else x) is undefined and '' }}
+    {{ (()[:, :] if 1 > 0) is undefined and '' }}
 
 while Jinja2 folds the test, picks the first branch and renders `''`
 (`subscripts.tuple_of_slices_fold_by_choice`). The Python module's tests use this template as

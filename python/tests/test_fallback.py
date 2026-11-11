@@ -21,7 +21,7 @@ from jinja2cpp.nativetypes import NativeEnvironment
 # a conditional that Jinja2 folds by its test (task 0463), here to "" whatever the environment
 # (unfolded, it compiles to invalid Python). A template with NOPARSE in it goes to Jinja2;
 # test_candidate_is_unparsable checks it
-NOPARSE = '{{ (()[:, :] if 1 > 0 else x) is undefined and "" }}'
+NOPARSE = '{{ (()[:, :] if 1 > 0) is undefined and "" }}'
 UNPARSABLE = "a" + NOPARSE + "{{ 1 }}b"
 UNPARSABLE_RESULT = "a1b"
 
