@@ -127,6 +127,11 @@ void ProtectStack()
         return;
     }
     const Fiber& fiber = *t_running.back();
+    if (fiber.StackSize() == 0)
+    {
+        // A Windows fiber knows its bounds only once it runs: Run() sets them first thing
+        return;
+    }
     if (protection.set(state, const_cast<void*>(fiber.StackLow()), fiber.StackSize()) != 0)
     {
         // Out of memory in CPython: it keeps checking against the bounds it had
@@ -230,6 +235,8 @@ PyLazyRender::~PyLazyRender()
 
 void PyLazyRender::Run()
 {
+    // On the fiber, before any Python runs: its bounds are known here on every platform
+    ProtectStack();
     const jinja2::RenderSuspension suspension{ m_fiber->StackLow(), m_fiber->StackSize() };
     Sink sink(*this);
     try
