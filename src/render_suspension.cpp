@@ -50,6 +50,8 @@ RenderThreadState::RenderThreadState(const RenderSuspension& suspension)
     : workspace(TakeWorkspace())
     , stack(t_threadStack)
 {
+    // The thread's workspace is made here, where a failed allocation can throw, not in Exchange
+    static_cast<void>(RenderWorkspace::ForThisThread());
     if (suspension.stackSize != 0)
     {
         const auto low = reinterpret_cast<std::uintptr_t>(suspension.stackLow);
