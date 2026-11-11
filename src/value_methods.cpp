@@ -953,6 +953,11 @@ struct StrOps
         if (const auto* arg = Arg(params, 0, "tabsize"))
         {
             tabsize = IntArg(*arg, "expandtabs");
+            // Python's tabsize is a C int
+            if (tabsize < std::numeric_limits<int>::min() || tabsize > std::numeric_limits<int>::max())
+            {
+                Raise("OverflowError: Python int too large to convert to C int"s);
+            }
         }
         uint64_t size = 0;
         auto forEachPiece = [&self, tabsize](const auto& fn) {
@@ -1018,11 +1023,6 @@ struct StrOps
         {
             return map->FindItem(key);
         }
-        if (IsStringValue(table))
-        {
-            const auto count = ApplyStringConverter(table, [](auto sv) -> InternalValue { return static_cast<int64_t>(CodePointCount(sv)); });
-            return static_cast<int64_t>(cp) < *GetIf<int64_t>(&count) ? std::optional<InternalValue>(Subscript(table, key, &context)) : std::nullopt;
-        }
         const auto list = AsList(table);
         if (list && table.Kind() == ValueKind::List && list->GetIteratorKind() == IteratorKind::None)
         {
@@ -1039,7 +1039,19 @@ struct StrOps
         CheckArgs(params, "translate", 1, 1);
         const auto& table = params.posParams[0];
         Str result;
-        ForEachCodePoint(self, [&](View ch) {
+        // A str table is split once: indexing it per character would rescan it each time
+        if (IsStringValue(table))
+        {
+            const auto tableStr = StrArg(self, table, "translate");
+            const auto tableChars = SplitCodePoints(View(tableStr));
+            ForEachCodePoint(self, [&result, &tableChars](View ch) {
+                const auto cp = CodePointValue(ch);
+                result.append(cp < tableChars.size() ? tableChars[cp] : ch);
+                CheckSequenceSize(result.size(), "a translated string");
+            });
+            return Result(std::move(result));
+        }
+        ForEachCodePoint(self, [&result, &table, &self, &context](View ch) {
             const auto mapped = TranslateLookup(table, CodePointValue(ch), context);
             if (!mapped)
             {

@@ -220,6 +220,8 @@ CASES = [
     ("str_expandtabs_edges", "[{{ 'a\\tbc\\td'.expandtabs(tabsize=3) }}|{{ 'a\\tb'.expandtabs(0) }}|{{ 'a\\tb'.expandtabs(-1) }}|{{ 'ab\\n\\tc\\r\\td'.expandtabs(4)|replace('\\n', 'N')|replace('\\r', 'R') }}|{{ 'é\\tx\\t'.expandtabs(4) }}|{{ '😀\\t|'.expandtabs(3) }}|{{ ''.expandtabs() }}|{{ ('<\\t'|safe).expandtabs(2) }}]"),
     ("str_expandtabs_bad_size", "{{ 'a'.expandtabs('2') }}"),
     ("str_expandtabs_too_many_args", "{{ 'a'.expandtabs(1, 2) }}"),
+    ("str_expandtabs_c_int", "{{ 'a\\tb'.expandtabs(-2**63) }}"),
+    ("str_translate_str_table", "{{ ('xy' * 3000).translate('z' * 3000 + 'é')|length }}|{{ 'yxé'.translate('ab' * 61) }}"),
     ("str_translate", "{{ 'abc'.translate('abc'.maketrans('ab', 'xy')) }}|{{ 'abc'.translate({97: none, 98: 'BB', 99: 100}) }}|{{ 'héé'.translate({233: 'e'}) }}|{{ 'ab'.translate(['x'] * 98) }}|{{ 'ab'.translate('z' * 98) }}|{{ ('<a>'|safe).translate({97: '<'}) }}"),
     ("str_maketrans", "{{ 'abc'.maketrans('ab', 'xy') }}|{{ ''.maketrans({'a': 'z', 98: none}) }}|{{ ''.maketrans('a', 'b', 'cé') }}|{{ ''.maketrans('aa', 'bc') }}"),
     ("str_maketrans_unequal", "{{ ''.maketrans('ab', 'x') }}"),

@@ -4613,6 +4613,52 @@
    }
   },
   {
+   "id": "methods.str_expandtabs_c_int",
+   "template": "{{ 'a\\tb'.expandtabs(-2**63) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "OverflowError",
+    "message": "Python int too large to convert to C int"
+   }
+  },
+  {
+   "id": "methods.str_translate_str_table",
+   "template": "{{ ('xy' * 3000).translate('z' * 3000 + 'é')|length }}|{{ 'yxé'.translate('ab' * 61) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "6000|baé"
+  },
+  {
    "id": "methods.str_translate",
    "template": "{{ 'abc'.translate('abc'.maketrans('ab', 'xy')) }}|{{ 'abc'.translate({97: none, 98: 'BB', 99: 100}) }}|{{ 'héé'.translate({233: 'e'}) }}|{{ 'ab'.translate(['x'] * 98) }}|{{ 'ab'.translate('z' * 98) }}|{{ ('<a>'|safe).translate({97: '<'}) }}",
    "context": {
