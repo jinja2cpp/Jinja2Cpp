@@ -3072,29 +3072,25 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     if (!isConverted && AsMap(templateNames))
     {
         list = ConvertToList(templateNames, isConverted, false);
-        // It may iterate once, and the names tried are reported
-        if (isConverted)
-        {
-            list = ListAdapter::CreateAdapter(list.ToValueList());
-        }
     }
 
     bool rendered = false;
+    // The names tried, for the error: a host iterable may iterate once, and stops at the first found
+    // name as Python's select_template does
+    InternalValueList tried;
     if (isConverted)
     {
-        for (const auto& name : list)
-        {
+        list.ForEach([&](InternalValue&& name) {
+            CheckSequenceSize(tried.size() + 1, "a list");
+            tried.push_back(name);
             // Python's select_template finds no template by a name that is not a string and tries the next
             if (!GetAsSameString(std::string(), name))
             {
-                continue;
+                return true;
             }
             rendered = doRender(callback->LoadTemplate(name));
-            if (rendered)
-            {
-                break;
-            }
-        }
+            return !rendered;
+        });
     }
     else
     {
@@ -3112,7 +3108,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         ValuesList extraParams;
         if (isConverted)
         {
-            extraParams.push_back(IntValue2Value(InternalValue(list)));
+            extraParams.push_back(IntValue2Value(ListAdapter::CreateAdapter(std::move(tried))));
         }
         else
         {

@@ -138,6 +138,32 @@ def test_include_of_several_missing_templates_is_templates_not_found():
         assert str(info.value) == "none of the templates given were found: missing, missing2"
 
 
+def test_include_of_an_iterator_stops_at_the_first_template_found():
+    def names_then_fail():
+        yield "missing"
+        yield "header"
+        raise ValueError("read past the template found")
+
+    def endless():
+        while True:
+            yield "header"
+
+    def missing_names():
+        yield "missing"
+        yield 5
+        yield "missing2"
+
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({"header": "H"}))
+        include = env.from_string("{% include names %}|{% include names2 %}")
+        assert include.render(names=names_then_fail(), names2=endless()) == "H|H", module
+    # the names tried are reported (Jinja2's TemplatesNotFound fails on a generator with a TypeError)
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"header": "H"}))
+    with pytest.raises(jinja2cpp.TemplatesNotFound) as info:
+        env.from_string("{% include names %}").render(names=missing_names())
+    assert info.value.templates == ["missing", 5, "missing2"]
+
+
 def test_template_not_found_names_the_search_path(tmp_path):
     for module in (jinja2cpp, jinja2):
         loader = module.FileSystemLoader(str(tmp_path))
