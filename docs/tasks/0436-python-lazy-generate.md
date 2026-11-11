@@ -5,6 +5,7 @@ area: parity
 depends: [0355]
 touches: [python/src/environment.cpp, python/jinja2cpp/environment.py, include/jinja2cpp/template.h, src/renderer.h, src/out_stream.h, src/statements.cpp]
 shares: [python/tests/upstream/expected-failures.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/830
 ---
 # `Template.generate` renders on demand, in Jinja2's chunks
 
