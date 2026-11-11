@@ -1,4 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the literals area (cases/literals.py).
 # Format and kinds: test/parity/README.md.
 
-literals.class_name_of_str              rejects     0469 the engine's values have no __class__ (Jinja2 gives the Python type)
+literals.class_name_of_str              rejects     0476 the engine's values have no __class__ (Jinja2 gives the Python type)

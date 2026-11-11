@@ -30,7 +30,7 @@ test_debug.py::TestDebug::test_local_extraction                                 
 test_debug.py::TestDebug::test_regular_syntax_error                                    deliberate  0432 the classes are jinja2cpp.exceptions.*, which a traceback names (Jinja2's are jinja2.exceptions.*)
 test_debug.py::TestDebug::test_syntax_error                                            deliberate  0432 the classes are jinja2cpp.exceptions.*, which a traceback names (Jinja2's are jinja2.exceptions.*)
 test_ext.py::TestAutoEscape::test_overlay_scopes                                       extension   a custom Extension
-test_ext.py::TestAutoEscape::test_volatile_scoping                                     unsupported Environment.compile (and `.__class__` of an output value, docs/tasks/0469)
+test_ext.py::TestAutoEscape::test_volatile_scoping                                     unsupported Environment.compile (and `.__class__` of an output value, docs/tasks/0476)
 test_ext.py::TestExtensions                                                            extension   a custom Extension or jinja2.ext.debug
 test_ext.py::TestInternationalization::test_comment_extract                            unsupported babel_extract (message extraction)
 test_ext.py::TestInternationalization::test_complex_plural                             divergence  0415 oldstyle gettext formats the variables after the call

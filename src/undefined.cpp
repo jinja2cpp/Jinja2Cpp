@@ -250,7 +250,7 @@ std::optional<InternalValue> UndefinedField(const UndefinedInfo& info, std::stri
         {
             return InternalValue(NoneValue{});
         }
-        return InternalValue(std::move(hint));
+        return InternalValue(hint);
     }
     return std::nullopt;
 }

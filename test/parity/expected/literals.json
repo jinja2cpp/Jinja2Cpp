@@ -1,796 +1,796 @@
 {
-    "generator": "jinja2 3.1.6",
-    "area": "literals",
-    "cases": [
-        {
-            "id": "literals.int",
-            "template": "{{ 42 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "42"
-        },
-        {
-            "id": "literals.int_negative",
-            "template": "{{ -42 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "-42"
-        },
-        {
-            "id": "literals.int_underscore",
-            "template": "{{ 1_000_000 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1000000"
-        },
-        {
-            "id": "literals.int_hex",
-            "template": "{{ 0x1F }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "31"
-        },
-        {
-            "id": "literals.int_octal",
-            "template": "{{ 0o17 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "15"
-        },
-        {
-            "id": "literals.int_binary",
-            "template": "{{ 0b101 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "5"
-        },
-        {
-            "id": "literals.int_prefix_upper_underscore",
-            "template": "{{ 0XFF_FF }}|{{ 0O_17 }}|{{ 0B1_0 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "65535|15|2"
-        },
-        {
-            "id": "literals.int_hex_then_keyword",
-            "template": "{{ 'T' if 0x1for 0 else 'F' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "literals.int_zero_forms",
-            "template": "{{ 0_0 }}|{{ 00 }}|{{ 0_1.5 }}|{{ 01.5 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "0|0|1.5|1.5"
-        },
-        {
-            "id": "literals.int_after_float_overflow",
-            "template": "{{ 'T' if 1e400 > 0 else 'F' }}{{ 4611686018427387904 + 1 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "T4611686018427387905"
-        },
-        {
-            "id": "literals.int_big",
-            "template": "{{ 12345678901234567890 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "12345678901234567890"
-        },
-        {
-            "id": "literals.float",
-            "template": "{{ 1.5 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1.5"
-        },
-        {
-            "id": "literals.float_whole",
-            "template": "{{ 2.0 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "2.0"
-        },
-        {
-            "id": "literals.float_exponent",
-            "template": "{{ 1e3 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1000.0"
-        },
-        {
-            "id": "literals.float_exponent_negative",
-            "template": "{{ 2.5e-3 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "0.0025"
-        },
-        {
-            "id": "literals.float_underscore",
-            "template": "{{ 1_000.5 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1000.5"
-        },
-        {
-            "id": "literals.float_exponent_underscore",
-            "template": "{{ 1_5e-0_1 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1.5"
-        },
-        {
-            "id": "literals.float_precision",
-            "template": "{{ 0.1 + 0.2 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "0.30000000000000004"
-        },
-        {
-            "id": "literals.float_large",
-            "template": "{{ 1e20 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1e+20"
-        },
-        {
-            "id": "literals.float_small",
-            "template": "{{ 1e-7 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1e-07"
-        },
-        {
-            "id": "literals.string_single",
-            "template": "{{ 'abc' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "abc"
-        },
-        {
-            "id": "literals.string_double",
-            "template": "{{ \"abc\" }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "abc"
-        },
-        {
-            "id": "literals.string_escape_quote",
-            "template": "{{ 'it\\'s' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "it's"
-        },
-        {
-            "id": "literals.string_escape_newline",
-            "template": "{{ 'a\\nb' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "a\nb"
-        },
-        {
-            "id": "literals.string_escape_tab",
-            "template": "{{ 'a\\tb' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "a\tb"
-        },
-        {
-            "id": "literals.string_escape_backslash",
-            "template": "{{ 'a\\\\b' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "a\\b"
-        },
-        {
-            "id": "literals.string_escape_unicode",
-            "template": "{{ 'é' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "é"
-        },
-        {
-            "id": "literals.string_escape_hex_octal",
-            "template": "{{ 'A\\x42\\u0043\\U00000044\\105' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "ABCDE"
-        },
-        {
-            "id": "literals.string_escape_control",
-            "template": "{{ '\\a\\b\\f\\v\\0' == 'abfv0' }}|{{ '\\a\\b\\f\\v\\0'|length }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "False|5"
-        },
-        {
-            "id": "literals.string_escape_named",
-            "template": "{{ '\\N{BULLET}' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "•"
-        },
-        {
-            "id": "literals.string_escape_named_kinds",
-            "template": "{{ 'a\\N{latin small letter b}\\N{HYPHEN-MINUS}\\N{lf}\\N{CJK UNIFIED IDEOGRAPH-4E00}\\N{HANGUL SYLLABLE GAGS}\\N{nushu character-1b170}\\N{MAHJONG TILE RED DRAGON}'|length }}|{{ '\\N{SNOWMAN}\\N{BOM}'|list|map('length')|join(',') }}|{{ '\\N{CJK UNIFIED IDEOGRAPH-04E00}' == '\\u4e00' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "8|1,1|True"
-        },
-        {
-            "id": "literals.string_escape_named_unknown",
-            "template": "{{ '\\N{NO SUCH CHARACTER}' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "unknown Unicode character name"
-            }
-        },
-        {
-            "id": "literals.string_escape_named_computed_lower",
-            "template": "{{ '\\N{hangul syllable ga}' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "unknown Unicode character name"
-            }
-        },
-        {
-            "id": "literals.string_escape_named_unclosed",
-            "template": "{{ '\\N{BULLET' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "malformed \\N character escape"
-            }
-        },
-        {
-            "id": "literals.string_escape_named_no_brace",
-            "template": "{{ '\\NBULLET' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "malformed \\N character escape"
-            }
-        },
-        {
-            "id": "literals.string_escape_unknown_keeps_backslash",
-            "template": "{{ '\\q\\8\\/' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "\\q\\8\\/"
-        },
-        {
-            "id": "literals.string_escape_octal_wide",
-            "template": "{{ '\\400'|length }}|{{ '\\777'|length }}|{{ '\\1012'|length }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1|1|2"
-        },
-        {
-            "id": "literals.string_escape_line_continuation",
-            "template": "{{ 'a\\\nb' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "ab"
-        },
-        {
-            "id": "literals.string_escape_code_points",
-            "template": "{{ '\\xe9'|length }}|{{ ['\\xe9', '\\u00e9', '\\u20ac', '\\U0001F600']|map('length')|join(',') }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1|1,1,1,1"
-        },
-        {
-            "id": "literals.string_escape_in_adjacent",
-            "template": "{{ 'a\\x41' 'b\\u0042' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "aAbB"
-        },
-        {
-            "id": "literals.string_escape_truncated_x",
-            "template": "{{ '\\x4' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "truncated \\xXX escape"
-            }
-        },
-        {
-            "id": "literals.string_escape_bad_hex",
-            "template": "{{ '\\x4g' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "truncated \\xXX escape"
-            }
-        },
-        {
-            "id": "literals.string_escape_truncated_u",
-            "template": "{{ '\\u12' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "truncated \\uXXXX escape"
-            }
-        },
-        {
-            "id": "literals.string_escape_truncated_big_u",
-            "template": "{{ '\\U0001F60' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "truncated \\UXXXXXXXX escape"
-            }
-        },
-        {
-            "id": "literals.string_escape_out_of_range",
-            "template": "{{ '\\U00110000' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "illegal Unicode character"
-            }
-        },
-        {
-            "id": "literals.string_escape_bad_second_literal",
-            "template": "{{ 'ok' '\\x' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "truncated \\xXX escape"
-            }
-        },
-        {
-            "id": "literals.string_unicode_literal",
-            "template": "{{ 'héllo ✓' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "héllo ✓"
-        },
-        {
-            "id": "literals.string_adjacent_concat",
-            "template": "{{ 'a' 'b' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "ab"
-        },
-        {
-            "id": "literals.string_adjacent_mixed_quotes",
-            "template": "{{ 'a' \"b\" 'c' ~ 'd' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "abcd"
-        },
-        {
-            "id": "literals.bool_lower",
-            "template": "{{ true }}|{{ false }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "True|False"
-        },
-        {
-            "id": "literals.bool_title",
-            "template": "{{ True }}|{{ False }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "True|False"
-        },
-        {
-            "id": "literals.none_lower",
-            "template": "{{ none }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "None"
-        },
-        {
-            "id": "literals.none_title",
-            "template": "{{ None }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "None"
-        },
-        {
-            "id": "literals.list",
-            "template": "{{ [1, 2, 3] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "[1, 2, 3]"
-        },
-        {
-            "id": "literals.list_empty",
-            "template": "{{ [] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "[]"
-        },
-        {
-            "id": "literals.list_trailing_comma",
-            "template": "{{ [1, 2,] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "[1, 2]"
-        },
-        {
-            "id": "literals.list_nested",
-            "template": "{{ [[1], [2, [3]]] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "[[1], [2, [3]]]"
-        },
-        {
-            "id": "literals.list_mixed",
-            "template": "{{ [1, 'a', none, true, 1.5] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "[1, 'a', None, True, 1.5]"
-        },
-        {
-            "id": "literals.tuple",
-            "template": "{{ (1, 2) }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "(1, 2)"
-        },
-        {
-            "id": "literals.tuple_single",
-            "template": "{{ (1,) }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "(1,)"
-        },
-        {
-            "id": "literals.tuple_empty",
-            "template": "{{ () }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "()"
-        },
-        {
-            "id": "literals.tuple_trailing_comma",
-            "template": "{% for i in (1, 2,) %}{{ i }},{% endfor %}{{ (1,)|length }}{{ ()|length }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1,2,10"
-        },
-        {
-            "id": "literals.dict",
-            "template": "{{ {'a': 1} }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{'a': 1}"
-        },
-        {
-            "id": "literals.dict_empty",
-            "template": "{{ {} }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{}"
-        },
-        {
-            "id": "literals.dict_order",
-            "template": "{{ {'b': 1, 'a': 2, 'c': 3} }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{'b': 1, 'a': 2, 'c': 3}"
-        },
-        {
-            "id": "literals.dict_int_key",
-            "template": "{{ {1: 'x'}[1] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "x"
-        },
-        {
-            "id": "literals.dict_nested",
-            "template": "{{ {'a': {'b': [1]}} }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{'a': {'b': [1]}}"
-        },
-        {
-            "id": "literals.dict_trailing_comma",
-            "template": "{{ {'a': 1,}['a'] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1"
-        },
-        {
-            "id": "literals.call_trailing_comma",
-            "template": "{{ range(1, 3, )|join(',') }}|{{ 'T' if 10 is equalto(10,) else 'F' }}|{{ 'a,b'.split(',', )|join('-') }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1,2|T|a-b"
-        },
-        {
-            "id": "literals.dict_expression_key",
-            "template": "{% set k = 'x' %}{{ {k: 1, k ~ 'y': 2}['xy'] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "2"
-        },
-        {
-            "id": "literals.dict_nested_lookup",
-            "template": "{% set d = {'a': {'b': [1, 2]}} %}{{ d['a']['b'][1] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "2"
-        },
-        {
-            "id": "literals.parenthesised",
-            "template": "{{ (1) }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "1"
-        },
-        {
-            "id": "literals.number_dot_attribute",
-            "template": "[{{ 1.e3 }}][{{ 1.5.2 }}]",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "[][]"
-        },
-        {
-            "id": "literals.dict_int_key_print",
-            "template": "{{ {1: 'x', '1': 'y'} }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{1: 'x', '1': 'y'}"
-        },
-        {
-            "id": "literals.dict_numeric_keys_merge",
-            "template": "{{ {1:'a', 1.0:'b', True:'c'} }}|{{ {1.0:'x'} }}|{{ {True:1}[1] }}|{{ {0:'z'}[false] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{1: 'c'}|{1.0: 'x'}|1|z"
-        },
-        {
-            "id": "literals.dict_other_hashable_keys",
-            "template": "{{ {none:1, 1.5:2, (1,2):3} }}|{{ {(1,2):3}[(1,2)] }}|{{ {(1,2.0):3}[(1.0,2)] }}|{{ {none:1}[none] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{None: 1, 1.5: 2, (1, 2): 3}|3|3|1"
-        },
-        {
-            "id": "literals.dict_int_key_not_string",
-            "template": "{{ {1:'x'}['1'] is defined }}|{{ {'1':'x'}[1] is defined }}|{{ {1:2}.1 }}|{{ {-1:2}[-1] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "False|False|2|2"
-        },
-        {
-            "id": "literals.dict_float_keys",
-            "template": "{{ {0.1+0.2:'x'} }}|{{ {-0.0:'x', 0:'y'} }}|{{ {1e100:'x'} }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{0.30000000000000004: 'x'}|{-0.0: 'y'}|{1e+100: 'x'}"
-        },
-        {
-            "id": "literals.dict_key_range_and_nested_tuple",
-            "template": "{{ {range(3): 'r', ((1, 2), 'a'): 'n'} }}|{{ {range(3): 'r'}[range(0, 3)] }}|{{ {((1, 2), 'a'): 'n'}[((1.0, 2), 'a')] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "{range(0, 3): 'r', ((1, 2), 'a'): 'n'}|r|n"
-        },
-        {
-            "id": "literals.dict_key_big_float_is_float",
-            "template": "{{ {2.0**63: 'f'}[2.0**63] }}|{{ {2.0**63: 'f'} }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "f|{9.223372036854776e+18: 'f'}"
-        },
-        {
-            "id": "literals.int_big_hex",
-            "template": "{{ 0x1_0000_0000_0000_0000 }}|{{ 0o2000000000000000000000 }}|{{ 0b10000000000000000000000000000000000000000000000000000000000000000 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "18446744073709551616|18446744073709551616|18446744073709551616"
-        },
-        {
-            "id": "literals.int_min_literal",
-            "template": "{{ -9223372036854775808 }}|{{ (-9223372036854775808) is integer }}|{{ 9223372036854775808 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "-9223372036854775808|True|9223372036854775808"
-        },
-        {
-            "id": "literals.int_digits_limit",
-            "template": "{{ 11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111 }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "ValueError",
-                "message": "Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit"
-            }
-        },
-        {
-            "id": "literals.int_big_context",
-            "template": "{{ n }}|{{ n is integer }}|{{ [n] }}|{{ n > 9223372036854775807 }}",
-            "context": {
-                "n": 18446744073709551615
-            },
-            "env": {},
-            "templates": {},
-            "output": "18446744073709551615|True|[18446744073709551615]|True"
-        },
-        {
-            "id": "literals.unicode_15_1_repr",
-            "template": "{{ ['\\U0002ebf0', '⿼', '㇯'] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "['\\U0002ebf0', '\\u2ffc', '\\u31ef']"
-        },
-        {
-            "id": "literals.unicode_16_0_repr",
-            "template": "{{ ['\\U00010d50', 'Ᲊ', 'ࢗ'] }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "['\\U00010d50', '\\u1c89', '\\u0897']"
-        },
-        {
-            "id": "literals.unicode_15_1_named_computed",
-            "template": "{{ '\\N{CJK UNIFIED IDEOGRAPH-2EBF0}' == '\\U0002ebf0' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "unknown Unicode character name"
-            }
-        },
-        {
-            "id": "literals.unicode_15_1_named_stored",
-            "template": "{{ '\\N{IDEOGRAPHIC DESCRIPTION CHARACTER SUBTRACTION}'|length }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "unknown Unicode character name"
-            }
-        },
-        {
-            "id": "literals.unicode_16_0_named",
-            "template": "{{ '\\N{GARAY CAPITAL LETTER A}' == '\\U00010d50' }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "unknown Unicode character name"
-            }
-        },
-        {
-            "id": "literals.unicode_16_0_named_any_case",
-            "template": "{{ '\\N{latin capital letter rams horn}'|length }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "unknown Unicode character name"
-            }
-        },
-        {
-            "id": "literals.class_name_of_str",
-            "template": "{{ 'a'.__class__.__name__ }}|{{ ('a'|safe).__class__.__name__ }}",
-            "context": {},
-            "env": {},
-            "templates": {},
-            "output": "str|Markup"
-        }
-    ]
+ "generator": "jinja2 3.1.6",
+ "area": "literals",
+ "cases": [
+  {
+   "id": "literals.int",
+   "template": "{{ 42 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "42"
+  },
+  {
+   "id": "literals.int_negative",
+   "template": "{{ -42 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "-42"
+  },
+  {
+   "id": "literals.int_underscore",
+   "template": "{{ 1_000_000 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1000000"
+  },
+  {
+   "id": "literals.int_hex",
+   "template": "{{ 0x1F }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "31"
+  },
+  {
+   "id": "literals.int_octal",
+   "template": "{{ 0o17 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "15"
+  },
+  {
+   "id": "literals.int_binary",
+   "template": "{{ 0b101 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "5"
+  },
+  {
+   "id": "literals.int_prefix_upper_underscore",
+   "template": "{{ 0XFF_FF }}|{{ 0O_17 }}|{{ 0B1_0 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "65535|15|2"
+  },
+  {
+   "id": "literals.int_hex_then_keyword",
+   "template": "{{ 'T' if 0x1for 0 else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "literals.int_zero_forms",
+   "template": "{{ 0_0 }}|{{ 00 }}|{{ 0_1.5 }}|{{ 01.5 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0|0|1.5|1.5"
+  },
+  {
+   "id": "literals.int_after_float_overflow",
+   "template": "{{ 'T' if 1e400 > 0 else 'F' }}{{ 4611686018427387904 + 1 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "T4611686018427387905"
+  },
+  {
+   "id": "literals.int_big",
+   "template": "{{ 12345678901234567890 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "12345678901234567890"
+  },
+  {
+   "id": "literals.float",
+   "template": "{{ 1.5 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1.5"
+  },
+  {
+   "id": "literals.float_whole",
+   "template": "{{ 2.0 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2.0"
+  },
+  {
+   "id": "literals.float_exponent",
+   "template": "{{ 1e3 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1000.0"
+  },
+  {
+   "id": "literals.float_exponent_negative",
+   "template": "{{ 2.5e-3 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0.0025"
+  },
+  {
+   "id": "literals.float_underscore",
+   "template": "{{ 1_000.5 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1000.5"
+  },
+  {
+   "id": "literals.float_exponent_underscore",
+   "template": "{{ 1_5e-0_1 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1.5"
+  },
+  {
+   "id": "literals.float_precision",
+   "template": "{{ 0.1 + 0.2 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0.30000000000000004"
+  },
+  {
+   "id": "literals.float_large",
+   "template": "{{ 1e20 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1e+20"
+  },
+  {
+   "id": "literals.float_small",
+   "template": "{{ 1e-7 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1e-07"
+  },
+  {
+   "id": "literals.string_single",
+   "template": "{{ 'abc' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "abc"
+  },
+  {
+   "id": "literals.string_double",
+   "template": "{{ \"abc\" }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "abc"
+  },
+  {
+   "id": "literals.string_escape_quote",
+   "template": "{{ 'it\\'s' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "it's"
+  },
+  {
+   "id": "literals.string_escape_newline",
+   "template": "{{ 'a\\nb' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a\nb"
+  },
+  {
+   "id": "literals.string_escape_tab",
+   "template": "{{ 'a\\tb' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a\tb"
+  },
+  {
+   "id": "literals.string_escape_backslash",
+   "template": "{{ 'a\\\\b' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a\\b"
+  },
+  {
+   "id": "literals.string_escape_unicode",
+   "template": "{{ 'é' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "é"
+  },
+  {
+   "id": "literals.string_escape_hex_octal",
+   "template": "{{ 'A\\x42\\u0043\\U00000044\\105' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ABCDE"
+  },
+  {
+   "id": "literals.string_escape_control",
+   "template": "{{ '\\a\\b\\f\\v\\0' == 'abfv0' }}|{{ '\\a\\b\\f\\v\\0'|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False|5"
+  },
+  {
+   "id": "literals.string_escape_named",
+   "template": "{{ '\\N{BULLET}' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "•"
+  },
+  {
+   "id": "literals.string_escape_named_kinds",
+   "template": "{{ 'a\\N{latin small letter b}\\N{HYPHEN-MINUS}\\N{lf}\\N{CJK UNIFIED IDEOGRAPH-4E00}\\N{HANGUL SYLLABLE GAGS}\\N{nushu character-1b170}\\N{MAHJONG TILE RED DRAGON}'|length }}|{{ '\\N{SNOWMAN}\\N{BOM}'|list|map('length')|join(',') }}|{{ '\\N{CJK UNIFIED IDEOGRAPH-04E00}' == '\\u4e00' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "8|1,1|True"
+  },
+  {
+   "id": "literals.string_escape_named_unknown",
+   "template": "{{ '\\N{NO SUCH CHARACTER}' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.string_escape_named_computed_lower",
+   "template": "{{ '\\N{hangul syllable ga}' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.string_escape_named_unclosed",
+   "template": "{{ '\\N{BULLET' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "malformed \\N character escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_named_no_brace",
+   "template": "{{ '\\NBULLET' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "malformed \\N character escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_unknown_keeps_backslash",
+   "template": "{{ '\\q\\8\\/' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "\\q\\8\\/"
+  },
+  {
+   "id": "literals.string_escape_octal_wide",
+   "template": "{{ '\\400'|length }}|{{ '\\777'|length }}|{{ '\\1012'|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|1|2"
+  },
+  {
+   "id": "literals.string_escape_line_continuation",
+   "template": "{{ 'a\\\nb' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "literals.string_escape_code_points",
+   "template": "{{ '\\xe9'|length }}|{{ ['\\xe9', '\\u00e9', '\\u20ac', '\\U0001F600']|map('length')|join(',') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|1,1,1,1"
+  },
+  {
+   "id": "literals.string_escape_in_adjacent",
+   "template": "{{ 'a\\x41' 'b\\u0042' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "aAbB"
+  },
+  {
+   "id": "literals.string_escape_truncated_x",
+   "template": "{{ '\\x4' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\xXX escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_bad_hex",
+   "template": "{{ '\\x4g' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\xXX escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_truncated_u",
+   "template": "{{ '\\u12' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\uXXXX escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_truncated_big_u",
+   "template": "{{ '\\U0001F60' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\UXXXXXXXX escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_out_of_range",
+   "template": "{{ '\\U00110000' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "illegal Unicode character"
+   }
+  },
+  {
+   "id": "literals.string_escape_bad_second_literal",
+   "template": "{{ 'ok' '\\x' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "truncated \\xXX escape"
+   }
+  },
+  {
+   "id": "literals.string_unicode_literal",
+   "template": "{{ 'héllo ✓' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "héllo ✓"
+  },
+  {
+   "id": "literals.string_adjacent_concat",
+   "template": "{{ 'a' 'b' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "literals.string_adjacent_mixed_quotes",
+   "template": "{{ 'a' \"b\" 'c' ~ 'd' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "abcd"
+  },
+  {
+   "id": "literals.bool_lower",
+   "template": "{{ true }}|{{ false }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|False"
+  },
+  {
+   "id": "literals.bool_title",
+   "template": "{{ True }}|{{ False }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|False"
+  },
+  {
+   "id": "literals.none_lower",
+   "template": "{{ none }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "None"
+  },
+  {
+   "id": "literals.none_title",
+   "template": "{{ None }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "None"
+  },
+  {
+   "id": "literals.list",
+   "template": "{{ [1, 2, 3] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[1, 2, 3]"
+  },
+  {
+   "id": "literals.list_empty",
+   "template": "{{ [] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "literals.list_trailing_comma",
+   "template": "{{ [1, 2,] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[1, 2]"
+  },
+  {
+   "id": "literals.list_nested",
+   "template": "{{ [[1], [2, [3]]] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[[1], [2, [3]]]"
+  },
+  {
+   "id": "literals.list_mixed",
+   "template": "{{ [1, 'a', none, true, 1.5] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[1, 'a', None, True, 1.5]"
+  },
+  {
+   "id": "literals.tuple",
+   "template": "{{ (1, 2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "(1, 2)"
+  },
+  {
+   "id": "literals.tuple_single",
+   "template": "{{ (1,) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "(1,)"
+  },
+  {
+   "id": "literals.tuple_empty",
+   "template": "{{ () }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "()"
+  },
+  {
+   "id": "literals.tuple_trailing_comma",
+   "template": "{% for i in (1, 2,) %}{{ i }},{% endfor %}{{ (1,)|length }}{{ ()|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1,2,10"
+  },
+  {
+   "id": "literals.dict",
+   "template": "{{ {'a': 1} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 1}"
+  },
+  {
+   "id": "literals.dict_empty",
+   "template": "{{ {} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{}"
+  },
+  {
+   "id": "literals.dict_order",
+   "template": "{{ {'b': 1, 'a': 2, 'c': 3} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'b': 1, 'a': 2, 'c': 3}"
+  },
+  {
+   "id": "literals.dict_int_key",
+   "template": "{{ {1: 'x'}[1] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "literals.dict_nested",
+   "template": "{{ {'a': {'b': [1]}} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': {'b': [1]}}"
+  },
+  {
+   "id": "literals.dict_trailing_comma",
+   "template": "{{ {'a': 1,}['a'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "literals.call_trailing_comma",
+   "template": "{{ range(1, 3, )|join(',') }}|{{ 'T' if 10 is equalto(10,) else 'F' }}|{{ 'a,b'.split(',', )|join('-') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1,2|T|a-b"
+  },
+  {
+   "id": "literals.dict_expression_key",
+   "template": "{% set k = 'x' %}{{ {k: 1, k ~ 'y': 2}['xy'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "literals.dict_nested_lookup",
+   "template": "{% set d = {'a': {'b': [1, 2]}} %}{{ d['a']['b'][1] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "literals.parenthesised",
+   "template": "{{ (1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "literals.number_dot_attribute",
+   "template": "[{{ 1.e3 }}][{{ 1.5.2 }}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[][]"
+  },
+  {
+   "id": "literals.dict_int_key_print",
+   "template": "{{ {1: 'x', '1': 'y'} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{1: 'x', '1': 'y'}"
+  },
+  {
+   "id": "literals.dict_numeric_keys_merge",
+   "template": "{{ {1:'a', 1.0:'b', True:'c'} }}|{{ {1.0:'x'} }}|{{ {True:1}[1] }}|{{ {0:'z'}[false] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{1: 'c'}|{1.0: 'x'}|1|z"
+  },
+  {
+   "id": "literals.dict_other_hashable_keys",
+   "template": "{{ {none:1, 1.5:2, (1,2):3} }}|{{ {(1,2):3}[(1,2)] }}|{{ {(1,2.0):3}[(1.0,2)] }}|{{ {none:1}[none] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{None: 1, 1.5: 2, (1, 2): 3}|3|3|1"
+  },
+  {
+   "id": "literals.dict_int_key_not_string",
+   "template": "{{ {1:'x'}['1'] is defined }}|{{ {'1':'x'}[1] is defined }}|{{ {1:2}.1 }}|{{ {-1:2}[-1] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False|False|2|2"
+  },
+  {
+   "id": "literals.dict_float_keys",
+   "template": "{{ {0.1+0.2:'x'} }}|{{ {-0.0:'x', 0:'y'} }}|{{ {1e100:'x'} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{0.30000000000000004: 'x'}|{-0.0: 'y'}|{1e+100: 'x'}"
+  },
+  {
+   "id": "literals.dict_key_range_and_nested_tuple",
+   "template": "{{ {range(3): 'r', ((1, 2), 'a'): 'n'} }}|{{ {range(3): 'r'}[range(0, 3)] }}|{{ {((1, 2), 'a'): 'n'}[((1.0, 2), 'a')] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{range(0, 3): 'r', ((1, 2), 'a'): 'n'}|r|n"
+  },
+  {
+   "id": "literals.dict_key_big_float_is_float",
+   "template": "{{ {2.0**63: 'f'}[2.0**63] }}|{{ {2.0**63: 'f'} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "f|{9.223372036854776e+18: 'f'}"
+  },
+  {
+   "id": "literals.int_big_hex",
+   "template": "{{ 0x1_0000_0000_0000_0000 }}|{{ 0o2000000000000000000000 }}|{{ 0b10000000000000000000000000000000000000000000000000000000000000000 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "18446744073709551616|18446744073709551616|18446744073709551616"
+  },
+  {
+   "id": "literals.int_min_literal",
+   "template": "{{ -9223372036854775808 }}|{{ (-9223372036854775808) is integer }}|{{ 9223372036854775808 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "-9223372036854775808|True|9223372036854775808"
+  },
+  {
+   "id": "literals.int_digits_limit",
+   "template": "{{ 11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "ValueError",
+    "message": "Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit"
+   }
+  },
+  {
+   "id": "literals.int_big_context",
+   "template": "{{ n }}|{{ n is integer }}|{{ [n] }}|{{ n > 9223372036854775807 }}",
+   "context": {
+    "n": 18446744073709551615
+   },
+   "env": {},
+   "templates": {},
+   "output": "18446744073709551615|True|[18446744073709551615]|True"
+  },
+  {
+   "id": "literals.unicode_15_1_repr",
+   "template": "{{ ['\\U0002ebf0', '⿼', '㇯'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "['\\U0002ebf0', '\\u2ffc', '\\u31ef']"
+  },
+  {
+   "id": "literals.unicode_16_0_repr",
+   "template": "{{ ['\\U00010d50', 'Ᲊ', 'ࢗ'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "['\\U00010d50', '\\u1c89', '\\u0897']"
+  },
+  {
+   "id": "literals.unicode_15_1_named_computed",
+   "template": "{{ '\\N{CJK UNIFIED IDEOGRAPH-2EBF0}' == '\\U0002ebf0' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.unicode_15_1_named_stored",
+   "template": "{{ '\\N{IDEOGRAPHIC DESCRIPTION CHARACTER SUBTRACTION}'|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.unicode_16_0_named",
+   "template": "{{ '\\N{GARAY CAPITAL LETTER A}' == '\\U00010d50' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.unicode_16_0_named_any_case",
+   "template": "{{ '\\N{latin capital letter rams horn}'|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.class_name_of_str",
+   "template": "{{ 'a'.__class__.__name__ }}|{{ ('a'|safe).__class__.__name__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "str|Markup"
+  }
+ ]
 }

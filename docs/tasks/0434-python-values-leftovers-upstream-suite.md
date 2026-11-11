@@ -35,10 +35,10 @@ module can call `random.choice`; the C++ engine keeps its generator (record as d
 
 **Progress (2026-11-11).** All nine lines are closed: seven tests pass through the module, `random` is
 `deliberate` (the engine keeps its own generator; Python's `random.seed` cannot reach it) and
-`test_volatile_scoping` is `unsupported` (`Environment.compile`), its `__class__` gap filed as 0469.
+`test_volatile_scoping` is `unsupported` (`Environment.compile`), its `__class__` gap filed as 0476.
 - StopIteration from a call is the environment's undefined value (`PyHost::Call`, Jinja2's
   `Context.call`). A filter's StopIteration still ends the render, but Jinja2 raises RuntimeError
-  there: 0470.
+  there: 0477.
 - A module macro takes an EvalContext first argument (`jinja2cpp.nodes.EvalContext`, a partial
   `jinja2.nodes`, or Jinja2's), whose `autoescape` decides Markup.
 - `_undefined_name` and `_undefined_hint` are attributes of every undefined value outside the sandbox

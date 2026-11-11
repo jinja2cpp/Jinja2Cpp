@@ -360,7 +360,7 @@ def test_stop_iteration_from_a_call_is_undefined():
         with pytest.raises(module.UndefinedError):
             module.Environment().from_string("{{ f().x }}").render(f=stop)
     # A filter is not called through Context.call: the render fails (Jinja2 raises RuntimeError, as its render is a
-    # generator: docs/tasks/0470)
+    # generator: docs/tasks/0477)
     for module in (jinja2cpp, jinja2):
         env = module.Environment()
         env.filters["stop"] = lambda value: stop()
