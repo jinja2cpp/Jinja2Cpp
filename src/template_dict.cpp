@@ -528,13 +528,6 @@ TemplateDict::TemplateDict(const TemplateDict& other)
     ChargeEntries();
 }
 
-TemplateDict::TemplateDict(TemplateDict&& other) noexcept(std::is_nothrow_move_constructible_v<InternalDict>)
-    : m_items(std::move(other.m_items))
-    , m_keys(std::move(other.m_keys))
-{
-    other.m_items.clear();
-}
-
 TemplateDict& TemplateDict::operator=(const TemplateDict& other)
 {
     if (this != &other)
@@ -552,7 +545,6 @@ TemplateDict& TemplateDict::operator=(TemplateDict&& other) noexcept(std::is_not
         ReleaseEntries();
         m_items = std::move(other.m_items);
         m_keys = std::move(other.m_keys);
-        other.m_items.clear();
     }
     return *this;
 }

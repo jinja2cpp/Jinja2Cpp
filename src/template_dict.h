@@ -67,8 +67,8 @@ public:
     explicit TemplateDict(InternalDict&& items);
     TemplateDict(const TemplateDict& other);
     // OrderedMap's moves allocate on MSVC (see ordered_map.h), so these are noexcept only where its are. The entries
-    // move with their count against the render's memory budget, and the dict moved from is left empty
-    TemplateDict(TemplateDict&& other) noexcept(std::is_nothrow_move_constructible_v<InternalDict>);
+    // move with their count against the render's memory budget: OrderedMap's moves leave the map moved from empty
+    TemplateDict(TemplateDict&& other) noexcept(std::is_nothrow_move_constructible_v<InternalDict>) = default;
     TemplateDict& operator=(const TemplateDict& other);
     TemplateDict& operator=(TemplateDict&& other) noexcept(std::is_nothrow_move_assignable_v<InternalDict>);
     ~TemplateDict() { ReleaseEntries(); }
