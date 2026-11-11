@@ -2,3 +2,8 @@
 # Format and kinds: test/parity/README.md.
 
 subscripts.tuple_of_slices_fold_by_choice rejects 0463 Jinja2 folds a conditional by the branch its folded test picks; the engine decides that only when it renders, so it rejects an unfolded subscript by a tuple of slices in the other branch
+subscripts.tuple_of_slices_in_test rejects 0463 Jinja2 folds a conditional by its folded test; the engine decides that only when it renders, so it rejects a tuple of slices in the test
+subscripts.tuple_of_slices_set_by_choice rejects 0463 Jinja2's optimizer folds a conditional by its folded test in a set too; the engine folds a tuple of slices only in an output
+subscripts.tuple_of_slices_print rejects 0463 Jinja2's print builds an Output it folds; the engine folds a tuple of slices only in {{ }}
+subscripts.tuple_of_slices_strict_concat accepts 0463 with StrictUndefined, Jinja2's fold fails wherever the undefined is stringified or compared; the engine refuses only a bare output of it
+subscripts.tuple_of_slices_of_folded_undefined accepts 0463 a literal subscript that folds to an undefined cannot be subscripted by a tuple of slices in Jinja2's fold; the engine folds it again

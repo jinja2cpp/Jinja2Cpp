@@ -1252,7 +1252,7 @@ SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& p
         std::vector<NodeRef<Expression>> items;
         bool hasSlice = result.isSlice;
         bool foldable = true;
-        const auto addItem = [&](const BracketSubscript& item) {
+        const auto addItem = [&nodes, &foldable, &items](const BracketSubscript& item) {
             for (const auto& part : item.parts)
             {
                 foldable = foldable && (!part || nodes[part].IsFoldable(nodes));
@@ -1263,8 +1263,13 @@ SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& p
         {
             addItem(result);
         }
-        while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']')
+        while (lexer.EatIfEqual(','))
         {
+            // Jinja2 has no trailing comma in a subscript: `l[1,]` is a syntax error
+            if (lexer.PeekNextToken() == ']')
+            {
+                return MakeParseError(ErrorCode::ExpectedExpression, lexer.PeekNextToken());
+            }
             auto item = ParseSubscribed(parser, lexer, siblings);
             if (!item)
             {

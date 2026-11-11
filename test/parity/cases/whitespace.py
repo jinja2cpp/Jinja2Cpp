@@ -61,5 +61,6 @@ CASES = [
     ("tag_unicode_space", "[{{\u00a0x }}|{{ x\u2003}}]", {"ctx": {"x": 3}}),
     ("tag_unicode_space_more", "[{%\u3000if\u2028x\x85%}y{%\x1cendif\u205f%}|{{ x\u00a0+\u20091 }}]", {"ctx": {"x": 3}}),
     ("tag_zero_width_space_is_no_space", "{{ x\u200b }}", {"ctx": {"x": 3}}),
+    ("raw_tag_unicode_space", "[{%\u00a0raw\u3000%}{{ x }}{%\u2003endraw\x85-%} |{%-\u205fraw\u00a0-%} y {%\u2028endraw %}]"),
     ("tag_unicode_space_minus", "[{{ x\u00a0-}} |{{-\u2003x }}]", {"ctx": {"x": 3}}),
 ]

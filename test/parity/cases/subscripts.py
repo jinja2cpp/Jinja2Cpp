@@ -81,6 +81,15 @@ CASES = [
     ("tuple_of_slices_in_call", "{{ [1][:, :]|string }}"),
     ("tuple_of_slices_attribute", "{{ [1][:, :].x }}"),
     ("tuple_of_slices_item", "{{ [1][:, :][0] }}"),
+    ("subscript_trailing_comma", "{{ [1][1,] }}"),
+    # leftovers of 0445 (0463): Jinja2 folds by the branch a folded test picks also in a test, a
+    # set and a print; strict undefined refuses more folds; an item of a folded undefined does not fold
+    ("tuple_of_slices_in_test", "[{{ 1 if [1][:, :] is undefined }}]"),
+    ("tuple_of_slices_set_by_choice", "{% set q = 1 if true else ()[:, :] %}[{{ q }}]"),
+    ("tuple_of_slices_print", "[{% print ()[:, :] %}]"),
+    ("tuple_of_slices_strict_concat", "[{{ ()[:, :] ~ 'a' }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_of_folded_undefined", "[{{ ()[0][:, :] }}]"),
+    ("subscript_slice_trailing_comma", "{{ [1][1:2,] }}"),
     ("tuple_of_slices_folded_branch", "[{{ ()[:, :] if true else x }}|{{ ()[:, :] if false else 5 }}|{% autoescape x %}{{ ()[:, :] }}{% endautoescape %}]"),
     # Jinja2 folds a conditional whose test folds by the branch it picks; the engine decides that
     # only when it renders, so at load it rejects an unfolded tuple of slices there (0463)

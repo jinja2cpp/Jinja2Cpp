@@ -544,6 +544,14 @@
    }
   },
   {
+   "id": "whitespace.raw_tag_unicode_space",
+   "template": "[{% raw　%}{{ x }}{% endraw-%} |{%- raw -%} y {% endraw %}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[{{ x }}|y ]"
+  },
+  {
    "id": "whitespace.tag_unicode_space_minus",
    "template": "[{{ x -}} |{{- x }}]",
    "context": {

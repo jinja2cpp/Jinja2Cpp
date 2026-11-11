@@ -2202,6 +2202,248 @@
    }
   },
   {
+   "id": "subscripts.subscript_trailing_comma",
+   "template": "{{ [1][1,] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected ']'"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_in_test",
+   "template": "[{{ 1 if [1][:, :] is undefined }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_set_by_choice",
+   "template": "{% set q = 1 if true else ()[:, :] %}[{{ q }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_print",
+   "template": "[{% print ()[:, :] %}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_concat",
+   "template": "[{{ ()[:, :] ~ 'a' }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "tuple object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_of_folded_undefined",
+   "template": "[{{ ()[0][:, :] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 12)"
+   }
+  },
+  {
+   "id": "subscripts.subscript_slice_trailing_comma",
+   "template": "{{ [1][1:2,] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected ']'"
+   }
+  },
+  {
    "id": "subscripts.tuple_of_slices_folded_branch",
    "template": "[{{ ()[:, :] if true else x }}|{{ ()[:, :] if false else 5 }}|{% autoescape x %}{{ ()[:, :] }}{% endautoescape %}]",
    "context": {
