@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <random>
@@ -152,11 +153,13 @@ jinja2::ValuesMap MakeHostContext()
     auto second = std::make_shared<HostRecord>();
     second->id = 7;
     second->title = "second";
-    const std::vector<std::shared_ptr<HostRecord>> records{ record, second };
+    std::vector<std::shared_ptr<HostRecord>> records{ record, second };
 
     params["rec"] = jinja2::Reflect(record);
-    params["recs"] = jinja2::Reflect(records);
-    params["recValue"] = jinja2::Reflect(*record);
+    // Reflect borrows an lvalue container or struct and owns an rvalue one: the values must own theirs, as this
+    // function's locals end before the render starts
+    params["recs"] = jinja2::Reflect(std::move(records));
+    params["recValue"] = jinja2::Reflect(HostRecord(*record));
     params["ints"] = jinja2::Reflect(std::vector<std::int64_t>{ 9, 0, 8, 1, 7 });
     params["strs"] = jinja2::Reflect(std::vector<std::string>{ "b", "a", "c" });
     params["gen"] = jinja2::MakeGenericList([n = 0]() mutable -> std::optional<Value> {
@@ -167,7 +170,15 @@ jinja2::ValuesMap MakeHostContext()
         return Value(n++);
     });
 
-    params["add"] = MakeCallable([](std::int64_t a, std::int64_t b) { return a + b; }, ArgInfo{ "a" }, ArgInfo{ "b", false, 1 });
+    params["add"] = MakeCallable(
+        [](std::int64_t a, std::int64_t b) {
+            if ((b > 0 && a > std::numeric_limits<std::int64_t>::max() - b) || (b < 0 && a < std::numeric_limits<std::int64_t>::min() - b))
+            {
+                throw std::overflow_error("add overflows");
+            }
+            return a + b;
+        },
+        ArgInfo{ "a" }, ArgInfo{ "b", false, 1 });
     params["concat"] = MakeCallable(
         [](const jinja2::ValuesList& args) {
             std::string result;
