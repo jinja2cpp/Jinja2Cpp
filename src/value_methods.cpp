@@ -2113,6 +2113,7 @@ InternalValue ListAppend(const InternalValue& self, const CallParams& params, Re
     CheckArgs(params, "append", 1, 1);
     auto& items = MutableItems(self);
     CheckSequenceSize(uint64_t{ items.size() } + 1, "a list");
+    ReserveCounted(items, items.size() + 1);
     NoteContainerStore(self, params.posParams[0]);
     items.push_back(params.posParams[0]);
     return InternalValue(NoneValue());
@@ -2131,6 +2132,7 @@ InternalValue ListExtend(const InternalValue& self, const CallParams& params, Re
     auto newItems = other.ToValueList();
     auto& items = MutableItems(self);
     CheckSequenceSize(uint64_t{ items.size() } + newItems.size(), "a list");
+    ReserveCounted(items, items.size() + newItems.size());
     for (auto& item : newItems)
     {
         NoteContainerStore(self, item);
@@ -2145,6 +2147,7 @@ InternalValue ListInsert(const InternalValue& self, const CallParams& params, Re
     auto& items = MutableItems(self);
     auto idx = SliceIndex(params.posParams.data(), items.size(), 0, "insert");
     CheckSequenceSize(uint64_t{ items.size() } + 1, "a list");
+    ReserveCounted(items, items.size() + 1);
     NoteContainerStore(self, params.posParams[1]);
     items.insert(items.begin() + static_cast<std::ptrdiff_t>(idx), params.posParams[1]);
     return InternalValue(NoneValue());

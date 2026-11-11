@@ -223,16 +223,21 @@ struct Settings
         //! stops where Python Jinja2 does (248 nested `block`, `with`, `filter` tags); CPython's compiler stops
         //! nested `if` and `for` earlier, which Jinja2C++ does not copy
         std::uint32_t maxBlockNesting = 248;
+        //! Bytes the strings, lists and dicts a Render builds may hold at once: each is counted when it is made or
+        //! grows and released when it is freed, so a render that keeps what it builds stops while one that drops it
+        //! does not. An estimate of the engine's own storage (characters, item and entry slots, dict keys), which may
+        //! change between releases; other objects (loop and macro state, host data) are not counted. 0 is no limit
+        std::uint64_t maxRenderMemory = 0;
     };
     //! Bounds on Load and Render; none but the depth limits by default
     Limits limits;
 };
 
 //! Limits for templates a host's users write, anchored on Jinja2's `SandboxedEnvironment`: `range()` of at most
-//! 100000 items, sequences of at most 2^20 items, 16 MiB of output, 10^7 render steps, no time limit. The values may
-//! change between releases. Not every operation that builds a string or list checks maxSequenceSize yet, so
-//! these limits do not bound a render's memory: a host that needs that bound runs untrusted renders where memory is
-//! limited too
+//! 100000 items, sequences of at most 2^20 items, 16 MiB of output, 10^7 render steps, 256 MiB of strings, lists and
+//! dicts held at once, no time limit. The values may change between releases. The memory limit is an estimate of the
+//! engine's own storage (\ref Settings::Limits::maxRenderMemory): a host's process needs room for that and for the
+//! rest of the render
 inline Settings::Limits UntrustedLimits()
 {
     Settings::Limits limits;
@@ -240,6 +245,7 @@ inline Settings::Limits UntrustedLimits()
     limits.maxSequenceSize = std::uint64_t{ 1 } << 20;
     limits.maxOutputSize = std::uint64_t{ 16 } << 20;
     limits.maxRenderSteps = 10000000;
+    limits.maxRenderMemory = std::uint64_t{ 256 } << 20;
     return limits;
 }
 

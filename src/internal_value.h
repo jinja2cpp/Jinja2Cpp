@@ -563,6 +563,21 @@ void ReserveHint(List& list, size_t size)
     list.reserve(size);
 }
 
+// Makes room for `size` items in a list the template owns and counts the slots it adds against the
+// render's memory budget (docs/tasks/0459), before they are allocated; grows as push_back does
+template<typename List>
+void ReserveCounted(List& list, size_t size)
+{
+    const auto capacity = list.capacity();
+    if (size <= capacity)
+    {
+        return;
+    }
+    const auto newCapacity = std::max(size, capacity * 2);
+    ChargeRenderMemory(std::uint64_t{ newCapacity - capacity } * sizeof(typename List::value_type));
+    list.reserve(newCapacity);
+}
+
 // Mappings a template can iterate (dict literals, kwargs) keep insertion order, as Python
 // dicts do; scopes and other lookup-only maps stay InternalValueMap (docs/tasks/0031)
 using InternalDict = OrderedMap<std::string, InternalValue>;
@@ -1084,6 +1099,7 @@ struct StringObject final : ValueObject
     // The caller writes them before it shares the object
     static IntrusivePtr<StringObject> Make(size_t size)
     {
+        ChargeRenderMemory(Bytes(size));
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
         return IntrusivePtr<StringObject>(new (CharCount{ size }) StringObject(size));
     }
@@ -1108,11 +1124,20 @@ struct StringObject final : ValueObject
     }
     // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
+    StringObject(const StringObject&) = delete;
+    StringObject(StringObject&&) = delete;
+    StringObject& operator=(const StringObject&) = delete;
+    StringObject& operator=(StringObject&&) = delete;
+    ~StringObject() override { ReleaseRenderMemory(Bytes(m_size)); }
+
 private:
     explicit StringObject(size_t size) noexcept
         : m_size(size)
     {
     }
+
+    // What the render's memory budget counts for it (docs/tasks/0459)
+    static constexpr std::uint64_t Bytes(size_t size) noexcept { return sizeof(StringObject) + (std::uint64_t{ size } * sizeof(CharT)); }
 
     size_t m_size;
 };

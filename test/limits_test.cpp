@@ -133,6 +133,17 @@ std::vector<LimitCase> Cases()
         // The template's top level is a block too
         { "BlocksOver", "{% if 1 %}{% if 1 %}{% if 1 %}{% endif %}{% endif %}{% endif %}", [](auto& l) { l.maxBlockNesting = 3; }, "RecursionLimitExceeded", true },
         { "BlocksAt", "{% if 1 %}{% if 1 %}{% endif %}{% endif %}", [](auto& l) { l.maxBlockNesting = 3; }, "" },
+        // The memory budget counts what the render holds at once (docs/tasks/0459): what it keeps fails, what it
+        // drops again does not, though the two allocate as much
+        { "MemoryKeptLists", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryDroppedLists", "{% for i in range(100) %}{% set l = range(1000)|list %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
+        { "MemoryDictUpdate", "{% set d = {} %}{% for i in range(10000) %}{% set _ = d.update({i: i}) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryKeptString", "{% set ns = namespace(s='') %}{% for i in range(300) %}{% set ns.s = ns.s ~ ('x' * 1000) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "maxRenderMemory" },
+        { "MemoryKeptStrings", "{% set l = [] %}{% for i in range(300) %}{% set _ = l.append('x' * 1000 ~ i) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "maxRenderMemory" },
+        { "MemoryDroppedStrings", "{% for i in range(1000) %}{% set s = 'x' * 1000 ~ i %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "" },
+        { "MemoryCopiedDict", "{% set d = {} %}{% for i in range(1000) %}{% set _ = d.update({'k' ~ i: i}) %}{% endfor %}{% set l = [] %}{% for i in range(20) %}{% set _ = l.append(d.copy()) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        // UINT64_MAX bytes is no limit
+        { "MemoryMax", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = UINT64_MAX; }, "" },
     };
 }
 
@@ -497,6 +508,7 @@ TEST_F(LimitsEnvTest, FailedRenderLeavesNoLimits)
     limited.limits.maxRenderSteps = 50;
     limited.limits.maxSequenceSize = 10;
     limited.limits.maxRenderDepth = 3;
+    limited.limits.maxRenderMemory = 1000;
     limitedEnv.SetSettings(limited);
     Template failing(&limitedEnv);
     ASSERT_TRUE(failing.Load("{% for i in range(1000) %}{% endfor %}").has_value());
@@ -504,6 +516,53 @@ TEST_F(LimitsEnvTest, FailedRenderLeavesNoLimits)
 
     EXPECT_EQ("2000", Render("{% for i in range(2000) %}{% endfor %}{{ ('x' * 2000)|length }}"));
     EXPECT_EQ("", Render("{% macro f(n) %}{% if n %}{{ f(n - 1) }}{% endif %}{% endmacro %}{{ f(20) }}"));
+    EXPECT_EQ("100", Render("{% set l = [] %}{% for i in range(100) %}{% set _ = l.append(range(100)|list) %}{% endfor %}{{ l|length }}"));
+}
+
+// The memory budget (docs/tasks/0459) counts what the template builds, in either character type, not the host's data
+// it reads; each render starts with the whole budget
+TEST_F(LimitsEnvTest, MemoryBudget)
+{
+    Settings settings;
+    settings.limits.maxRenderMemory = 1 << 20;
+    m_env.SetSettings(settings);
+    const std::string big(std::size_t{ 4 } << 20, 'x');
+    const ValuesList items(100000, Value(std::string(100, 'y')));
+    Template host(&m_env);
+    ASSERT_TRUE(host.Load("{{ big|length }} {{ items|length }} {% for item in items %}{% endfor %}{{ big[:10] }}").has_value());
+    EXPECT_EQ("4194304 100000 xxxxxxxxxx", host.RenderAsString({ { "big", big }, { "items", items } }).value());
+
+    const char* kept = "{% set ns = namespace(s='') %}{% for i in range(2000) %}{% set ns.s = ns.s ~ ('x' * 1000) %}{% endfor %}";
+    TemplateW wide(&m_env);
+    ASSERT_TRUE(wide.Load(L"{% set ns = namespace(s='') %}{% for i in range(2000) %}{% set ns.s = ns.s ~ ('x' * 1000) %}{% endfor %}").has_value());
+    auto wideResult = wide.RenderAsString({});
+    ASSERT_FALSE(wideResult.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wideResult.error().GetCode());
+    Template narrow(&m_env);
+    ASSERT_TRUE(narrow.Load(kept).has_value());
+    for (int run = 0; run != 3; ++run)
+    {
+        auto result = narrow.RenderAsString({});
+        ASSERT_FALSE(result.has_value());
+        EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
+    }
+    // Under the budget the same template renders, again and again
+    ASSERT_TRUE(narrow.Load("{% set ns = namespace(s='') %}{% for i in range(500) %}{% set ns.s = ns.s ~ ('x' * 1000) %}{% endfor %}{{ ns.s|length }}").has_value());
+    for (int run = 0; run != 3; ++run)
+    {
+        EXPECT_EQ("500000", narrow.RenderAsString({}).value());
+    }
+}
+
+// UntrustedLimits() bounds what a render keeps: the template of docs/tasks/0459 kept about 1 GB before the step
+// limit stopped it, and now stops on the memory budget
+TEST_F(LimitsEnvTest, UntrustedLimitsBoundMemory)
+{
+    m_env.SetSettings(UntrustedSettings());
+    auto result = Load("{% set ns = namespace(l=[]) %}{% for i in range(100000) %}{% set _ = ns.l.append(range(65536)|list) %}{% endfor %}").RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
 }
 
 TEST_F(LimitsEnvTest, LoadsEveryUse)
@@ -543,6 +602,7 @@ TEST_F(LimitsEnvTest, Presets)
     EXPECT_EQ(std::uint64_t{ 16 } << 20, limits.maxOutputSize);
     EXPECT_EQ(10000000U, limits.maxRenderSteps);
     EXPECT_EQ(0, limits.maxRenderTime.count());
+    EXPECT_EQ(std::uint64_t{ 256 } << 20, limits.maxRenderMemory);
 
     const auto settings = UntrustedSettings();
     EXPECT_TRUE(settings.autoescape);
@@ -551,6 +611,9 @@ TEST_F(LimitsEnvTest, Presets)
     expected.autoescape = true;
     EXPECT_EQ(expected, settings);
     expected.limits.maxRenderSteps = 1;
+    EXPECT_NE(expected, settings);
+    expected.limits = limits;
+    expected.limits.maxRenderMemory = 1;
     EXPECT_NE(expected, settings);
 
     m_env.SetSettings(settings);

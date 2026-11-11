@@ -160,10 +160,15 @@ defaults, or lower values, for tier 1.
 
 `Settings::Limits` adds bounds that are off by default (see `template_env.h` for each field's
 exact unit): `maxRange`, `maxSequenceSize`, `maxOutputSize`, `maxTemplateSize`,
-`maxTemplateLoads`, `maxRenderSteps`, `maxRenderTime`. `UntrustedLimits()` sets values anchored
-on Python's `SandboxedEnvironment`: `range()` of at most 100000 items, sequences of at most
-2^20 items, 16 MiB of output, 10^7 steps, no time limit. The values may change between
-releases. A step is an approximate unit that can change between releases too; set
+`maxTemplateLoads`, `maxRenderSteps`, `maxRenderTime`, `maxRenderMemory`. `UntrustedLimits()`
+sets values anchored on Python's `SandboxedEnvironment`: `range()` of at most 100000 items,
+sequences of at most 2^20 items, 16 MiB of output, 10^7 steps, no time limit, and 256 MiB of
+strings, lists and dicts held at once (Python's sandbox has no memory bound to copy). The values
+may change between releases. `maxRenderMemory` counts what a render holds, not what it
+allocates in total: each string, list and dict is counted when it is built or grows and given
+back when it is freed ([0459](tasks/0459-render-memory-budget.md)). It is an estimate of the
+engine's own storage; loop and macro state, the host's data and allocator overhead are not
+counted, so give the host process room beyond it. A step is an approximate unit that can change between releases too; set
 `maxRenderSteps` with a wide margin over what the host's real templates take.
 
 ## Errors
@@ -179,11 +184,12 @@ These apply to both tiers. The claims above stop here until these tasks land:
 
 - One step, such as a filter over a long string, can overrun `maxRenderTime`:
   [0282](tasks/0282-settings-limits-followups.md).
-- No limit bounds a render's memory: a template may keep what each step builds, so memory grows
-  with `maxRenderSteps` times `maxSequenceSize` ([0459](tasks/0459-render-memory-budget.md)). The
-  fuzz targets for untrusted templates ([0267](tasks/0267-untrusted-mode-fuzzing.md)) run under
-  limits tight enough to bound it; the structure-aware mutator and the continuous service they
-  are meant to feed are [0095](tasks/0095-structure-aware-fuzzing.md) and
+- `maxRenderMemory` counts strings, lists and dicts, not every object a render makes: a template
+  that keeps many loop objects, macros or other engine objects in a list is counted only for their
+  slots ([0463](tasks/0463-render-memory-uncounted-objects.md)). The fuzz targets for untrusted
+  templates ([0267](tasks/0267-untrusted-mode-fuzzing.md)) run under `UntrustedLimits()` with a
+  shorter time limit; the structure-aware mutator and the continuous service they are meant to
+  feed are [0095](tasks/0095-structure-aware-fuzzing.md) and
   [0096](tasks/0096-continuous-fuzzing-service.md).
   The library builds with hardening flags by default (`JINJA2CPP_HARDENING`) and its
   internal invariant checks fail the render, not the process

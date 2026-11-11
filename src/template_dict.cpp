@@ -511,6 +511,7 @@ std::string DictKeyText(const InternalValue& key)
 TemplateDict::TemplateDict(InternalDict&& items)
     : m_items(std::move(items))
 {
+    ChargeEntries();
     if constexpr (detail::ContractChecks >= 2)
     {
         for (const auto& item : m_items)
@@ -524,6 +525,14 @@ TemplateDict::TemplateDict(const TemplateDict& other)
     : m_items(other.m_items)
     , m_keys(other.m_keys ? std::make_unique<KeyTable>(*other.m_keys) : nullptr)
 {
+    ChargeEntries();
+}
+
+TemplateDict::TemplateDict(TemplateDict&& other) noexcept(std::is_nothrow_move_constructible_v<InternalDict>)
+    : m_items(std::move(other.m_items))
+    , m_keys(std::move(other.m_keys))
+{
+    other.m_items.clear();
 }
 
 TemplateDict& TemplateDict::operator=(const TemplateDict& other)
@@ -534,6 +543,56 @@ TemplateDict& TemplateDict::operator=(const TemplateDict& other)
         *this = std::move(copy);
     }
     return *this;
+}
+
+TemplateDict& TemplateDict::operator=(TemplateDict&& other) noexcept(std::is_nothrow_move_assignable_v<InternalDict>)
+{
+    if (this != &other)
+    {
+        ReleaseEntries();
+        m_items = std::move(other.m_items);
+        m_keys = std::move(other.m_keys);
+        other.m_items.clear();
+    }
+    return *this;
+}
+
+std::uint64_t TemplateDict::EntryBytes(const std::string& stored) noexcept
+{
+    // The entry and about two words of the index for it; a key past the short-string buffer has its own block, and
+    // a key that is not a string has its spelling in m_keys too
+    constexpr std::size_t ShortKey = 15;
+    const std::uint64_t key = stored.size() > ShortKey ? stored.size() + 1 : 0;
+    std::uint64_t bytes = sizeof(InternalDict::value_type) + (2 * sizeof(void*)) + key;
+    if (IsSpelledToken(stored))
+    {
+        bytes += sizeof(KeyTable::value_type) + (2 * sizeof(void*)) + key;
+    }
+    return bytes;
+}
+
+void TemplateDict::ChargeEntries() const
+{
+    if (!RenderMemoryCounted())
+    {
+        return;
+    }
+    std::uint64_t bytes = 0;
+    for (const auto& item : m_items)
+    {
+        bytes += EntryBytes(item.first);
+    }
+    ChargeRenderMemory(bytes);
+}
+
+void TemplateDict::ReleaseEntriesSlow() const noexcept
+{
+    std::uint64_t bytes = 0;
+    for (const auto& item : m_items)
+    {
+        bytes += EntryBytes(item.first);
+    }
+    ReleaseRenderMemory(bytes);
 }
 
 TemplateDict::const_iterator TemplateDict::FindString(const std::string& name) const
@@ -566,33 +625,63 @@ TemplateDict::iterator TemplateDict::Set(const InternalValue& key, InternalValue
     {
         ThrowUnhashable(unhashable);
     }
-    auto [pos, inserted] = m_items.insert_or_assign(std::move(*token), std::move(value));
-    if (inserted && IsSpelledToken(pos->first))
+    // A new entry is counted before it is added
+    std::uint64_t bytes = 0;
+    if (RenderMemoryCounted() && m_items.find(*token) == m_items.end())
     {
-        try
-        {
-            if (!m_keys)
-            {
-                m_keys = std::make_unique<KeyTable>();
-            }
-            m_keys->emplace(pos->first, key);
-        }
-        catch (...)
-        {
-            m_items.erase(pos);
-            throw;
-        }
+        bytes = EntryBytes(*token);
+        ChargeRenderMemory(bytes);
     }
-    return pos;
+    try
+    {
+        auto [pos, inserted] = m_items.insert_or_assign(std::move(*token), std::move(value));
+        if (inserted && IsSpelledToken(pos->first))
+        {
+            try
+            {
+                if (!m_keys)
+                {
+                    m_keys = std::make_unique<KeyTable>();
+                }
+                m_keys->emplace(pos->first, key);
+            }
+            catch (...)
+            {
+                m_items.erase(pos);
+                throw;
+            }
+        }
+        return pos;
+    }
+    catch (...)
+    {
+        ReleaseRenderMemory(bytes);
+        throw;
+    }
 }
 
 TemplateDict::iterator TemplateDict::SetString(std::string name, InternalValue value)
 {
     if (NeedsEscape(name))
     {
-        return m_items.insert_or_assign(EscapeString(name), std::move(value)).first;
+        name = EscapeString(name);
     }
-    return m_items.insert_or_assign(std::move(name), std::move(value)).first;
+    // A new entry is counted before it is added
+    std::uint64_t bytes = 0;
+    if (RenderMemoryCounted() && m_items.find(name) == m_items.end())
+    {
+        bytes = EntryBytes(name);
+        ChargeRenderMemory(bytes);
+    }
+    try
+    {
+        return m_items.insert_or_assign(std::move(name), std::move(value)).first;
+    }
+    catch (...)
+    {
+        ReleaseRenderMemory(bytes);
+        throw;
+    }
 }
 
 std::pair<TemplateDict::iterator, bool> TemplateDict::TryEmplace(const InternalValue& key, InternalValue value)
@@ -612,6 +701,10 @@ std::pair<TemplateDict::iterator, bool> TemplateDict::TryEmplace(const InternalV
 
 TemplateDict::iterator TemplateDict::Erase(const_iterator pos)
 {
+    if (RenderMemoryCounted())
+    {
+        ReleaseRenderMemory(EntryBytes(pos->first));
+    }
     if (m_keys && IsSpelledToken(pos->first))
     {
         m_keys->erase(pos->first);
@@ -621,6 +714,7 @@ TemplateDict::iterator TemplateDict::Erase(const_iterator pos)
 
 void TemplateDict::Clear()
 {
+    ReleaseEntries();
     m_items.clear();
     m_keys.reset();
 }
