@@ -433,9 +433,6 @@ private:
     unsigned m_left = 0;
 };
 
-// Throws RecursionLimitError when the thread's stack is nearly used up. The renderer's and
-// the evaluator's check: in a render with limits each call is a render step, which may throw
-// ResourceLimitError
 // For as long as it lives, every CheckStack takes the slow path (RenderLimits::eachPiece): a render that writes
 // each piece (RenderOptions::writeEachPiece) makes one, after its RenderLimitsScope
 class EachPieceScope
@@ -463,6 +460,9 @@ private:
     bool m_saved;
 };
 
+// Throws RecursionLimitError when the thread's stack is nearly used up. The renderer's and
+// the evaluator's check: in a render with limits each call is a render step, which may throw
+// ResourceLimitError
 inline void CheckStack()
 {
 #if defined(_MSC_VER) && !defined(__clang__)

@@ -1839,7 +1839,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         m_root.referenced.push_back(valueExpr);
     }
     m_nodes[renderer].SetImportNameExpr(valueExpr);
-    lexer.PositionText(stmtTok, [&](std::string_view text) { m_nodes[renderer].SetPosition(m_nodes.MakeText(text)); });
+    lexer.PositionText(stmtTok, [this, renderer](std::string_view text) { m_nodes[renderer].SetPosition(m_nodes.MakeText(text)); });
 
     // Every `name as alias` pair is kept in source order; a name imported twice binds both aliases
     std::vector<ImportName> names;
