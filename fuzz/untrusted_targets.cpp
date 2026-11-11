@@ -310,24 +310,17 @@ void InjectSlowSeed(const std::uint8_t* data, std::size_t size)
         std::this_thread::sleep_for(std::chrono::minutes(10));
     }
 }
-std::vector<std::string> CanaryForms(const std::string& canary)
+// Whether the output holds the canary's random tail, in any case and either direction: what reaches it through
+// upper, lower, title, capitalize, reverse or a slice that keeps the tail
+bool HoldsCanary(std::string output, const std::string& canary)
 {
-    std::string upper = canary;
-    std::string lower = canary;
-    for (auto& c : upper)
-    {
-        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    }
-    for (auto& c : lower)
+    for (auto& c : output)
     {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
-    std::vector<std::string> forms{ canary, upper, lower };
-    for (std::size_t n = 0, count = forms.size(); n < count; ++n)
-    {
-        forms.emplace_back(forms[n].rbegin(), forms[n].rend());
-    }
-    return forms;
+    const std::string tail = canary.substr(canary.find('-') + 1);
+    const std::string reversed(tail.rbegin(), tail.rend());
+    return output.find(tail) != std::string::npos || output.find(reversed) != std::string::npos;
 }
 } // namespace
 
@@ -430,14 +423,10 @@ void FuzzLoader(const std::uint8_t* data, std::size_t size)
     {
         output += parsed.error().ToString();
     }
-    // Neither handler may reach a canary by a name, nor ConfinedFileSystem through a link: as read, or through the
-    // filters that keep its characters (upper, lower, reverse; the hex digits and the prefix make each form distinct)
-    for (const auto& form : CanaryForms(canary))
+    // Neither handler may reach a canary by a name, nor ConfinedFileSystem through a link
+    if (HoldsCanary(std::move(output), canary))
     {
-        if (output.find(form) != std::string::npos)
-        {
-            std::abort();
-        }
+        std::abort();
     }
 }
 

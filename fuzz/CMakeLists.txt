@@ -53,7 +53,12 @@ if (JINJA2CPP_BUILD_FUZZERS)
     # libFuzzer runtime (it brings its own main).
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -fsanitize=fuzzer-no-link)
     target_compile_options(jinja2cpp_fuzz_targets PRIVATE -fsanitize=fuzzer-no-link)
-    foreach (_target parse render render_wide metadata prompt_escape untrusted host loader alloc_failure)
+    set(_fuzzers parse render render_wide metadata prompt_escape untrusted host loader)
+    # alloc_failure replaces operator new, which the TSan and MSan runtimes define themselves
+    if (NOT JINJA2CPP_WITH_SANITIZERS MATCHES "thread|memory")
+        list(APPEND _fuzzers alloc_failure)
+    endif ()
+    foreach (_target ${_fuzzers})
         add_executable(jinja2cpp_fuzz_${_target} ${_fuzz_dir}/fuzz_${_target}.cpp)
         if (_target STREQUAL "alloc_failure")
             target_sources(jinja2cpp_fuzz_${_target} PRIVATE ${_fuzz_dir}/alloc_failure_target.cpp)
