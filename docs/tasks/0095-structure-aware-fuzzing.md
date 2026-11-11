@@ -80,7 +80,7 @@ differential job renders 5000 of them (the run number as seed) and records the s
 engines render; 500 also seed every fuzz job's corpus (`make_corpus.py --generated`, fixed
 seed). Over 20 000 generated templates both engines rendered about 97 %, and every divergence
 fell into two classes, pinned in `test/parity/cases/fuzz.py` and filed: `lower`/`upper` tests
-on strings with no cased letter (0463) and dotted filter and test names (0464). The run also
+on strings with no cased letter (0464) and dotted filter and test names (0465). The run also
 showed that `differential.py` still assumed sorted `ValuesMap` keys (0043 made them ordered):
 its context now keeps MakeContext's order, which removed about 200 false divergences.
 

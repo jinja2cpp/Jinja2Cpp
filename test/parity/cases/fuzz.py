@@ -42,10 +42,10 @@ CASES = [
     ("macro_name_then_junk", "{% macro m x %}{% endmacro %}"),
     ("call_name_then_junk", "{% macro m() %}{% endmacro %}{% call m x %}{% endcall %}"),
     # Found by the generated templates of fuzz/generate_templates.py (docs/tasks/0095)
-    # `lower` and `upper` are str.islower and str.isupper: at least one cased letter, no titlecase (0463)
+    # `lower` and `upper` are str.islower and str.isupper: at least one cased letter, no titlecase (0464)
     ("lower_test_no_cased_letter", "{{ '3' is lower }}|{{ '' is lower }}|{{ '-7' is upper }}|{{ '3a' is lower }}"),
     ("upper_test_titlecase", "{{ '\u01c5' is upper }}|{{ '\u01c5' is lower }}"),
-    # A filter or test name may be dotted (`x|ns.f`); an unknown one fails only when it runs (0464)
+    # A filter or test name may be dotted (`x|ns.f`); an unknown one fails only when it runs (0465)
     ("dotted_filter_name_not_run", "{% if false %}{{ x|first.upper() }}{% endif %}ok"),
     ("dotted_test_name_not_run", "{% if false %}{{ x is ns.odd }}{% endif %}ok"),
 ]

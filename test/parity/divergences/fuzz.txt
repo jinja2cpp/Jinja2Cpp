@@ -1,7 +1,7 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the fuzz area (cases/fuzz.py).
 # Format and kinds: test/parity/README.md.
 
-fuzz.lower_test_no_cased_letter         output      0463 lower/upper tests check only that no letter of the other case is there, not that a cased one is
-fuzz.upper_test_titlecase               output      0463 lower/upper tests use std::islower/isupper per char, not Unicode lowercase/uppercase/titlecase
-fuzz.dotted_filter_name_not_run         rejects     0464 the parser does not take a dotted filter name and rejects it at load
-fuzz.dotted_test_name_not_run           rejects     0464 the parser does not take a dotted test name and rejects it at load
+fuzz.lower_test_no_cased_letter         output      0464 lower/upper tests check only that no letter of the other case is there, not that a cased one is
+fuzz.upper_test_titlecase               output      0464 lower/upper tests use std::islower/isupper per char, not Unicode lowercase/uppercase/titlecase
+fuzz.dotted_filter_name_not_run         rejects     0465 the parser does not take a dotted filter name and rejects it at load
+fuzz.dotted_test_name_not_run           rejects     0465 the parser does not take a dotted test name and rejects it at load
