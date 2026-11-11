@@ -2,7 +2,7 @@
 status: in-progress
 priority: medium
 area: robustness
-touches: [src/template_impl.h, src/render_workspace.h, test/embedding_lifecycle_values_test.cpp, test/borrowed_cells_test.cpp, test/allocation_failure_test.cpp]
+touches: [src/template_impl.h, src/render_workspace.h, test/embedding_lifecycle_values_test.cpp, test/borrowed_cells_test.cpp, test/allocation_failure_test.cpp, tla/CellProtocol.tla, tla/CellTrace.tla, tla/check.py, tla/README.md]
 ---
 # A nested render does not see a global the outer render changed in place
 
@@ -39,4 +39,8 @@ in-place changes and the outer render sees what the nested one then writes to th
 replaces the 0331 rule that a nested render converts its own globals once the outer one attached
 a global (`BorrowedCellsSingle.NestedRenderOfAGlobalWrittenThroughAnAlias` and
 `AllocationFailureTest.NestedRenderAfterAFailedGlobalsConversion` now expect the shared cell).
-A global the nested render writes first is still not seen by the outer render: 0463.
+A global the nested render writes first is still not seen by the outer render: 0463. The cell model follows
+(`FixShareNested`): `NoForeignCell` allows a global's adapter to read a live cell of a render below
+the running one on the same thread, in CellProtocol.tla and in the trace check (CellTrace.tla
+`Hit`); `no-nested-global` and `no-mark-order` run without it, as the design before 0324. Checked:
+trace validation of the suite with its mutants, those two mutants, and `render` at level 9.

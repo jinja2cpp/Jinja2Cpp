@@ -43,6 +43,8 @@ CONSTANTS
     \* @type: Bool;
     FixNestedGlobal,
     \* @type: Bool;
+    FixShareNested,
+    \* @type: Bool;
     FixMarkOrder,
     \* @type: Bool;
     FixSortMutableFirst,

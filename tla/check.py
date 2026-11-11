@@ -28,6 +28,8 @@ TLA_URL = "https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools
 FIXES = {
     "FixLinkEpoch": True, "FixEnumRefetch": True, "FixSortRefetch": True,
     "FixCallRestore": True, "FixNestedGlobal": True, "FixMarkOrder": True,
+    # 0324: a nested render shares the outer render's snapshot of the globals and its cells
+    "FixShareNested": True,
     "FixSortMutableFirst": True, "FixMarkerAfterCopy": True, "FixReadOnlyExport": True,
     "FixFreeze": True, "FixSourceKeepsId": True,
     # Task 0337 (README, finding F1): BorrowedCell::NoteExport marks an export of two calls shared
@@ -113,9 +115,10 @@ RUNS = {
     "no-call-restore": ("mutant", MODULE1, {"FixCallRestore": False, "FixCallPin": False},
                         ["SnapshotStable"],
                         "1e15c2d, Codex P1: outer call writes a nested call's snapshot"),
-    "no-nested-global": ("mutant", RENDER1, {"FixNestedGlobal": False}, ["NoForeignCell"],
+    # The two below guard the design before 0324, where a nested render had its own globals
+    "no-nested-global": ("mutant", RENDER1, {"FixNestedGlobal": False, "FixShareNested": False}, ["NoForeignCell"],
                          "9c91ffc, Codex P2: nested render reads the outer render's cell"),
-    "no-mark-order": ("mutant", RENDER1, {"FixMarkOrder": False}, ["NoForeignCell"],
+    "no-mark-order": ("mutant", RENDER1, {"FixMarkOrder": False, "FixShareNested": False}, ["NoForeignCell"],
                       "5e37c24, verifier r11: failed conversion loses the attached mark"),
     "no-sort-mutable-first": ("mutant", MODULE1, {"FixSortMutableFirst": False},
                               ["NoUndefItems"],
