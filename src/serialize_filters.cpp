@@ -256,7 +256,9 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 return;
             }
             const bool isTuple = list->IsTuple();
-            std::string_view end = isTuple ? (list->GetSize() == 1 ? ",)" : ")") : "]";
+            // A host's iteration may not know its size: its len() does
+            const auto size = hostItems ? GetHostObject(val)->Len() : list->GetSize();
+            std::string_view end = isTuple ? (size == 1 ? ",)" : ")") : "]";
             out += isTuple ? '(' : '[';
             FormatItems(out, *list, indent, allowance + static_cast<int64_t>(end.size()), level + 1);
             out += end;

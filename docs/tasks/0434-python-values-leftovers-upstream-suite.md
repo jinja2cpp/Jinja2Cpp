@@ -3,7 +3,7 @@ status: in-progress
 priority: low
 area: parity
 depends: [0355]
-touches: [python/src/adapters.cpp, python/src/template_module.cpp, src/filters.cpp, src/serialize_filters.cpp, src/undefined.cpp, include/jinja2cpp/host_object.h, include/jinja2cpp/template.h]
+touches: [python/src/adapters.cpp, python/src/template_module.cpp, src/filters.cpp, src/serialize_filters.cpp, src/undefined.cpp, src/testers.cpp, src/expression_evaluator.cpp, src/template_module.cpp, src/public_host_object.cpp, src/host_object.h, include/jinja2cpp/host_object.h, include/jinja2cpp/template.h, include/jinja2cpp/generic_list_iterator.h]
 shares: [python/tests/upstream/expected-failures.txt]
 ---
 # Values, filters and macros: leftovers the upstream Jinja2 suite found
@@ -50,3 +50,7 @@ module can call `random.choice`; the C++ engine keeps its generator (record as d
 - Before the 2.0 freeze: `IHostObject::IsNumber`, `ToInt`, `ToFloat` (`is number`, `int`, `float`) and
   `jinja2::MacroAttributes(UserCallable)` for the module's macro attributes (docs/api-2.0.md, section 7).
 - Found on the way and fixed: an empty `GenericList` with an accessor never reached `end()`.
+- Left as they are: a list subclass with its own `__repr__` is still broken as a list by `pprint` (the
+  engine cannot see `__repr__`); `d['']._undefined_name` is None (an empty name means none); a list
+  that contains itself ends in the size cap or RecursionError, where pformat prints
+  `<Recursion on list ...>`.

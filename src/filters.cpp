@@ -2536,12 +2536,19 @@ InternalValue ValueConverter::ToInt(const InternalValue& baseVal, RenderContext&
     {
         // int(x), then int(float(x)); a float that is inf or nan has no int
         result = host->ToInt();
+        // Only an integer is int(x)
+        if (result && result->Kind() != ValueKind::Int && result->Kind() != ValueKind::BigInt)
+        {
+            result.reset();
+        }
         if (!result)
         {
             if (auto asFloat = host->ToFloat())
             {
-                const auto* dbl = GetIf<double>(&*asFloat);
-                result = dbl ? FloatToInt(*dbl) : std::move(asFloat);
+                if (const auto* dbl = GetIf<double>(&*asFloat))
+                {
+                    result = FloatToInt(*dbl);
+                }
             }
         }
     }
@@ -2576,7 +2583,8 @@ InternalValue ValueConverter::ToFloat(const InternalValue& baseVal, RenderContex
     }
     else if (const auto* host = GetHostObject(baseVal))
     {
-        if (auto result = host->ToFloat())
+        // Only a float is float(x)
+        if (auto result = host->ToFloat(); result && GetIf<double>(&*result))
         {
             return std::move(*result);
         }

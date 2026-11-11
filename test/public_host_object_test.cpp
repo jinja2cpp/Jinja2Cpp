@@ -2074,6 +2074,41 @@ TEST(PublicHostObjectTest, ListOrTupleIsAJsonArrayAndASequence)
     EXPECT_NE(std::string::npos, Render("{{ s|tojson }}", params).find("Object of type Toy is not JSON serializable"));
 }
 
+// pprint reads a list or tuple through its iteration and breaks it as pformat does (0434); a tuple of one item keeps
+// its comma when its iteration has no size
+TEST(PublicHostObjectTest, ListOrTuplePrettyPrints)
+{
+    auto items = [](std::vector<Value> values, bool tuple, bool indexable) {
+        ToySpec spec;
+        spec.listOrTuple = true;
+        spec.tuple = tuple;
+        spec.len = values.size();
+        spec.iteration = std::move(values);
+        spec.indexable = indexable;
+        return MakeToy(spec);
+    };
+    std::vector<Value> numbers;
+    std::string broken = "[";
+    for (int64_t n = 0; n != 30; ++n)
+    {
+        numbers.emplace_back(n);
+        broken += (n != 0 ? ",\n " : "") + std::to_string(n);
+    }
+    broken += "]";
+    const ValuesMap params{ { "l", items(numbers, false, true) },
+        { "g", items(numbers, false, false) },
+        { "t", items({ items(numbers, false, true) }, true, false) },
+        { "e", items({}, true, false) },
+        { "d", items({ Value(ValuesMap{ { "b", Value(1) }, { "a", Value(2) } }) }, false, true) } };
+    EXPECT_EQ(broken, Render("{{ l|pprint }}", params));
+    EXPECT_EQ(broken, Render("{{ g|pprint }}", params));
+    const auto tuple = Render("{{ t|pprint }}", params);
+    EXPECT_EQ("([0,", tuple.substr(0, 4));
+    EXPECT_EQ("29],)", tuple.substr(tuple.size() - 5));
+    EXPECT_EQ("() [{'a': 2, 'b': 1}]", Render("{{ e|pprint }} {{ d|pprint }}", params));
+    EXPECT_EQ(L"[{'a': 2, 'b': 1}]", RenderW(L"{{ d|pprint }}", params));
+}
+
 // A method that may change its receiver (append) is the host's own attribute: the engine never
 // copies the object to change the copy
 TEST(PublicHostObjectTest, MutatingMethodNameCallsTheObject)
