@@ -29,8 +29,11 @@ with a lambda), or have `LoopFrame::Traverse` report the iterated loop it keeps 
 **Done when.** The template above renders without a leak under
 `-DJINJA2CPP_WITH_SANITIZERS=address+undefined` with `detect_leaks=1`.
 
-**Resolution.** `LoopAccessor::GetIteration` returns a `LoopIteration` accessor in place of a
-generator lambda: it holds the loop object (the frame's own accessor, owned by the frame) and
-`Traverse`s it, so the collector follows the kept inner loop through its `indexedList` to the
-outer loop. Rows in `ExpressionTest.CyclesThroughObjects`, which the sanitizer job runs with
-leak detection.
+**Resolution.** `LoopAccessor::GetIteration` makes its generator with
+`ListAdapter::CreateGenerator`, which keeps the loop object (the frame's own accessor, owned by
+the frame) in the list and `Traverse`s it, and makes each (item, loop) pair when it is read rather
+than keeping it in the enumerator, which the collector does not see. So the collector follows the
+kept inner loop through its `indexedList` to the outer loop. The generator lives in
+internal_value.cpp: as a final class in statements.cpp GCC speculatively devirtualized the loop
+enumerator calls in `RenderLoopInSlots` into it (+4% instructions on mitsuhiko_table). Rows in
+`ExpressionTest.CyclesThroughObjects`, which the sanitizer job runs with leak detection.
