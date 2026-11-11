@@ -1230,6 +1230,52 @@ SubscriptParseResult<BracketSubscript> ParseSubscribed(ExpressionParser& parser,
     return result;
 }
 
+// The rest of a subscript by a tuple after its first item, if any: `l[a, b]`, `l[]`, `l[1:2, 3]`
+SubscriptParseResult<BracketSubscript> ParseSubscriptTuple(ExpressionParser& parser, LexScanner& lexer, SiblingOperators& siblings, const BracketSubscript& first)
+{
+    auto& nodes = parser.Nodes();
+    std::vector<NodeRef<Expression>> items;
+    bool hasSlice = first.isSlice;
+    bool foldable = true;
+    const auto addItem = [&nodes, &foldable, &items](const BracketSubscript& item) {
+        for (const auto& part : item.parts)
+        {
+            foldable = foldable && (!part || nodes[part].IsFoldable(nodes));
+        }
+        items.push_back(item.parts[0]);
+    };
+    if (first.parts[0] || first.isSlice)
+    {
+        addItem(first);
+    }
+    while (lexer.EatIfEqual(','))
+    {
+        // Jinja2 has no trailing comma in a subscript: `l[1,]` is a syntax error
+        if (lexer.PeekNextToken() == ']')
+        {
+            return MakeParseError(ErrorCode::ExpectedExpression, lexer.PeekNextToken());
+        }
+        auto item = ParseSubscribed(parser, lexer, siblings);
+        if (!item)
+        {
+            return MakeUnexpected(item.error());
+        }
+        hasSlice = hasSlice || item->isSlice;
+        addItem(*item);
+    }
+    BracketSubscript result;
+    if (hasSlice)
+    {
+        result.isTupleOfSlices = true;
+        result.foldable = foldable;
+    }
+    else
+    {
+        result.parts[0] = nodes.Make<TupleCreator>(nodes.MakeSpan(items), true);
+    }
+    return result;
+}
+
 // Jinja2's parse_subscript: an index, a slice, or a tuple of them. l[a, b] and l[] index with a
 // tuple; a tuple with a slice among its items (`l[1:2, 3]`, Python's extended slice) is only
 // told apart, as the caller folds or rejects it (docs/tasks/0445)
@@ -1248,46 +1294,12 @@ SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& p
     // l[a, b] and l[] index with a tuple, as in Jinja2
     if (lexer.PeekNextToken() == ',' || (!result.parts[0] && !result.isSlice && lexer.PeekNextToken() == ']'))
     {
-        auto& nodes = parser.Nodes();
-        std::vector<NodeRef<Expression>> items;
-        bool hasSlice = result.isSlice;
-        bool foldable = true;
-        const auto addItem = [&nodes, &foldable, &items](const BracketSubscript& item) {
-            for (const auto& part : item.parts)
-            {
-                foldable = foldable && (!part || nodes[part].IsFoldable(nodes));
-            }
-            items.push_back(item.parts[0]);
-        };
-        if (result.parts[0] || result.isSlice)
+        auto tuple = ParseSubscriptTuple(parser, lexer, siblings, result);
+        if (!tuple)
         {
-            addItem(result);
+            return MakeUnexpected(tuple.error());
         }
-        while (lexer.EatIfEqual(','))
-        {
-            // Jinja2 has no trailing comma in a subscript: `l[1,]` is a syntax error
-            if (lexer.PeekNextToken() == ']')
-            {
-                return MakeParseError(ErrorCode::ExpectedExpression, lexer.PeekNextToken());
-            }
-            auto item = ParseSubscribed(parser, lexer, siblings);
-            if (!item)
-            {
-                return MakeUnexpected(item.error());
-            }
-            hasSlice = hasSlice || item->isSlice;
-            addItem(*item);
-        }
-        result = BracketSubscript{};
-        if (hasSlice)
-        {
-            result.isTupleOfSlices = true;
-            result.foldable = foldable;
-        }
-        else
-        {
-            result.parts[0] = nodes.Make<TupleCreator>(nodes.MakeSpan(items), true);
-        }
+        result = *tuple;
     }
 
     if (!lexer.EatIfEqual(']'))
