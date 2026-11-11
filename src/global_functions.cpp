@@ -456,7 +456,7 @@ std::string LipsumParagraph(std::minstd_rand& random, int64_t minWords, int64_t 
         }
         // The paragraph grows word by word, so the cap stops min/max of billions of words
         // before they are built (docs/tasks/0263)
-        CheckSequenceSize(uint64_t{ text.size() } + word.size() + 2, "a lipsum text");
+        CheckSequenceSize(uint64_t{ text.size() } + (text.empty() ? 0 : 1) + word.size(), "a lipsum text");
         if (!text.empty())
         {
             text += ' ';
@@ -503,7 +503,8 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     for (int64_t paragraph = 0; paragraph < count; ++paragraph)
     {
         auto text = LipsumParagraph(random, minWords, maxWords);
-        CheckSequenceSize(uint64_t{ result.size() } + text.size() + 8, "a lipsum text");
+        CheckSequenceSize(uint64_t{ result.size() } + (result.empty() ? 0 : (html ? 1 : 2)) + text.size() + (html ? 7 : 0),
+                          "a lipsum text");
         if (!result.empty())
         {
             result += html ? "\n" : "\n\n";

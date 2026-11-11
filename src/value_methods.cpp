@@ -583,7 +583,8 @@ struct StrOps
             {
                 if (count < 0 || static_cast<int64_t>(n) < count)
                 {
-                    CheckSequenceSize(uint64_t{ result.size() } + newStr.size() + 1, "a replaced string");
+                    CheckSequenceSize(uint64_t{ result.size() } + newStr.size() + (n < chars.size() ? chars[n].size() : 0),
+                                      "a replaced string");
                     result += newStr;
                 }
                 if (n < chars.size())

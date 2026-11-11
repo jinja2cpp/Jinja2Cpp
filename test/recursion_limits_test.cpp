@@ -474,6 +474,13 @@ TEST_F(RecursionLimitsTest, GrowthOperationsCheckSizeFirst)
     Template atLimit(&m_env);
     ASSERT_TRUE(atLimit.Load("{{ (('-' * 600).join(['a' * 1000]))|length }}").has_value());
     EXPECT_EQ("1000", atLimit.RenderAsString({}).value());
+    // The same for one wrapped line and for an empty-pattern replace at the end of the text
+    Template wrapAtLimit(&m_env);
+    ASSERT_TRUE(wrapAtLimit.Load("{{ (('a' * 1000)|wordwrap(2000, wrapstring='-' * 600))|length }}").has_value());
+    EXPECT_EQ("1000", wrapAtLimit.RenderAsString({}).value());
+    Template replaceAtLimit(&m_env);
+    ASSERT_TRUE(replaceAtLimit.Load("{{ ('a' * 1000).replace('', '')|length }}").has_value());
+    EXPECT_EQ("1000", replaceAtLimit.RenderAsString({}).value());
 }
 
 #if defined(__linux__) || defined(__APPLE__)
