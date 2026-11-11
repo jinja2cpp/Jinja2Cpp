@@ -397,8 +397,17 @@ InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const In
 // an undefined that knows where it came from
 InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values)
 {
-    if (GetUndefinedInfo(cur))
+    if (const auto* info = GetUndefinedInfo(cur))
     {
+        // Jinja2's Undefined has these as fields, which getattr finds before __getattr__; the sandbox refuses a
+        // name that starts with an underscore
+        if (idx.isAttr && !values.GetSandboxPolicy())
+        {
+            if (auto field = UndefinedField(*info, idx.attrName))
+            {
+                return std::move(*field);
+            }
+        }
         CheckUndefinedUse(cur, UndefinedUse::Attribute);
         return cur;
     }

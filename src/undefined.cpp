@@ -9,10 +9,13 @@
 
 #include <jinja2cpp/template_env.h>
 
+#include <charconv>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <variant>
 
@@ -218,6 +221,34 @@ InternalValue MakeUnsafeUndefined(const RenderContext& context, std::string hint
 void ThrowUndefined(const UndefinedInfo& info)
 {
     throw UndefinedError(UndefinedMessage(info), info.security);
+}
+
+std::optional<InternalValue> UndefinedField(const UndefinedInfo& info, std::string_view name)
+{
+    if (name == "_undefined_name")
+    {
+        if (info.name.empty())
+        {
+            return InternalValue(NoneValue{});
+        }
+        // A non-string key is kept as its repr: an int key is the int again
+        int64_t number = 0;
+        const auto* end = info.name.data() + info.name.size();
+        if (!info.isAttr)
+        {
+            if (const auto parsed = std::from_chars(info.name.data(), end, number); parsed.ec == std::errc() && parsed.ptr == end)
+            {
+                return InternalValue(number);
+            }
+        }
+        return InternalValue(info.name);
+    }
+    if (name == "_undefined_hint")
+    {
+        auto hint = HintOf(info);
+        return hint.empty() ? InternalValue(NoneValue{}) : InternalValue(std::move(hint));
+    }
+    return std::nullopt;
 }
 
 const char* UndefinedClassName(const UndefinedInfo& info)

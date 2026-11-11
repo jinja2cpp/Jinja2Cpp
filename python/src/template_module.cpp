@@ -12,6 +12,7 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_set>
@@ -164,6 +165,25 @@ private:
     std::unordered_set<PyObject*> m_path;
 };
 
+// Whether `object` is an EvalContext of jinja2cpp or Jinja2 (jinja2.nodes.EvalContext) or of a subclass
+bool IsEvalContext(nb::handle object)
+{
+    const auto mro = nb::steal(PyObject_GetAttrString(reinterpret_cast<PyObject*>(Py_TYPE(object.ptr())), "__mro__"));
+    if (!mro)
+    {
+        PyErr_Clear();
+        return false;
+    }
+    for (auto base : mro)
+    {
+        if (IsJinjaClass(base, "EvalContext"))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 // A macro of a module (Template.make_module, Template.module): it runs in its module, which
 // the callable keeps alive with the template, so it stays callable after the template, the
 // module object and every other reference to them are gone (docs/tasks/0284). It holds the
@@ -194,13 +214,26 @@ public:
         auto& env = nb::cast<PyEnvironment&>(m_environment);
         env.CheckAlive();
         env.CheckSandboxHooks();
+        // Jinja2's Macro.__call__: an EvalContext as the first argument is not an argument of the macro, and its
+        // autoescape decides whether the result is Markup
+        int autoescape = -1;
+        size_t first = 0;
+        if (args.size() != 0 && IsEvalContext(args[0]))
+        {
+            autoescape = PyObject_IsTrue(nb::getattr(args[0], "autoescape").ptr());
+            if (autoescape < 0)
+            {
+                throw nb::python_error();
+            }
+            first = 1;
+        }
         // One budget for all the arguments of the call
         ModuleParams convert;
         jinja2::ValuesList positional;
-        positional.reserve(args.size());
-        for (auto arg : args)
+        positional.reserve(args.size() - first);
+        for (size_t i = first; i < args.size(); ++i)
         {
-            positional.push_back(convert.Convert(arg));
+            positional.push_back(convert.Convert(args[i]));
         }
         jinja2::ValuesMap keywords;
         for (auto [name, value] : kwargs)
@@ -221,6 +254,18 @@ public:
         {
             auto result = ToPython(m_callable.callable(params));
             RaiseAbort(state);
+            if (autoescape >= 0 && PyUnicode_Check(result.ptr()))
+            {
+                const bool markup = nb::isinstance(result, Names().markupType);
+                if (autoescape != 0 && !markup)
+                {
+                    return Names().markupType(result);
+                }
+                if (autoescape == 0 && markup)
+                {
+                    return nb::steal(PyObject_Str(result.ptr()));
+                }
+            }
             return result;
         }
         catch (const jinja2::BadResultAccess<char>& failure)

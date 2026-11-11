@@ -120,7 +120,9 @@ engines on a Release build of the module.
   engine's `Template::MakeModule`: the exports are attributes of a `TemplateModule`, `str()` is
   the rendered body, `__html__` is the same as Markup. An exported macro (also inside an exported
   list or dict) is a callable that keeps its module, the template and the environment alive, so
-  it works after every other reference is gone.
+  it works after every other reference is gone. As Jinja2's `Macro`, it takes an `EvalContext`
+  (`jinja2cpp.nodes.EvalContext`, Jinja2's too) as an optional first argument, whose `autoescape`
+  decides whether the result is Markup (0434).
 - `jinja2cpp.meta.find_undeclared_variables` and `find_referenced_templates`, which take the
   result of `env.parse(source, name=None, filename=None)` (an opaque object).
 - `env.globals`, `env.filters` and `env.tests` as dicts of Python values and callables.

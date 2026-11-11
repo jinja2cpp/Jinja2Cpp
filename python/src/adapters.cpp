@@ -405,7 +405,21 @@ jinja2::Value PyHost::Call(const jinja2::UserCallableParams& params) const
         const auto safe = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_check_call", "O", m_object));
         (void)safe;
     }
-    return CallPython(m_object, params);
+    try
+    {
+        return CallPython(m_object, params);
+    }
+    catch (nb::python_error& error)
+    {
+        if (!error.matches(PyExc_StopIteration))
+        {
+            throw;
+        }
+    }
+    // Jinja2's Context.call: a call that raises StopIteration gives the environment's undefined value
+    const auto* render = CurrentRender();
+    const nb::handle type = render && render->undefinedClass ? nb::handle(render->undefinedClass) : nb::handle(Names().undefinedType);
+    return ToEngine(Steal(PyObject_CallFunction(type.ptr(), "s", "value was undefined because a callable raised a StopIteration exception")));
 }
 
 bool PyHost::IsIterable() const

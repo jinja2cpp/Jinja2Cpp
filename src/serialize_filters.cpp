@@ -204,6 +204,25 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     // _format: indent is the column the value starts at, allowance the columns the text
     // after it on its last line takes, level its nesting (1 for the value pformat prints)
+    // A host's list or tuple as the engine's list, which pprint breaks as it breaks a list: pprint finds list.__repr__
+    // and tuple.__repr__, which a subclass keeps; a namedtuple has a __repr__ of its own, printed on one line
+    static std::optional<ListAdapter> HostSequence(const InternalValue& val)
+    {
+        const auto* host = GetHostObject(val);
+        if (!host || !host->IsSequence() || (host->IsTuple() && std::strcmp(host->TypeName(), "tuple") != 0))
+        {
+            return std::nullopt;
+        }
+        return host::AsSequence(*host);
+    }
+
+    // The list val is, or the one HostSequence gives, which `hostItems` holds
+    static std::optional<ListRef> ListOf(const InternalValue& val, std::optional<ListAdapter>& hostItems)
+    {
+        hostItems = HostSequence(val);
+        return hostItems ? std::optional<ListRef>(hostItems->Ref()) : AsList(val);
+    }
+
     void FormatTo(std::string& out, const InternalValue& val, int64_t indent, int64_t allowance, int level) const
     {
         CheckStack();
@@ -213,7 +232,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             Write(out, Print(val, m_context));
             return;
         }
-        if (auto list = AsList(val))
+        std::optional<ListAdapter> hostItems;
+        if (auto list = ListOf(val, hostItems))
         {
             if (list->GetRangeInfo())
             {
@@ -269,7 +289,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             return limit + 1;
         }
-        if (auto list = AsList(val); list && !list->GetRangeInfo())
+        std::optional<ListAdapter> hostItems;
+        if (auto list = ListOf(val, hostItems); list && !list->GetRangeInfo())
         {
             return ItemsWidthAtMost(*list, limit);
         }

@@ -1806,6 +1806,116 @@
     "type": "UndefinedError",
     "message": "'jinja2.utils.Namespace object' has no attribute 'b'"
    }
+  },
+  {
+   "id": "undefined.undefined_name_field",
+   "template": "{{ nope._undefined_name }}|{{ d.zz._undefined_name }}|{{ nope._undefined_hint }}|{{ nope|attr('_undefined_name') }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "nope|zz|None|nope"
+  },
+  {
+   "id": "undefined.undefined_name_item_fails",
+   "template": "{{ nope['_undefined_name'] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_undefined_name_field",
+   "template": "{{ nope._undefined_name }}|{{ d.zz._undefined_name }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "nope|zz"
+  },
+  {
+   "id": "undefined.debug_undefined_name_field",
+   "template": "{{ nope._undefined_name }}|{{ d.zz._undefined_name }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "nope|zz"
+  },
+  {
+   "id": "undefined.chainable_undefined_name_missing",
+   "template": "{{ foo.bar['baz']._undefined_name }}|{{ foo._undefined_hint }}",
+   "context": {},
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "foo|None"
+  },
+  {
+   "id": "undefined.chainable_undefined_name_attr",
+   "template": "{{ foo.bar['baz']._undefined_name }}|{{ foo._undefined_name }}",
+   "context": {
+    "foo": 42
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "bar|"
+  },
+  {
+   "id": "undefined.chainable_undefined_name_item",
+   "template": "{{ foo.bar['baz']._undefined_name }}",
+   "context": {
+    "foo": {
+     "bar": 42
+    }
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "baz"
+  },
+  {
+   "id": "undefined.chainable_undefined_name_list",
+   "template": "{{ foo.x[0]._undefined_name }}|{{ foo.x[0]._undefined_name is number }}",
+   "context": {
+    "foo": {
+     "x": []
+    }
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "0|True"
   }
  ]
 }

@@ -483,6 +483,13 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
         const auto* info = GetUndefinedInfo(attrNameVal);
         throw TemplateRuntimeError("attribute name must be string, not '" + (info ? std::string(UndefinedClassName(*info)) : Apply<visitors::PythonTypeNameGetter>(attrNameVal)) + "'");
     }
+    if (const auto* info = GetUndefinedInfo(baseVal); info && !context.GetSandboxPolicy())
+    {
+        if (auto field = UndefinedField(*info, AsString(attrNameVal)))
+        {
+            return std::move(*field);
+        }
+    }
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // A missing attribute is environment.undefined(obj=obj, name=name), which DebugUndefined
     // prints as {{ no such element: str object['f'] }}

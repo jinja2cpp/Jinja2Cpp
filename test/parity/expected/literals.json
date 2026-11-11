@@ -783,6 +783,14 @@
     "type": "TemplateSyntaxError",
     "message": "unknown Unicode character name"
    }
+  },
+  {
+   "id": "literals.class_name_of_str",
+   "template": "{{ 'a'.__class__.__name__ }}|{{ ('a'|safe).__class__.__name__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "str|Markup"
   }
  ]
 }

@@ -127,4 +127,14 @@ CASES = [
     ("debug_engine_object_types", "{% set ns = namespace(a=1) %}{{ ns.b }}|{{ cycler(1).b }}|{{ joiner().b }}|{% for i in [1] %}{{ loop.b }}{% endfor %}|{{ self.b }}", {"env": {"undefined": "debug"}}),
     ("debug_callable_object_types", "{{ range(2).b }}|{{ lipsum.b }}|{{ 'a'.upper.b }}|{% macro m() %}{% endmacro %}{{ m.b }}|{{ ([1]|select).b }}|{{ ([1]|reverse).b }}", {"env": {"undefined": "debug"}}),
     ("strict_engine_object_type", "{% set ns = namespace(a=1) %}{{ ns.b }}", {"env": {"undefined": "strict"}}),
+    # task 0434: _undefined_name and _undefined_hint are fields of Jinja2's Undefined, which getattr finds before
+    # __getattr__, for every policy; ChainableUndefined keeps the first missing step of a chain
+    ("undefined_name_field", "{{ nope._undefined_name }}|{{ d.zz._undefined_name }}|{{ nope._undefined_hint }}|{{ nope|attr('_undefined_name') }}"),
+    ("undefined_name_item_fails", "{{ nope['_undefined_name'] }}"),
+    ("strict_undefined_name_field", "{{ nope._undefined_name }}|{{ d.zz._undefined_name }}", STRICT),
+    ("debug_undefined_name_field", "{{ nope._undefined_name }}|{{ d.zz._undefined_name }}", DEBUG),
+    ("chainable_undefined_name_missing", "{{ foo.bar['baz']._undefined_name }}|{{ foo._undefined_hint }}", {"env": {"undefined": "chainable"}, "ctx": {}}),
+    ("chainable_undefined_name_attr", "{{ foo.bar['baz']._undefined_name }}|{{ foo._undefined_name }}", {"env": {"undefined": "chainable"}, "ctx": {"foo": 42}}),
+    ("chainable_undefined_name_item", "{{ foo.bar['baz']._undefined_name }}", {"env": {"undefined": "chainable"}, "ctx": {"foo": {"bar": 42}}}),
+    ("chainable_undefined_name_list", "{{ foo.x[0]._undefined_name }}|{{ foo.x[0]._undefined_name is number }}", {"env": {"undefined": "chainable"}, "ctx": {"foo": {"x": []}}}),
 ]

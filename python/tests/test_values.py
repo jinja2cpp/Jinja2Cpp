@@ -326,3 +326,39 @@ def test_list_and_tuple_subclasses_iterate_as_python_does(source):
         env = module.Environment()
         results.append(env.from_string(source).render(**_subclass_context()))
     assert results[0] == results[1], f"{source!r}: jinja2cpp {results[0]!r}, Jinja2 {results[1]!r}"
+
+
+# pprint breaks a Python list or tuple as pformat does (0434): a subclass that keeps list.__repr__ too, but a
+# namedtuple, whose __repr__ is its own, prints on one line
+@pytest.mark.parametrize(
+    "value",
+    [
+        list(range(40)),
+        tuple(range(40)),
+        (list(range(40)),),
+        [[1] * 40, {"a": (1,) * 40}],
+        PlainSubList(range(40)),
+        Point(list(range(40)), 1),
+        list(range(1000)),
+    ],
+)
+def test_pprint_breaks_python_sequences_as_pformat(value):
+    assert_same("{{ v|pprint }}", {"v": value})
+
+
+# A call that raises StopIteration is undefined, as Jinja2's Context.call makes it (0434)
+def test_stop_iteration_from_a_call_is_undefined():
+    def stop():
+        raise StopIteration
+
+    assert_same("A{{ f() }}B|{{ f() is defined }}", {"f": stop})
+    for module in (jinja2cpp, jinja2):
+        with pytest.raises(module.UndefinedError):
+            module.Environment().from_string("{{ f().x }}").render(f=stop)
+    # A filter is not called through Context.call: the render fails (Jinja2 raises RuntimeError, as its render is a
+    # generator: docs/tasks/0470)
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        env.filters["stop"] = lambda value: stop()
+        with pytest.raises((StopIteration, RuntimeError)):
+            env.from_string("{{ 1|stop }}").render()
