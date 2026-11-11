@@ -1546,6 +1546,13 @@ public:
         const auto* view = dynamic_cast<const CallListView*>(&other);
         return view != nullptr && view->Items() == Items();
     }
+    // A tuple the template made stays one (GenericList::IsTuple): a keepUndefined callable gets
+    // a dictsort pair as a 2-tuple (docs/tasks/0347)
+    [[nodiscard]] bool IsTuple() const override
+    {
+        const auto list = m_identity ? std::nullopt : AsList(m_container);
+        return list && list->IsTuple();
+    }
 
 private:
     [[nodiscard]] const InternalValueList* Items() const

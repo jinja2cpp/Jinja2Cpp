@@ -5,6 +5,7 @@
 
 #include "../src/borrowed_cells.h"
 
+#include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
@@ -829,6 +830,34 @@ TEST(BorrowedCellsKept, ModuleCellInsideALazyValue)
         // The second call's value is that call's
         EXPECT_NE(m.keeper.Show(0), m.keeper.Show(1));
     }
+}
+
+TEST(BorrowedCellsKept, ModuleTupleToAKeepUndefinedCallable)
+{
+    // 0347: a callable that keeps undefined values gets a dictsort or items() pair, and a tuple,
+    // as a 2-tuple from a module's call too (UserCallable::keepUndefined)
+    std::string seen;
+    UserCallable probe(
+        [&seen](const UserCallableParams& p) {
+            const Value value = p["v"];
+            const auto& list = value.As<GenericList>();
+            seen += list.IsTuple() ? "tuple;" : "list;";
+            for (const auto& item : list)
+            {
+                const auto* inner = item.GetIf<GenericList>();
+                seen += inner && inner->IsTuple() ? "tuple;" : "other;";
+            }
+            return Value();
+        },
+        { ArgInfo{ "v" } });
+    probe.keepUndefined = true;
+    ValuesMap params{ { "l", ValuesList{ 0 } }, { "probe", probe } };
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add() %}{% set _ = l.append(1) %}{% set _ = probe({'k': l}|dictsort) %}{% set _ = probe({'k': l}.items()) %}"
+                           "{% set _ = probe([('k', l)]) %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    module.exports["add"].As<UserCallable>().callable(UserCallableParams{});
+    EXPECT_EQ("list;tuple;list;tuple;list;tuple;", seen);
 }
 
 TEST(BorrowedCellsKept, ModuleCellInsideAKeptListReadFromThreads)

@@ -41,6 +41,6 @@ pinned at the call's end, so those shapes held. Two shapes read the cell live af
 a dictsort or `items()` pair (`CallExportItem` exported the pair's key and value with
 `IntValue2Value`, outside the call's exports) and a namespace (`NamespaceAdapter` lacked the
 running-call export a dict has). Both now go through the call's exports. Rows:
-`BorrowedCellsKept.ModuleCellInsideALazyValue` (13 shapes, two calls each) and the
+`BorrowedCellsKept.ModuleCellInsideALazyValue` (12 shapes, two calls each), `ModuleTupleToAKeepUndefinedCallable` (a pair or tuple stays a 2-tuple for a keepUndefined callable: `CallListView` now forwards `IsTuple`, which a module call's tuple lacked before, verifier round 1) and the
 `ModuleCellInsideAKeptListReadFromThreads` TSan row for `[l]`, a dictsort pair, a namespace and
 a generator's item. Documented in docs/api-2.0.md 3.10, item 9.
