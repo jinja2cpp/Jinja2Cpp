@@ -2,6 +2,7 @@
 
 #include "convert.h"
 #include "errors.h"
+#include "lazy_render.h"
 #include "loaders.h"
 #include "poll.h"
 
@@ -847,7 +848,7 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
 }
 
 template<typename Target>
-void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bool eachPiece) const
+void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bool eachPiece, const jinja2::RenderSuspension* suspension) const
 {
     ++g_renders;
     auto& env = LiveEnvironment();
@@ -880,6 +881,7 @@ void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bo
     options.globals = std::move(globals);
     options.poll = RenderPoll();
     options.writeEachPiece = eachPiece;
+    options.suspension = suspension;
     auto result = [&] {
         const RenderScope scope(state);
         return m_template.RenderTo(target, params, options);
@@ -927,6 +929,11 @@ void PyTemplate::RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) co
 {
     CallbackSink sink(write);
     RenderWith(sink, std::move(args), std::move(kwargs), true);
+}
+
+void PyTemplate::RenderSuspended(jinja2::OutputSink& sink, nb::args args, nb::kwargs kwargs, const jinja2::RenderSuspension& suspension) const
+{
+    RenderWith(sink, std::move(args), std::move(kwargs), true, &suspension);
 }
 
 int PyTemplate::Traverse(visitproc visit, void* arg) const
@@ -1021,6 +1028,7 @@ void BindEnvironment(nb::module_& module)
         .def(nb::init<nb::handle, nb::handle, nb::kwargs>(), "source"_a, "_environment"_a.none() = nb::none(), "kwargs"_a)
         .def("render", &PyTemplate::Render)
         .def("_render_to", &PyTemplate::RenderTo)
+        .def("_lazy", &MakeLazyRender)
         .def("_make_module", &PyTemplate::MakeModule, "params"_a)
         .def("_undeclared", &PyTemplate::FindUndeclared)
         .def("_referenced", &PyTemplate::FindReferenced)
