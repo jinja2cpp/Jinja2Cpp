@@ -3065,6 +3065,17 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         }
     }
 
+    RenderByNames(values, doRender);
+}
+
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(const IRendererCallback::LoadTemplateResult&)> doRender) const
+{
+    auto* callback = values.GetRendererCallback();
     auto templateNames = values.Nodes()[m_expr].Evaluate(values);
     bool isConverted = false;
     ListAdapter list = ConvertToList(templateNames, isConverted);

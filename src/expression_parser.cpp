@@ -39,6 +39,12 @@ inline namespace v2
 {
 
 ParseError::ParseError(const ParseError&) = default;
+
+nonstd::unexpected_type<ParseError> MakeParseErrorMsg(ErrorCode code, Token tok, std::string message)
+{
+    return MakeUnexpected(ParseError{ code, tok, std::move(message) });
+}
+
 ParseError::ParseError(ParseError&& other) noexcept
     : errorCode(other.errorCode)
     , errorToken(std::move(other.errorToken))

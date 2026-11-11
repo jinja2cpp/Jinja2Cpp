@@ -281,6 +281,39 @@ TEST(OutputTest, SinkGetsEachPieceWhenAsked)
     EXPECT_EQ(gathered.chunks.size(), 1U);
 }
 
+TEST(OutputTest, EachPieceRenderKeepsItsPiecesAroundOthersOnTheThread)
+{
+    // The piece flush rides the stack check's slow path (EachPieceScope): a render with limits, and a render a
+    // callable runs inside it, leave the outer render's pieces as they are, and the next render gathers again
+    Template inner;
+    ASSERT_TRUE(inner.Load("x{{ 1 }}y"));
+    TemplateEnv env;
+    env.GetSettings().limits = UntrustedLimits();
+    Template limited(&env);
+    ASSERT_TRUE(limited.Load("p{{ 2 }}q"));
+    const ValuesMap params = { { "f", MakeCallable([&inner]() { return inner.RenderAsString({}).value(); }) },
+                               { "g", MakeCallable([&limited]() { return limited.RenderAsString({}).value(); }) } };
+    RenderOptions options;
+    options.writeEachPiece = true;
+
+    Template outer;
+    ASSERT_TRUE(outer.Load("a{{ f() }}b{{ g() }}c{{ 3 }}"));
+    RecordingSink<char> sink;
+    ASSERT_TRUE(outer.RenderTo(sink, params, options));
+    EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "a", "x1y", "b", "p2q", "c", "3" }));
+
+    // With limits of its own
+    Template outerLimited(&env);
+    ASSERT_TRUE(outerLimited.Load("a{{ f() }}b{{ 3 }}"));
+    RecordingSink<char> limitedSink;
+    ASSERT_TRUE(outerLimited.RenderTo(limitedSink, params, options));
+    EXPECT_EQ(limitedSink.chunks, (std::vector<std::string>{ "a", "x1y", "b", "3" }));
+
+    RecordingSink<char> gathered;
+    ASSERT_TRUE(outer.RenderTo(gathered, params));
+    EXPECT_EQ(gathered.chunks, (std::vector<std::string>{ "ax1ybp2qc3" }));
+}
+
 TEST(OutputTest, SinkGetsLongFragmentsAsTheirOwnChunks)
 {
     // A text fragment of 128 characters or more skips the buffer: what the buffer holds goes first

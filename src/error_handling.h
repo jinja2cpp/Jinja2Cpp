@@ -58,10 +58,9 @@ inline auto MakeParseError(ErrorCode code, Token tok)
     return MakeUnexpected(ParseError{ code, std::move(tok) });
 }
 
-inline auto MakeParseErrorMsg(ErrorCode code, Token tok, std::string message)
-{
-    return MakeUnexpected(ParseError{ code, tok, std::move(message) });
-}
+// Out of line (expression_parser.cpp): an error path, whose string and shared message stay out of
+// the parser's hot functions
+nonstd::unexpected_type<ParseError> MakeParseErrorMsg(ErrorCode code, Token tok, std::string message);
 
 inline auto MakeParseError(ErrorCode code, Token tok, std::initializer_list<Token> toks)
 {

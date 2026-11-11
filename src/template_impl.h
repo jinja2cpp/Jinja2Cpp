@@ -539,11 +539,14 @@ public:
             OutStream outStream(os);
             // On the render's stack, so that it outlives every use of the callback's pointer to it
             [[maybe_unused]] std::conditional_t<hasHooks, detail::GenerationTracker, std::monostate> tracker;
+            // After limitsScope, and gone before it
+            [[maybe_unused]] std::conditional_t<hasHooks, std::optional<EachPieceScope>, std::monostate> eachPieceScope;
             if constexpr (hasHooks)
             {
                 if (hooks->writeEachPiece)
                 {
                     outStream.WriteEachPiece();
+                    eachPieceScope.emplace();
                 }
                 if (hooks->generationSpans)
                 {

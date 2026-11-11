@@ -129,7 +129,7 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame)
             stack.limit = std::max(stack.limit, bounds.high - StackBudget);
         }
 #endif
-        if (!t_renderLimits.active)
+        if (!t_renderLimits.active && !t_renderLimits.eachPiece)
         {
             stack.renderLimit = stack.limit;
         }
@@ -227,7 +227,7 @@ void InstallRenderLimits(const RenderLimits& limits)
 {
     t_renderLimits = limits;
     auto& stack = t_threadStack;
-    stack.renderLimit = limits.active ? UINTPTR_MAX : stack.limit;
+    stack.renderLimit = limits.active || limits.eachPiece ? UINTPTR_MAX : stack.limit;
 }
 } // namespace detail
 

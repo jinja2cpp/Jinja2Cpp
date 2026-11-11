@@ -662,6 +662,9 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
+    // The lookup by the value of the name expression, out of Render's fast path for a constant name found before
+    void RenderByNames(RenderContext& values, FunctionRef<bool(const IRendererCallback::LoadTemplateResult&)> doRender) const;
+
     bool m_ignoreMissing{};
     bool m_withContext{};
     bool m_isConstant{};

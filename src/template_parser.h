@@ -526,10 +526,8 @@ public:
 private:
     ParseResult ParseNonKeywordStatement(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& tok);
     // The tag is unknown, or not where Jinja2 looks for it: its message (parser.py `_fail_ut_eof`)
-    [[nodiscard]] nonstd::unexpected_type<ParseError> UnknownTagError(const StatementInfoList& statementsInfo, const Token& tok, std::string_view name) const
-    {
-        return MakeParseErrorMsg(ErrorCode::UnexpectedStatement, tok, UnknownTagMessage(m_nodes, statementsInfo, name));
-    }
+    // (template_parser.cpp, out of the parse loop)
+    [[nodiscard]] nonstd::unexpected_type<ParseError> UnknownTagError(const StatementInfoList& statementsInfo, const Token& tok, std::string_view name) const;
     ParseResult ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
@@ -1707,6 +1705,22 @@ private:
         }
     }
 
+    // Jinja2's error for a statement left open at the end of the template; out of line, off the parse's path
+#if defined(_MSC_VER)
+    __declspec(noinline)
+#else
+    __attribute__((noinline))
+#endif
+    ParseError UnclosedError(const StatementInfoList& statementsStack) const
+    {
+        auto eof = m_template->size();
+        if (statementsStack.back().type == StatementInfo::TransStatement)
+        {
+            return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, MakeToken(Token::Eof, { eof, eof }), "unclosed translation block").error();
+        }
+        return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, MakeToken(Token::Eof, { eof, eof }), UnknownTagMessage(m_nodes, statementsStack, {})).error();
+    }
+
     nonstd::expected<void, std::vector<ParseError>> FinishFineParsing(NodeRef<TemplateRenderer> templateRef, StatementInfoList& statementsStack)
     {
         auto errors = std::move(m_fineErrors);
@@ -1718,16 +1732,7 @@ private:
         // Jinja2: a block statement left open at the end of the template is an error
         if (errors.empty() && statementsStack.size() > 1)
         {
-            auto eof = m_template->size();
-            if (statementsStack.back().type == StatementInfo::TransStatement)
-            {
-                errors.push_back(MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, MakeToken(Token::Eof, { eof, eof }), "unclosed translation block").error());
-            }
-            else
-            {
-                errors.push_back(
-                    MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, MakeToken(Token::Eof, { eof, eof }), UnknownTagMessage(m_nodes, statementsStack, {})).error());
-            }
+            errors.push_back(UnclosedError(statementsStack));
         }
 
         if (!errors.empty())

@@ -128,25 +128,34 @@ std::vector<OpenTag> OpenTags(const NodeArena& nodes, const StatementInfoList& s
 
 namespace
 {
-// The keywords of the tags that close a statement or continue an `if` or `for`
-bool IsClosingKeyword(Keyword keyword)
+// For the keywords of the tags that close a statement or continue an `if` or `for`: the statement
+// they usually close, which the innermost one being accepts the tag at once. TemplateRoot for others
+StatementInfo::Type ClosedStatement(Keyword keyword)
 {
     switch (keyword)
     {
     case Keyword::Endfor:
+        return StatementInfo::ForStatement;
     case Keyword::Else:
     case Keyword::ElIf:
     case Keyword::EndIf:
+        return StatementInfo::IfStatement;
     case Keyword::EndSet:
+        return StatementInfo::SetStatement;
     case Keyword::EndBlock:
+        return StatementInfo::BlockStatement;
     case Keyword::EndMacro:
+        return StatementInfo::MacroStatement;
     case Keyword::EndCall:
+        return StatementInfo::MacroCallStatement;
     case Keyword::EndWith:
+        return StatementInfo::WithStatement;
     case Keyword::EndFilter:
+        return StatementInfo::FilterStatement;
     case Keyword::EndAutoescape:
-        return true;
+        return StatementInfo::AutoescapeStatement;
     default:
-        return false;
+        return StatementInfo::TemplateRoot;
     }
 }
 
@@ -262,6 +271,16 @@ std::string UnknownTagMessage(const NodeArena& nodes, const StatementInfoList& s
     return message;
 }
 
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+nonstd::unexpected_type<ParseError> StatementsParser::UnknownTagError(const StatementInfoList& statementsInfo, const Token& tok, std::string_view name) const
+{
+    return MakeParseErrorMsg(ErrorCode::UnexpectedStatement, tok, UnknownTagMessage(m_nodes, statementsInfo, name));
+}
+
 NodeRef<ComposedRenderer> StatementsParser::TakeFrameBody(StatementInfo& info)
 {
     if (const auto binding = m_names.EntryBinding(info.frame, m_nodes))
@@ -301,8 +320,10 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         return result;
     }
 
-    // Jinja2 accepts an end tag, `elif` or `else` only where the innermost open statement looks for it
-    if (IsClosingKeyword(keyword) && !AcceptsClosingKeyword(m_nodes, statementsInfo, keyword))
+    // Jinja2 accepts an end tag, `elif` or `else` only where the innermost open statement looks for it. The
+    // innermost statement being the one the tag closes accepts it; only the others need the whole check
+    if (const auto closed = ClosedStatement(keyword);
+        closed != StatementInfo::TemplateRoot && !(statementsInfo.size() > 1 && statementsInfo.back().type == closed) && !AcceptsClosingKeyword(m_nodes, statementsInfo, keyword))
     {
         return UnknownTagError(statementsInfo, tok, lexer.GetAsString(tok));
     }
@@ -1067,12 +1088,6 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
         return MakeParseError(ErrorCode::ExpectedIdentifier, nextTok);
     }
 
-    if (lexer.PeekNextToken() == '-')
-    {
-        // Jinja2's parse_block: `{% block foo-bar %}`
-        return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, lexer.PeekNextToken(),
-                                 "Block names in Jinja have to be valid Python identifiers and may not contain hyphens, use an underscore instead.");
-    }
     const auto blockName = m_nodes.MakeText(lexer.GetAsString(nextTok));
     // Its body reads names where it is rendered, and may be rendered again by `self` and `super()`
     m_names.AddReadOfAll();
@@ -1089,6 +1104,12 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     modifierTok = lexer.PeekNextToken();
     if (modifierTok != Token::Eof)
     {
+        // Jinja2's parse_block checks for a hyphen after the modifiers (`{% block foo-bar %}`); here, so that a block that parses pays nothing
+        if (modifierTok == '-')
+        {
+            return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, modifierTok,
+                                     "Block names in Jinja have to be valid Python identifiers and may not contain hyphens, use an underscore instead.");
+        }
         return MakeParseErrorTL(ErrorCode::ExpectedToken, modifierTok, Token::Eof);
     }
 

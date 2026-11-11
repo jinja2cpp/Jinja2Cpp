@@ -130,6 +130,9 @@ struct RenderLimits
     // installs the defaults
     bool scoped = false;
     bool hasDeadline = false;
+    // A render that writes each piece (RenderOptions::writeEachPiece, EachPieceScope) runs: every check
+    // takes the slow path, where a body reads its stream's flag, so the usual render pays nothing for it
+    bool eachPiece = false;
     // steady_clock ticks since its epoch: a time_point's constructor is not noexcept, which a
     // thread-local's initialiser has to be
     std::chrono::steady_clock::rep deadline = 0;
@@ -426,6 +429,33 @@ private:
 // Throws RecursionLimitError when the thread's stack is nearly used up. The renderer's and
 // the evaluator's check: in a render with limits each call is a render step, which may throw
 // ResourceLimitError
+// For as long as it lives, every CheckStack takes the slow path (RenderLimits::eachPiece): a render that writes
+// each piece (RenderOptions::writeEachPiece) makes one, after its RenderLimitsScope
+class EachPieceScope
+{
+public:
+    EachPieceScope() noexcept
+        : m_saved(detail::t_renderLimits.eachPiece)
+    {
+        detail::t_renderLimits.eachPiece = true;
+        detail::t_threadStack.renderLimit = UINTPTR_MAX;
+    }
+    ~EachPieceScope()
+    {
+        auto& limits = detail::t_renderLimits;
+        limits.eachPiece = m_saved;
+        auto& stack = detail::t_threadStack;
+        stack.renderLimit = limits.active || limits.eachPiece ? UINTPTR_MAX : stack.limit;
+    }
+    EachPieceScope(const EachPieceScope&) = delete;
+    EachPieceScope& operator=(const EachPieceScope&) = delete;
+    EachPieceScope(EachPieceScope&&) = delete;
+    EachPieceScope& operator=(EachPieceScope&&) = delete;
+
+private:
+    bool m_saved;
+};
+
 inline void CheckStack()
 {
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -437,6 +467,23 @@ inline void CheckStack()
     {
         detail::CheckStackSlow(frame);
     }
+}
+
+// CheckStack, telling whether it took the slow path: only then can a render that writes each piece run
+// (EachPieceScope), so a body reads its stream's flag there and the usual render tests nothing more
+[[nodiscard]] inline bool CheckStackTookSlowPath()
+{
+#if defined(_MSC_VER) && !defined(__clang__)
+    const auto frame = reinterpret_cast<std::uintptr_t>(_AddressOfReturnAddress());
+#else
+    const auto frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+#endif
+    if (frame < detail::t_threadStack.renderLimit)
+    {
+        detail::CheckStackSlow(frame);
+        return true;
+    }
+    return false;
 }
 
 // One level of render nesting; throws RecursionLimitError past
