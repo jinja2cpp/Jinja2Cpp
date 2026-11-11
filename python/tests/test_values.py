@@ -367,6 +367,7 @@ def test_stop_iteration_from_a_call_is_undefined():
         with pytest.raises((StopIteration, RuntimeError)):
             env.from_string("{{ 1|stop }}").render()
 
+
 class IntOnly:
     def __int__(self):
         return 42
