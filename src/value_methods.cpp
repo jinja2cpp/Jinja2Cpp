@@ -557,7 +557,7 @@ struct StrOps
             {
                 Raise(fmt::format("sequence item {}: expected str instance, {} found", idx, TypeName(item)));
             }
-            CheckSequenceSize(uint64_t{ result.size() } + self.size() + str->size(), "a joined string");
+            CheckSequenceSize(uint64_t{ result.size() } + (idx != 0 ? self.size() : 0) + str->size(), "a joined string");
             if (idx++ != 0)
             {
                 result.append(self.begin(), self.end());

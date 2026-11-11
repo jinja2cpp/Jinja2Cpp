@@ -739,7 +739,9 @@ private:
         }
         if (directive.precisionStar)
         {
-            spec.precision = std::max<int64_t>(0, StarArg());
+            // A "*" precision is clamped like a literal one (2**20, Number), not to MaxWidth: the
+            // float conversion formats the digits before any size check (Codex on #829)
+            spec.precision = std::clamp<int64_t>(StarArg(), 0, int64_t{ 1 } << 20);
         }
         if (directive.error == PercentDirective::Error::IncompleteAfterSpec)
         {

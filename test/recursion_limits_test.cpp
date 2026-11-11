@@ -408,8 +408,9 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
     EXPECT_EQ("[0, 1, 2]  x  ababTrue", tpl.RenderAsString({}).value());
     // A width past 2**20 pads as Python does, up to the cap (docs/tasks/0263)
     Template padded(&m_env);
-    ASSERT_TRUE(padded.Load("{{ ('%2000000s' % 'x')|length }} {{ ('%-*d' % (2000000, 1))|length }}").has_value());
-    EXPECT_EQ("2000000 2000000", padded.RenderAsString({}).value());
+    ASSERT_TRUE(padded.Load("{{ ('%2000000s' % 'x')|length }} {{ ('%-*d' % (2000000, 1))|length }} {{ ('%.*f' % (2**40, 1.0))|length }} {{ ('%.1048576f' % 1.0)|length }}").has_value());
+    // A "*" precision is clamped as a literal one is, never to the width cap (Codex on #829)
+    EXPECT_EQ("2000000 2000000 1048577 1048577", padded.RenderAsString({}).value());
     TemplateW wide(&m_env);
     ASSERT_TRUE(wide.Load(L"{{ 'x'|center(2**40) }}").has_value());
     EXPECT_FALSE(wide.RenderAsString({}).has_value());
@@ -469,6 +470,10 @@ TEST_F(RecursionLimitsTest, GrowthOperationsCheckSizeFirst)
     Template ok(&m_env);
     ASSERT_TRUE(ok.Load("{{ ([1] * 3 + [2])|join }}{{ 'x'.center(5) }}{{ 'ab' ~ 'c' }}{{ ('%3s' % 'a') }}{{ range(3)|join(',') }}{{ 'h\xc3\xa9llo'|length }}{{ {'a': 1, 'b': 2}|length }}").has_value());
     EXPECT_EQ("1112  x  abc  a0,1,252", ok.RenderAsString({}).value());
+    // The separator goes only between items: one item at the limit joins (Codex on #829)
+    Template atLimit(&m_env);
+    ASSERT_TRUE(atLimit.Load("{{ (('-' * 600).join(['a' * 1000]))|length }}").has_value());
+    EXPECT_EQ("1000", atLimit.RenderAsString({}).value());
 }
 
 #if defined(__linux__) || defined(__APPLE__)
