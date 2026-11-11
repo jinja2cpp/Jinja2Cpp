@@ -1243,7 +1243,7 @@ SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& p
         {
             return MakeUnexpected(first.error());
         }
-        result = std::move(*first);
+        result = *first;
     }
     // l[a, b] and l[] index with a tuple, as in Jinja2
     if (lexer.PeekNextToken() == ',' || (!result.parts[0] && !result.isSlice && lexer.PeekNextToken() == ']'))
