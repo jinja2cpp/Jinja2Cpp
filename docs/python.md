@@ -380,7 +380,7 @@ inside the adapters that let the engine read Python objects, not in generated co
   `__init__`, `_x`) on one is asked of `is_safe_attribute` with a stand-in object of the Python
   type and is refused with the same undefined; so is a public name when the subclass's
   `is_safe_attribute` is not Jinja2's. `format_map` of a string (which the module
-  answers from `NativeAttribute`, ahead of the engine's own, 0465) and `str.format` are
+  answers from `NativeAttribute`, ahead of the engine's own, 0466) and `str.format` are
   Python's, run through `SandboxedFormatter`. `ImmutableSandboxedEnvironment`
   also refuses the methods of the engine's lists and dicts that change them (`append`, `update`,
   ...) with Jinja2's message and `ErrorCode::SecurityError` (`Dialect::ImmutableSandbox`, the read-only containers of the
