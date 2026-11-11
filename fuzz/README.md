@@ -13,10 +13,14 @@ Python Jinja2.
 | `fuzz_render_wide.cpp` | `jinja2cpp_fuzz_render_wide`: the same through `TemplateW` (input decoded as UTF-8) |
 | `fuzz_metadata.cpp` | `jinja2cpp_fuzz_metadata`: the input as the text of a `{% meta %}` block, read by the JSON reader with default and untrusted limits |
 | `fuzz_prompt_escape.cpp`, `prompt_escape_case.h` | `jinja2cpp_fuzz_prompt_escape`: prompt autoescape (docs/tasks/0358). The input chooses a template from a grammar of escaping constructs and data strings with private-use special tokens the template never contains; a special in the output aborts. Then the input itself renders in prompt mode, for crashes only. `PromptEscapeProperty` in `test/filters_test.cpp` runs a fixed-seed sample |
+| `untrusted_targets.cpp`, `fuzz_untrusted.cpp` | `jinja2cpp_fuzz_untrusted`: load and render under `FuzzLimits()` (`UntrustedLimits()` tightened so that no template may legitimately run past the timeout or the RSS limit), so a timeout or out-of-memory is a finding (docs/tasks/0267). The first byte picks settings: autoescape, trim and lstrip blocks, `#` line statements, one of four delimiter sets, strict undefined, wide |
+| `fuzz_host.cpp` | `jinja2cpp_fuzz_host`: the same with host data: reflected structs (nested by `shared_ptr`, lists of them), reflected vectors, a generated list, callables with typed, `*args`, `**kwargs` and `*context` parameters, one returning a fresh host object, one throwing, host filters and tests |
+| `fuzz_loader.cpp` | `jinja2cpp_fuzz_loader`: templates on disk. The second byte picks `RealFileSystem` over a plain root or `ConfinedFileSystem` over one with links out of it; canary files outside the roots get new text for each input, and that text in the output aborts |
+| `alloc_failure_target.cpp`, `fuzz_alloc_failure.cpp` | `jinja2cpp_fuzz_alloc_failure`: the first two bytes (little-endian) pick an allocation to fail during Load and Render, the third the settings. Each call must return or throw `std::bad_alloc`; when the failure fired and no `bad_alloc` came out the outcome must not change, and the template and environment must render as before afterwards. It replaces the global `operator new`, so its replay is `jinja2cpp_fuzz_alloc_replay` |
 | `replay_corpus.py` | Runs a libFuzzer target once over a corpus, carrying on past timeouts and crashes (the pull-request mode) |
 | `replay_main.cpp` | `jinja2cpp_fuzz_replay`: runs all targets over files without libFuzzer (any compiler); `--json` prints render outcomes |
 | `regressions/` | One input per crash ever found; ctest `jinja2cpp_fuzz_regressions` replays them in every CI build |
-| `make_corpus.py` | Seed corpus: parity cases, unit-test template literals, `test/test_data`, `regressions/` |
+| `make_corpus.py` | Seed corpus: parity cases, unit-test template literals, `test/test_data`, `regressions/`; `--prefix TARGET` adds the bytes the limits-on targets read first (each seed with the default bytes and with bytes from its hash, its delimiters rewritten to match) |
 | `jinja2.dict` | Dictionary of Jinja2 syntax, statements, filters and tests |
 | `differential.py` | Renders a corpus with Jinja2C++ and Python Jinja2 and reports where they disagree |
 
@@ -45,9 +49,18 @@ pass `-C "$JINJA2CPP_CMAKE_INIT"` to the configure step (CLAUDE.md).
 3. Add the minimized input to `regressions/` under a name that says what it does
    (`recursive-include.j2`) and, for a behaviour the fix defines, a unit test.
 
-Timeouts and out-of-memory reports (`timeout-*`, `oom-*`) are findings too, but a template
-can legitimately ask for a lot of work (`range(10**9)`, `'x' * 10**9`); Jinja2C++ has no
-sandbox limits yet, so CI reports them without failing.
+Timeouts and out-of-memory reports (`timeout-*`, `oom-*`) are findings too. With default
+settings a template can legitimately ask for a lot of work (`range(10**9)`, `'x' * 10**9`), so
+CI reports them without failing for those targets. The limits-on targets (`untrusted`, `host`,
+`loader`, `alloc_failure`) run under `FuzzLimits()`, which bounds both, so there a timeout or
+out-of-memory fails the job (`replay_corpus.py --strict`, and no `-ignore_timeouts` when
+generating). Every run of the untrusted job also checks that this holds: with
+`JINJA2CPP_FUZZ_INJECT_SLOW=1` the target hangs on an input that starts with
+`\xffjinja2cpp-fuzz-slow-seed`, and that replay must fail.
+
+The limits-on targets read bytes before the template; seed them with
+`python3 fuzz/make_corpus.py --prefix untrusted corpus/untrusted` (or `host`, `loader`,
+`alloc_failure`). A regression input for them keeps its prefix bytes.
 
 ## Differential check
 

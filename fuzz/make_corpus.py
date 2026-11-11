@@ -6,6 +6,10 @@ Seeds are the templates the project already has: every case of the parity corpus
 include), the template literals of the unit tests (test/*.cpp), test/test_data and the
 regression inputs in fuzz/regressions/. Files are named by content hash, as libFuzzer
 names its own, so re-running the script into a grown corpus only adds what is missing.
+
+The untrusted, host, loader and alloc_failure targets read a few bytes before the template
+(fuzz_common.h, docs/tasks/0267); --prefix TARGET writes each seed with the default bytes and
+once more with bytes picked from its hash, its delimiters rewritten to the ones they select.
 """
 import argparse
 import ast
@@ -49,6 +53,41 @@ def unit_test_templates():
                 yield body
 
 
+# fuzz_common.h DelimiterSet: variable start/end, block start/end, comment start/end
+DELIMITERS = [
+    ("{{", "}}", "{%", "%}", "{#", "#}"),
+    ("${", "}", "<%", "%>", "<#", "#>"),
+    ("\\VAR{", "}", "\\BLOCK{", "}", "\\#{", "}"),
+    ("[[", "]]", "[%", "%]", "[#", "#]"),
+]
+DELIMITER_SHIFT = 4  # fuzz_common.h settings_byte
+WIDE = 0x80
+# The bytes before the template, and whether the target reads the wide bit
+PREFIXES = {"untrusted": (1, True), "host": (1, True), "loader": (2, False), "alloc_failure": (3, False)}
+
+
+def with_delimiters(data, index):
+    pattern = re.compile(b"{{|}}|{%|%}|{#|#}")
+    table = dict(zip(DELIMITERS[0], DELIMITERS[index]))
+    return pattern.sub(lambda m: table[m.group(0).decode()].encode(), data)
+
+
+def prefixed(data, target):
+    """The seed with the default prefix, and with one picked from its hash"""
+    length, wide = PREFIXES[target]
+    yield bytes(length) + data
+    digest = hashlib.sha1(data).digest()
+    settings = digest[0] if wide else digest[0] & ~WIDE
+    body = with_delimiters(data, (settings >> DELIMITER_SHIFT) & 3)
+    if target == "loader":
+        yield bytes([settings, digest[1] & 1]) + body
+    elif target == "alloc_failure":
+        # Small templates make a few hundred allocations; the fuzzer grows the count from there
+        yield bytes([digest[1], 0, settings]) + body
+    else:
+        yield bytes([settings]) + body
+
+
 def file_templates(directory):
     if directory.is_dir():
         for path in sorted(directory.iterdir()):
@@ -59,6 +98,8 @@ def file_templates(directory):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("out", type=pathlib.Path, help="corpus directory (created if missing)")
+    parser.add_argument("--prefix", choices=sorted(PREFIXES),
+                        help="write the seeds for this target, with its prefix bytes")
     parser.add_argument("--parity-only", action="store_true",
                         help="only the parity corpus: differential.py --known skips what it already covers")
     args = parser.parse_args()
@@ -71,13 +112,16 @@ def main():
     for source in sources:
         for item in source:
             data = item if isinstance(item, bytes) else item.encode("utf-8", errors="surrogatepass")
-            if not data or len(data) > MAX_SIZE:
+            if not data:
                 continue
-            total += 1
-            target = args.out / hashlib.sha1(data).hexdigest()
-            if not target.exists():
-                target.write_bytes(data)
-                added += 1
+            for seed in prefixed(data, args.prefix) if args.prefix else [data]:
+                if len(seed) > MAX_SIZE:
+                    continue
+                total += 1
+                target = args.out / hashlib.sha1(seed).hexdigest()
+                if not target.exists():
+                    target.write_bytes(seed)
+                    added += 1
     print(f"{total} seeds, {added} new files in {args.out}", file=sys.stderr)
 
 

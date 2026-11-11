@@ -9,8 +9,10 @@ name: fuzz
 #   corpus for an hour per target; the minimized corpus is saved to the Actions cache for the
 #   next runs, and the differential check against Python Jinja2 runs over the render corpus
 #   (report only). A crash it finds fails that run, not a pull request.
-# Timeouts and out-of-memory inputs are reported, not failed: Jinja2C++ has no sandbox
-# limits, so a template may ask for unbounded work (range(10**9)).
+# The targets with default settings report timeouts and out-of-memory inputs without failing:
+# a template may ask for unbounded work (range(10**9)). The limits-on targets (untrusted, host,
+# loader, alloc_failure; docs/tasks/0267) run under FuzzLimits() (fuzz_common.h), which bounds
+# both, so there a timeout or out-of-memory input fails the job like a crash.
 
 on:
   pull_request:
@@ -52,13 +54,19 @@ jobs:
         # big values are fuzzed too (docs/tasks/0272); render_wide keeps the default none
         # metadata reads {% meta %} JSON (docs/tasks/0230, step D6); prompt_escape checks that prompt
         # autoescape lets no special token of the data through (docs/tasks/0358)
-        target: [parse, render, render_wide, metadata, prompt_escape]
+        # untrusted, host, loader and alloc_failure run under limits and read a few bytes before the
+        # template (settings, handler, allocation to fail; docs/tasks/0267)
+        target: [parse, render, render_wide, metadata, prompt_escape, untrusted, host, loader, alloc_failure]
 
     env:
       FUZZ_MODE: ${{ github.event_name == 'pull_request' && 'replay' || 'generate' }}
       FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '3600' || inputs.seconds || '600' }}
       # Keep the corpus only from runs on master, so pull requests never feed it
       SAVE_CORPUS: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/master' }}
+      # Under limits a timeout or out-of-memory input is a finding (docs/tasks/0267)
+      STRICT: ${{ contains(fromJSON('["untrusted", "host", "loader", "alloc_failure"]'), matrix.target) }}
+      # make_corpus.py --prefix for the targets that read bytes before the template
+      SEED_PREFIX: ${{ contains(fromJSON('["untrusted", "host", "loader", "alloc_failure"]'), matrix.target) && format('--prefix {0}', matrix.target) || '' }}
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -95,13 +103,30 @@ jobs:
         restore-keys: fuzz-corpus-${{ matrix.target }}-
 
     - name: Add seeds
-      run: python3 fuzz/make_corpus.py corpus
+      run: python3 fuzz/make_corpus.py $SEED_PREFIX corpus
+
+    # The limits-on target must fail the job on a slow input: an input the target hangs on when
+    # JINJA2CPP_FUZZ_INJECT_SLOW is set (untrusted_targets.cpp) has to make the replay fail
+    - name: Check that a slow input fails the job
+      if: matrix.target == 'untrusted'
+      run: |
+        mkdir -p slow-seed
+        printf '\xffjinja2cpp-fuzz-slow-seed' > slow-seed/slow
+        if JINJA2CPP_FUZZ_INJECT_SLOW=1 python3 fuzz/replay_corpus.py build/fuzz/jinja2cpp_fuzz_untrusted slow-seed \
+            --strict --timeout 5 --artifacts slow-artifacts --log slow.log > slow-out.log 2>&1; then
+          cat slow-out.log
+          echo "::error::the injected slow seed did not fail the replay of the limits-on target"
+          exit 1
+        fi
+        grep -q 'timeouts: 1' slow-out.log || { cat slow-out.log; echo "::error::the injected slow seed failed for another reason"; exit 1; }
+        echo "injected slow seed: replay failed on its timeout, as it must" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Replay corpus
       if: env.FUZZ_MODE == 'replay'
       run: |
         python3 fuzz/replay_corpus.py build/fuzz/jinja2cpp_fuzz_${{ matrix.target }} corpus \
-          --artifacts artifacts --log fuzz.log --summary "$GITHUB_STEP_SUMMARY"
+          --artifacts artifacts --log fuzz.log --summary "$GITHUB_STEP_SUMMARY" \
+          ${{ env.STRICT == 'true' && '--strict' || '' }}
 
     - name: Fuzz
       if: env.FUZZ_MODE == 'generate'
@@ -109,9 +134,11 @@ jobs:
       run: |
         mkdir -p artifacts
         set +e
+        # Under limits a timeout or out-of-memory input stops the run as a crash does
+        if [ "$STRICT" = true ]; then ignore=(); else ignore=(-ignore_timeouts=1 -ignore_ooms=1); fi
         build/fuzz/jinja2cpp_fuzz_${{ matrix.target }} corpus \
           -dict=fuzz/jinja2.dict -max_len=4096 -timeout=25 -rss_limit_mb=2560 \
-          -fork=2 -ignore_timeouts=1 -ignore_ooms=1 \
+          -fork=2 "${ignore[@]}" \
           -max_total_time="$FUZZ_SECONDS" -artifact_prefix=artifacts/ > fuzz.log 2>&1
         status=$?
         set -e
@@ -127,6 +154,10 @@ jobs:
           echo '```'
           echo "crashes: $crashes, timeouts: $timeouts, out of memory: $ooms (exit status $status)"
         } >> "$GITHUB_STEP_SUMMARY"
+        if [ "$STRICT" = true ] && [ $((timeouts + ooms)) -ne 0 ]; then
+          echo "::error::${{ matrix.target }} runs under limits and found $timeouts timeout(s), $ooms out-of-memory input(s); see the fuzz-artifacts-${{ matrix.target }} artifact"
+          exit 1
+        fi
         if [ "$crashes" -ne 0 ]; then
           grep -A 30 -E 'ERROR: (AddressSanitizer|LeakSanitizer|UndefinedBehaviorSanitizer|libFuzzer)|runtime error' fuzz.log | head -n 120 || true
           echo "::error::${{ matrix.target }} found $crashes crashing or leaking input(s); see the fuzz-artifacts-${{ matrix.target }} artifact"

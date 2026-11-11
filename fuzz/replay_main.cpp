@@ -1,6 +1,8 @@
 // Runs every fuzz target over the given files and directories without libFuzzer, so the
 // regression inputs in fuzz/regressions/ are checked by ctest under every compiler
 // (GCC, MSVC) and sanitizer configuration, not only in clang fuzzing builds.
+// jinja2cpp_fuzz_alloc_replay is this file built with JINJA2CPP_FUZZ_ALLOC_REPLAY: it runs only the
+// allocation-failure target, whose operator new replacement the other targets must not see.
 // With --json it renders each input once and prints the outcome as a JSON line instead,
 // for the differential check against Python Jinja2 (fuzz/differential.py).
 #include "fuzz_common.h"
@@ -54,11 +56,19 @@ void RunFile(const std::filesystem::path& path)
     }
     std::cout << "replay " << path.generic_string() << '\n'
               << std::flush;
+#if defined(JINJA2CPP_FUZZ_ALLOC_REPLAY)
+    // jinja2cpp_fuzz_alloc_replay: only the target that replaces operator new (alloc_failure_target.cpp)
+    jinja2_fuzz::FuzzAllocFailure(data, bytes.size());
+#else
     jinja2_fuzz::FuzzParse(data, bytes.size());
     jinja2_fuzz::FuzzRender(data, bytes.size());
     jinja2_fuzz::FuzzRenderWide(data, bytes.size());
     jinja2_fuzz::FuzzMetadata(data, bytes.size());
     jinja2_fuzz::FuzzPromptEscape(data, bytes.size());
+    jinja2_fuzz::FuzzUntrusted(data, bytes.size());
+    jinja2_fuzz::FuzzHostSurface(data, bytes.size());
+    jinja2_fuzz::FuzzLoader(data, bytes.size());
+#endif
 }
 
 } // namespace
