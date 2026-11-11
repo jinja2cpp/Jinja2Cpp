@@ -329,6 +329,20 @@ Considered: a separate sink callback per piece (a second sink interface for one 
 splitting in the module (the module cannot see node boundaries). Like `generationSpans`, the growth
 of `RenderOptions` must land before G1.
 
+**Suspendable renders (task 0457, Ruslan 2026-11-11 D1, before G1).** `RenderOptions` grows by
+`const RenderSuspension* suspension` (`struct RenderSuspension { const void* stackLow; size_t stackSize; }`).
+A render to a sink with it set may be suspended inside `Write`: its host runs it on a stack of its own (a
+fiber) and switches back to its own code there, to resume the render later on the same thread. The engine
+then keeps the render's per-thread state (workspace contents, limits, stack bounds, poll, render depth, cycle
+collector) in a bundle of its own, swapped with the thread's at entry, around each `Write` and at exit, so
+other renders, plain or suspendable, run and interleave on the thread while one is suspended; and it checks
+the stack against the given bounds. Null costs nothing (the code is in the hooks instantiation and a cold
+translation unit); a render to a string ignores it. The Python module's lazy `Template.generate()` is the
+user. Considered: an additive `RenderTo(sink, params, options, const RenderSuspension&)` overload after G1
+(a fourth `RenderTo` overload for one pointer), and a public resumable render class owning the fiber (the
+core would gain platform assembly and stack management, docs/design/0457-lazy-generate-plan.md option b).
+Like `generationSpans`, the growth of `RenderOptions` must land before G1.
+
 **Prompt escaping and token budgets (tasks 0358, 0359, decided by Ruslan 2026-11-05).** A new,
 always installed header `jinja2cpp/prompt.h` (core, included by `template_env.h`, not behind
 `JINJA2CPP_WITH_CHAT_TEMPLATES`, whose switch must not change the core ABI) adds:

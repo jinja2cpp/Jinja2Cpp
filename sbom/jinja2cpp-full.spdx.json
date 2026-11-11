@@ -215,6 +215,27 @@
       "comment": "role: optional; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; builds with tests ON build the adapter. Standalone mode (BOOST_MP_STANDALONE): boostorg/multiprecision and boostorg/config fetched on their own, or the headers of a Boost release the build already has (internal mode with boost_json in JINJA2CPP_TEST_BINDINGS, a found Boost::headers); also-roles: test; used-for: The configuration headers standalone Boost.Multiprecision needs besides its own; why: Multiprecision's only dependency in standalone mode; lighten: Goes with boost-multiprecision"
     },
     {
+      "SPDXID": "SPDXRef-Package-boost-context-fcontext",
+      "name": "boost-context-fcontext",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org (Oliver Kowalke)",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://github.com/boostorg/context",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/context@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "SOURCE",
+      "comment": "role: optional; phases: build,test; exposure: internal; delivery: vendored; selected-by: JINJA2CPP_BUILD_PYTHON (the module's lazy Template.generate()) and JINJA2CPP_BUILD_TESTS (the suspendable render tests), on x86-64 and AArch64 outside Windows (python/src/fiber/fiber.cmake); also-roles: test; used-for: make_fcontext and jump_fcontext, the stack switch of python/src/fiber (docs/tasks/0457): the module runs a lazy generate() on a fiber and suspends it at each item. No Boost C++ interface; the symbols are hidden; why: A switch that has run on every major ABI for a decade (AArch64 callee-saved FP registers, ELF and Mach-O names), reviewed once rather than written anew (0457 plan D3, Ruslan 2026-11-11); lighten: Eight small assembly files; the library never links them; modified: Unmodified copies of libs/context/src/asm from the Boost 1.92.0 release (the one thirdparty/thirdparty-internal.cmake pins); thirdparty/boost_context/README.md; file: thirdparty/boost_context/make_x86_64_sysv_elf_gas.S sha256:822eb4db4451d54af7c1bf4f66c193c166d01264e12c3d67f8a89beaf7839738; file: thirdparty/boost_context/jump_x86_64_sysv_elf_gas.S sha256:560c7fa5b5c4476999e50e54a6b14efaddb7c7f42a8de8165cd1336c71c93ef0; file: thirdparty/boost_context/make_x86_64_sysv_macho_gas.S sha256:b47ab015d1159173effdbc59dfc6ddac81304b2f80678523419ea87eebddecb2; file: thirdparty/boost_context/jump_x86_64_sysv_macho_gas.S sha256:9b7f0901d3516fbd123fc6637992ee80515ecdfaa21b400e274431917e48f7d4; file: thirdparty/boost_context/make_arm64_aapcs_elf_gas.S sha256:4391a1bf8033a984128baddd1aa3cdbe269d038349fa93d038a7fd409816de84; file: thirdparty/boost_context/jump_arm64_aapcs_elf_gas.S sha256:8757cfbfdcc7cbc43ac10ddee7c7f461ea3109704c2710a50a1dae7ae9bb8a04; file: thirdparty/boost_context/make_arm64_aapcs_macho_gas.S sha256:70f07951a0bd02415f8c36b0fec2007f6cd33f1e121e569396d313a637d399dd; file: thirdparty/boost_context/jump_arm64_aapcs_macho_gas.S sha256:948981fc56f53c319e709f17212d1b9c7a202c59ed3767a5b361cb5fa2b81f12"
+    },
+    {
       "SPDXID": "SPDXRef-Package-nlohmann-json",
       "name": "nlohmann_json",
       "versionInfo": "3.12.0",
@@ -1063,6 +1084,11 @@
       "relatedSpdxElement": "SPDXRef-Package-boost-config"
     },
     {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-context-fcontext"
+    },
+    {
       "spdxElementId": "SPDXRef-Package-nlohmann-json",
       "relationshipType": "OPTIONAL_DEPENDENCY_OF",
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
@@ -1243,5 +1269,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-8a39d090cd429665"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-bea508dd4b2c8987"
 }

@@ -14,6 +14,7 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "render_failure.h"
+#include "render_suspension.h"
 #include "shared_owner.h"
 #include "span.h"
 #include "template_dict.h"
@@ -5332,6 +5333,20 @@ bool Callable::IsEqual(const Callable& other) const
     const auto right = other.GetIdentity();
     return left.call != nullptr && right.call != nullptr && left.call->invoke == right.call->invoke && SameMethodReceiver(left.call->self, right.call->self);
 }
+
+namespace detail
+{
+SuspensionMarks ValueSuspensionMarks() noexcept
+{
+    SuspensionMarks marks;
+    marks.destroyDepth = t_pendingDestroy.depth;
+    marks.pendingDestroy = t_pendingDestroy.size;
+    marks.bridgingAccessor = g_bridgingAccessor;
+    marks.lendFrame = t_lendFrame;
+    marks.keepUndefinedExport = t_keepUndefinedExport;
+    return marks;
+}
+} // namespace detail
 
 } // namespace v2
 } // namespace jinja2
