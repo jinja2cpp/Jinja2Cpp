@@ -22,6 +22,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace jinja2
@@ -553,8 +554,8 @@ std::uint64_t TemplateDict::EntryBytes(const std::string& stored) noexcept
 {
     // The entry and about two words of the index for it; a key past the short-string buffer has its own block, and
     // a key that is not a string has its spelling in m_keys too
-    constexpr std::size_t ShortKey = 15;
-    const std::uint64_t key = stored.size() > ShortKey ? stored.size() + 1 : 0;
+    constexpr std::size_t shortKey = 15;
+    const std::uint64_t key = stored.size() > shortKey ? stored.size() + 1 : 0;
     std::uint64_t bytes = sizeof(InternalDict::value_type) + (2 * sizeof(void*)) + key;
     if (IsSpelledToken(stored))
     {
@@ -563,12 +564,8 @@ std::uint64_t TemplateDict::EntryBytes(const std::string& stored) noexcept
     return bytes;
 }
 
-void TemplateDict::ChargeEntries() const
+void TemplateDict::ChargeEntriesSlow() const
 {
-    if (!RenderMemoryCounted())
-    {
-        return;
-    }
     std::uint64_t bytes = 0;
     for (const auto& item : m_items)
     {

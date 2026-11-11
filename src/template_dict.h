@@ -2,8 +2,10 @@
 #define JINJA2CPP_SRC_TEMPLATE_DICT_H
 
 #include "internal_value.h"
+#include "recursion_guard.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -129,7 +131,14 @@ private:
     // The render's memory budget (docs/tasks/0459) counts each entry from when it is added until it is erased or
     // the dict is freed, by its stored key alone, so that adding and freeing count the same
     static std::uint64_t EntryBytes(const std::string& stored) noexcept;
-    void ChargeEntries() const;
+    void ChargeEntries() const
+    {
+        if (RenderMemoryCounted())
+        {
+            ChargeEntriesSlow();
+        }
+    }
+    void ChargeEntriesSlow() const;
     void ReleaseEntries() const noexcept
     {
         if (RenderMemoryCounted())
