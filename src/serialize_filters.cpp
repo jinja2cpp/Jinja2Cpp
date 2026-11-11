@@ -106,6 +106,10 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     // A value as pprint prints it: Markup as Markup('...')
     static std::string Print(const InternalValue& val, const RenderContext* context)
     {
+        if (auto items = HostSequence(val))
+        {
+            return Apply<PrettyPrinter>(InternalValue(std::move(*items)), context);
+        }
         auto text = Apply<PrettyPrinter>(val, context);
         return val.IsMarkup() && IsStringValue(val) ? "Markup(" + text + ")" : text;
     }
@@ -204,16 +208,23 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     // _format: indent is the column the value starts at, allowance the columns the text
     // after it on its last line takes, level its nesting (1 for the value pformat prints)
-    // A host's list or tuple as the engine's list, which pprint breaks as it breaks a list: pprint finds list.__repr__
-    // and tuple.__repr__, which a subclass keeps; a namedtuple has a __repr__ of its own, printed on one line
+    // A host's list or tuple as the engine's list of what iterating it gives, which pprint prints and breaks as a list
+    // of the engine: pprint finds list.__repr__ and tuple.__repr__, which a subclass keeps, and iterates the object
+    // (its own __iter__ too, docs/tasks/0453); a namedtuple (a tuple subclass with `_fields`) has a __repr__ of its
+    // own, which prints on one line
     static std::optional<ListAdapter> HostSequence(const InternalValue& val)
     {
         const auto* host = GetHostObject(val);
-        if (!host || !host->IsSequence() || (host->IsTuple() && std::strcmp(host->TypeName(), "tuple") != 0))
+        if (!host || !host->IsSequence() || (host->IsTuple() && std::strcmp(host->TypeName(), "tuple") != 0 && host->GetAttr("_fields")))
         {
             return std::nullopt;
         }
-        return host::AsSequence(*host);
+        auto items = host->Iterate();
+        if (items && host->IsTuple())
+        {
+            items->MarkAsTuple();
+        }
+        return items;
     }
 
     // The list val is, or the one HostSequence gives, which `hostItems` holds

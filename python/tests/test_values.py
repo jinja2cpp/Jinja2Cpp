@@ -305,6 +305,8 @@ SUBCLASS_CASES = [
     "{% for i in l %}{{ loop.length }}{{ loop.revindex }}{{ loop.revindex0 }}{{ loop.last }};{% endfor %}",
     "{% for i in t %}{{ loop.length }}{% endfor %}|{% for i in n %}{{ i }}{{ loop.length }}{{ loop.last }}{% endfor %}",
     "{{ l + ['z'] }} {{ l * 2 }} {{ t + ('z',) }} {{ l < [1, 3] }} {{ t > (1,) }} {{ '%s-%s-%s' % t }} {{ l|length }}",
+    # pprint iterates a subclass that keeps list.__repr__ or tuple.__repr__ (task 0453)
+    "{{ l|pprint }} {{ t|pprint }} {{ p|pprint }} {{ g|pprint }} {{ gt|pprint }} {{ [l, {'b': t, 'a': p}]|pprint }}",
 ]
 
 
