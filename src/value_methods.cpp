@@ -1047,7 +1047,7 @@ struct StrOps
             }
             else if (IsStringValue(*mapped))
             {
-                result += *GetAsSameString(self, *mapped);
+                result += StrArg(self, *mapped, "translate");
             }
             else if (mapped->Kind() == ValueKind::Int || mapped->Kind() == ValueKind::Bool || mapped->Kind() == ValueKind::BigInt)
             {
@@ -1101,7 +1101,7 @@ struct StrOps
             {
                 if (IsStringValue(entry.key))
                 {
-                    const auto key = *GetAsSameString(self, entry.key);
+                    const auto key = StrArg(self, entry.key, "maketrans");
                     if (CodePointCount(View(key)) != 1)
                     {
                         Raise("string keys in translate table must be of length 1"s);
@@ -2023,7 +2023,7 @@ struct StrOps
     {
         CheckArgs(params, "format_map", 1, 1);
         FieldNumbering numbering;
-        numbering.mapping = &params.posParams[0];
+        numbering.mapping = params.posParams.data();
         return Result(Build(self, params, numbering, context, escape, 2));
     }
 };
