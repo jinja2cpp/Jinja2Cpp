@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: robustness
 depends: [0003]
 touches: [fuzz/]
 shares: [.github/workflows/fuzz.yml, fuzz/CMakeLists.txt, test/parity/cases/fuzz.py, test/parity/divergences/fuzz.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/841
 ---
 # Structure-aware fuzzing: mutate templates, not bytes
 
