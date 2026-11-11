@@ -148,6 +148,8 @@ jobs:
         set +e
         # Under limits a timeout or out-of-memory input stops the run as a crash does
         if [ "$STRICT" = true ]; then ignore=(); else ignore=(-ignore_timeouts=1 -ignore_ooms=1); fi
+        # A custom mutator makes libFuzzer turn length control off; the byte-only baseline keeps master's default
+        if [ "$JINJA2CPP_FUZZ_MUTATOR" = bytes ]; then ignore+=(-len_control=100); fi
         build/fuzz/jinja2cpp_fuzz_${{ matrix.target }} corpus \
           -dict=fuzz/jinja2.dict -max_len=4096 -timeout=25 -rss_limit_mb=2560 \
           -fork=2 "${ignore[@]}" \
