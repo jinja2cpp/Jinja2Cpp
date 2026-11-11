@@ -334,11 +334,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0260](0260-public-headers-iosfwd.md) | Public headers include `<iostream>` where `<iosfwd>` would do | release | low | open |
 | [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
 | [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | done |
-| [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | in-progress |
+| [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | done |
 | [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | done |
 | [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | done |
 | [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | done |
-| [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | open |
+| [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | done |
 | [0268](0268-untrusted-mode-followups.md) | Untrusted mode: additive follow-ups after the freeze | api | low | open |
 | [0269](0269-public-big-int-value.md) | Public `BigInt` value (0178 phase 1, G1) | api | high | done |
 | [0270](0270-big-int-core-text-form.md) | Big integers in the core, text form (0178 phase 2) | parity | medium | done |
@@ -526,3 +526,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | open |
 | [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | open |
 | [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
+| [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | open |

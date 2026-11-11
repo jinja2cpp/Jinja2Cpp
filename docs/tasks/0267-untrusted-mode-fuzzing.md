@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: robustness
 depends: [0262]
 touches: [fuzz/]
 shares: [.github/workflows/fuzz.yml, fuzz/CMakeLists.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/835
 ---
 # Fuzz targets for templates written by untrusted users
 
