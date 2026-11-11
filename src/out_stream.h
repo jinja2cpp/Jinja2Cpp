@@ -227,13 +227,14 @@ private:
     void* m_sink = nullptr;
     size_t m_sinkWritten = 0;
     size_t m_charSize = 1;
-    bool m_eachPiece = false;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer
     alignas(wchar_t) unsigned char m_buffer[BufferLength * sizeof(wchar_t)];
     unsigned char* m_cur = m_buffer;
     unsigned char* m_end = m_buffer + BufferLength;
+    // Last: before m_buffer it pads to the alignas, which MSVC reports (C4324)
+    bool m_eachPiece = false;
 };
 
 // Renders into a new string with `render(OutStream&)` and returns it
