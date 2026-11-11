@@ -8,7 +8,8 @@ test makes a known input crash. Finding new inputs is the nightly job's work.
 libFuzzer stops at the first input that crashes, times out or runs out of memory; this
 script records that input and carries on with the next one. Crashes and leaks fail the run
 and their inputs are copied to the artifacts directory. Timeouts and out-of-memory inputs
-are reported only: Jinja2C++ has no sandbox limits yet (docs/tasks/0097).
+are reported only, unless --strict is given: the targets that run under limits
+(docs/tasks/0267) treat both as findings.
 """
 import argparse
 import pathlib
@@ -28,12 +29,12 @@ def classify(log):
     return "crash"
 
 
-def replay(binary, files, artifacts, log_file):
+def replay(binary, files, artifacts, log_file, flags, strict):
     outcomes = {"crash": [], "timeout": [], "oom": []}
     pos = 0
     while pos < len(files):
         batch = files[pos:pos + BATCH]
-        proc = subprocess.run([binary, *FLAGS, *map(str, batch)], stdout=subprocess.PIPE,
+        proc = subprocess.run([binary, *flags, *map(str, batch)], stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True, errors="replace")
         log_file.write(proc.stdout)
         if proc.returncode == 0:
@@ -48,8 +49,8 @@ def replay(binary, files, artifacts, log_file):
         index = pos + [str(f) for f in batch].index(str(culprit))
         kind = classify(proc.stdout[proc.stdout.rfind("Running: " + str(culprit)):])
         outcomes[kind].append(culprit)
-        if kind == "crash":
-            shutil.copyfile(culprit, artifacts / f"crash-{culprit.name}")
+        if kind == "crash" or strict:
+            shutil.copyfile(culprit, artifacts / f"{kind}-{culprit.name}")
             print(proc.stdout[proc.stdout.rfind("Running: " + str(culprit)):][-6000:])
         pos = index + 1
     return outcomes
@@ -62,12 +63,16 @@ def main():
     parser.add_argument("--artifacts", type=pathlib.Path, default=pathlib.Path("artifacts"))
     parser.add_argument("--log", type=pathlib.Path, default=pathlib.Path("fuzz.log"))
     parser.add_argument("--summary", type=pathlib.Path, help="append a Markdown summary here")
+    parser.add_argument("--strict", action="store_true",
+                        help="timeouts and out-of-memory inputs fail the run too (the limits-on targets)")
+    parser.add_argument("--timeout", type=int, default=25, help="libFuzzer -timeout, seconds per input")
     args = parser.parse_args()
 
     files = sorted(f for c in args.corpus for f in (c.iterdir() if c.is_dir() else [c]) if f.is_file())
     args.artifacts.mkdir(parents=True, exist_ok=True)
     with args.log.open("w") as log_file:
-        outcomes = replay(args.binary, files, args.artifacts, log_file)
+        flags = [f"-timeout={args.timeout}", *FLAGS[1:]]
+        outcomes = replay(args.binary, files, args.artifacts, log_file, flags, args.strict)
 
     name = pathlib.Path(args.binary).name
     lines = [f"### replay {name}", "",
@@ -81,6 +86,10 @@ def main():
             summary.write("\n".join(lines) + "\n")
     if outcomes["crash"]:
         print(f"::error::{name} crashed or leaked on {len(outcomes['crash'])} corpus input(s)")
+        return 1
+    if args.strict and (outcomes["timeout"] or outcomes["oom"]):
+        print(f"::error::{name} runs under limits, and {len(outcomes['timeout'])} corpus input(s) timed out, "
+              f"{len(outcomes['oom'])} ran out of memory")
         return 1
     return 0
 

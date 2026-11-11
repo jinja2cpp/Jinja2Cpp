@@ -18,9 +18,6 @@
 
 namespace jinja2_fuzz
 {
-namespace
-{
-
 // Lenient UTF-8 decoder: a malformed sequence becomes U+FFFD, so every input yields a
 // wide template and the narrow seeds keep their meaning in the wide target.
 std::wstring DecodeUtf8(const std::uint8_t* data, std::size_t size)
@@ -85,6 +82,9 @@ std::wstring DecodeUtf8(const std::uint8_t* data, std::size_t size)
     }
     return result;
 }
+
+namespace
+{
 
 template<typename CharT>
 Outcome LoadAndRender(const std::basic_string<CharT>& source)

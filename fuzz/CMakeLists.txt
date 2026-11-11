@@ -7,7 +7,8 @@
 
 set(_fuzz_dir ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(jinja2cpp_fuzz_targets STATIC ${_fuzz_dir}/fuzz_targets.cpp ${_fuzz_dir}/fuzz_common.h ${_fuzz_dir}/prompt_escape_case.h)
+add_library(jinja2cpp_fuzz_targets STATIC ${_fuzz_dir}/fuzz_targets.cpp ${_fuzz_dir}/untrusted_targets.cpp ${_fuzz_dir}/fuzz_common.h
+                                          ${_fuzz_dir}/prompt_escape_case.h)
 target_link_libraries(jinja2cpp_fuzz_targets PUBLIC ${LIB_TARGET_NAME})
 set_target_properties(jinja2cpp_fuzz_targets PROPERTIES
     CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
@@ -25,6 +26,23 @@ if (JINJA2CPP_BUILD_TESTS)
         target_link_options(jinja2cpp_fuzz_replay PRIVATE /STACK:8388608)
     endif ()
     add_test(NAME jinja2cpp_fuzz_regressions COMMAND jinja2cpp_fuzz_replay ${_fuzz_dir}/regressions)
+
+    # The allocation-failure target replaces the global operator new, so it has its own replay executable.
+    # The TSan and MSan runtimes define operator new themselves, so those builds go without it (as
+    # jinja2cpp_alloc_tests does)
+    if (NOT JINJA2CPP_WITH_SANITIZERS MATCHES "thread|memory")
+        add_executable(jinja2cpp_fuzz_alloc_replay ${_fuzz_dir}/replay_main.cpp ${_fuzz_dir}/alloc_failure_target.cpp)
+        target_compile_definitions(jinja2cpp_fuzz_alloc_replay PRIVATE JINJA2CPP_FUZZ_ALLOC_REPLAY)
+        target_link_libraries(jinja2cpp_fuzz_alloc_replay jinja2cpp_fuzz_targets)
+        set_target_properties(jinja2cpp_fuzz_alloc_replay PROPERTIES
+            CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+            CXX_STANDARD_REQUIRED ON
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+        if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+            target_link_options(jinja2cpp_fuzz_alloc_replay PRIVATE /STACK:8388608)
+        endif ()
+        add_test(NAME jinja2cpp_fuzz_alloc_regressions COMMAND jinja2cpp_fuzz_alloc_replay ${_fuzz_dir}/regressions)
+    endif ()
 endif ()
 
 if (JINJA2CPP_BUILD_FUZZERS)
@@ -35,8 +53,16 @@ if (JINJA2CPP_BUILD_FUZZERS)
     # libFuzzer runtime (it brings its own main).
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -fsanitize=fuzzer-no-link)
     target_compile_options(jinja2cpp_fuzz_targets PRIVATE -fsanitize=fuzzer-no-link)
-    foreach (_target parse render render_wide metadata prompt_escape)
+    set(_fuzzers parse render render_wide metadata prompt_escape untrusted host loader)
+    # alloc_failure replaces operator new, which the TSan and MSan runtimes define themselves
+    if (NOT JINJA2CPP_WITH_SANITIZERS MATCHES "thread|memory")
+        list(APPEND _fuzzers alloc_failure)
+    endif ()
+    foreach (_target ${_fuzzers})
         add_executable(jinja2cpp_fuzz_${_target} ${_fuzz_dir}/fuzz_${_target}.cpp)
+        if (_target STREQUAL "alloc_failure")
+            target_sources(jinja2cpp_fuzz_${_target} PRIVATE ${_fuzz_dir}/alloc_failure_target.cpp)
+        endif ()
         target_link_libraries(jinja2cpp_fuzz_${_target} jinja2cpp_fuzz_targets)
         target_compile_options(jinja2cpp_fuzz_${_target} PRIVATE -fsanitize=fuzzer)
         target_link_options(jinja2cpp_fuzz_${_target} PRIVATE -fsanitize=fuzzer)
