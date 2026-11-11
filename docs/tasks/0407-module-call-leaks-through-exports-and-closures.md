@@ -1,9 +1,10 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: robustness
 depends: []
 touches: [src/borrowed_cells.cpp, src/cycle_collector.cpp, src/template_module.cpp, test/template_module_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/836
 ---
 # Leaks in template module calls through call exports and closure frames
 
