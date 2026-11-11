@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: parity
 depends: [0355]
 touches: [python/jinja2cpp/_debug.py, python/jinja2cpp/loaders.py, python/src/errors.cpp, python/src/loaders.cpp, src/template_parser.cpp, src/statements.cpp, src/error_info.cpp, include/jinja2cpp/error_info.h]
 shares: [python/tests/upstream/expected-failures.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/830
 ---
 # Error classes, messages and tracebacks the upstream Jinja2 suite checks
 

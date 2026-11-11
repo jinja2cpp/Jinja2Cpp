@@ -167,8 +167,8 @@ Outside the corpus:
 - borrowed JSON views start fresh in each module call (0402 option b, Ruslan 2026-11-06).
 
 Corpus on master `5a7fe2bf`: 3287 cases, 3260 match. The upstream pallets/jinja suite through
-the Python module (0355) passes 623 of 856 (#819 and the fixes since; 0431 is done).
-Its remaining divergences are filed as 0412, 0415 and 0432-0436.
+the Python module (0355) passes 628 of 856 (#830 and the fixes before it; 0431 and 0432 are done).
+Its remaining divergences are filed as 0412, 0415, 0433-0436 and 0456-0458.
 
 ## 6. Confirmed facts for this revision
 
