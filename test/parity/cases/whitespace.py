@@ -59,4 +59,7 @@ CASES = [
     ("raw_minus_and_trim_blocks", "{% raw -%}  \n\n x{% endraw %}\n\ny", {"env": TB}),
     # Python's \\s inside a tag: a no-break or an em space separates tokens (0447)
     ("tag_unicode_space", "[{{\u00a0x }}|{{ x\u2003}}]", {"ctx": {"x": 3}}),
+    ("tag_unicode_space_more", "[{%\u3000if\u2028x\x85%}y{%\x1cendif\u205f%}|{{ x\u00a0+\u20091 }}]", {"ctx": {"x": 3}}),
+    ("tag_zero_width_space_is_no_space", "{{ x\u200b }}", {"ctx": {"x": 3}}),
+    ("tag_unicode_space_minus", "[{{ x\u00a0-}} |{{-\u2003x }}]", {"ctx": {"x": 3}}),
 ]

@@ -144,8 +144,9 @@ def test_patch_assistant_mask_uses_transformers(patched):
 
 
 def test_patch_hands_unloadable_templates_to_transformers(patched):
-    # A syntax jinja2cpp lacks (a subscript by a tuple of slices, task 0445) compiles in transformers' environment
-    compiled = patched._compile_jinja_template('{{ 1 }}{{ ()[:, :] is undefined and "" }}{{ 2 }}')
+    # A syntax jinja2cpp lacks (a tuple of slices Jinja2 folds by a conditional, task 0463) compiles in
+    # transformers' environment
+    compiled = patched._compile_jinja_template('{{ 1 }}{{ (()[:, :] if 1 > 0 else x) is undefined and "" }}{{ 2 }}')
     assert not isinstance(compiled, integration.ChatTemplate)
     assert compiled.render() == "12"
     # transformers reads the variables through Jinja2's AST: the proxy gives its environment

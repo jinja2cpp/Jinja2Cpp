@@ -17,10 +17,11 @@ import pytest
 from jinja2 import nodes
 from jinja2cpp.nativetypes import NativeEnvironment
 
-# A syntax of Jinja2 the engine does not parse: a subscript of a literal by a tuple of slices (task
-# 0445), which Jinja2 folds to an undefined, here to "" whatever the environment (unfolded, it
-# compiles to invalid Python). A template with NOPARSE in it goes to Jinja2; test_candidate_is_unparsable checks it
-NOPARSE = '{{ ()[:, :] is undefined and "" }}'
+# A syntax of Jinja2 the engine does not parse: a subscript of a literal by a tuple of slices in
+# a conditional that Jinja2 folds by its test (task 0463), here to "" whatever the environment
+# (unfolded, it compiles to invalid Python). A template with NOPARSE in it goes to Jinja2;
+# test_candidate_is_unparsable checks it
+NOPARSE = '{{ (()[:, :] if 1 > 0 else x) is undefined and "" }}'
 UNPARSABLE = "a" + NOPARSE + "{{ 1 }}b"
 UNPARSABLE_RESULT = "a1b"
 

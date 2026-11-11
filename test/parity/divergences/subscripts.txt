@@ -1,4 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
-subscripts.tuple_of_slices_literal rejects 0445 a subscript of a literal by a tuple of slices (`[1, 2][1:2, 3]`) is a parse error; Jinja2 folds it to an undefined
+subscripts.tuple_of_slices_fold_by_choice rejects 0463 Jinja2 folds a conditional by the branch its folded test picks; the engine decides that only when it renders, so it rejects an unfolded subscript by a tuple of slices in the other branch

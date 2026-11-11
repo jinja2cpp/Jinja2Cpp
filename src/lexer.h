@@ -405,13 +405,57 @@ public:
 private:
     using traits = lexertk::details::lexer_traits<CharT>;
 
+    // Jinja2's whitespace_re is `\s+`: Python's whitespace, Unicode included (docs/tasks/0447)
     [[nodiscard]] size_t SkipWhitespace(size_t pos, size_t end) const
     {
-        while (pos != end && traits::is_whitespace(m_src[pos]))
+        while (pos != end)
         {
-            ++pos;
+            const auto unit = static_cast<std::make_unsigned_t<CharT>>(m_src[pos]);
+            if (unit == ' ' || (unit >= '\t' && unit <= '\r'))
+            {
+                ++pos;
+                continue;
+            }
+            // U+001C-U+001F and the non-ASCII spaces; rare, so out of line
+            const size_t len = unit >= 0x80 || (unit >= 0x1C && unit <= 0x1F) ? OtherSpaceLength(pos, end) : 0;
+            if (len == 0)
+            {
+                break;
+            }
+            pos += len;
         }
         return pos;
+    }
+
+    // The length of the space other than ' ' and \t-\r at `pos`, or 0
+    JINJA2CPP_OUTLINE_INLINE size_t OtherSpaceLength(size_t pos, size_t end) const
+    {
+        const auto unit = static_cast<std::make_unsigned_t<CharT>>(m_src[pos]);
+        if constexpr (sizeof(CharT) == 1)
+        {
+            if (unit >= 0x80)
+            {
+                // Every Unicode space is in the BMP: a two- or three-byte sequence
+                const size_t len = unit >= 0xF0 ? 4 : (unit >= 0xE0 ? 3 : 2);
+                if (unit < 0xC2 || len == 4 || len > end - pos)
+                {
+                    return 0;
+                }
+                uint32_t cp = unit & (0x7FU >> len);
+                for (size_t idx = 1; idx != len; ++idx)
+                {
+                    const auto next = static_cast<unsigned char>(m_src[pos + idx]);
+                    if ((next & 0xC0) != 0x80)
+                    {
+                        return 0;
+                    }
+                    cp = (cp << 6) | (next & 0x3FU);
+                }
+                // An overlong form is not a space
+                return cp >= (len == 3 ? 0x800U : 0x80U) && unicode::IsSpace(cp) ? len : 0;
+            }
+        }
+        return unicode::IsSpace(static_cast<uint32_t>(unit)) ? 1 : 0;
     }
 
     // Delimiters are short and the first character decides most calls: no compare call
