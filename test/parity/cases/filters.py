@@ -476,6 +476,16 @@ CASES = [
     ("attr_missing_debug", "[{{ 'x'|attr('f') }}|{{ {'k': 1}|attr('k') }}|{{ 1|attr('nope') }}|{% set ns = namespace(a=1) %}{{ ns|attr('b') }}]", {"env": {"undefined": "debug"}}),
     ("attr_missing_strict", "{{ 'x'|attr('f') }}", {"env": {"undefined": "strict"}}),
     ("attr_missing_strict_dict_item", "{{ {'k': 1}|attr('k') }}", {"env": {"undefined": "strict"}}),
+    # task 0413: a strict undefined sort or unique key refuses == and hash
+    ("sort_attribute_missing_strict", "{{ [{'a': 1}, {'a': 2}, {'a': 3}]|sort(attribute='zzz')|list|length }}", {"env": {"undefined": "strict"}}),
+    ("sort_attribute_missing_strict_one_item", "{{ [{'a': 1}]|sort(attribute='zzz')|list|length }}", {"env": {"undefined": "strict"}}),
+    ("sort_attribute_missing_strict_first_key", "{{ [{'a': 1}, {'a': 2}]|sort(attribute='zzz,a')|list|length }}", {"env": {"undefined": "strict"}}),
+    ("sort_attribute_missing_strict_second_key", "{{ [{'a': 1}, {'a': 2}]|sort(attribute='a,zzz')|map(attribute='a')|join(',') }}", {"env": {"undefined": "strict"}}),
+    ("sort_undefined_items_strict", "{{ [{'a': 1}, {'a': 2}]|map(attribute='zzz')|sort|list|length }}", {"env": {"undefined": "strict"}}),
+    ("unique_attribute_missing_strict", "{{ [{'a': 1}, {'a': 2}, {'a': 3}]|unique(attribute='zzz')|list|length }}", {"env": {"undefined": "strict"}}),
+    ("unique_attribute_missing_strict_one_item", "{{ [{'a': 1}]|unique(attribute='zzz')|list|length }}", {"env": {"undefined": "strict"}}),
+    ("unique_undefined_items_strict", "{{ [{'a': 1}, {'a': 2}]|map(attribute='zzz')|unique|list|length }}", {"env": {"undefined": "strict"}}),
+    ("sort_unique_attribute_missing_default", "{{ [{'a': 1}, {'a': 2}, {'a': 3}]|sort(attribute='zzz')|list|length }}|{{ [{'a': 1}, {'a': 2}]|unique(attribute='zzz')|list|length }}"),
     # task 0368: json.dumps names a callable's type
     ("tojson_callable", "{{ lipsum|tojson }}"),
     # task 0401: a generator still answers as a list to truncate's len() and to unique's hash

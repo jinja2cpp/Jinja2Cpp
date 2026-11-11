@@ -921,6 +921,22 @@
    "output": "False"
   },
   {
+   "id": "globals.engine_call_slot_hidden",
+   "template": "{{ cycler(1)['operator()'] is defined }}|{{ joiner()|attr('operator()') is defined }}|{{ joiner()['__call__'] is defined }}|{{ joiner()['sep'] }}|{% for i in [1] %}{{ loop['operator()'] is defined }}{% endfor %}|{% set j = joiner() %}{{ j() }}{{ j() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False|False|True|, |False|, "
+  },
+  {
+   "id": "globals.namespace_call_key_item",
+   "template": "{% set ns = namespace(**{'operator()': 1}) %}{{ ns['operator()'] }}|{{ {'operator()': 2}['operator()'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|2"
+  },
+  {
    "id": "globals.cycler_method_equals",
    "template": "{% set c = cycler(1, 2) %}{{ c.next == c.next }}|{{ c.next == c.reset }}|{{ c.next == cycler(1, 2).next }}",
    "context": {},

@@ -105,5 +105,7 @@ CASES = [
     ('namespace_call_key_is_no_call', "{% set ns = namespace(**{'operator()': 1}) %}[{{ ns.__call__ }}]"),
     # task 0420: the engine's call slot is not an item of a joiner
     ('joiner_call_slot_hidden', "{{ joiner()['operator()'] is defined }}"),
+    ('engine_call_slot_hidden', "{{ cycler(1)['operator()'] is defined }}|{{ joiner()|attr('operator()') is defined }}|{{ joiner()['__call__'] is defined }}|{{ joiner()['sep'] }}|{% for i in [1] %}{{ loop['operator()'] is defined }}{% endfor %}|{% set j = joiner() %}{{ j() }}{{ j() }}"),
+    ('namespace_call_key_item', "{% set ns = namespace(**{'operator()': 1}) %}{{ ns['operator()'] }}|{{ {'operator()': 2}['operator()'] }}"),
     ('cycler_method_equals', "{% set c = cycler(1, 2) %}{{ c.next == c.next }}|{{ c.next == c.reset }}|{{ c.next == cycler(1, 2).next }}"),
 ]

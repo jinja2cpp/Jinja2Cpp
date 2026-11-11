@@ -498,7 +498,21 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     // getitem does (HostObjectAccessor::FindItem); for every other map it is x.name
     [[nodiscard]] static InternalValue GetStringItem(const MapRef& values, const std::string& field)
     {
+        if (field == CallSlotName && IsCallSlotHidden(values))
+        {
+            return InternalValue();
+        }
         return values.IsHost() ? FindKey(values, InternalValue(field)) : GetField(values, field);
+    }
+
+    // The call operator of an engine object (joiner(), loop) is the engine's slot, which the call
+    // path reads with Subscript(fn, "operator()"); x['operator()'] does not see it, as Python's
+    // objects have no such item. A namespace's attributes are its own (docs/tasks/0420)
+    static constexpr std::string_view CallSlotName = "operator()";
+    [[nodiscard]] static bool IsCallSlotHidden(const MapRef& values)
+    {
+        const char* objectClass = values.GetObjectClass();
+        return objectClass && !values.IsHost() && std::string_view(objectClass) != "Namespace";
     }
 
     // Undefined for a missing name; a user's accessor (IMapItemAccessor) is asked through
@@ -610,7 +624,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         const auto* fields = values.GetFieldNames();
         if (!fields)
         {
-            return InternalValue();
+            // The data attributes of a range (docs/tasks/0420); Jinja2's getitem falls back to getattr
+            const auto* range = values.GetRangeInfo();
+            return range ? RangeAttribute(*range, field) : InternalValue();
         }
         auto p = std::find(fields->begin(), fields->end(), field);
         if (p == fields->end())
@@ -618,6 +634,23 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
             return InternalValue();
         }
         return values.GetValueByIndex(p - fields->begin());
+    }
+
+    [[nodiscard]] static InternalValue RangeAttribute(const RangeInfo& range, const std::string& field)
+    {
+        if (field == "start")
+        {
+            return InternalValue(range.start);
+        }
+        if (field == "stop")
+        {
+            return InternalValue(range.stop);
+        }
+        if (field == "step")
+        {
+            return InternalValue(range.step);
+        }
+        return InternalValue();
     }
 
     template<typename CharT>
@@ -780,6 +813,8 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         int64_t start = 0;
         int64_t step = 1;
         size_t count = 0;
+        // The clipped stop index, which a slice of a range keeps (range(10)[1:6:2] is range(1, 6, 2))
+        int64_t end = 0;
 
         // Stepping past the last index could overflow with a huge step, so index directly
         [[nodiscard]] size_t At(size_t n) const { return static_cast<size_t>(start + (static_cast<int64_t>(n) * step)); }
@@ -808,6 +843,14 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         {
             return InternalValue();
         }
+        // A slice of a range is a range (docs/tasks/0420)
+        if (const auto* range = values.GetRangeInfo())
+        {
+            if (auto sliced = SliceRange(*range, indices))
+            {
+                return std::move(*sliced);
+            }
+        }
 
         InternalValueList result;
         ReserveHint(result, indices.count);
@@ -823,6 +866,20 @@ struct SliceVisitor : public visitors::BaseVisitor<>
             list.MarkAsTuple();
         }
         return list;
+    }
+
+    // range(start + i * step, start + j * step, step * k), as Python computes it; none when a bound
+    // leaves int64, where the items are copied as for a list
+    static std::optional<InternalValue> SliceRange(const RangeInfo& range, const Indices& indices)
+    {
+        int64_t start = 0;
+        int64_t stop = 0;
+        int64_t step = 0;
+        if (visitors::MulOverflows(indices.start, range.step, start) || visitors::AddOverflows(range.start, start, start) || visitors::MulOverflows(indices.end, range.step, stop) || visitors::AddOverflows(range.start, stop, stop) || visitors::MulOverflows(indices.step, range.step, step))
+        {
+            return std::nullopt;
+        }
+        return InternalValue(ListAdapter::CreateRange(start, stop, step));
     }
 
     // An int does not slice
@@ -981,8 +1038,8 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         const int64_t upper = indices.step < 0 ? length - 1 : length;
 
         indices.start = AdjustIndex(start, indices.step < 0 ? upper : lower, length, lower, upper);
-        const int64_t end = AdjustIndex(stop, indices.step < 0 ? lower : upper, length, lower, upper);
-        indices.count = SliceLength(indices.start, end, indices.step);
+        indices.end = AdjustIndex(stop, indices.step < 0 ? lower : upper, length, lower, upper);
+        indices.count = SliceLength(indices.start, indices.end, indices.step);
         return true;
     }
 

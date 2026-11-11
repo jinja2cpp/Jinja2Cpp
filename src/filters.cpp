@@ -110,7 +110,8 @@ bool CompareForOrder(const InternalValue& left,
     auto kind = GetOrderKind(left);
     if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
     {
-        throw TemplateRuntimeError("'<' not supported between these values");
+        // Python's max compares item > best, min and sorted item < other (docs/tasks/0420)
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + (oper == BinaryExpression::LogicalGt ? ">" : "<") + "' not supported between instances of '" + Apply<visitors::PythonTypeNameGetter>(left) + "' and '" + Apply<visitors::PythonTypeNameGetter>(right) + "'");
     }
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, oper, compType));
 }
@@ -268,9 +269,12 @@ std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName, bool 
     return paths;
 }
 
-// Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
+// Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python. A strict
+// undefined refuses the `==` (docs/tasks/0413); the default one equals another undefined
 bool IsLessKey(const InternalValue& key1, const InternalValue& key2, BinaryExpression::Operation oper, BinaryExpression::CompareType compType, bool& isEqual)
 {
+    CheckUndefinedUse(key1, UndefinedUse::Operator);
+    CheckUndefinedUse(key2, UndefinedUse::Operator);
     isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
     return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
 }
@@ -1161,9 +1165,10 @@ InternalValue Unique(const ListAdapter& list,
         return true;
     });
 
-    // Jinja2 keeps a set of the keys it saw
+    // Jinja2 keeps a set of the keys it saw: a strict undefined refuses its hash (docs/tasks/0413)
     for (const auto& item : items)
     {
+        CheckUndefinedUse(item.val, UndefinedUse::Operator);
         if (const char* type = UnhashableType(item.val))
         {
             throw TemplateRuntimeError("unhashable type: '"s + type + "'");
@@ -1308,7 +1313,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         InternalValue bestKey;
         list.ForEach([&](InternalValue&& item) {
             InternalValue key = attrPath.empty() ? item : GetAttributeByPath(item, attrPath, InternalValue(), context);
-            if (!best || (isMax ? CompareForOrder(bestKey, key, BinaryExpression::LogicalLt, compType) : CompareForOrder(key, bestKey, BinaryExpression::LogicalLt, compType)))
+            if (!best || (isMax ? CompareForOrder(key, bestKey, BinaryExpression::LogicalGt, compType) : CompareForOrder(key, bestKey, BinaryExpression::LogicalLt, compType)))
             {
                 bestKey = std::move(key);
                 best = std::move(item);

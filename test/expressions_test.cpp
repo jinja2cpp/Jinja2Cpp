@@ -855,3 +855,37 @@ TEST(ExpressionsTest, CallableTypeNamesInErrors)
         EXPECT_NE(std::wstring::npos, wide.find(std::wstring(c.message.begin(), c.message.end()))) << c.source;
     }
 }
+
+// The messages of a sequence repeat and of min/max of unorderable items are Python's
+// (docs/tasks/0420); the parity corpus compares only the class
+TEST(ExpressionsTest, RepeatAndOrderingMessages)
+{
+    struct Case
+    {
+        std::string source;
+        std::string message;
+    };
+    // clang-format off
+    const Case cases[] = {
+        {"{{ [1] * range(3) }}",              "can't multiply sequence by non-int of type 'range'"},
+        {"{{ range(3) * 'a' }}",              "can't multiply sequence by non-int of type 'range'"},
+        {"{{ 'a' * range(3) }}",              "can't multiply sequence by non-int of type 'range'"},
+        {"{{ range(3) * [1] }}",              "can't multiply sequence by non-int of type 'range'"},
+        {"{{ [1] * 'a' }}",                   "can't multiply sequence by non-int of type 'str'"},
+        {"{{ (1,) * [1] }}",                  "can't multiply sequence by non-int of type 'list'"},
+        {"{{ [1] * 1.5 }}",                   "can't multiply sequence by non-int of type 'float'"},
+        {"{{ range(3) * 2 }}",                "unsupported operand type(s) for *: 'range' and 'int'"},
+        {"{{ range(3) * range(2) }}",         "unsupported operand type(s) for *: 'range' and 'range'"},
+        {"{{ [range(3), range(2)]|max }}",    "'>' not supported between instances of 'range' and 'range'"},
+        {"{{ [range(3), range(2)]|min }}",    "'<' not supported between instances of 'range' and 'range'"},
+        {"{{ [{}, {}]|max }}",                "'>' not supported between instances of 'dict' and 'dict'"},
+    };
+    // clang-format on
+    for (const auto& c : cases)
+    {
+        const auto narrow = ErrorNarrow(c.source, {});
+        const auto wide = ErrorWide(c.source, {});
+        EXPECT_NE(std::string::npos, narrow.find(c.message)) << c.source << ": " << narrow;
+        EXPECT_NE(std::wstring::npos, wide.find(std::wstring(c.message.begin(), c.message.end()))) << c.source;
+    }
+}

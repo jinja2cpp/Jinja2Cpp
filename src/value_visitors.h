@@ -1270,6 +1270,24 @@ struct BinaryMathOperation : BaseVisitor<>
         }
     }
 
+    // A str, list or tuple: `seq * n` repeats it. A range and a generator do not repeat
+    template<typename T>
+    [[nodiscard]] static bool IsRepeatable(const T& val)
+    {
+        if constexpr (IsStringType_v<T> || std::is_same_v<T, KeyValuePair>)
+        {
+            return true;
+        }
+        else if constexpr (std::is_same_v<T, ListRef>)
+        {
+            return !val.GetRangeInfo() && val.GetIteratorKind() == IteratorKind::None;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
     template<typename L, typename R>
     [[noreturn]] void ThrowUnsupported(const L& left, const R& right) const
     {
@@ -1283,6 +1301,13 @@ struct BinaryMathOperation : BaseVisitor<>
         if (m_oper == BinaryExpression::Plus && leftType == "str")
         {
             throw TemplateRuntimeError("can only concatenate str (not \"" + rightType + "\") to str");
+        }
+        // Python tries the left operand's sequence repeat, then the right's (docs/tasks/0420); an
+        // int beyond int64 is an OverflowError there
+        constexpr bool hasBigInt = std::is_same_v<L, BigIntView> || std::is_same_v<R, BigIntView>;
+        if (!hasBigInt && m_oper == BinaryExpression::Mul && (IsRepeatable(left) || IsRepeatable(right)))
+        {
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "can't multiply sequence by non-int of type '" + (IsRepeatable(left) ? rightType : leftType) + "'");
         }
         throw TemplateRuntimeError("unsupported operand type(s) for "s + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
     }
