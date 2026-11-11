@@ -142,6 +142,10 @@ std::vector<LimitCase> Cases()
         { "MemoryKeptStrings", "{% set l = [] %}{% for i in range(300) %}{% set _ = l.append('x' * 1000 ~ i) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "maxRenderMemory" },
         { "MemoryDroppedStrings", "{% for i in range(1000) %}{% set s = 'x' * 1000 ~ i %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "" },
         { "MemoryCopiedDict", "{% set d = {} %}{% for i in range(1000) %}{% set _ = d.update({'k' ~ i: i}) %}{% endfor %}{% set l = [] %}{% for i in range(20) %}{% set _ = l.append(d.copy()) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        // Generated lists count the items they hold, and loop.changed() its state (verifier on 0459)
+        { "MemoryDictKeysList", "{% set d = {} %}{% for j in range(100) %}{% set _ = d.update({j: j}) %}{% endfor %}{% set l = [] %}{% for i in range(1000) %}{% set _ = l.append(d|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryRepeatedList", "{% set r = range(1000)|list %}{% set l = [] %}{% for i in range(100) %}{% set _ = l.append(r * 1) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryLoopChanged", "{% set r = range(1000)|list %}{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% for q in range(1) %}{% set _ = loop.changed(*r) %}{% endfor %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         // UINT64_MAX bytes is no limit
         { "MemoryMax", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = UINT64_MAX; }, "" },
     };

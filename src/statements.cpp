@@ -768,6 +768,7 @@ InternalValue CallLoopChanged(const InternalValue& state, const CallParams& para
         return false;
     }
     // In place: a loop calling with as many values each time allocates nothing past the first call
+    ReserveCounted(*last, args.size() + 1);
     last->resize(args.size() + 1);
     last->front() = true;
     std::copy(args.begin(), args.end(), last->begin() + 1);

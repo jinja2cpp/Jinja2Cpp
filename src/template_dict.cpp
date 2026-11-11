@@ -543,9 +543,12 @@ TemplateDict& TemplateDict::operator=(TemplateDict&& other) noexcept(std::is_not
 {
     if (this != &other)
     {
+        // Moved out first: where the move may throw (MSVC), the entries stay counted while they live
+        auto items = std::move(other.m_items);
+        auto keys = std::move(other.m_keys);
         ReleaseEntries();
-        m_items = std::move(other.m_items);
-        m_keys = std::move(other.m_keys);
+        m_items.swap(items);
+        m_keys.swap(keys);
     }
     return *this;
 }

@@ -1552,6 +1552,35 @@ private:
 
 static_assert(sizeof(InternalValue) == 32, "docs/tasks/0140");
 
+// The items a generated list reads (a lambda's capture, ListAdapter::CreateAdapter(size, fn)), counted against the
+// render's memory budget as a list's storage is (docs/tasks/0459): each copy is counted, and a move leaves none behind
+class CountedItems
+{
+public:
+    explicit CountedItems(InternalValueList&& items)
+        : m_items(std::move(items))
+    {
+        ChargeRenderMemory(Bytes());
+    }
+    CountedItems(const CountedItems& other)
+        : m_items(other.m_items)
+    {
+        ChargeRenderMemory(Bytes());
+    }
+    // A moved vector is left empty, with no storage
+    CountedItems(CountedItems&& other) noexcept = default;
+    CountedItems& operator=(const CountedItems&) = delete;
+    CountedItems& operator=(CountedItems&&) = delete;
+    ~CountedItems() { ReleaseRenderMemory(Bytes()); }
+
+    [[nodiscard]] const InternalValue& operator[](size_t idx) const { return m_items[idx]; }
+
+private:
+    [[nodiscard]] std::uint64_t Bytes() const noexcept { return std::uint64_t{ m_items.capacity() } * sizeof(InternalValue); }
+
+    InternalValueList m_items;
+};
+
 namespace detail
 {
 struct InternalValueAccess
