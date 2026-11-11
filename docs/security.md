@@ -186,7 +186,7 @@ These apply to both tiers. The claims above stop here until these tasks land:
   [0282](tasks/0282-settings-limits-followups.md).
 - `maxRenderMemory` counts strings, lists and dicts, not every object a render makes: a template
   that keeps many loop objects, macros or other engine objects in a list is counted only for their
-  slots ([0476](tasks/0476-render-memory-uncounted-objects.md)). The fuzz targets for untrusted
+  slots ([0478](tasks/0478-render-memory-uncounted-objects.md)). The fuzz targets for untrusted
   templates ([0267](tasks/0267-untrusted-mode-fuzzing.md)) run under `UntrustedLimits()` with a
   shorter time limit; the structure-aware mutator and the continuous service they are meant to
   feed are [0095](tasks/0095-structure-aware-fuzzing.md) and

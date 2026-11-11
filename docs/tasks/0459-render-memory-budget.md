@@ -42,4 +42,4 @@ back to whatever budget runs on the thread, capped at that budget, so memory fre
 render did not make (host data, an outer render's values) never lets it pass the bound by more
 than it freed. Without a budget each point costs one thread-local compare. `UntrustedLimits()`
 sets 256 MiB, and `FuzzLimits()` keeps `UntrustedLimits()`' steps and sequence cap. Objects not
-counted: [0476](0476-render-memory-uncounted-objects.md).
+counted: [0478](0478-render-memory-uncounted-objects.md).
