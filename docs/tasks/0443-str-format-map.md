@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: []
@@ -29,3 +29,12 @@ with `false`.
 **Done when.** `methods.str_format_map` matches (its line is deleted from
 `test/parity/divergences/methods.txt`), with a narrow and a wide row, a row for the positional
 field error, and a `PublicSandboxPolicyTest` row for a policy that formats `format_map`.
+
+**Resolution.** `format_map` (str and Markup) shares `str.format`'s field parser; the mapping
+is the only source of named fields (looked up as a `[key]` part is, so a missing key is a
+KeyError and a non-subscriptable mapping a TypeError) and any positional field raises
+`Format string contains positional fields`. A sandbox policy is asked
+`Format(self, true, params)` first. Corpus cases `methods.str_format_map*` and
+`methods.markup_format_map`; `PublicSandboxPolicyTest` rows in
+`TheEnginesFormatAsksAboutFieldAttributes` and `APolicyMayFormatItself`. The Python module's
+own `format_map` callable is now redundant: 0465.

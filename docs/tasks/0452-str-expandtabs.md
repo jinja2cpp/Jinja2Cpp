@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/value_methods.cpp]
@@ -20,3 +20,8 @@ before it is built (0263's rule), so `('\t' * 1000).expandtabs(2**20)` fails wit
 
 **Done when** the corpus case passes in narrow and wide runs, its divergence line is gone, and a
 `RecursionLimitsTest.GrowthOperationsCheckSizeFirst` row covers the huge tab size.
+
+**Resolution.** `expandtabs(tabsize=8)` on str and Markup, counting code points; a first pass
+sizes the result through `CheckSequenceSize` before anything is built. Corpus cases
+`methods.str_expandtabs*`; `RecursionLimitsTest.GrowthOperationsCheckSizeFirst` rows for a
+huge tab size (narrow and wide) and for many tabs.

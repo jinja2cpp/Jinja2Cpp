@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0353]
@@ -21,3 +21,16 @@ cases), and implement them in `src/value_methods.cpp` with parity cases. Methods
 
 **Acceptance.** Each implemented method matches Python Jinja2 in a parity case, narrow and wide;
 the rest are listed in docs/python.md with the reason.
+
+**Resolution.** Python 3.12's public methods of the three types, against the engine:
+- str: added `format_map` (0443), `expandtabs` (0452), `translate` and `maketrans` (dict,
+  list or str tables; Markup's `translate` returns Markup and does not escape the table, as
+  markupsafe's). Not added: `encode` (returns `bytes`).
+- int and bool: added `bit_count`, `conjugate`, `as_integer_ratio`, `is_integer` (3.12); had
+  `bit_length`. Not added: `to_bytes`, `from_bytes` (`bytes`).
+- float: added `hex`, `conjugate`, `as_integer_ratio` (a denominator past int64 is a big int);
+  had `is_integer`. Not added: `fromhex`, an alternate constructor rather than a method of a
+  value.
+
+Each added method has a corpus case in cases/methods.py (narrow and wide); the three left out
+are deliberate lines in divergences/methods.txt and are listed in docs/python.md.
