@@ -11,6 +11,7 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cctype>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -97,17 +98,6 @@ std::string Narrow(const std::uint8_t* data, std::size_t size)
     return { reinterpret_cast<const char*>(data), size };
 }
 
-// The support templates of fuzz_common.h written with the input's delimiters
-template<typename CharT>
-void AddSupportTemplates(jinja2::MemoryFileSystem& fs, const std::basic_string<CharT>& self, const Delimiters& delims)
-{
-    fs.AddFile("self", self);
-    fs.AddFile("base", WithDelimiters<CharT>("<{% block content %}base{% endblock %}|{% block other %}{% endblock %}>", delims));
-    fs.AddFile("header", WithDelimiters<CharT>("[{{ foo }}|{{ bar }}]", delims));
-    fs.AddFile("macros",
-               WithDelimiters<CharT>("{% macro m(a, b=2) %}{{ a }}-{{ b }}-{{ varargs }}-{{ kwargs }}{{ caller() if caller }}{% endmacro %}{% set v = 42 %}", delims));
-}
-
 // The settings byte, then the template, narrow or wide, with the support templates, in `env`
 template<typename CharT>
 void RenderUntrusted(jinja2::TemplateEnv& env, std::uint8_t settingsByte, const std::basic_string<CharT>& source, const jinja2::ValuesMap& params)
@@ -149,7 +139,7 @@ jinja2::ValuesMap MakeHostContext()
     auto record = std::make_shared<HostRecord>();
     record->id = 42;
     record->title = "record <one> & \"two\"";
-    record->wideTitle = L"wide é record";
+    record->wideTitle = L"wide \u00e9 record";
     record->inner = std::make_shared<HostInner>();
     for (int n = 0; n < 3; ++n)
     {
@@ -239,12 +229,8 @@ struct LoaderTree
         for (const auto& root : { plain, linked })
         {
             std::filesystem::create_directories(root / "sub" / "deeper");
-            Write(root / "base", "<{% block content %}base{% endblock %}|{% block other %}{% endblock %}>");
-            Write(root / "header", "[{{ foo }}|{{ bar }}]");
-            Write(root / "macros", "{% macro m(a, b=2) %}{{ a }}-{{ b }}{% endmacro %}{% set v = 42 %}");
-            Write(root / "sub" / "item", "{% include 'header' %}<{{ x }}>");
-            Write(root / "sub" / "deeper" / "leaf", "leaf {{ x }}");
         }
+        WriteSupport(Delimiters{ DelimiterSet(0) });
         // Links out of the root: absolute, relative with `..`, and a directory; and one inside it. Creating them may
         // fail (Windows without the privilege); the target then fuzzes the names only
         std::error_code ignored;
@@ -252,6 +238,13 @@ struct LoaderTree
         std::filesystem::create_symlink(std::filesystem::path("..") / "outside" / "canary.txt", linked / "escape-up", ignored);
         std::filesystem::create_directory_symlink(dir / "outside", linked / "escape-dir", ignored);
         std::filesystem::create_symlink(std::filesystem::path("deeper") / "leaf", linked / "sub" / "inside-link", ignored);
+#if !defined(_WIN32)
+        // Without the links the confined half would check nothing
+        if (!std::filesystem::is_symlink(linked / "escape-abs") || !std::filesystem::is_symlink(linked / "escape-up") || !std::filesystem::is_symlink(linked / "escape-dir"))
+        {
+            std::abort();
+        }
+#endif
     }
     ~LoaderTree()
     {
@@ -262,6 +255,19 @@ struct LoaderTree
     LoaderTree& operator=(const LoaderTree&) = delete;
     LoaderTree(LoaderTree&&) = delete;
     LoaderTree& operator=(LoaderTree&&) = delete;
+
+    // The templates beside the input, written with its delimiters
+    void WriteSupport(const Delimiters& delims) const
+    {
+        for (const auto& root : { plain, linked })
+        {
+            Write(root / "base", WithDelimiters<char>("<{% block content %}base{% endblock %}|{% block other %}{% endblock %}>", delims));
+            Write(root / "header", WithDelimiters<char>("[{{ foo }}|{{ bar }}]", delims));
+            Write(root / "macros", WithDelimiters<char>("{% macro m(a, b=2) %}{{ a }}-{{ b }}{% endmacro %}{% set v = 42 %}", delims));
+            Write(root / "sub" / "item", WithDelimiters<char>("{% include 'header' %}<{{ x }}>", delims));
+            Write(root / "sub" / "deeper" / "leaf", WithDelimiters<char>("leaf {{ x }}", delims));
+        }
+    }
 
     static void Write(const std::filesystem::path& path, std::string_view text)
     {
@@ -288,11 +294,40 @@ constexpr std::string_view SlowSeed = "\xFFjinja2cpp-fuzz-slow-seed";
 
 void InjectSlowSeed(const std::uint8_t* data, std::size_t size)
 {
-    static const bool enabled = std::getenv("JINJA2CPP_FUZZ_INJECT_SLOW") != nullptr; // NOLINT(concurrency-mt-unsafe): read once, nothing sets it
+    static const bool enabled = [] {
+#if defined(_MSC_VER)
+        char* value = nullptr;
+        std::size_t length = 0;
+        const bool set = _dupenv_s(&value, &length, "JINJA2CPP_FUZZ_INJECT_SLOW") == 0 && value;
+        std::free(value); // NOLINT(cppcoreguidelines-no-malloc): _dupenv_s allocates with malloc
+        return set;
+#else
+        return std::getenv("JINJA2CPP_FUZZ_INJECT_SLOW") != nullptr; // NOLINT(concurrency-mt-unsafe): read once, nothing sets it
+#endif
+    }();
     if (enabled && Narrow(data, size).rfind(SlowSeed, 0) == 0)
     {
         std::this_thread::sleep_for(std::chrono::minutes(10));
     }
+}
+std::vector<std::string> CanaryForms(const std::string& canary)
+{
+    std::string upper = canary;
+    std::string lower = canary;
+    for (auto& c : upper)
+    {
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    for (auto& c : lower)
+    {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    std::vector<std::string> forms{ canary, upper, lower };
+    for (std::size_t n = 0, count = forms.size(); n < count; ++n)
+    {
+        forms.emplace_back(forms[n].rbegin(), forms[n].rend());
+    }
+    return forms;
 }
 } // namespace
 
@@ -351,6 +386,7 @@ void FuzzLoader(const std::uint8_t* data, std::size_t size)
     const std::string source = Narrow(data + 2, size - 2);
     const auto& root = confined ? tree.linked : tree.plain;
     LoaderTree::Write(root / "self", source);
+    tree.WriteSupport(DelimitersOf(settingsByte));
 
     jinja2::TemplateEnv env;
     ConfigureUntrustedEnv(env, settingsByte);
@@ -362,28 +398,46 @@ void FuzzLoader(const std::uint8_t* data, std::size_t size)
     {
         env.AddFilesystemHandler(std::string(), std::make_shared<jinja2::RealFileSystem>(root.string()));
     }
-    // By name from the root, and from the source text
+    // By name from the root, and from the source text. Error text counts too: the input cannot hold the canary, so an
+    // error that quotes it quotes a file read outside the root
     std::string output;
-    if (auto loaded = env.LoadTemplate("self"))
-    {
-        if (auto rendered = loaded.value().RenderAsString(MakeContext()))
+    const auto take = [&output](const auto& result) {
+        if (result)
         {
-            output = std::move(rendered.value());
+            output += result.value();
         }
+        else
+        {
+            output += result.error().ToString();
+        }
+    };
+    auto loaded = env.LoadTemplate("self");
+    if (loaded)
+    {
+        take(loaded.value().RenderAsString(MakeContext()));
+    }
+    else
+    {
+        output += loaded.error().ToString();
     }
     jinja2::Template tpl(&env);
-    if (tpl.Load(source, "self"))
+    auto parsed = tpl.Load(source, "self");
+    if (parsed)
     {
-        if (auto rendered = tpl.RenderAsString(MakeContext()))
-        {
-            output += rendered.value();
-        }
+        take(tpl.RenderAsString(MakeContext()));
     }
-    // Neither handler may reach a canary by a name, nor ConfinedFileSystem through a link. Error messages are not
-    // checked: a parse error quotes the source line it failed on
-    if (output.find(canary) != std::string::npos)
+    else
     {
-        std::abort();
+        output += parsed.error().ToString();
+    }
+    // Neither handler may reach a canary by a name, nor ConfinedFileSystem through a link: as read, or through the
+    // filters that keep its characters (upper, lower, reverse; the hex digits and the prefix make each form distinct)
+    for (const auto& form : CanaryForms(canary))
+    {
+        if (output.find(form) != std::string::npos)
+        {
+            std::abort();
+        }
     }
 }
 

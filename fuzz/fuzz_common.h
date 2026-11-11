@@ -210,6 +210,17 @@ struct Outcome
 // Lenient UTF-8 decoder: a malformed sequence becomes U+FFFD, so every input yields a wide template
 std::wstring DecodeUtf8(const std::uint8_t* data, std::size_t size);
 
+// The support templates above written with the input's delimiters
+template<typename CharT>
+inline void AddSupportTemplates(jinja2::MemoryFileSystem& fs, const std::basic_string<CharT>& self, const Delimiters& delims)
+{
+    fs.AddFile("self", self);
+    fs.AddFile("base", WithDelimiters<CharT>("<{% block content %}base{% endblock %}|{% block other %}{% endblock %}>", delims));
+    fs.AddFile("header", WithDelimiters<CharT>("[{{ foo }}|{{ bar }}]", delims));
+    fs.AddFile("macros",
+               WithDelimiters<CharT>("{% macro m(a, b=2) %}{{ a }}-{{ b }}-{{ varargs }}-{{ kwargs }}{{ caller() if caller }}{% endmacro %}{% set v = 42 %}", delims));
+}
+
 // ConfigureEnv, FuzzLimits() and the settings byte: the environment of the limits-on targets
 void ConfigureUntrustedEnv(jinja2::TemplateEnv& env, std::uint8_t settingsByte);
 

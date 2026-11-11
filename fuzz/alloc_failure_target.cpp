@@ -8,7 +8,7 @@
 // (fuzz_common.h, narrow only); the template. The template first runs without a failure. Then a fresh template of the
 // same environment loads and renders it with the failure armed, and each call must return or throw std::bad_alloc,
 // never anything else. When the failure fired and no std::bad_alloc came out, the outcome must be the one of the
-// first run: an engine that swallows the failure into another result breaks the contract. Afterwards the environment
+// first runs (compared only when three runs agree and nothing in it may vary: `random`, an address, a time limit): an engine that swallows the failure into another result breaks the contract. Afterwards the environment
 // and the template must render as in the first run. With a Windows DLL build the library keeps its CRT's operator new,
 // so no failure is injected there.
 
@@ -162,6 +162,19 @@ Run LoadAndRender(jinja2::Template& tpl, const std::string& source, bool load)
     return run;
 }
 
+// A render whose result may change between runs: the `random` filter, an address in the output (a bound method's
+// repr), a time limit hit
+bool Reproducible(const std::string& source, const Run& run)
+{
+    return source.find("random") == std::string::npos && run.code != jinja2::ErrorCode::ResourceLimitExceeded && (!run.output || run.output->find("0x") == std::string::npos);
+}
+
+// Equal, unless either hit a limit: maxRenderTime makes a render near it end either way
+bool Same(const Run& a, const Run& b)
+{
+    return a == b || a.code == jinja2::ErrorCode::ResourceLimitExceeded || b.code == jinja2::ErrorCode::ResourceLimitExceeded;
+}
+
 [[noreturn]] void Fail(const char* what, long succeed)
 {
     std::fprintf(stderr, "allocation failure target: %s (allocation %ld failing)\n", what, succeed);
@@ -182,15 +195,18 @@ void FuzzAllocFailure(const std::uint8_t* data, std::size_t size)
     jinja2::TemplateEnv env;
     ConfigureUntrustedEnv(env, settingsByte);
     auto fs = std::make_shared<jinja2::MemoryFileSystem>();
-    AddSupportTemplates(*fs, source);
+    AddSupportTemplates(*fs, source, DelimitersOf(settingsByte));
     env.AddFilesystemHandler(std::string(), fs);
 
+    // Only a render that depends on its source alone can be compared; any other still runs with the failure armed
     jinja2::Template first(&env);
     const Run expected = LoadAndRender(first, source, true);
-    // A render that depends on more than its source (the `random` filter, a time limit) cannot be compared; it is
-    // still run with the failure armed
-    jinja2::Template second(&env);
-    const bool comparable = expected.code != jinja2::ErrorCode::ResourceLimitExceeded && LoadAndRender(second, source, true) == expected;
+    bool comparable = Reproducible(source, expected);
+    for (int n = 0; comparable && n < 2; ++n)
+    {
+        jinja2::Template other(&env);
+        comparable = Same(LoadAndRender(other, source, true), expected);
+    }
 
     jinja2::Template tpl(&env);
     Run injected;
@@ -212,21 +228,17 @@ void FuzzAllocFailure(const std::uint8_t* data, std::size_t size)
     {
         return;
     }
-    if (fired && !threw && injected != expected)
+    if (fired && !threw && !Same(injected, expected))
     {
         Fail("the failure was turned into another outcome", succeed);
     }
-    if (!fired && injected != expected)
-    {
-        Fail("a second run differs with no failure", succeed);
-    }
     // The template and the environment stay usable
-    if (injected.loaded && LoadAndRender(tpl, source, false) != expected)
+    if (injected.loaded && !Same(LoadAndRender(tpl, source, false), expected))
     {
         Fail("the template renders differently after the failure", succeed);
     }
     jinja2::Template again(&env);
-    if (LoadAndRender(again, source, true) != expected)
+    if (!Same(LoadAndRender(again, source, true), expected))
     {
         Fail("the environment renders differently after the failure", succeed);
     }

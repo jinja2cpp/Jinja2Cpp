@@ -154,8 +154,11 @@ jobs:
           echo '```'
           echo "crashes: $crashes, timeouts: $timeouts, out of memory: $ooms (exit status $status)"
         } >> "$GITHUB_STEP_SUMMARY"
-        if [ "$STRICT" = true ] && [ $((timeouts + ooms)) -ne 0 ]; then
-          echo "::error::${{ matrix.target }} runs under limits and found $timeouts timeout(s), $ooms out-of-memory input(s); see the fuzz-artifacts-${{ matrix.target }} artifact"
+        # slow-unit-* (a unit past 10 s that finished) stays a report: maxRenderTime may be overrun by one
+        # step (docs/tasks/0282); a timeout-* did not finish in 25 s
+        hard_timeouts=$(find artifacts -name 'timeout-*' | wc -l)
+        if [ "$STRICT" = true ] && [ $((hard_timeouts + ooms)) -ne 0 ]; then
+          echo "::error::${{ matrix.target }} runs under limits and found $hard_timeouts timeout(s), $ooms out-of-memory input(s); see the fuzz-artifacts-${{ matrix.target }} artifact"
           exit 1
         fi
         if [ "$crashes" -ne 0 ]; then
