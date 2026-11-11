@@ -150,6 +150,27 @@ TEST_F(TemplateModuleTest, MacroCalls)
     EXPECT_EQ("[|2|{}|()]", Call(m).AsString());
 }
 
+TEST_F(TemplateModuleTest, MacroAttributes)
+{
+    auto module = Make("{% macro foo(a, b) %}{% endmacro %}{% macro bar() %}{{ varargs }}{{ kwargs }}{% endmacro %}{% macro baz() %}{{ caller() }}{% endmacro %}{% set alias = foo %}{% set n = 1 %}");
+    const auto attributes = [&module](const char* name) { return jinja2::MacroAttributes(module.exports[name].As<jinja2::UserCallable>()); };
+    const auto foo = attributes("foo");
+    EXPECT_EQ("foo", foo.at("name").AsString());
+    EXPECT_EQ((jinja2::ValuesList{ "a", "b" }), foo.at("arguments").AsList());
+    EXPECT_FALSE(foo.at("catch_kwargs").As<bool>());
+    EXPECT_FALSE(foo.at("catch_varargs").As<bool>());
+    EXPECT_FALSE(foo.at("caller").As<bool>());
+    const auto bar = attributes("bar");
+    EXPECT_TRUE(bar.at("arguments").AsList().empty());
+    EXPECT_TRUE(bar.at("catch_kwargs").As<bool>());
+    EXPECT_TRUE(bar.at("catch_varargs").As<bool>());
+    EXPECT_TRUE(attributes("baz").at("caller").As<bool>());
+    // An alias is the same macro
+    EXPECT_EQ("foo", attributes("alias").at("name").AsString());
+    // Any other callable has none
+    EXPECT_TRUE(jinja2::MacroAttributes(jinja2::UserCallable{}).empty());
+}
+
 TEST_F(TemplateModuleTest, MakeModuleParams)
 {
     auto tpl = Load("{% macro m() %}{{ x }}{% endmacro %}{{ x }}");

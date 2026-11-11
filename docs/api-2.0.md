@@ -915,6 +915,18 @@ Recommend A now, C only if someone asks.
      exact `list` or `tuple`, so a subclass loops through `iter()` as in Python. `loop.length`
      stays `Len`, and list operators still read the items by index. It
      adds a vtable slot before the freeze.
+   - **Numbers of a host object (task 0434, before the freeze; decided by Ruslan 2026-11-11).**
+     `IHostObject` gains `IsNumber()` (`isinstance(x, numbers.Number)`, for `is number`; false by
+     default), `ToInt()` (`int(x)` for the `int` filter) and `ToFloat()` (`float(x)` for `int` and
+     `float`), the last two `std::optional<Value>` with nullopt by default. The `int` filter asks
+     `ToInt`, then `ToFloat` truncated, then the default, as Jinja2's `do_int`. The Python module
+     answers them with `numbers.Number`, `int()` and `float()` (a `TypeError` or `ValueError` is
+     nullopt). It adds three vtable slots before the freeze.
+   - **Attributes of a module macro (task 0434, before the freeze; decided by Ruslan 2026-11-11).**
+     `jinja2::MacroAttributes(const UserCallable&)` returns the attributes Jinja2's `Macro` has for
+     a macro a module exports: `name`, `arguments` (a `ValuesList`), `catch_kwargs`,
+     `catch_varargs` and `caller`; an empty map for any other callable. A free function, so it
+     adds no vtable slot; the Python `ModuleMacro` exposes them as read-only properties.
 
 ## 8. Work breakdown
 

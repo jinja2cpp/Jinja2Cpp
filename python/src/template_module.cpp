@@ -17,6 +17,7 @@
 #include <string>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace jinja2cpp_py
 {
@@ -198,6 +199,30 @@ public:
         , m_templateName(std::move(templateName))
         , m_name(std::move(name))
     {
+        // Jinja2's Macro attributes, read once; the macro's own name, not the name it is exported under
+        const auto attributes = jinja2::MacroAttributes(m_callable);
+        const auto flag = [&attributes](const char* key) {
+            const auto pos = attributes.find(key);
+            const auto* value = pos == attributes.end() ? nullptr : pos->second.GetIf<bool>();
+            return value && *value;
+        };
+        if (const auto pos = attributes.find("name"); pos != attributes.end() && pos->second.IsString())
+        {
+            m_name = pos->second.AsString();
+        }
+        if (const auto pos = attributes.find("arguments"); pos != attributes.end())
+        {
+            if (const auto* names = pos->second.GetIf<jinja2::ValuesList>())
+            {
+                for (const auto& item : *names)
+                {
+                    m_arguments.push_back(item.AsString());
+                }
+            }
+        }
+        m_catchKwargs = flag("catch_kwargs");
+        m_catchVarargs = flag("catch_varargs");
+        m_caller = flag("caller");
     }
     ModuleMacro(const ModuleMacro&) = delete;
     ModuleMacro& operator=(const ModuleMacro&) = delete;
@@ -278,6 +303,18 @@ public:
     }
 
     [[nodiscard]] const std::string& Name() const { return m_name; }
+    [[nodiscard]] nb::tuple Arguments() const
+    {
+        nb::list names;
+        for (const auto& argument : m_arguments)
+        {
+            names.append(nb::str(argument.c_str(), argument.size()));
+        }
+        return nb::tuple(names);
+    }
+    [[nodiscard]] bool CatchKwargs() const { return m_catchKwargs; }
+    [[nodiscard]] bool CatchVarargs() const { return m_catchVarargs; }
+    [[nodiscard]] bool Caller() const { return m_caller; }
     [[nodiscard]] std::string Repr() const { return "<macro '" + m_name + "'>"; }
 
     int Traverse(visitproc visit, void* arg) const
@@ -301,6 +338,10 @@ private:
     nb::object m_templateGlobals;
     nb::object m_templateName;
     std::string m_name;
+    std::vector<std::string> m_arguments;
+    bool m_catchKwargs = false;
+    bool m_catchVarargs = false;
+    bool m_caller = false;
 };
 
 // One level of a nested export, counted against Python's recursion limit
@@ -492,6 +533,10 @@ void BindTemplateModule(nb::module_& module)
     nb::class_<ModuleMacro>(module, "ModuleMacro", nb::type_slots(g_macroSlots), nb::is_weak_referenceable())
         .def("__call__", &ModuleMacro::Call)
         .def("__repr__", &ModuleMacro::Repr)
-        .def_prop_ro("name", &ModuleMacro::Name);
+        .def_prop_ro("name", &ModuleMacro::Name)
+        .def_prop_ro("arguments", &ModuleMacro::Arguments)
+        .def_prop_ro("catch_kwargs", &ModuleMacro::CatchKwargs)
+        .def_prop_ro("catch_varargs", &ModuleMacro::CatchVarargs)
+        .def_prop_ro("caller", &ModuleMacro::Caller);
 }
 } // namespace jinja2cpp_py

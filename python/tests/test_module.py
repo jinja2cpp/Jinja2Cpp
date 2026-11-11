@@ -412,3 +412,18 @@ def test_macro_takes_an_eval_context_first(autoescape):
     assert results[0] == results[1]
     # Jinja2's own EvalContext is taken too
     assert jinja2cpp.Environment().from_string(source).module.hello(jinja2.nodes.EvalContext(jinja2.Environment()), "x") == "<p>x</p>"
+
+
+MACRO_SOURCE = (
+    "{% macro foo(a, b) %}{% endmacro %}{% macro bar() %}{{ varargs }}{{ kwargs }}{% endmacro %}"
+    "{% macro baz() %}{{ caller() }}{% endmacro %}{% set alias = foo %}"
+)
+
+
+def test_module_macro_attributes():
+    ours, theirs = both(MACRO_SOURCE)
+    for name in ("foo", "bar", "baz", "alias"):
+        mine, expected = getattr(ours, name), getattr(theirs, name)
+        for attribute in ("name", "arguments", "catch_kwargs", "catch_varargs", "caller"):
+            assert getattr(mine, attribute) == getattr(expected, attribute), (name, attribute)
+    assert ours.foo.arguments == ("a", "b")

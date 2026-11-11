@@ -411,7 +411,7 @@ same object (`x is y`). Strings are copied in UTF-8, and a lone surrogate raises
 | `list`, `tuple`, namedtuple | sequences; a tuple prints as a tuple, namedtuple fields are attributes; `+`, `*`, `<`, `sort`, `min`, `max` and `%` treat them as Jinja2 does, and a loop follows the live length of a list it changes |
 | generators and iterators | read once, as in Python |
 | callables | called with Python's own argument binding |
-| any other object | `getattr` first, then items; `str()`, `repr()` and `__html__` as Python uses them |
+| any other object | `getattr` first, then items; `str()`, `repr()` and `__html__` as Python uses them; `is number` is `isinstance(x, numbers.Number)` (a `complex`, `Decimal` or `Fraction` too), and the `int` and `float` filters call `int(x)` and `float(x)` (0434) |
 
 Going the other way, the engine's lists and dicts become `list` and `dict`, Markup becomes
 `markupsafe.Markup`, and undefined becomes an instance of the environment's Undefined class.
@@ -441,6 +441,8 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   engine, not through `env.get_template(name, parent=...)`, so an overridden `join_path` is not
   called for them (Jinja2 calls it with the including template's name); `get_template` and
   `select_template` call it (0410).
+- An exported macro of `make_module` and `module` has `name`, `arguments`, `catch_kwargs`, `catch_varargs` and
+  `caller` as Jinja2's `Macro` has them (0434).
 - `make_module` and `module` give the exports as Python values the host API can carry: a
   `namespace` becomes a dict, a `cycler` a dict, a `range` a list, a tuple a list, an `Undefined` is
   `None`, a dict key that is no str is spelled as `str()` spells it, and a Python object (not a str, number,
