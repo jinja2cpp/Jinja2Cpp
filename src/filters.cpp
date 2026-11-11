@@ -402,6 +402,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
             }
             isFirst = false;
             builder.AppendString(asText(val));
+            CheckSequenceSize(builder.View().size(), "a joined string");
         }
         return builder.Build();
     };
@@ -1241,6 +1242,22 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 }
                 throw TemplateRuntimeError("object of type '"s + iterator + "' has no len()");
             }
+        }
+    }
+    // len() of a string or a mapping needs no list of its characters or keys (docs/tasks/0263)
+    if (m_mode == LengthMode)
+    {
+        if (const auto map = AsMap(baseVal); map && !map->GetObjectClass())
+        {
+            return static_cast<int64_t>(map->GetSize());
+        }
+        int64_t chars = -1;
+        if (ApplyStringConverter(baseVal, [&chars](auto str) {
+                chars = static_cast<int64_t>(CodePointCount(std::basic_string_view<typename decltype(str)::value_type>(str)));
+                return true;
+            }))
+        {
+            return chars;
         }
     }
     // Like Python, a string is a sequence of characters and a mapping one of its keys

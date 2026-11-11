@@ -518,7 +518,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
-            ModuleCallCollector cycles(cells, kept);
+            ModuleCallCollector cycles(cells, kept, &LiveRoots, this);
             // Then what the call loads, which its collector sees go
             const CallScope callScope(*callback);
             // Then the module's context as the call found it, which a failed call would leave
@@ -573,6 +573,33 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         catch (...)
         {
             throw BadResultAccess<CharT>(Named(detail::CurrentExceptionToError<CharT>(impl->m_templateName), name));
+        }
+    }
+
+    // ModuleScope::LiveRootsFn: the objects the module's names hold, and those the attributes of
+    // a namespace among them hold, where a call keeps its state (docs/tasks/0450). Not the items
+    // of a list or dict: there may be as many as calls, and gathering them would cost what the
+    // walk saves
+    static void LiveRoots(const void* state, std::vector<const ValueObject*>& roots)
+    {
+        const auto& self = *static_cast<const TemplateModuleState*>(state);
+        for (const auto& [name, value] : self.module->Names())
+        {
+            const auto* object = detail::InternalValueAccess::Object(value);
+            if (!object)
+            {
+                continue;
+            }
+            roots.push_back(object);
+            const auto own = OwnObjectOf(value);
+            if (own.get() != object)
+            {
+                roots.push_back(own.get());
+            }
+            if (const auto map = AsMap(value); map && map->IsNamespace())
+            {
+                own->Traverse([&roots](const ValueObject* attribute) { roots.push_back(attribute); });
+            }
         }
     }
 

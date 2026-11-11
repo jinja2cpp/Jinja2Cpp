@@ -126,15 +126,14 @@ void CheckArgs(const CallParams& params, const char* name, size_t minArgs, size_
     }
 }
 
-// The largest width or precision a method pads to: Python raises MemoryError or
+// A width or precision a method pads to counts against the same cap as every other string
+// the template builds (maxSequenceSize, docs/tasks/0263); Python raises MemoryError or
 // OverflowError well before a template could allocate this much
-constexpr int64_t MaxWidth = static_cast<int64_t>(1) << 28;
-
 int64_t WidthArg(int64_t width)
 {
-    if (width > MaxWidth)
+    if (width > 0)
     {
-        Raise("width or precision too big");
+        CheckSequenceSize(static_cast<uint64_t>(width), "a padded string");
     }
     return width;
 }
@@ -558,6 +557,7 @@ struct StrOps
             {
                 Raise(fmt::format("sequence item {}: expected str instance, {} found", idx, TypeName(item)));
             }
+            CheckSequenceSize(uint64_t{ result.size() } + (idx != 0 ? self.size() : 0) + str->size(), "a joined string");
             if (idx++ != 0)
             {
                 result.append(self.begin(), self.end());
@@ -583,6 +583,8 @@ struct StrOps
             {
                 if (count < 0 || static_cast<int64_t>(n) < count)
                 {
+                    CheckSequenceSize(uint64_t{ result.size() } + newStr.size() + (n < chars.size() ? chars[n].size() : 0),
+                                      "a replaced string");
                     result += newStr;
                 }
                 if (n < chars.size())
@@ -600,6 +602,7 @@ struct StrOps
             {
                 break;
             }
+            CheckSequenceSize(uint64_t{ result.size() } + (p - start) + newStr.size(), "a replaced string");
             result.append(self.begin() + static_cast<std::ptrdiff_t>(start), self.begin() + static_cast<std::ptrdiff_t>(p));
             result += newStr;
             start = p + oldStr.size();
@@ -1789,6 +1792,7 @@ struct StrOps
             }
             auto field = ParseField(self, pos);
             result += ReplaceField(field, params, numbering, context, escape, depth);
+            CheckSequenceSize(result.size(), "a formatted string");
         }
         return result;
     }
@@ -2108,6 +2112,7 @@ InternalValue ListAppend(const InternalValue& self, const CallParams& params, Re
 {
     CheckArgs(params, "append", 1, 1);
     auto& items = MutableItems(self);
+    CheckSequenceSize(uint64_t{ items.size() } + 1, "a list");
     NoteContainerStore(self, params.posParams[0]);
     items.push_back(params.posParams[0]);
     return InternalValue(NoneValue());
@@ -2125,6 +2130,7 @@ InternalValue ListExtend(const InternalValue& self, const CallParams& params, Re
     // A snapshot first: l.extend(l) doubles the list, as in Python
     auto newItems = other.ToValueList();
     auto& items = MutableItems(self);
+    CheckSequenceSize(uint64_t{ items.size() } + newItems.size(), "a list");
     for (auto& item : newItems)
     {
         NoteContainerStore(self, item);
@@ -2138,6 +2144,7 @@ InternalValue ListInsert(const InternalValue& self, const CallParams& params, Re
     CheckArgs(params, "insert", 2, 2);
     auto& items = MutableItems(self);
     auto idx = SliceIndex(params.posParams.data(), items.size(), 0, "insert");
+    CheckSequenceSize(uint64_t{ items.size() } + 1, "a list");
     NoteContainerStore(self, params.posParams[1]);
     items.insert(items.begin() + static_cast<std::ptrdiff_t>(idx), params.posParams[1]);
     return InternalValue(NoneValue());

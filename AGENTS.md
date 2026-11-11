@@ -63,6 +63,8 @@ Useful configurations (see `.github/workflows/` for the actual CI matrix):
 | JSON bindings the tests check (components in `bindings/`) | `-DJINJA2CPP_TEST_BINDINGS="nlohmann_json;boost_json"` (default `nlohmann_json`) |
 | Shared library | `-DJINJA2CPP_BUILD_SHARED=ON` |
 | Node reference checks | `-DJINJA2CPP_NODEREF_CHECKS=OFF`, `ON` (Release default), `FULL` (Debug/sanitizer/fuzz default) |
+| Hardening flags (library only, default ON) | `-DJINJA2CPP_HARDENING=OFF` |
+| Contract checks (`src/contracts.h`) | `-DJINJA2CPP_CONTRACT_CHECKS=OFF`, `ON` (Release default), `FULL` (Debug/sanitizer/fuzz default) |
 | Coverage | `-DJINJA2CPP_WITH_COVERAGE=ON` (GCC/Clang, Debug) |
 
 For current Conan dependency-mode builds, use Conan 2:

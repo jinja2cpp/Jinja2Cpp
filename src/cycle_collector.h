@@ -31,6 +31,22 @@ private:
     size_t m_pruneAt = MinPruneAt;
 };
 
+// What the calls of a template module share with its collector: its cells, what KeepUntilEnd
+// holds, and the objects its own names hold (docs/tasks/0049, 0373, 0450)
+struct ModuleScope
+{
+    // Appends to `roots` the objects the module's names hold. They outlive the call, and so does
+    // all they reach: the walk at the end of the call takes them as held from outside without
+    // walking into them, so that a call storing into a container of the module walks what it made,
+    // not the whole container (docs/tasks/0450). Throws std::bad_alloc
+    using LiveRootsFn = void (*)(const void* state, std::vector<const ValueObject*>& roots);
+
+    BorrowedCells& cells;
+    KeptObjects& kept;
+    LiveRootsFn liveRoots = nullptr;
+    const void* state = nullptr;
+};
+
 // Frees the reference cycles among the values a render makes (docs/tasks/0110, 0251). Lists,
 // dicts and namespaces are shared by reference count, as Python's are, so a container that
 // holds itself (`{% set ns.a = ns %}`, `l.append(l)`) keeps itself alive, possibly through
@@ -59,12 +75,11 @@ public:
     {
         s_current = this;
     }
-    // A collector whose writes to the host's data go to `cells`, and what KeepUntilEnd holds to
-    // `kept`, which outlive it: a template module's, whose values live across its calls
-    // (docs/tasks/0049, 0373)
-    CycleCollector(BorrowedCells& cells, KeptObjects& kept) noexcept
-        : m_external(&cells)
-        , m_externalKept(&kept)
+    // A collector whose writes to the host's data go to the module's cells, and what KeepUntilEnd
+    // holds to its kept objects, which outlive it: a template module's, whose values live across
+    // its calls (docs/tasks/0049, 0373)
+    explicit CycleCollector(const ModuleScope& module) noexcept
+        : m_module(&module)
     {
         s_current = this;
     }
@@ -95,9 +110,9 @@ public:
         {
             return nullptr;
         }
-        if (collector->m_external)
+        if (collector->m_module)
         {
-            return collector->m_external;
+            return &collector->m_module->cells;
         }
         return collector->m_notes ? &collector->m_notes->cells : nullptr;
     }
@@ -192,10 +207,9 @@ private:
 
     CycleCollector* m_outer = s_current;
     std::unique_ptr<Notes> m_notes;
-    // The cells of a template module, which outlive the call (docs/tasks/0049); null for a render
-    BorrowedCells* m_external = nullptr;
-    // What KeepUntilEnd holds for a template module (docs/tasks/0373); null for a render
-    KeptObjects* m_externalKept = nullptr;
+    // The cells and kept objects of a template module, which outlive the call (docs/tasks/0049,
+    // 0373); null for a render
+    const ModuleScope* m_module = nullptr;
 };
 
 // A call of a template module: it runs as a new call of the module's cells (BorrowedCells::BeginCall),
@@ -204,10 +218,11 @@ private:
 class ModuleCallCollector
 {
 public:
-    ModuleCallCollector(BorrowedCells& cells, KeptObjects& kept) noexcept
-        : m_cells(cells)
+    // `liveRoots` and `state`: ModuleScope's
+    ModuleCallCollector(BorrowedCells& cells, KeptObjects& kept, ModuleScope::LiveRootsFn liveRoots = nullptr, const void* state = nullptr) noexcept
+        : m_scope{ cells, kept, liveRoots, state }
         , m_outerCall(cells.BeginCall())
-        , m_collector(cells, kept)
+        , m_collector(m_scope)
     {
     }
     ~ModuleCallCollector()
@@ -215,18 +230,18 @@ public:
         // Last in the call: what the call made is gone, and with it the adapters of its data. The
         // values the call handed out keep what they read now, before a cell of theirs is dropped
         // (Complete did that already, unless the call failed)
-        m_cells.PinExportsOrSkip();
+        m_scope.cells.PinExportsOrSkip();
         // The cells of borrowed JSON values live for the outermost call (docs/tasks/0212)
         if (m_outerCall.call == 0)
         {
-            m_cells.FreezeCallScoped(&m_collector);
+            m_scope.cells.FreezeCallScoped(&m_collector);
         }
-        m_cells.DropUnheld(true);
-        m_cells.EndCall(std::move(m_outerCall));
+        m_scope.cells.DropUnheld(true);
+        m_scope.cells.EndCall(std::move(m_outerCall));
     }
     // The call succeeded: its values keep what they read now, or the call fails with
     // std::bad_alloc rather than hand out values that read the host's data
-    void Complete() { m_cells.PinExports(); }
+    void Complete() { m_scope.cells.PinExports(); }
 
     ModuleCallCollector(const ModuleCallCollector&) = delete;
     ModuleCallCollector(ModuleCallCollector&&) = delete;
@@ -234,7 +249,7 @@ public:
     ModuleCallCollector& operator=(ModuleCallCollector&&) = delete;
 
 private:
-    BorrowedCells& m_cells;
+    ModuleScope m_scope;
     BorrowedCells::CallFrame m_outerCall;
     CycleCollector m_collector;
 };
