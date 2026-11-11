@@ -24,6 +24,7 @@ CASES = [
     ("str_format_map", "{{ '{a}!'.format_map({'a': 5}) }}"),
     ("str_isdigit", "{{ '123'.isdigit() }}"),
     ("str_zfill", "{{ '7'.zfill(3) }}"),
+    ("str_expandtabs", "[{{ 'a\\tbc\\td'.expandtabs(4) }}|{{ 'x\\ty'.expandtabs() }}]"),
     ("str_center", "[{{ 'a'.center(5, '*') }}]"),
     ("str_partition", "{{ 'a=b'.partition('=') }}"),
     ("str_percent_format", "{{ '%s=%d' % ('a', 3) }}"),

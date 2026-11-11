@@ -59,6 +59,10 @@ option(JINJA2CPP_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (clang only
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 set(JINJA2CPP_NODEREF_CHECKS "" CACHE STRING "Checks of the handles that link a parse tree: OFF, ON (Seal and cross-template links), FULL (every access); empty picks FULL for Debug, sanitizer and fuzz builds, else ON")
 set_property(CACHE JINJA2CPP_NODEREF_CHECKS PROPERTY STRINGS "" ON FULL OFF)
+set(JINJA2CPP_CONTRACT_CHECKS "" CACHE STRING "Checks of the engine's preconditions and invariants (src/contracts.h): OFF, ON (preconditions), FULL (invariants too); a violation fails the render with an error. Empty picks FULL for Debug, sanitizer and fuzz builds, else ON")
+set_property(CACHE JINJA2CPP_CONTRACT_CHECKS PROPERTY STRINGS "" ON FULL OFF)
+option(JINJA2CPP_LANGUAGE_CONTRACTS "With a C++26 compiler that has contracts (P2900), check src/contracts.h with contract_assert and install a violation handler that throws; the handler is program-global, so it is opt-in" OFF)
+option(JINJA2CPP_HARDENING "Build the library with stack protector, stack clash protection, control-flow protection and fortified libc calls (MSVC: /GS /guard:cf); the flags are not passed on to consumers" ON)
 option(JINJA2CPP_WITH_CHAT_TEMPLATES "Build and install jinja2cpp/chat_template.h: ConfigureForChatTemplates renders Hugging Face chat templates as transformers does (docs/tasks/0360)" ON)
 option(JINJA2CPP_WITH_UNICODE_NAMES "Decode \\N{name} escapes in string literals with the Unicode name table (about 450 KB of data)" ON)
 option(JINJA2CPP_CELL_TRACE "Log the borrowed-cell protocol's events to the file the JINJA2CPP_CELL_TRACE environment variable names, for tla/check.py --trace (docs/tasks/0338); a test build only" OFF)
@@ -266,6 +270,7 @@ set(JINJA2CPP_SOURCES
     src/lexer.cpp
     src/markup.cpp
     src/name_resolver.cpp
+    src/contracts.cpp
     src/node_arena.cpp
     src/out_stream.cpp
     src/prompt_escape.cpp
@@ -464,6 +469,48 @@ else ()
 endif ()
 message(STATUS "Jinja2C++ node reference checks: ${_noderef_checks}")
 target_compile_definitions(${LIB_TARGET_NAME} PUBLIC "$<BUILD_INTERFACE:JINJA2CPP_NODEREF_CHECKS_LEVEL=${_noderef_level}>")
+# The same for the checks of src/contracts.h (docs/tasks/0265)
+string(TOUPPER "${JINJA2CPP_CONTRACT_CHECKS}" _contract_checks)
+if (_contract_checks STREQUAL "OFF")
+    set(_contract_level 0)
+elseif (_contract_checks STREQUAL "ON")
+    set(_contract_level 1)
+elseif (_contract_checks STREQUAL "FULL")
+    set(_contract_level 2)
+elseif (_contract_checks STREQUAL "")
+    if (NOT JINJA2CPP_WITH_SANITIZERS STREQUAL "none" OR JINJA2CPP_BUILD_FUZZERS)
+        set(_contract_level 2)
+        set(_contract_checks "FULL")
+    else ()
+        set(_contract_level "$<IF:$<CONFIG:Debug>,2,1>")
+        set(_contract_checks "FULL in Debug, else ON")
+    endif ()
+else ()
+    message(FATAL_ERROR "JINJA2CPP_CONTRACT_CHECKS is OFF, ON, FULL or empty, not '${JINJA2CPP_CONTRACT_CHECKS}'")
+endif ()
+message(STATUS "Jinja2C++ contract checks: ${_contract_checks}")
+target_compile_definitions(${LIB_TARGET_NAME} PUBLIC "$<BUILD_INTERFACE:JINJA2CPP_CONTRACT_CHECKS_LEVEL=${_contract_level}>")
+if (JINJA2CPP_LANGUAGE_CONTRACTS)
+    include(CheckCXXCompilerFlag)
+    include(CheckCXXSourceCompiles)
+    check_cxx_compiler_flag("-fcontracts" JINJA2CPP_HAS_FCONTRACTS)
+    check_cxx_source_compiles("int f(int x) { contract_assert(x > 0); return x; } int main() { return f(1) - 1; }" JINJA2CPP_HAS_CONTRACT_ASSERT)
+    if (JINJA2CPP_HAS_CONTRACT_ASSERT OR JINJA2CPP_HAS_FCONTRACTS)
+        message(STATUS "Jinja2C++ language contracts: ON")
+        target_compile_definitions(${LIB_TARGET_NAME} PUBLIC "$<BUILD_INTERFACE:JINJA2CPP_USE_LANGUAGE_CONTRACTS>")
+        if (JINJA2CPP_HAS_FCONTRACTS)
+            target_compile_options(${LIB_TARGET_NAME} PUBLIC "$<BUILD_INTERFACE:-fcontracts>")
+        endif ()
+    else ()
+        message(WARNING "JINJA2CPP_LANGUAGE_CONTRACTS is ON, but this compiler has no contracts (P2900); using the macros' own checks")
+    endif ()
+endif ()
+if (JINJA2CPP_HARDENING)
+    include(hardening)
+    jinja2cpp_apply_hardening(${LIB_TARGET_NAME})
+else ()
+    message(STATUS "Jinja2C++ hardening: off")
+endif ()
 if (JINJA2CPP_BUILD_SHARED)
     target_compile_definitions(${LIB_TARGET_NAME} PRIVATE -DJINJA2CPP_BUILD_AS_SHARED PUBLIC -DJINJA2CPP_LINK_AS_SHARED)
 endif ()
@@ -522,6 +569,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/borrowed_cells_globals_test.cpp
         test/borrowed_cells_test.cpp
         test/containers_api_test.cpp
+        test/contracts_test.cpp
         test/debug_containers_test.cpp
         test/decimal_locale_test.cpp
         test/embedding_lifecycle_reentry_test.cpp

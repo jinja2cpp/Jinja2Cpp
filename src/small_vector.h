@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_SMALL_VECTOR_H
 #define JINJA2CPP_SRC_SMALL_VECTOR_H
 
+#include "contracts.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -154,7 +155,7 @@ public:
     iterator emplace(const_iterator pos, Args&&... args)
     {
         const auto index = static_cast<size_type>(pos - begin());
-        assert(index <= m_size);
+        JINJA2CPP_ASSERT(index <= m_size);
         // Appending first keeps an argument that names an element of this vector valid
         emplace_back(std::forward<Args>(args)...);
         std::rotate(begin() + index, end() - 1, end()); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -165,7 +166,7 @@ public:
     iterator insert(const_iterator pos, size_type count, const T& value)
     {
         const auto index = static_cast<size_type>(pos - begin());
-        assert(index <= m_size);
+        JINJA2CPP_ASSERT(index <= m_size);
         const size_type oldSize = m_size;
         if (count != 0)
         {
@@ -182,7 +183,7 @@ public:
     iterator insert(const_iterator pos, It first, It last)
     {
         const auto index = static_cast<size_type>(pos - begin());
-        assert(index <= m_size);
+        JINJA2CPP_ASSERT(index <= m_size);
         const size_type oldSize = m_size;
         Append(first, last);
         std::rotate(begin() + index, begin() + oldSize, end()); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -193,7 +194,7 @@ public:
     iterator erase(const_iterator pos) { return erase(pos, pos + 1); } // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     iterator erase(const_iterator first, const_iterator last)
     {
-        assert(begin() <= first && first <= last && last <= end());
+        JINJA2CPP_ASSERT(begin() <= first && first <= last && last <= end());
         auto* from = begin() + (first - begin()); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
         auto* to = begin() + (last - begin());    // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
         if (from != to)

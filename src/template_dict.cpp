@@ -1,5 +1,6 @@
 #include "template_dict.h"
 
+#include "contracts.h"
 #include "engine_errors.h"
 #include "host_object.h"
 #include "internal_value.h"
@@ -12,7 +13,6 @@
 
 #include <fmt/format.h>
 
-#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -511,12 +511,13 @@ std::string DictKeyText(const InternalValue& key)
 TemplateDict::TemplateDict(InternalDict&& items)
     : m_items(std::move(items))
 {
-#ifndef NDEBUG
-    for (const auto& item : m_items)
+    if constexpr (detail::ContractChecks >= 2)
     {
-        assert(!NeedsEscape(item.first) && "a name never starts with the mark of a dict key token");
+        for (const auto& item : m_items)
+        {
+            JINJA2CPP_ASSERT(!NeedsEscape(item.first) && "a name never starts with the mark of a dict key token");
+        }
     }
-#endif
 }
 
 TemplateDict::TemplateDict(const TemplateDict& other)

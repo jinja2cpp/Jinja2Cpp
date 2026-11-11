@@ -1,5 +1,6 @@
 #include "node_arena.h"
 
+#include "contracts.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "renderer.h"
@@ -107,7 +108,8 @@ constexpr auto OpsTable = AllNodeClasses::MakeOpsTable();
 
 const NodeOps& OpsOf(NodeKind kind)
 {
-    // Only a node the arena made is relocated or destroyed, and Make records its kind
+    // Only a node the arena made is relocated or destroyed, and Make records its kind. A plain
+    // assert: the destructors' DestroyNodes, which are noexcept, call this (contracts.h)
     assert(kind != NodeKind::None);
     return OpsTable[static_cast<std::size_t>(kind)];
 }
@@ -213,12 +215,12 @@ void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, std::byte* 
         }
         throw;
     }
-    assert(owner == m_owners);
+    JINJA2CPP_ASSERT(owner == m_owners);
 }
 
 SealedArena NodeArena::SealWith(Span<const detail::RootRef> roots)
 {
-    assert(!m_sealed);
+    JINJA2CPP_ASSERT(!m_sealed);
     // Only the parse interns names: the table goes before the sealed buffer comes
     m_heapSymbols.reset();
     const auto layout = detail::LayoutOf(m_used, m_owners);

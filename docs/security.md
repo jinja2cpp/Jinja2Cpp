@@ -42,8 +42,8 @@ apply to both tiers.
   `Result`, code `ResourceLimitExceeded` (18) with the field name in `ExtraParams[1]`; depth
   limits report `RecursionLimitExceeded` (12). Load and Render report errors as a `Result`;
   only `std::bad_alloc` passes through, which the contract reserves for real system memory
-  exhaustion (until [0263](tasks/0263-per-operation-size-checks.md) lands a template can still
-  cause one, see [Known gaps](#known-gaps)).
+  exhaustion: every operation that grows a string or list checks `maxSequenceSize` before it
+  allocates ([0263](tasks/0263-per-operation-size-checks.md)).
 - Counted render work is bounded by `maxRenderSteps`; wall-clock time by `maxRenderTime`, when
   the host sets it. Both are checked between engine steps and are cooperative: a step is not a
   bounded amount of CPU (a filter over a long string is one step), and Load runs under neither.
@@ -177,14 +177,12 @@ text; filter it first if it may hold something the author should not see.
 
 These apply to both tiers. The claims above stop here until these tasks land:
 
-- Not every operation that grows a string or list checks `maxSequenceSize` before
-  allocating (`~` and `+` concatenation, list `+`/`extend`, `join`, `replace`, `%` totals,
-  `lipsum`, `wordwrap`); a template can build large values and run the process out of
-  memory: [0263](tasks/0263-per-operation-size-checks.md).
 - One step, such as a filter over a long string, can overrun `maxRenderTime`:
   [0282](tasks/0282-settings-limits-followups.md).
-- Hardening build flags and fuzz targets for untrusted templates:
-  [0265](tasks/0265-hardening-by-default.md), [0267](tasks/0267-untrusted-mode-fuzzing.md).
+- Fuzz targets for untrusted templates: [0267](tasks/0267-untrusted-mode-fuzzing.md).
+  The library builds with hardening flags by default (`JINJA2CPP_HARDENING`) and its
+  internal invariant checks fail the render, not the process
+  ([0265](tasks/0265-hardening-by-default.md)); a consumer's own build flags are its own.
 - Cancellation, stack bounds for fibers and coroutines, error redaction:
   [0268](tasks/0268-untrusted-mode-followups.md).
 

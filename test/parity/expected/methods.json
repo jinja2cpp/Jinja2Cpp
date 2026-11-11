@@ -486,6 +486,27 @@
    "output": "007"
   },
   {
+   "id": "methods.str_expandtabs",
+   "template": "[{{ 'a\\tbc\\td'.expandtabs(4) }}|{{ 'x\\ty'.expandtabs() }}]",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "[a   bc  d|x       y]"
+  },
+  {
    "id": "methods.str_center",
    "template": "[{{ 'a'.center(5, '*') }}]",
    "context": {

@@ -31,6 +31,9 @@ inline namespace v2
 {
 namespace
 {
+// The widest a width or a "*" argument is taken: one past the hard cap on any sequence, which
+// CheckSequenceSize rejects before padding (docs/tasks/0263); Python pads to any width
+constexpr int64_t MaxWidth = static_cast<int64_t>(MaxSequenceSize) + 1;
 
 std::string Str(const InternalValue& val, bool asRepr = false)
 {
@@ -145,6 +148,7 @@ void AppendPadded(std::string& out, std::string_view body, const Spec& spec, boo
         return;
     }
     auto fill = static_cast<size_t>(spec.width - length);
+    CheckSequenceSize(uint64_t{ out.size() } + body.size() + fill, "a formatted string");
     if (spec.left)
     {
         out.append(body);
@@ -179,6 +183,7 @@ void AppendDigits(std::string& out, bool negative, std::string_view prefix, std:
     size_t precisionZeros = spec.precision > static_cast<int64_t>(digits.size()) ? static_cast<size_t>(spec.precision) - digits.size() : 0;
     auto length = static_cast<int64_t>(sign.size() + prefix.size() + precisionZeros + digits.size());
     auto fill = spec.width > length ? static_cast<size_t>(spec.width - length) : 0;
+    CheckSequenceSize(uint64_t{ out.size() } + static_cast<uint64_t>(length) + fill, "a formatted string");
     if (fill != 0 && !spec.left && !spec.zero)
     {
         out.append(fill, ' ');
@@ -363,12 +368,13 @@ public:
 private:
     [[nodiscard]] char Peek() const { return m_pos < m_format.size() ? m_format[m_pos] : '\0'; }
 
-    int64_t Number()
+    // Clamped to `limit`, so that a long run of digits does not overflow
+    int64_t Number(int64_t limit = int64_t{ 1 } << 20)
     {
         int64_t result = 0;
         while (Peek() >= '0' && Peek() <= '9')
         {
-            result = std::min<int64_t>((result * 10) + (m_format[m_pos++] - '0'), 1 << 20);
+            result = std::min<int64_t>((result * 10) + (m_format[m_pos++] - '0'), limit);
         }
         return result;
     }
@@ -435,7 +441,7 @@ private:
         }
         else if (Peek() >= '0' && Peek() <= '9')
         {
-            m_directive.width = Number();
+            m_directive.width = Number(MaxWidth);
         }
         if (Peek() == '.')
         {
@@ -583,7 +589,11 @@ public:
     {
         std::string result;
         result.reserve(format.size() + 16);
-        ParsePercentFormat(format, [&](const PercentDirective& directive) { Directive(format, directive, result); });
+        ParsePercentFormat(format, [&](const PercentDirective& directive) {
+            Directive(format, directive, result);
+            // One directive adds at most a clamped width, so the total is checked after each (docs/tasks/0263)
+            CheckSequenceSize(result.size(), "a formatted string");
+        });
         return Finish(std::move(result));
     }
 
@@ -594,6 +604,7 @@ public:
         for (const auto& directive : directives)
         {
             Directive(format, directive, result);
+            CheckSequenceSize(result.size(), "a formatted string");
         }
         return Finish(std::move(result));
     }
@@ -646,7 +657,7 @@ private:
         // Clamped like a literal width, so a huge or INT64_MIN star neither allocates nor overflows on negation
         if (const auto* i = GetIf<int64_t>(&val))
         {
-            return std::max<int64_t>(-(1 << 20), std::min<int64_t>(*i, 1 << 20));
+            return std::max<int64_t>(-MaxWidth, std::min<int64_t>(*i, MaxWidth));
         }
         if (const auto* b = GetIf<bool>(&val))
         {
@@ -728,7 +739,9 @@ private:
         }
         if (directive.precisionStar)
         {
-            spec.precision = std::max<int64_t>(0, StarArg());
+            // A "*" precision is clamped like a literal one (2**20, Number), not to MaxWidth: the
+            // float conversion formats the digits before any size check (Codex on #829)
+            spec.precision = std::clamp<int64_t>(StarArg(), 0, int64_t{ 1 } << 20);
         }
         if (directive.error == PercentDirective::Error::IncompleteAfterSpec)
         {

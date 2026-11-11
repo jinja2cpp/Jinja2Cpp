@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_PARSER_H
 #define JINJA2CPP_SRC_TEMPLATE_PARSER_H
 
+#include "contracts.h"
 #include "error_handling.h"
 #include "expression_evaluator.h"
 #include "expression_parser.h"
@@ -30,7 +31,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -256,7 +256,7 @@ public:
     // The body that starts at `start`, as a node; its children leave the list
     JINJA2CPP_HOT_INLINE NodeRef<ComposedRenderer> Take(NodeArena& nodes, std::uint32_t start)
     {
-        assert(start <= m_size);
+        JINJA2CPP_ASSERT(start <= m_size);
         const std::size_t count = m_size - start;
         const Item* const items = m_data + start;
         auto body = nodes.MakeWithItems<ComposedRenderer, Child, std::uint32_t>(

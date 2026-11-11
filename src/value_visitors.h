@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_VALUE_VISITORS_H
 #define JINJA2CPP_SRC_VALUE_VISITORS_H
 
+#include "contracts.h"
 #include "big_int.h"
 #include "decimal_number.h"
 #include "expression_evaluator.h"
@@ -27,7 +28,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -177,7 +177,7 @@ private:
     template<size_t... indices, typename... Args>
     [[nodiscard]] auto Call(std::index_sequence<indices...> /*sequence*/, const Args&... args) const
     {
-        assert(m_visitor != nullptr);
+        JINJA2CPP_ASSERT(m_visitor);
         return [this](const auto&... unwrapped) { return (*m_visitor)(unwrapped...); }(UnwrapRecursive(args, m_owners[indices])...);
     }
 };
@@ -217,19 +217,19 @@ struct BaseVisitor
 {
     R operator()(const GenericMap&) const
     {
-        assert(false);
+        JINJA2CPP_ASSERT(false);
         return R();
     }
 
     R operator()(const GenericList&) const
     {
-        assert(false);
+        JINJA2CPP_ASSERT(false);
         return R();
     }
 
     R operator()(const ValueRef&) const
     {
-        assert(false);
+        JINJA2CPP_ASSERT(false);
         return R();
     }
 
@@ -1942,6 +1942,7 @@ struct BinaryMathOperation : BaseVisitor<>
         switch (m_oper)
         {
         case jinja2::BinaryExpression::Plus:
+            CheckSequenceSize(uint64_t{ left.size() } + right.size(), "a string");
             result = InternalValue::FromText<CharT>({ left, right });
             break;
         case jinja2::BinaryExpression::LogicalEq:
@@ -2145,6 +2146,8 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             throw ResourceLimitError("repeated list is too long");
         }
+        // The result is lazy, but a template can still walk or copy it (docs/tasks/0263)
+        CheckSequenceSize(size * static_cast<uint64_t>(count > 0 ? count : 0), "a repeated list");
         const auto listSize = size * static_cast<size_t>(count > 0 ? count : 0);
         auto result = ListAdapter::CreateAdapter(listSize, [size, values = std::move(values)](size_t idx) { return values[idx % size]; });
         if (list.IsTuple())

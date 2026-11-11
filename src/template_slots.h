@@ -1,11 +1,11 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_SLOTS_H
 #define JINJA2CPP_SRC_TEMPLATE_SLOTS_H
 
+#include "contracts.h"
 #include "node_arena.h"
 #include "engine_errors.h"
 #include "small_vector.h"
 
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -31,7 +31,7 @@ public:
     TemplateHandle(std::uint32_t slot, std::uint8_t generation)
         : m_value((slot << 8) | generation)
     {
-        assert(slot < MaxSlots);
+        JINJA2CPP_ASSERT(slot < MaxSlots);
     }
 
     [[nodiscard]] std::uint32_t Slot() const { return m_value >> 8; }

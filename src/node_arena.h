@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_NODE_ARENA_H
 #define JINJA2CPP_SRC_NODE_ARENA_H
 
+#include "contracts.h"
 #include "small_vector.h"
 #include "span.h"
 
@@ -343,7 +344,7 @@ public:
     [[nodiscard]] T& Get(NodeRef<U> ref) const
     {
         const auto node = As<T>(ref);
-        assert(node);
+        JINJA2CPP_ASSERT(node);
         return Self()[node];
     }
 
@@ -732,7 +733,7 @@ struct SealedLayout
 inline SealedLayout LayoutOf(std::uint32_t size, std::uint32_t objects)
 {
     // The arena rounds every allocation up to 8 bytes
-    assert(size % sizeof(std::uint64_t) == 0);
+    JINJA2CPP_ASSERT(size % sizeof(std::uint64_t) == 0);
     const std::size_t words = NodeRefChecks >= 1 ? BitWords(size) : 0;
     SealedLayout layout{};
     layout.starts = size;
@@ -767,7 +768,7 @@ public:
         {
             CheckRef(ref);
         }
-        assert(ref && InRange(ref.m_offset, sizeof(T)));
+        JINJA2CPP_ASSERT(ref && InRange(ref.m_offset, sizeof(T)));
         return *std::launder(reinterpret_cast<T*>(m_base + ref.m_offset));
     }
 
@@ -779,7 +780,7 @@ public:
             CheckSpan(list);
         }
         // An empty list has offset 0, which is still inside the buffer: no branch
-        assert(list.empty() ? list.m_offset == 0 : InRange(list.m_offset, list.m_size * sizeof(T)));
+        JINJA2CPP_ASSERT(list.empty() ? list.m_offset == 0 : InRange(list.m_offset, list.m_size * sizeof(T)));
         return Span<const T>(std::launder(reinterpret_cast<const T*>(m_base + list.m_offset)), list.m_size);
     }
 
@@ -1137,7 +1138,7 @@ public:
     template<typename T>
     ArenaSpan<T> MakeSpan(Span<const T> items)
     {
-        assert(!m_sealed);
+        JINJA2CPP_ASSERT(!m_sealed);
         if (items.empty())
         {
             return {};
@@ -1161,7 +1162,7 @@ public:
     ArenaSymbol Intern(std::string_view name, std::size_t hash, const NewSlot& newSlot)
     {
         // The table points into the blocks, which Seal frees
-        assert(!m_sealed);
+        JINJA2CPP_ASSERT(!m_sealed);
         if (name.empty())
         {
             return { ArenaText(), hash, newSlot() };
@@ -1236,7 +1237,7 @@ public:
                 }
             }
         }
-        assert(ref);
+        JINJA2CPP_ASSERT(ref);
         return *std::launder(reinterpret_cast<T*>(Locate(ref.m_offset)));
     }
     template<typename T>
@@ -1294,12 +1295,12 @@ private:
     {
         static_assert(std::is_base_of_v<ArenaNode, T>, "an arena node starts with the ArenaNode header");
         static_assert(alignof(T) <= Alignment, "the arena aligns nodes to 8 bytes");
-        assert(!m_sealed);
+        JINJA2CPP_ASSERT(!m_sealed);
         // Only what owns something is destroyed: the other nodes are left as they are
         constexpr bool owns = !detail::IsTriviallyDestructibleNode<T>;
         if constexpr (!std::is_base_of_v<ArenaObjectBase, T>)
         {
-            assert(detail::OpsOf(T::Kind).relocate == &detail::Relocate<T>);
+            JINJA2CPP_ASSERT(detail::OpsOf(T::Kind).relocate == &detail::Relocate<T>);
         }
         // Room for the records first, so that they cannot fail once the node exists; a node
         // that throws from its constructor leaves only unused bytes behind
@@ -1364,7 +1365,7 @@ private:
     // Where the object at `offset` is while the arena is built
     [[nodiscard]] std::byte* Locate(std::uint32_t offset) const
     {
-        assert(offset >= sizeof(detail::ArenaHeader) && offset < m_used);
+        JINJA2CPP_ASSERT(offset >= sizeof(detail::ArenaHeader) && offset < m_used);
         const auto& last = m_blocks.back();
         if (offset >= last.start)
         {

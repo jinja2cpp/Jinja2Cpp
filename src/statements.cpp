@@ -1,5 +1,6 @@
 #include "statements.h"
 
+#include "contracts.h"
 #include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
@@ -34,7 +35,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -1401,7 +1401,7 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     if (HasSlots())
     {
         // Every unit with slotted loops takes its frame when it is called (UnitCall)
-        assert(values.Frame().unit == m_unit);
+        JINJA2CPP_ASSERT(values.Frame().unit == m_unit);
         RenderLoopInSlots(loopVal, os, values);
         return;
     }
@@ -2822,7 +2822,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
         const auto parent = values.GetRendererCallback()->Templates().Resolve(frame.parent);
         const ArenaSwitch nodesSwitch(values, parent.nodes);
         // A template that extends another has a stack of its own
-        assert(stack);
+        JINJA2CPP_ASSERT(stack);
         parent.node.RenderAsParent(os, values, *stack, name);
     }
     if (values.KeepsClosures())

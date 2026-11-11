@@ -60,9 +60,9 @@ bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_
     {
         return false;
     }
-    if (collector->m_externalKept)
+    if (collector->m_module)
     {
-        collector->m_externalKept->Keep(std::move(object), std::move(owner));
+        collector->m_module->kept.Keep(std::move(object), std::move(owner));
         return true;
     }
     if (!collector->m_notes)
@@ -90,9 +90,9 @@ BorrowedCells* CycleCollector::CellsForWrite()
     {
         return nullptr;
     }
-    if (collector->m_external)
+    if (collector->m_module)
     {
-        return collector->m_external;
+        return &collector->m_module->cells;
     }
     if (!collector->m_notes)
     {
@@ -203,17 +203,25 @@ void CycleCollector::Collect() noexcept
 
 namespace
 {
+// Whether `object` is one of `live`, sorted: held by what outlives the walk (ModuleScope::LiveRootsFn)
+bool IsLive(const std::vector<const ValueObject*>& live, const ValueObject* object)
+{
+    return !live.empty() && std::binary_search(live.begin(), live.end(), object);
+}
+
 // The walk of CollectOnce from `candidates` and `roots`, which it empties, or, with `keepRoots`,
 // leaves with the roots that are not garbage: the garbage among what they reach is emptied, which
-// breaks its cycles. Throws std::bad_alloc, and then changes nothing
-void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots, bool keepRoots = false)
+// breaks its cycles. The objects in `live` (sorted) are held from outside and are not walked into:
+// none of what they reach is garbage, and what the walk finds that only they hold counts as held
+// from outside, which it is. Throws std::bad_alloc, and then changes nothing
+void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots, bool keepRoots = false, const std::vector<const ValueObject*>& live = {})
 {
     std::unordered_map<const ValueObject*, Node> nodes;
     // In the order found: `order` grows while it is walked
     std::vector<Node*> order;
-    auto visit = [&nodes, &order](const ValueObject* object) {
+    auto visit = [&nodes, &order, &live](const ValueObject* object) {
         // Strings, numbers and host adapters hold no template value
-        if (!object->IsTraversable())
+        if (!object->IsTraversable() || IsLive(live, object))
         {
             return;
         }
@@ -251,8 +259,8 @@ void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObje
             pending.push_back(node);
         }
     }
-    auto markReachable = [&nodes, &pending](const ValueObject* object) {
-        if (!object->IsTraversable())
+    auto markReachable = [&nodes, &pending, &live](const ValueObject* object) {
+        if (!object->IsTraversable() || IsLive(live, object))
         {
             return;
         }
@@ -343,7 +351,13 @@ void CycleCollector::CollectOnce()
     {
         return;
     }
-    WalkAndClear(candidates, roots);
+    std::vector<const ValueObject*> live;
+    if (m_module && m_module->liveRoots)
+    {
+        m_module->liveRoots(m_module->state, live);
+        std::sort(live.begin(), live.end());
+    }
+    WalkAndClear(candidates, roots, false, live);
 }
 
 } // namespace v2
