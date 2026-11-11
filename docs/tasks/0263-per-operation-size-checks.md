@@ -1,10 +1,11 @@
 ---
-status: open
+status: in-progress
 priority: high
 area: robustness
 depends: [0262]
 touches: [src/value_methods.cpp, src/value_visitors.h, src/python_format.cpp, src/expression_evaluator.cpp, src/filters.cpp, src/global_functions.cpp, src/string_converter_filter.cpp, test/recursion_limits_test.cpp]
 shares: [src/internal_value.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/829
 ---
 # Every growth operation checks its size before allocating
 

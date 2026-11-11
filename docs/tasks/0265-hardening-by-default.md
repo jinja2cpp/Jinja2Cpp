@@ -1,9 +1,10 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: build
 touches: [CMakeLists.txt, cmake/, .github/workflows/, src/contracts.h, src/contracts.cpp]
 shares: [src/node_ref.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/829
 ---
 # Build hardening on by default; invariant checks that fail the render, not the process
 

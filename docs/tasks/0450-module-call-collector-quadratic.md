@@ -1,10 +1,11 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: [0444]
 touches: [src/template_module.cpp, src/cycle_collector.cpp]
 shares: [test/template_module_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/829
 ---
 # A module whose calls grow a module-level container walks all of it on every call
 
