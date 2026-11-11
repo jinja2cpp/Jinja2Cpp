@@ -535,7 +535,9 @@ public:
 // registry in use (CycleCollector::CurrentCells), so that finding it costs a render nothing more,
 // and releases its own before it walks: what detaching the adapters frees needs no walk. A render
 // started inside another one on the same thread (a user callable rendering a template) has its
-// own: it sees the outer render's cells only through the values passed to it, as in Python
+// own: it sees the outer render's cells through the values passed to it, as in Python, and
+// through the globals' adapters of the outer render's snapshot, which it shares when it has the
+// same environment (docs/tasks/0324); a global it writes first gets a cell of its own (0463)
 class BorrowedCells
 {
 public:

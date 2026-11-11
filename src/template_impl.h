@@ -138,7 +138,8 @@ inline std::shared_ptr<const GlobalsSnapshot>& ThreadGlobalsSnapshot()
 // The globals of `env` for a render on this thread: converted again only when they changed since
 // the last render here, or a render changed one in place. The render holds the result, which a
 // render it starts may replace. A render that attached a global to one of its cells keeps its
-// snapshot, and one it starts converts its own
+// snapshot; one it starts with the same environment and generation reads that snapshot, and a
+// later one converts its own
 inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::TemplateEnvImpl& env)
 {
     auto& workspace = RenderWorkspace::ForThisThread();

@@ -22,7 +22,9 @@ env.AddGlobal("nested", jinja2::MakeCallable([&] { return inner.RenderAsString({
 // renders "{{ g }}{{ nested() }}|{{ g }}"
 ```
 
-Python prints `[0][0, 5]|[0, 5]`; Jinja2C++ prints `[0][0, 5]|[0]`. A loop over `g` in the outer
+Python prints `[0][0, 5]|[0, 5]`; Jinja2C++ prints `[0][0, 5]|[0]`. The same holds when the outer
+render only aliased the global before the call (`{% set y = g %}{{ nested() }}{% do y.append(1) %}{{ y }}`
+with an empty `g` and a nested `g.append(4)`: Python `[4, 1]`, here `[1]`). A loop over `g` in the outer
 render that calls `nested()` in its body runs once here, where Python's sees the appended items.
 
 **Proposal.** A nested render that shares the outer render's snapshot also promotes the cells of
@@ -31,6 +33,14 @@ data (`IsGlobalData`) go to the registry of the outermost render that owns the s
 other data (params, which `BorrowedCellsSingle.NestedRenderHasItsOwnCells` keeps per render) stays
 in the nested render's registry. Check it against the cell model (0338): the cell outlives the
 nested render, and its links detach when the outer render ends.
+
+Related gaps seen by the 0324 verifier, same on master or new with 0324 but memory-safe:
+- A host callable that calls `env.AddGlobal` mid-render moves the globals generation, so a render
+  it then nests converts fresh globals and misses the outer render's in-place change (Python keeps
+  one dict). Leave it, or match on the snapshot's source map instead of the generation.
+- A macro that a nested render stores into the outer render's global, called by the outer render
+  after the nested one ended, reports its closure variable undefined (Python reads it); compare
+  0326 (closures of an ended frame).
 
 **Done when.** The reproducer prints `[0][0, 5]|[0, 5]`, a render after it sees `g` as `[0]`, and
 `NestedRenderHasItsOwnCells` still passes.
