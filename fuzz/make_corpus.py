@@ -7,6 +7,10 @@ include), the template literals of the unit tests (test/*.cpp), test/test_data a
 regression inputs in fuzz/regressions/. Files are named by content hash, as libFuzzer
 names its own, so re-running the script into a grown corpus only adds what is missing.
 
+--generated N adds N templates of the grammar in generate_templates.py (docs/tasks/0095), with a
+fixed seed so that every run writes the same ones: they give the structure-aware mutator deep,
+well-formed templates to start from.
+
 The untrusted, host, loader and alloc_failure targets read a few bytes before the template
 (fuzz_common.h, docs/tasks/0267); --prefix TARGET writes each seed with the default bytes and
 once more with bytes picked from its hash, its delimiters rewritten to the ones they select.
@@ -18,6 +22,8 @@ import json
 import pathlib
 import re
 import sys
+
+import generate_templates
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MAX_SIZE = 4096  # fuzz_common.h MaxInputSize
@@ -102,12 +108,16 @@ def main():
                         help="write the seeds for this target, with its prefix bytes")
     parser.add_argument("--parity-only", action="store_true",
                         help="only the parity corpus: differential.py --known skips what it already covers")
+    parser.add_argument("--generated", type=int, default=0, metavar="N",
+                        help="add N templates from generate_templates.py (not with --parity-only)")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
     sources = [parity_templates()]
     if not args.parity_only:
         sources += [unit_test_templates(), file_templates(ROOT / "test/test_data"), file_templates(ROOT / "fuzz/regressions")]
+        # Not filtered through Python Jinja2, so the seeds do not depend on it being installed
+        sources.append(generate_templates.generate(args.generated, generate_templates.DEFAULT_SEED, lambda source: True))
     added = total = 0
     for source in sources:
         for item in source:

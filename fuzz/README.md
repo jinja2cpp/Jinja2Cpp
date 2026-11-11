@@ -17,10 +17,12 @@ Python Jinja2.
 | `fuzz_host.cpp` | `jinja2cpp_fuzz_host`: the same with host data: reflected structs (nested by `shared_ptr`, lists of them), reflected vectors, a generated list, callables with typed, `*args`, `**kwargs` and `*context` parameters, one returning a fresh host object, one throwing, host filters and tests |
 | `fuzz_loader.cpp` | `jinja2cpp_fuzz_loader`: templates on disk. The second byte picks `RealFileSystem` over a plain root or `ConfinedFileSystem` over one with links out of it; canary files outside the roots get new text for each input, and that text in the output aborts |
 | `alloc_failure_target.cpp`, `fuzz_alloc_failure.cpp` | `jinja2cpp_fuzz_alloc_failure`: the first two bytes (little-endian) pick an allocation to fail during Load and Render, the third the settings. Each call must return or throw `std::bad_alloc`; when the failure fired and no `bad_alloc` came out the outcome must not change, and the template and environment must render as before afterwards. It replaces the global `operator new`, so its replay is `jinja2cpp_fuzz_alloc_replay` |
+| `template_mutator.h`, `template_mutator.cpp` | The structure-aware mutator and crossover of the template targets (`parse`, `render`, `render_wide`, `untrusted`, `host`, `loader`, `alloc_failure`; docs/tasks/0095), below |
+| `generate_templates.py` | Writes well-formed templates from a grammar over the context of `differential.py`, all parsed by Python Jinja2 first: inputs for the differential check and seeds for the mutator |
 | `replay_corpus.py` | Runs a libFuzzer target once over a corpus, carrying on past timeouts and crashes (the pull-request mode) |
-| `replay_main.cpp` | `jinja2cpp_fuzz_replay`: runs all targets over files without libFuzzer (any compiler); `--json` prints render outcomes |
+| `replay_main.cpp` | `jinja2cpp_fuzz_replay`: runs all targets over files without libFuzzer (any compiler); `--json` prints render outcomes; `--mutate N` runs the mutator N times over each file and its mutants through the parse, untrusted and host targets (ctest `jinja2cpp_fuzz_mutator_smoke`) |
 | `regressions/` | One input per crash ever found; ctest `jinja2cpp_fuzz_regressions` replays them in every CI build |
-| `make_corpus.py` | Seed corpus: parity cases, unit-test template literals, `test/test_data`, `regressions/`; `--prefix TARGET` adds the bytes the limits-on targets read first (each seed with the default bytes and with bytes from its hash, its delimiters rewritten to match) |
+| `make_corpus.py` | Seed corpus: parity cases, unit-test template literals, `test/test_data`, `regressions/`; `--generated N` adds N templates of `generate_templates.py` (a fixed seed); `--prefix TARGET` adds the bytes the limits-on targets read first (each seed with the default bytes and with bytes from its hash, its delimiters rewritten to match) |
 | `jinja2.dict` | Dictionary of Jinja2 syntax, statements, filters and tests |
 | `differential.py` | Renders a corpus with Jinja2C++ and Python Jinja2 and reports where they disagree |
 
@@ -41,6 +43,22 @@ build-fuzz/fuzz/jinja2cpp_fuzz_render corpus/render -dict=fuzz/jinja2.dict -max_
 A crash leaves `artifacts/crash-<sha1>`; reproduce it with
 `build-fuzz/fuzz/jinja2cpp_fuzz_render artifacts/crash-<sha1>`. In the cloud sessions
 pass `-C "$JINJA2CPP_CMAKE_INIT"` to the configure step (CLAUDE.md).
+
+## Structure-aware mutation
+
+Byte mutants of a template mostly break its syntax and stop in the lexer or the parser's error
+paths. The template targets define `LLVMFuzzerCustomMutator` and `LLVMFuzzerCustomCrossOver`
+(`template_mutator.h`), which split the template, after the target's prefix bytes and with the
+delimiters its settings byte picks, into text, `{{ }}`, `{% %}` and `{# #}` pieces and mutate
+whole pieces: duplicate, swap or delete a run of whole statements, replace an expression with one
+of the input, of the crossover partner or of a pool over the fuzz context, wrap a run in
+`if`/`for`/`with`/`macro`/`call`/`filter`/`block`/`set`/`autoescape`/`raw`/`trans`, insert
+`extends`, `include`, `import`, `break` and friends, and close the statements left open. A quarter
+of the mutations, and one kind of piece mutation, still go to libFuzzer's byte mutator
+(`LLVMFuzzerMutate`), so byte-level coverage is kept; crossover splices runs of statements of two
+inputs. `JINJA2CPP_FUZZ_MUTATOR=bytes` turns all of it off, for comparing the two in one time
+budget (`mutator: bytes` on a manual run of the fuzz workflow); pass `-len_control=100` then,
+which libFuzzer otherwise turns off when a custom mutator is defined.
 
 ## When a fuzzer finds a crash
 
@@ -70,6 +88,15 @@ python3 fuzz/differential.py build/jinja2cpp_fuzz_replay corpus/render \
   --known seeds-parity --out differential.md
 ```
 
+Generated templates go through the same check; each of them parses in Python, so a difference
+is a divergence rather than an input both engines reject, and the report gives the share both
+engines render:
+
+```bash
+python3 fuzz/generate_templates.py generated --count 5000 --seed 1
+python3 fuzz/differential.py build/jinja2cpp_fuzz_replay generated --out generated.md
+```
+
 It needs Python Jinja2 (`pip install -r test/parity/requirements.txt`, Python 3.12 like the
 parity corpus). Inputs the parity corpus already covers (`--known`) and invalid UTF-8 are
 skipped. A divergence worth keeping becomes a parity case (`test/parity/cases/`), listed in
@@ -87,7 +114,8 @@ skipped. A divergence worth keeping becomes a parity case (`test/parity/cases/`)
   fuzzer mutates the corpus for an hour per target, keeps the minimized corpus in the
   Actions cache for the next runs, and runs the differential check (report only). A crash
   it finds fails that run and uploads its reproducer; fix it or file it as a task, and add
-  the input to `regressions/`, which every build replays.
+  the input to `regressions/`, which every build replays. The differential job also renders
+  5000 generated templates, with the run number as the grammar's seed.
 
 Replay the corpus locally the way a pull request does:
 
