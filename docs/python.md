@@ -451,8 +451,11 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   source order, `None` for a name that is not a literal.
 - `generate()` runs the whole template at the first item, where Jinja2 runs it item by item (0457).
   Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here three), and
-  yields `super()`, `self.block()` and a recursive loop's call as one item, and an empty `{{ }}` as
-  `''` (0456).
+  yields `super()`, `self.block()` and a recursive loop's call as one item, a macro's output of
+  more than 512 characters as one item, and an empty `{{ }}` as `''` (0456).
+- A Python loader's `get_source` runs again when a template it gave fails to compile, to show
+  the line of the error (twice more with the default fallback, which loads it through Jinja2);
+  Jinja2 calls it once.
 - Tracebacks name the classes `jinja2cpp.exceptions.*`, where Jinja2's say `jinja2.exceptions.*`
   (0432). They show the template's file and line as a frame, as Jinja2's do: the line of the call
   for an error a callable raised, and the line of a syntax error.

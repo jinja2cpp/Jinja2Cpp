@@ -32,6 +32,18 @@ def test_an_error_comes_after_the_items_before_it_and_ends_the_generator():
     assert list(generator) == []
 
 
+@pytest.mark.parametrize("exception", [KeyboardInterrupt, SystemExit])
+def test_a_base_exception_comes_after_the_items_before_it(exception):
+    def fail():
+        raise exception()
+
+    got = []
+    with pytest.raises(exception):
+        for item in jinja2cpp.Environment().from_string("a{{ x }}b{{ fail() }}c").generate(x=1, fail=fail):
+            got.append(item)
+    assert got == ["a", "1", "b"]
+
+
 def test_stream_buffers_the_items():
     source = "{% for i in range(300) %}{{ i }}-{% endfor %}"
     stream = jinja2cpp.Template(source).stream()

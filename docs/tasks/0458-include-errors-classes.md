@@ -18,6 +18,10 @@ shares: [test/includes_test.cpp, python/tests/test_errors.py]
   message is `None`.
 - `{% include 5 %}` is a TypeError in Jinja2, `{% include none %}` TemplatesNotFound; here both are
   TemplateRuntimeError.
+- A loader whose `get_source` raises `TemplateNotFound(name, "custom message")` (a
+  `FileSystemLoader` subclass, or any Python loader) loses its message: the module raises
+  `'x' not found in search path: ...` for a FileSystemLoader subclass and the bare name for others,
+  where Jinja2 passes the loader's own exception through (0436 verifier round 2).
 - `{{ dict(5) }}` is a TypeError and `{{ [1]|xmlattr }}` an AttributeError in Jinja2; here
   TemplateRuntimeError.
 

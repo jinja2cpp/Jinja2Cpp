@@ -19,12 +19,19 @@ Jinja2 3.1.6 (checked with the pinned oracle):
   Jinja2 and yielded as one item; here each piece is an item.
 - `{{ self.b() }}` is one item in Jinja2 (`A5B`), three here.
 - Text split by a comment (`a{# c #}b`) or by `{% raw %}` is one item in Jinja2, two here.
+- Constants of other types fold too: `{{ none }}{{ true }}{{ 1.5 }}` is one item in Jinja2, three
+  here; under autoescape `{{ '<' }}a{{ '<' }}` is one item, three here.
 - `{{ x }}` of an empty value (an undefined name) is an item `''` in Jinja2; the sink never gets an
-  empty write, so no item here.
+  empty write, so no item here. The same for an empty macro call (`{{ m() }}`), an empty filter
+  block, `{{ '' }}` and `{{ x if not x }}`.
+- A macro or call block whose output is longer than the stream's 512-character buffer is one item
+  in Jinja2 and several here (the buffer flushes when full; found by the 0436 verifier round 2):
+  a 900-character macro gives `[384, 384, 132]`.
 
 **Proposal.** Hold the piece flush (`OutStream::PieceHold`) in `super()` and in a recursive loop's
 body, and mark constant-folded runs when the parser merges them (or merge adjacent constant
-nodes at parse time, which also helps the render). Add the three cases to
+nodes at parse time, which also helps the render). Let a held piece grow past the buffer (or hand the sink the held run in one
+call). Add the cases to
 `OutputTest.SinkGetsEachPieceWhenAsked` and python/tests/test_generate.py.
 
 **Done when.** These cases yield Jinja2's items through `generate()`.

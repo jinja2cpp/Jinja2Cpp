@@ -201,7 +201,7 @@ class Template(_jinja2cpp.Template):
         error: t.Optional[BaseException] = None
         try:
             self._render_to(items.append, *args, **kwargs)
-        except Exception as raised:  # noqa: BLE001 - raised again after the items before it
+        except BaseException as raised:  # noqa: BLE001 - raised again after the items before it
             error = raised
         yield from items
         if error is not None:

@@ -118,8 +118,9 @@ struct RenderOptions
      * A render to a sink (\ref BasicOutputSink) calls `Write` once for each piece of output the
      * template makes, in the order Jinja2's `Template.generate()` yields them: a run of template
      * text, the value of a `{{ }}`, a block or macro call's output where Jinja2 writes it as one
-     * item. False, the default, gathers the pieces into chunks of up to 512 characters, which
-     * costs one call a chunk. A render to a string ignores it.
+     * item (an output longer than the 512-character buffer arrives in several pieces). False, the
+     * default, gathers the pieces into chunks of up to 512 characters, which costs one call a
+     * chunk. A render to a string ignores it.
      */
     bool writeEachPiece = false;
 };
