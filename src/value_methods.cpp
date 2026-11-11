@@ -1039,27 +1039,32 @@ struct StrOps
         CheckArgs(params, "translate", 1, 1);
         const auto& table = params.posParams[0];
         Str result;
+        // Each piece is checked against the sequence cap before it is appended, so a large
+        // replacement never builds an oversized result first
+        auto append = [&result](View piece) {
+            CheckSequenceSize(static_cast<uint64_t>(result.size()) + piece.size(), "a translated string");
+            result.append(piece);
+        };
         // A str table is split once: indexing it per character would rescan it each time
         if (IsStringValue(table))
         {
             const auto tableStr = StrArg(self, table, "translate");
             const auto tableChars = SplitCodePoints(View(tableStr));
-            ForEachCodePoint(self, [&result, &tableChars](View ch) {
+            ForEachCodePoint(self, [&append, &tableChars](View ch) {
                 const auto cp = CodePointValue(ch);
-                result.append(cp < tableChars.size() ? tableChars[cp] : ch);
-                CheckSequenceSize(result.size(), "a translated string");
+                append(cp < tableChars.size() ? tableChars[cp] : ch);
             });
             return Result(std::move(result));
         }
-        ForEachCodePoint(self, [&result, &table, &self, &context](View ch) {
+        ForEachCodePoint(self, [&result, &append, &table, &self, &context](View ch) {
             const auto mapped = TranslateLookup(table, CodePointValue(ch), context);
             if (!mapped)
             {
-                result.append(ch);
+                append(ch);
             }
             else if (IsStringValue(*mapped))
             {
-                result += StrArg(self, *mapped, "translate");
+                append(StrArg(self, *mapped, "translate"));
             }
             else if (mapped->Kind() == ValueKind::Int || mapped->Kind() == ValueKind::Bool || mapped->Kind() == ValueKind::BigInt)
             {
@@ -1069,13 +1074,13 @@ struct StrOps
                 {
                     Raise("character mapping must be in range(0x110000)"s);
                 }
+                CheckSequenceSize(static_cast<uint64_t>(result.size()) + EncodedUnits<CharT>(static_cast<uint32_t>(cp)), "a translated string");
                 AppendCodePoint(result, static_cast<uint32_t>(cp));
             }
             else if (!mapped->IsNone())
             {
                 Raise("character mapping must return integer, None or str"s);
             }
-            CheckSequenceSize(result.size(), "a translated string");
         });
         return Result(std::move(result));
     }

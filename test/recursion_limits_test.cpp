@@ -452,6 +452,7 @@ TEST_F(RecursionLimitsTest, GrowthOperationsCheckSizeFirst)
         "{{ ('\\t' * 1000).expandtabs(2**20) }}",
         "{{ ('\\t' * 300).expandtabs(4) }}",
         "{{ ('x' * 600).translate({120: 'yy'}) }}",
+        "{{ 'aa'.translate({97: 'x' * 600}) }}",
     };
     for (const auto& source : templates)
     {
