@@ -1,9 +1,10 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: robustness
 depends: [0332, 0335]
 touches: [src/borrowed_cells.cpp, src/internal_value.cpp, test/borrowed_cells_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/836
 ---
 # Module cells reached through a lazy list or a namespace are not pinned
 

@@ -5,8 +5,10 @@ Renders every input of a corpus directory with Jinja2C++ (jinja2cpp_fuzz_replay 
 same environment and context as the fuzz_render target) and with Python Jinja2, and reports
 where they disagree: different output, or one side rendering what the other rejects.
 Crashes are the fuzzers' job; this finds behaviour gaps the parity corpus does not cover yet.
+The corpus may be a fuzz corpus or templates from fuzz/generate_templates.py (docs/tasks/0095); the
+report gives the share of inputs that both engines render, the inputs that teach the check most.
 
-    python3 fuzz/differential.py build/jinja2cpp_fuzz_replay CORPUS_DIR [--out report.md]
+    python3 fuzz/differential.py build/jinja2cpp_fuzz_replay CORPUS_DIR [--out report.md] [--title TITLE]
 """
 import argparse
 import collections
@@ -20,8 +22,8 @@ import sys
 import jinja2
 import jinja2.ext
 
-# Mirrors fuzz/fuzz_common.h: AddSupportTemplates, ConfigureEnv and MakeContext. `d` is in
-# key order: ValuesMap sorts its keys (docs/tasks/0043), which is not what this check is after.
+# Mirrors fuzz/fuzz_common.h: AddSupportTemplates, ConfigureEnv and MakeContext. `d` keeps the
+# insertion order of MakeContext, as ValuesMap does since docs/tasks/0043.
 SUPPORT_TEMPLATES = {
     "base": "<{% block content %}base{% endblock %}|{% block other %}{% endblock %}>",
     "header": "[{{ foo }}|{{ bar }}]",
@@ -29,7 +31,7 @@ SUPPORT_TEMPLATES = {
 }
 CONTEXT = {
     "x": 3, "neg": -3, "y": 2.567, "s": "Hello World", "l": [3, 1, 2], "dup": [3, 1, 3, 2, 1],
-    "words": ["b", "A", "c"], "d": {"C": 3, "a": 1, "b": 2}, "e": [], "n": None, "t": True,
+    "words": ["b", "A", "c"], "d": {"b": 2, "a": 1, "C": 3}, "e": [], "n": None, "t": True,
     "html": "<b>Tom & \"Jerry\"</b>",
     "users": [{"name": "bob", "age": 30}, {"name": "alice", "age": 25, "city": "Rome"}],
     "foo": 42, "ws": "wide é",
@@ -97,6 +99,7 @@ def main():
     parser.add_argument("corpus", type=pathlib.Path)
     parser.add_argument("--out", type=pathlib.Path, help="write the divergent inputs to this markdown report")
     parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--title", default="Differential fuzzing report", help="heading of the report")
     parser.add_argument("--known", type=pathlib.Path, action="append", default=[],
                         help="corpus whose inputs are not reported, e.g. the seeds: parity cases already list theirs")
     args = parser.parse_args()
@@ -128,6 +131,7 @@ def main():
 
     stats = collections.Counter()
     divergent = collections.defaultdict(list)
+    both_rendered = 0
     for name in names:
         if name not in cpp:
             stats["cpp_missing"] += 1
@@ -136,13 +140,17 @@ def main():
         py_kind, py_output = render_python(source)
         kind = classify(source, cpp[name][0], cpp[name][1], py_kind, py_output)
         stats[kind] += 1
+        if cpp[name][0] == "rendered" and py_kind == "rendered":
+            both_rendered += 1
         if kind not in ("match", "nondeterministic"):
             divergent[kind].append((name, source, cpp[name], (py_kind, py_output)))
 
-    print(" ".join(f"{k}={v}" for k, v in sorted(stats.items())))
+    compared = sum(v for k, v in stats.items() if k != "cpp_missing")
+    share = f"both engines render {both_rendered} of {compared} inputs ({100 * both_rendered / max(compared, 1):.1f}%)"
+    print(" ".join(f"{k}={v}" for k, v in sorted(stats.items())) + "; " + share)
     if args.out:
         with args.out.open("w", encoding="utf-8") as report:
-            report.write("# Differential fuzzing report\n\n" + ", ".join(f"{k}: {v}" for k, v in sorted(stats.items())) + "\n")
+            report.write(f"# {args.title}\n\n" + ", ".join(f"{k}: {v}" for k, v in sorted(stats.items())) + "\n\n" + share.capitalize() + ".\n")
             for kind, rows in sorted(divergent.items()):
                 report.write(f"\n## {kind} ({len(rows)})\n")
                 for name, source, (ck, co), (pk, po) in sorted(rows, key=lambda r: len(r[1])):

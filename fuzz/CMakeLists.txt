@@ -7,8 +7,8 @@
 
 set(_fuzz_dir ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(jinja2cpp_fuzz_targets STATIC ${_fuzz_dir}/fuzz_targets.cpp ${_fuzz_dir}/untrusted_targets.cpp ${_fuzz_dir}/fuzz_common.h
-                                          ${_fuzz_dir}/prompt_escape_case.h)
+add_library(jinja2cpp_fuzz_targets STATIC ${_fuzz_dir}/fuzz_targets.cpp ${_fuzz_dir}/untrusted_targets.cpp ${_fuzz_dir}/template_mutator.cpp
+                                          ${_fuzz_dir}/fuzz_common.h ${_fuzz_dir}/prompt_escape_case.h ${_fuzz_dir}/template_mutator.h)
 target_link_libraries(jinja2cpp_fuzz_targets PUBLIC ${LIB_TARGET_NAME})
 set_target_properties(jinja2cpp_fuzz_targets PROPERTIES
     CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
@@ -26,6 +26,9 @@ if (JINJA2CPP_BUILD_TESTS)
         target_link_options(jinja2cpp_fuzz_replay PRIVATE /STACK:8388608)
     endif ()
     add_test(NAME jinja2cpp_fuzz_regressions COMMAND jinja2cpp_fuzz_replay ${_fuzz_dir}/regressions)
+    # The structure-aware mutator (docs/tasks/0095) over the regression inputs, its mutants through the targets that
+    # bound their work
+    add_test(NAME jinja2cpp_fuzz_mutator_smoke COMMAND jinja2cpp_fuzz_replay --mutate 6 ${_fuzz_dir}/regressions)
 
     # The allocation-failure target replaces the global operator new, so it has its own replay executable.
     # The TSan and MSan runtimes define operator new themselves, so those builds go without it (as
