@@ -98,6 +98,17 @@ public:
     [[nodiscard]] bool IsGlobalAttached() const noexcept { return m_globalAttached; }
     // Once the globals were converted again: a conversion that fails leaves the mark
     void GlobalsConverted() noexcept { m_globalAttached = false; }
+    // The snapshot of the globals a running render reads, linked to the one of the render it
+    // runs inside: a render started inside another of the same environment reads that one's
+    // (template_impl.h, docs/tasks/0324)
+    struct RunningGlobals
+    {
+        const GlobalsSnapshot* globals = nullptr;
+        const std::shared_ptr<const GlobalsSnapshot>* owner = nullptr;
+        const RunningGlobals* outer = nullptr;
+    };
+    [[nodiscard]] const RunningGlobals* Running() const noexcept { return m_running; }
+    void SetRunning(const RunningGlobals* running) noexcept { m_running = running; }
 
     // The tables of the params and the top scope of a render (docs/tasks/0160)
     struct RenderMaps
@@ -209,6 +220,7 @@ private:
     std::vector<IntrusivePtr<detail::LoopFrame>> m_loopFrames;
     std::shared_ptr<const GlobalsSnapshot> m_globals;
     bool m_globalAttached = false;
+    const RunningGlobals* m_running = nullptr;
     // Where the maps live never changes, so that the maps lent to a render stay in place
     // while a render inside it is lent others
     std::vector<std::unique_ptr<RenderMaps>> m_maps;

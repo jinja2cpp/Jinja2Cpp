@@ -71,6 +71,27 @@ struct GlobalsSnapshot
     InternalValueMap values;
 };
 
+// Names the snapshot of the globals a render reads for the renders started inside it (GetGlobalsSnapshot)
+class RunningGlobalsScope
+{
+public:
+    explicit RunningGlobalsScope(const std::shared_ptr<const GlobalsSnapshot>& globals) noexcept
+        : m_workspace(RenderWorkspace::ForThisThread())
+        , m_running{ globals.get(), &globals, m_workspace.Running() }
+    {
+        m_workspace.SetRunning(&m_running);
+    }
+    ~RunningGlobalsScope() { m_workspace.SetRunning(m_running.outer); }
+    RunningGlobalsScope(const RunningGlobalsScope&) = delete;
+    RunningGlobalsScope(RunningGlobalsScope&&) = delete;
+    RunningGlobalsScope& operator=(const RunningGlobalsScope&) = delete;
+    RunningGlobalsScope& operator=(RunningGlobalsScope&&) = delete;
+
+private:
+    RenderWorkspace& m_workspace;
+    RenderWorkspace::RunningGlobals m_running;
+};
+
 // Marks a render running on the thread for its whole scope: a Load meanwhile keeps the template
 // it replaces in the thread's workspace (RenderWorkspace::Retire, docs/tasks/0321)
 class RenderScope
@@ -122,8 +143,20 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
 {
     auto& workspace = RenderWorkspace::ForThisThread();
     auto& cached = workspace.Globals();
-    if (workspace.IsGlobalAttached() || !cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
+    const auto generation = env.globalsGeneration.load(std::memory_order_acquire);
+    if (workspace.IsGlobalAttached() || !cached || cached->generation != generation)
     {
+        // A render started inside another of the same environment shares its snapshot, with the
+        // globals that one changed in place, as Jinja2's renders share the globals' objects: the
+        // outer render no longer caches it (GlobalScopeWritten), and its adapters of the globals
+        // stay attached to its cells while this one runs (docs/tasks/0211, 0324)
+        for (const auto* running = workspace.Running(); running; running = running->outer)
+        {
+            if (running->globals && running->globals->generation == generation)
+            {
+                return *running->owner;
+            }
+        }
         auto snapshot = std::make_shared<GlobalsSnapshot>();
         {
             const detail::ReaderLock lock(env.guard);
@@ -507,6 +540,7 @@ public:
 
             static const InternalValueMap noGlobals;
             const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
+            const RunningGlobalsScope runningGlobals(globals);
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;

@@ -872,20 +872,8 @@ public:
     // Iterating it takes the rest of the loop's own items, each as (item, loop), so that the
     // running loop goes on after them: Jinja2's LoopContext.__next__ (docs/tasks/0219)
     [[nodiscard]] bool Iterates() const override { return true; }
-    bool GetIteration(ListAdapter& items) const override
-    {
-        items = ListAdapter::CreateAdapter([state = m_state, loop = InternalValue(MapAdapter(MakeRef<LoopAccessor>(*this)))]() -> std::optional<InternalValue> {
-            state->Peek();
-            if (state->isLast)
-            {
-                return std::nullopt;
-            }
-            state->SetIndex(state->index0 + 1);
-            state->isPeeked = false;
-            return InternalValue(ListAdapter::CreateAdapter(InternalValueList{ state->Item(state->index0), loop }).MarkAsTuple());
-        });
-        return true;
-    }
+    // `for a in loop`: (item, loop) pairs, made from the loop's state as it advances
+    bool GetIteration(ListAdapter& items) const override;
     [[nodiscard]] const LoopState* State() const { return m_state; }
     [[nodiscard]] const void* GetIdentity() const override { return m_state; }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -1167,6 +1155,107 @@ void intrusive_ptr_release(const LoopFrame* frame) noexcept
     intrusive_ptr_release(static_cast<const ValueObject*>(frame));
 }
 } // namespace detail
+
+namespace
+{
+using detail::LoopFrame;
+
+// The iteration of a `loop` object (`for a in loop`): its (item, loop) pairs, read from the
+// loop's state as the loop advances. It holds the loop object where the cycle collector sees
+// it: in a std::function capture a kept loop over `loop` (`set ns.k = loop`) closed a cycle
+// through the outer loop that nothing freed (docs/tasks/0400). The iteration state is the
+// loop's own, so copies of the list share this accessor
+class LoopIteration final : public IListAccessor
+{
+public:
+    class Enumerator final : public IListAccessorEnumerator
+    {
+    public:
+        // The loop that runs over the iteration keeps it (LoopState::indexedList)
+        explicit Enumerator(const LoopIteration* list) noexcept
+            : m_list(list)
+        {
+        }
+        Enumerator(const Enumerator&) = default;
+        Enumerator(Enumerator&&) noexcept = default;
+        Enumerator& operator=(const Enumerator&) = delete;
+        Enumerator& operator=(Enumerator&&) = delete;
+        ~Enumerator() override = default;
+
+        void Reset() override {}
+        bool MoveNext() override
+        {
+            auto next = m_list->Next();
+            if (!next)
+            {
+                return false;
+            }
+            m_current = std::move(*next);
+            return true;
+        }
+        [[nodiscard]] InternalValue GetCurrent() const override { return m_current; }
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
+        {
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, *this);
+        }
+        std::optional<ListAccessorEnumeratorPtr> Transfer() override
+        {
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
+        }
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
+        {
+            const auto* val = dynamic_cast<const Enumerator*>(&other);
+            return val && m_list == val->m_list && m_current == val->m_current;
+        }
+
+    private:
+        const LoopIteration* m_list;
+        InternalValue m_current;
+    };
+
+    explicit LoopIteration(LoopFrame& frame)
+        : m_state(&frame)
+        , m_loop(MapAdapter(&frame.accessor, ValueObjectPtr(&frame)))
+    {
+        SetTraversable();
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return std::nullopt; }
+    [[nodiscard]] std::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return std::nullopt; }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
+    {
+        return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(this));
+    }
+    [[nodiscard]] GenericList CreateGenericList() const override { return GenericList(); }
+    void Traverse(const TraverseFn& fn) const override { TraverseValue(m_loop, fn); }
+
+    [[nodiscard]] std::optional<InternalValue> Next() const
+    {
+        auto& state = *m_state;
+        state.Peek();
+        if (state.isLast)
+        {
+            return std::nullopt;
+        }
+        state.SetIndex(state.index0 + 1);
+        state.isPeeked = false;
+        return InternalValue(ListAdapter::CreateAdapter(InternalValueList{ state.Item(state.index0), m_loop }).MarkAsTuple());
+    }
+
+private:
+    // The loop's frame, which m_loop owns
+    LoopState* m_state;
+    InternalValue m_loop;
+};
+} // namespace
+
+bool LoopAccessor::GetIteration(ListAdapter& items) const
+{
+    // Every loop state is a frame's (LoopFramePool)
+    items = ListAdapter(MakeRef<LoopIteration>(*static_cast<LoopFrame*>(m_state)));
+    return true;
+}
 
 namespace
 {

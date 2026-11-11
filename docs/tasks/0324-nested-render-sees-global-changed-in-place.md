@@ -1,8 +1,8 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: robustness
-touches: [src/template_impl.h, test/template_api_test.cpp]
+touches: [src/template_impl.h, src/render_workspace.h, test/embedding_lifecycle_values_test.cpp, test/borrowed_cells_test.cpp, test/allocation_failure_test.cpp]
 ---
 # A nested render does not see a global the outer render changed in place
 
@@ -30,3 +30,13 @@ borrowed cells (P2), which change how the in-place copy is made.
 
 **Done when.** The reproducer prints `1|1`, the next render still sees `g` empty, and row F6 joins
 `test/embedding_lifecycle_test.cpp`.
+
+**Resolution.** A render records the snapshot it reads in the thread's workspace
+(`RunningGlobalsScope`); a render started inside it with the same environment and globals
+generation reads that snapshot instead of converting the globals again. Its adapters of the
+globals stay attached to the outer render's cells, so the nested render sees the outer render's
+in-place changes and the outer render sees what the nested one then writes to them. This
+replaces the 0331 rule that a nested render converts its own globals once the outer one attached
+a global (`BorrowedCellsSingle.NestedRenderOfAGlobalWrittenThroughAnAlias` and
+`AllocationFailureTest.NestedRenderAfterAFailedGlobalsConversion` now expect the shared cell).
+A global the nested render writes first is still not seen by the outer render: 0463.

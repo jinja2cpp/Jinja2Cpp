@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0251, 0390]
@@ -28,3 +28,9 @@ with a lambda), or have `LoopFrame::Traverse` report the iterated loop it keeps 
 
 **Done when.** The template above renders without a leak under
 `-DJINJA2CPP_WITH_SANITIZERS=address+undefined` with `detect_leaks=1`.
+
+**Resolution.** `LoopAccessor::GetIteration` returns a `LoopIteration` accessor in place of a
+generator lambda: it holds the loop object (the frame's own accessor, owned by the frame) and
+`Traverse`s it, so the collector follows the kept inner loop through its `indexedList` to the
+outer loop. Rows in `ExpressionTest.CyclesThroughObjects`, which the sanitizer job runs with
+leak detection.
