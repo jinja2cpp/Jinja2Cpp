@@ -426,8 +426,8 @@ TEST_F(TemplateModuleTest, CycleMadeInACall)
 }
 
 // A call that stores into a container the module holds does not walk all of it: calls stay
-// linear in their count, not quadratic (docs/tasks/0450). Timed: n calls against 4n, where a
-// walk of the whole container per call takes 16 times as long
+// linear in their count, not quadratic (docs/tasks/0450). Timed: n calls against 8n, where a
+// walk of the whole container per call takes 64 times as long
 TEST_F(TemplateModuleTest, StoresIntoModuleContainersStayLinear)
 {
 #ifdef JINJA2CPP_CELL_TRACE
@@ -465,11 +465,12 @@ TEST_F(TemplateModuleTest, StoresIntoModuleContainersStayLinear)
             }
             return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         };
-        // Each the best of two, so that a run the scheduler stalls neither fails a linear walk nor
-        // passes a quadratic one: linear is 4 times as long, quadratic 16
-        const auto small = std::min(time(1000), time(1000));
-        const auto large = std::min(time(4000), time(4000));
-        EXPECT_LT(large, small * 10) << source << ": 1000 calls " << small << " s, 4000 calls " << large << " s";
+        // Each the best of three, and the bound far from both ratios (linear is 8 times as long,
+        // quadratic 64), so that a shared runner's stalls neither fail a linear walk nor pass a
+        // quadratic one: 4n against n at a bound of 10 failed once on macOS
+        const auto small = std::min({ time(500), time(500), time(500) });
+        const auto large = std::min({ time(4000), time(4000), time(4000) });
+        EXPECT_LT(large, small * 24) << source << ": 500 calls " << small << " s, 4000 calls " << large << " s";
     }
 }
 
