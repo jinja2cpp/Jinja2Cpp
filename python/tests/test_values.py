@@ -2,6 +2,8 @@
 
 import collections
 import dataclasses
+import decimal
+import fractions
 import types
 
 import jinja2
@@ -364,3 +366,44 @@ def test_stop_iteration_from_a_call_is_undefined():
         env.filters["stop"] = lambda value: stop()
         with pytest.raises((StopIteration, RuntimeError)):
             env.from_string("{{ 1|stop }}").render()
+
+class IntOnly:
+    def __int__(self):
+        return 42
+
+
+class FloatOnly:
+    def __float__(self):
+        return 3.75
+
+
+class IntAndFloat:
+    def __int__(self):
+        return 7
+
+    def __float__(self):
+        return 2.5
+
+
+class Raises:
+    def __int__(self):
+        raise RuntimeError("no int")
+
+    def __float__(self):
+        raise RuntimeError("no float")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [IntOnly(), FloatOnly(), IntAndFloat(), object(), complex(1, 2), decimal.Decimal("3.9"), decimal.Decimal("NaN"), fractions.Fraction(7, 2), [1], {"a": 1}],
+)
+def test_numbers_of_an_object(value):
+    for source in ("{{ x is number }}", "{{ x|int }}", "{{ x|int(default=7) }}", "{{ x|float }}", "{{ x|float(default=1.5) }}"):
+        assert_same(source, {"x": value})
+
+
+def test_numbers_of_an_object_that_raises():
+    for source in ("{{ x|int }}", "{{ x|float }}"):
+        for module in (jinja2cpp, jinja2):
+            with pytest.raises(RuntimeError, match="no "):
+                module.Environment().from_string(source).render(x=Raises())

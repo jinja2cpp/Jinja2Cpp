@@ -39,6 +39,7 @@ class RenderContext;
 // - a dict key: Hash says whether it is hashable; the key is the object's Identity()
 //   (ObjectKey in template_dict.cpp; plan 0248 section 7)
 // - `is sameas`: Identity()
+// - `is number`: IsNumber(); the int filter: ToInt(), then ToFloat(); the float filter: ToFloat()
 //
 // No operation writes an item: template syntax cannot assign one (`set x.attr` takes
 // namespace() only, as in Jinja2), and a write the template asks for reaches the host through
@@ -117,6 +118,10 @@ public:
     // autoescape, and is `escaped`
     [[nodiscard]] virtual bool IsMarkupLike() const { return false; }
     [[nodiscard]] virtual std::string Html() const { return Str(); }
+    // isinstance(x, numbers.Number); int(x) and float(x) (nullopt: the object has no such value)
+    [[nodiscard]] virtual bool IsNumber() const { return false; }
+    [[nodiscard]] virtual std::optional<InternalValue> ToInt() const { return std::nullopt; }
+    [[nodiscard]] virtual std::optional<InternalValue> ToFloat() const { return std::nullopt; }
 };
 
 // The map accessor that carries a host object into the engine's values. Reading it as a map

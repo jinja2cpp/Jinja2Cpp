@@ -587,6 +587,60 @@ std::string PyHost::Html() const
     return Utf8(Steal(PyObject_CallMethod(m_object, "__html__", nullptr)));
 }
 
+bool PyHost::IsNumber() const
+{
+    if (m_kind != Kind::Other)
+    {
+        return false;
+    }
+    const int number = PyObject_IsInstance(m_object, Names().numberType.ptr());
+    if (number < 0)
+    {
+        ThrowPending();
+    }
+    return number != 0;
+}
+
+// int(x) and float(x) as Jinja2's do_int and do_float call them: a TypeError or ValueError is no value, any other
+// exception is the template's
+std::optional<jinja2::Value> PyHost::ToInt() const
+{
+    if (m_kind != Kind::Other)
+    {
+        return std::nullopt;
+    }
+    PyObject* const number = PyNumber_Long(m_object);
+    if (!number)
+    {
+        if (PyErr_ExceptionMatches(PyExc_TypeError) || PyErr_ExceptionMatches(PyExc_ValueError))
+        {
+            PyErr_Clear();
+            return std::nullopt;
+        }
+        ThrowPending();
+    }
+    return ToEngine(nb::steal(number));
+}
+
+std::optional<jinja2::Value> PyHost::ToFloat() const
+{
+    if (m_kind != Kind::Other)
+    {
+        return std::nullopt;
+    }
+    PyObject* const number = PyNumber_Float(m_object);
+    if (!number)
+    {
+        if (PyErr_ExceptionMatches(PyExc_TypeError) || PyErr_ExceptionMatches(PyExc_ValueError))
+        {
+            PyErr_Clear();
+            return std::nullopt;
+        }
+        ThrowPending();
+    }
+    return ToEngine(nb::steal(number));
+}
+
 const PyHost* AsPyHost(const jinja2::Value& value)
 {
     const auto* map = value.GetIf<jinja2::GenericMap>();

@@ -91,6 +91,7 @@ struct PyNames
     nb::object reversed;
     nb::object dictType;
     nb::object mappingType; // collections.abc.Mapping
+    nb::object numberType;  // numbers.Number
 };
 const PyNames& Names();
 // Drops the references Names() holds, when the module is freed

@@ -2532,6 +2532,19 @@ InternalValue ValueConverter::ToInt(const InternalValue& baseVal, RenderContext&
             }
         }
     }
+    else if (const auto* host = GetHostObject(baseVal))
+    {
+        // int(x), then int(float(x)); a float that is inf or nan has no int
+        result = host->ToInt();
+        if (!result)
+        {
+            if (auto asFloat = host->ToFloat())
+            {
+                const auto* dbl = GetIf<double>(&*asFloat);
+                result = dbl ? FloatToInt(*dbl) : std::move(asFloat);
+            }
+        }
+    }
     if (result)
     {
         return std::move(*result);
@@ -2559,6 +2572,13 @@ InternalValue ValueConverter::ToFloat(const InternalValue& baseVal, RenderContex
         if (auto result = ParsePythonFloat(*str))
         {
             return *result;
+        }
+    }
+    else if (const auto* host = GetHostObject(baseVal))
+    {
+        if (auto result = host->ToFloat())
+        {
+            return std::move(*result);
         }
     }
     return GetArgumentValue("default", context);
