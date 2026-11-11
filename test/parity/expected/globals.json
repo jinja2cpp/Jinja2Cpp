@@ -929,6 +929,44 @@
    "output": "False|False|True|, |False|, "
   },
   {
+   "id": "globals.engine_call_slot_hidden_strict",
+   "template": "{{ joiner()['operator()'] }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'jinja2.utils.Joiner object' has no attribute 'operator()'"
+   }
+  },
+  {
+   "id": "globals.engine_call_slot_hidden_attr_strict",
+   "template": "{% for i in [1] %}{{ loop|attr('operator()') }}{% endfor %}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'jinja2.runtime.LoopContext object' has no attribute 'operator()'"
+   }
+  },
+  {
+   "id": "globals.engine_call_slot_hidden_debug",
+   "template": "{{ joiner()['operator()'] }}|{% for i in [1] %}{{ loop['operator()'] }}{% endfor %}",
+   "context": {},
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "{{ no such element: jinja2.utils.Joiner object['operator()'] }}|{{ no such element: jinja2.runtime.LoopContext object['operator()'] }}"
+  },
+  {
    "id": "globals.namespace_call_key_item",
    "template": "{% set ns = namespace(**{'operator()': 1}) %}{{ ns['operator()'] }}|{{ {'operator()': 2}['operator()'] }}",
    "context": {},

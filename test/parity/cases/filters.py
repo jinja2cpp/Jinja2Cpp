@@ -485,6 +485,7 @@ CASES = [
     ("unique_attribute_missing_strict", "{{ [{'a': 1}, {'a': 2}, {'a': 3}]|unique(attribute='zzz')|list|length }}", {"env": {"undefined": "strict"}}),
     ("unique_attribute_missing_strict_one_item", "{{ [{'a': 1}]|unique(attribute='zzz')|list|length }}", {"env": {"undefined": "strict"}}),
     ("unique_undefined_items_strict", "{{ [{'a': 1}, {'a': 2}]|map(attribute='zzz')|unique|list|length }}", {"env": {"undefined": "strict"}}),
+    ("sort_same_undefined_strict", "{% set u = zzz %}{{ [u, u]|sort|list|length }}", {"env": {"undefined": "strict"}}),
     ("sort_unique_attribute_missing_default", "{{ [{'a': 1}, {'a': 2}, {'a': 3}]|sort(attribute='zzz')|list|length }}|{{ [{'a': 1}, {'a': 2}]|unique(attribute='zzz')|list|length }}"),
     # task 0368: json.dumps names a callable's type
     ("tojson_callable", "{{ lipsum|tojson }}"),

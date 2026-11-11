@@ -464,6 +464,16 @@ bool InternalValue::IsEqual(const InternalValue& other) const
 InternalValue Value2IntValue(const Value& val);
 InternalValue Value2IntValue(Value&& val);
 
+bool IsHiddenCallSlot(const MapRef& map, std::string_view name)
+{
+    if (name != "operator()")
+    {
+        return false;
+    }
+    const char* objectClass = map.GetObjectClass();
+    return objectClass != nullptr && !map.IsHost() && std::string_view(objectClass) != "Namespace";
+}
+
 struct SubscriptionVisitor : public visitors::BaseVisitor<>
 {
     using BaseVisitor<>::operator();
@@ -498,21 +508,11 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     // getitem does (HostObjectAccessor::FindItem); for every other map it is x.name
     [[nodiscard]] static InternalValue GetStringItem(const MapRef& values, const std::string& field)
     {
-        if (field == CallSlotName && IsCallSlotHidden(values))
+        if (IsHiddenCallSlot(values, field))
         {
             return InternalValue();
         }
         return values.IsHost() ? FindKey(values, InternalValue(field)) : GetField(values, field);
-    }
-
-    // The call operator of an engine object (joiner(), loop) is the engine's slot, which the call
-    // path reads with Subscript(fn, "operator()"); x['operator()'] does not see it, as Python's
-    // objects have no such item. A namespace's attributes are its own (docs/tasks/0420)
-    static constexpr std::string_view CallSlotName = "operator()";
-    [[nodiscard]] static bool IsCallSlotHidden(const MapRef& values)
-    {
-        const char* objectClass = values.GetObjectClass();
-        return objectClass != nullptr && !values.IsHost() && std::string_view(objectClass) != "Namespace";
     }
 
     // Undefined for a missing name; a user's accessor (IMapItemAccessor) is asked through

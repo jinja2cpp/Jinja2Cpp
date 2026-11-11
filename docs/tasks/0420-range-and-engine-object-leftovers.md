@@ -41,4 +41,4 @@ engine object other than a namespace is undefined; the call path still reads the
 repeat does, and `max` compares `item > best`, naming `'>'` and both types. Pinned by
 `operators.range_slice_bounds`, `operators.range_item_attributes`, `globals.engine_call_slot_hidden`,
 `globals.namespace_call_key_item`, and the messages by `ExpressionsTest.RepeatAndOrderingMessages`.
-5 is filed as 0467.
+5 is filed as 0467; the int64-edge and message leftovers the verifier found are 0468.
