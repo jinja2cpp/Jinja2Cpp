@@ -689,13 +689,9 @@ ValuesMap MacroAttributes(const UserCallable& callable)
             ValuesList names;
             if (const auto* list = converted.GetIf<GenericList>())
             {
-                // An empty list has no enumerator: its iteration does not end
-                if (list->GetSize().value_or(0) != 0)
+                for (const auto& item : *list)
                 {
-                    for (const auto& item : *list)
-                    {
-                        names.emplace_back(item.AsString());
-                    }
+                    names.emplace_back(item.AsString());
                 }
                 converted = Value(std::move(names));
             }
