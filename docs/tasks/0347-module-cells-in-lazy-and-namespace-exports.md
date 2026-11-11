@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: [0332, 0335]
 touches: [src/borrowed_cells.cpp, src/internal_value.cpp, test/borrowed_cells_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/836
 ---
 # Module cells reached through a lazy list or a namespace are not pinned
 
@@ -33,3 +34,14 @@ later read goes through `CallExports::Storage`. (a) is simpler and matches D8; (
 `keep(namespace(x=l))` in a macro that writes `l` after the keep show the call's final state, the
 cross-thread read row of `ModuleCellInsideAKeptListReadFromThreads` for these shapes is TSan-clean,
 and `Module/keep` does not move in `bench/count.py`.
+
+**Resolution (2026-11-11).** Option (a), where it was still missing. A generator (`select`,
+`map`, `batch`, `reject`) was already walked into a template list when the host got it, on the
+call's thread: its items are what it made then, and a list among them is the module's data,
+pinned at the call's end, so those shapes held. Two shapes read the cell live after the call:
+a dictsort or `items()` pair (`CallExportItem` exported the pair's key and value with
+`IntValue2Value`, outside the call's exports) and a namespace (`NamespaceAdapter` lacked the
+running-call export a dict has). Both now go through the call's exports. Rows:
+`BorrowedCellsKept.ModuleCellInsideALazyValue` (12 shapes, two calls each), `ModuleTupleToAKeepUndefinedCallable` (a pair or tuple stays a 2-tuple for a keepUndefined callable: `CallListView` now forwards `IsTuple`, which a module call's tuple lacked before, verifier round 1) and the
+`ModuleCellInsideAKeptListReadFromThreads` TSan row for `[l]`, a dictsort pair, a namespace and
+a generator's item. Documented in docs/api-2.0.md 3.10, item 9.
