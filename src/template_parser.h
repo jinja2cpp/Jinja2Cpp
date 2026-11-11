@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -2452,11 +2453,29 @@ public:
         return m_lineCount + 1;
     }
     bool TakeLiteralError() override { return std::exchange(m_literalError, false); }
-    std::string PositionText(std::size_t offset) override
+    void PositionText(std::size_t offset, FunctionRef<void(std::string_view)> out) override
     {
         const auto line = GetLineNumber(offset);
         // A template from a string has no name in Jinja2 (the loader gives the default one)
-        return "line " + std::to_string(line) + (m_templateName == "noname.j2tpl" ? std::string() : " in '" + m_templateName + "'");
+        const std::string_view name = m_templateName == "noname.j2tpl" ? std::string_view() : std::string_view(m_templateName);
+        constexpr std::string_view prefix = "line ";
+        constexpr std::string_view open = " in '";
+        std::array<char, 128> buffer{};
+        // "line " + at most 10 digits + " in '" + name + "'"
+        if (prefix.size() + 10 + open.size() + name.size() + 1 > buffer.size())
+        {
+            out("line " + std::to_string(line) + " in '" + std::string(name) + "'");
+            return;
+        }
+        auto* cur = std::copy(prefix.begin(), prefix.end(), buffer.data());
+        cur = std::to_chars(cur, buffer.data() + buffer.size(), line).ptr;
+        if (!name.empty())
+        {
+            cur = std::copy(open.begin(), open.end(), cur);
+            cur = std::copy(name.begin(), name.end(), cur);
+            *cur++ = '\'';
+        }
+        out(std::string_view(buffer.data(), static_cast<std::size_t>(cur - buffer.data())));
     }
     Keyword GetKeyword(const CharRange& range) override
     {

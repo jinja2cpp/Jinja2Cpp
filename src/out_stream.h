@@ -138,12 +138,23 @@ public:
     class PieceHold
     {
     public:
+        // Writes the stream only when it writes each piece: the usual render reads one flag
         explicit PieceHold(OutStream& os) noexcept
             : m_os(os)
-            , m_eachPiece(std::exchange(os.m_eachPiece, false))
+            , m_eachPiece(os.m_eachPiece)
         {
+            if (m_eachPiece)
+            {
+                os.m_eachPiece = false;
+            }
         }
-        ~PieceHold() { m_os.m_eachPiece = m_eachPiece; }
+        ~PieceHold()
+        {
+            if (m_eachPiece)
+            {
+                m_os.m_eachPiece = true;
+            }
+        }
         PieceHold(const PieceHold&) = delete;
         PieceHold& operator=(const PieceHold&) = delete;
         PieceHold(PieceHold&&) = delete;
