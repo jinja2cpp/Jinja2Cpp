@@ -21,3 +21,6 @@ Python, and have `pprint` of a host sequence follow it (through `Iterate` where 
 **Done when.** The example matches Jinja2, with a row next to the 0441 subclass rows in
 `python/tests/test_values.py` (built afresh per engine: a deep copy of a list subclass is
 rebuilt from its `__iter__`).
+
+**Progress (2026-11-11).** Fixed by 0434: `pprint` of a host sequence reads `Iterate`, so the example
+prints `['x', 'y']`; the row is next to the 0441 subclass rows in python/tests/test_values.py.
