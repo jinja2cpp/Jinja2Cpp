@@ -898,6 +898,11 @@ public:
     static ListAdapter CreateAdapter(GenericList&& values);
     static ListAdapter CreateAdapter(ValuesList&& values);
     static ListAdapter CreateAdapter(std::function<std::optional<InternalValue>()> fn);
+    // A generator whose state lives elsewhere: `next` moves to the next item and tells whether
+    // there is one, `current` makes the current item from `held`, which the list keeps where the
+    // cycle collector sees it (the `loop` object of `for a in loop`, docs/tasks/0400). Copies of
+    // the list share the generator
+    static ListAdapter CreateGenerator(InternalValue held, std::function<bool()> next, std::function<InternalValue(const InternalValue& held)> current);
     static ListAdapter CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn);
     // The lazy list of range(start, stop, step), as in Python; step must not be zero
     static ListAdapter CreateRange(int64_t start, int64_t stop, int64_t step);

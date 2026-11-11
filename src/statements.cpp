@@ -31,7 +31,6 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
-#include <jinja2cpp/value_ptr.h>
 
 #include <algorithm>
 #include <array>
@@ -1157,102 +1156,26 @@ void intrusive_ptr_release(const LoopFrame* frame) noexcept
 }
 } // namespace detail
 
-namespace
-{
-using detail::LoopFrame;
-
-// The iteration of a `loop` object (`for a in loop`): its (item, loop) pairs, read from the
-// loop's state as the loop advances. It holds the loop object where the cycle collector sees
-// it: in a std::function capture a kept loop over `loop` (`set ns.k = loop`) closed a cycle
-// through the outer loop that nothing freed (docs/tasks/0400). The iteration state is the
-// loop's own, so copies of the list share this accessor
-class LoopIteration final : public IListAccessor
-{
-public:
-    class Enumerator final : public IListAccessorEnumerator
-    {
-    public:
-        // The loop that runs over the iteration keeps it (LoopState::indexedList)
-        explicit Enumerator(const LoopIteration* list) noexcept
-            : m_list(list)
-        {
-        }
-        Enumerator(const Enumerator&) = default;
-        Enumerator(Enumerator&&) noexcept = default;
-        Enumerator& operator=(const Enumerator&) = delete;
-        Enumerator& operator=(Enumerator&&) = delete;
-        ~Enumerator() override = default;
-
-        void Reset() override {}
-        bool MoveNext() override { return m_list->Next(); }
-        // Made at each read rather than kept here, where the collector would not see the loop
-        // object the pair holds
-        [[nodiscard]] InternalValue GetCurrent() const override { return m_list->Current(); }
-        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
-        {
-            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, *this);
-        }
-        std::optional<ListAccessorEnumeratorPtr> Transfer() override
-        {
-            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
-        }
-        [[nodiscard]] bool IsEqual(const IComparable& other) const override
-        {
-            const auto* val = dynamic_cast<const Enumerator*>(&other);
-            if (!val)
-            {
-                return false;
-            }
-            return m_list == val->m_list;
-        }
-
-    private:
-        const LoopIteration* m_list;
-    };
-
-    explicit LoopIteration(LoopFrame& frame)
-        : m_state(&frame)
-        , m_loop(MapAdapter(&frame.accessor, ValueObjectPtr(&frame)))
-    {
-        SetTraversable();
-    }
-
-    [[nodiscard]] std::optional<size_t> GetSize() const override { return std::nullopt; }
-    [[nodiscard]] std::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return std::nullopt; }
-    [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
-    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
-    {
-        return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(this));
-    }
-    [[nodiscard]] GenericList CreateGenericList() const override { return GenericList(); }
-    void Traverse(const TraverseFn& fn) const override { TraverseValue(m_loop, fn); }
-
-    // Moves the loop to its next item, if it has one
-    [[nodiscard]] bool Next() const
-    {
-        auto& state = *m_state;
-        state.Peek();
-        if (state.isLast)
-        {
-            return false;
-        }
-        state.SetIndex(state.index0 + 1);
-        state.isPeeked = false;
-        return true;
-    }
-    [[nodiscard]] InternalValue Current() const { return ListAdapter::CreateAdapter(InternalValueList{ m_state->Item(m_state->index0), m_loop }).MarkAsTuple(); }
-
-private:
-    // The loop's frame, which m_loop owns
-    LoopState* m_state;
-    InternalValue m_loop;
-};
-} // namespace
-
+// It holds the loop object, the frame's own accessor, where the cycle collector sees it: in a
+// std::function capture a kept loop over `loop` (`set ns.k = loop`) closed a cycle through the
+// outer loop that nothing freed (docs/tasks/0400)
 bool LoopAccessor::GetIteration(ListAdapter& items) const
 {
     // Every loop state is a frame's (LoopFramePool)
-    items = ListAdapter(MakeRef<LoopIteration>(*static_cast<LoopFrame*>(m_state)));
+    auto& frame = *static_cast<detail::LoopFrame*>(m_state);
+    items = ListAdapter::CreateGenerator(
+        MapAdapter(&frame.accessor, ValueObjectPtr(&frame)),
+        [state = m_state]() {
+            state->Peek();
+            if (state->isLast)
+            {
+                return false;
+            }
+            state->SetIndex(state->index0 + 1);
+            state->isPeeked = false;
+            return true;
+        },
+        [state = m_state](const InternalValue& loop) { return InternalValue(ListAdapter::CreateAdapter(InternalValueList{ state->Item(state->index0), loop }).MarkAsTuple()); });
     return true;
 }
 

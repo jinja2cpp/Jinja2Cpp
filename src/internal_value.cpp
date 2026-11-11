@@ -2918,6 +2918,78 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
     return ListAdapter(MakeRef<Adapter>(std::move(fn)));
 }
 
+ListAdapter ListAdapter::CreateGenerator(InternalValue held, std::function<bool()> next, std::function<InternalValue(const InternalValue& held)> current)
+{
+    class Adapter final : public IListAccessor
+    {
+    public:
+        class Enumerator final : public IListAccessorEnumerator
+        {
+        public:
+            // The list outlives its enumerators, as the generic generator's does
+            explicit Enumerator(const Adapter* list) noexcept
+                : m_list(list)
+            {
+            }
+            Enumerator(const Enumerator&) = default;
+            Enumerator(Enumerator&&) noexcept = default;
+            Enumerator& operator=(const Enumerator&) = delete;
+            Enumerator& operator=(Enumerator&&) = delete;
+            ~Enumerator() override = default;
+
+            void Reset() override {}
+            bool MoveNext() override { return m_list->m_next(); }
+            // Made at each read rather than kept here, where the collector would not see what it holds
+            [[nodiscard]] InternalValue GetCurrent() const override { return m_list->m_current(m_list->m_held); }
+            [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
+            {
+                return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, *this);
+            }
+            std::optional<ListAccessorEnumeratorPtr> Transfer() override
+            {
+                return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*this));
+            }
+            [[nodiscard]] bool IsEqual(const IComparable& other) const override
+            {
+                const auto* val = dynamic_cast<const Enumerator*>(&other);
+                if (!val)
+                {
+                    return false;
+                }
+                return m_list == val->m_list;
+            }
+
+        private:
+            const Adapter* m_list;
+        };
+
+        Adapter(InternalValue&& held, std::function<bool()>&& next, std::function<InternalValue(const InternalValue&)>&& current)
+            : m_held(std::move(held))
+            , m_next(std::move(next))
+            , m_current(std::move(current))
+        {
+            SetTraversable();
+        }
+
+        [[nodiscard]] std::optional<size_t> GetSize() const override { return std::nullopt; }
+        [[nodiscard]] std::optional<InternalValue> GetItem(int64_t /*idx*/) const override { return std::nullopt; }
+        [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
+        {
+            return ListAccessorEnumeratorPtr(types::in_place_type_t<Enumerator>{}, Enumerator(this));
+        }
+        [[nodiscard]] GenericList CreateGenericList() const override { return GenericList(); }
+        void Traverse(const TraverseFn& fn) const override { TraverseValue(m_held, fn); }
+
+    private:
+        InternalValue m_held;
+        std::function<bool()> m_next;
+        std::function<InternalValue(const InternalValue&)> m_current;
+    };
+
+    return ListAdapter(MakeRef<Adapter>(std::move(held), std::move(next), std::move(current)));
+}
+
 ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalValue(size_t idx)> fn)
 {
     using GenFn = std::function<InternalValue(size_t idx)>;
