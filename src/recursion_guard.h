@@ -51,6 +51,13 @@ constexpr unsigned LimitOrNone(std::uint32_t limit)
 // loads with dlopen, they would take the dynamic TLS model: a call into the dynamic loader at
 // each access, a fifth of a render's instructions. The module's build (JINJA2CPP_BUILD_PYTHON)
 // gives these few the initial-exec model, which the loader's static TLS reserve has room for
+// An error path or a rare mode kept out of the function it is called from
+#ifdef _MSC_VER
+#define JINJA2CPP_NOINLINE __declspec(noinline)
+#else
+#define JINJA2CPP_NOINLINE __attribute__((noinline))
+#endif
+
 #ifdef JINJA2CPP_HOT_TLS_INITIAL_EXEC
 #define JINJA2CPP_HOT_TLS __attribute__((tls_model("initial-exec")))
 #else

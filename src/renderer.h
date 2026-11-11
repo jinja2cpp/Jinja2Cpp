@@ -89,11 +89,7 @@ public:
     }
 
 private:
-#if defined(_MSC_VER)
-    __declspec(noinline)
-#else
-    __attribute__((noinline))
-#endif
+    JINJA2CPP_NOINLINE
     void RenderEachPiece(OutStream& os, RenderContext& values)
     {
         RenderNodes<true>(os, values);

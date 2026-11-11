@@ -271,11 +271,7 @@ std::string UnknownTagMessage(const NodeArena& nodes, const StatementInfoList& s
     return message;
 }
 
-#if defined(_MSC_VER)
-__declspec(noinline)
-#else
-__attribute__((noinline))
-#endif
+JINJA2CPP_NOINLINE
 nonstd::unexpected_type<ParseError> StatementsParser::UnknownTagError(const StatementInfoList& statementsInfo, const Token& tok, std::string_view name) const
 {
     return MakeParseErrorMsg(ErrorCode::UnexpectedStatement, tok, UnknownTagMessage(m_nodes, statementsInfo, name));
@@ -323,7 +319,7 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     // Jinja2 accepts an end tag, `elif` or `else` only where the innermost open statement looks for it. The
     // innermost statement being the one the tag closes accepts it; only the others need the whole check
     if (const auto closed = ClosedStatement(keyword);
-        closed != StatementInfo::TemplateRoot && !(statementsInfo.size() > 1 && statementsInfo.back().type == closed) && !AcceptsClosingKeyword(m_nodes, statementsInfo, keyword))
+        closed != StatementInfo::TemplateRoot && (statementsInfo.size() <= 1 || statementsInfo.back().type != closed) && !AcceptsClosingKeyword(m_nodes, statementsInfo, keyword))
     {
         return UnknownTagError(statementsInfo, tok, lexer.GetAsString(tok));
     }

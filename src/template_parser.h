@@ -13,6 +13,7 @@
 #include "load_settings.h"
 #include "make_unexpected.h"
 #include "node_arena.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "render_failure.h"
 #include "renderer.h"
@@ -1706,11 +1707,7 @@ private:
     }
 
     // Jinja2's error for a statement left open at the end of the template; out of line, off the parse's path
-#if defined(_MSC_VER)
-    __declspec(noinline)
-#else
-    __attribute__((noinline))
-#endif
+    JINJA2CPP_NOINLINE
     ParseError UnclosedError(const StatementInfoList& statementsStack) const
     {
         auto eof = m_template->size();
