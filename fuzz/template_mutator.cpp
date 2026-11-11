@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
+#include <iterator>
 #include <random>
 #include <string>
 #include <string_view>
@@ -150,7 +150,7 @@ struct Splitter
 {
     const Delimiters& delims;
 
-    std::vector<Piece> Split(std::string_view body) const
+    [[nodiscard]] std::vector<Piece> Split(std::string_view body) const
     {
         std::vector<Piece> pieces;
         std::string text;
@@ -197,7 +197,7 @@ struct Splitter
         return pieces;
     }
 
-    std::string_view Start(PieceKind kind) const
+    [[nodiscard]] std::string_view Start(PieceKind kind) const
     {
         switch (kind)
         {
@@ -213,7 +213,7 @@ struct Splitter
         return {};
     }
 
-    std::string_view End(PieceKind kind) const
+    [[nodiscard]] std::string_view End(PieceKind kind) const
     {
         switch (kind)
         {
@@ -230,7 +230,7 @@ struct Splitter
     }
 
     // The text between the delimiters, whitespace-control markers left out
-    std::string_view Inner(const Piece& piece) const
+    [[nodiscard]] std::string_view Inner(const Piece& piece) const
     {
         std::string_view inner = piece.text;
         const auto start = Start(piece.kind);
@@ -252,7 +252,7 @@ struct Splitter
     }
 
     // The statement's name (`for`, `endfor`), or empty
-    std::string Keyword(const Piece& piece) const
+    [[nodiscard]] std::string Keyword(const Piece& piece) const
     {
         if (piece.kind != PieceKind::Statement)
         {
@@ -273,7 +273,7 @@ struct Splitter
     }
 
     // The name of the block statement a piece opens, or empty
-    std::string Opens(const Piece& piece) const
+    [[nodiscard]] std::string Opens(const Piece& piece) const
     {
         auto word = Keyword(piece);
         if (word == "set" && Inner(piece).find('=') != std::string_view::npos)
@@ -291,7 +291,7 @@ struct Splitter
     }
 
     // The name of the block statement a piece ends, or empty
-    std::string Closes(const Piece& piece) const
+    [[nodiscard]] std::string Closes(const Piece& piece) const
     {
         auto word = Keyword(piece);
         if (word.size() > 3 && word.compare(0, 3, "end") == 0)
@@ -301,7 +301,7 @@ struct Splitter
         return {};
     }
 
-    std::string Convert(std::string_view text) const { return WithDelimiters<char>(text, delims); }
+    [[nodiscard]] std::string Convert(std::string_view text) const { return WithDelimiters<char>(text, delims); }
 
     static bool StartsWith(std::string_view text, std::size_t pos, std::string_view prefix)
     {
@@ -330,10 +330,10 @@ public:
         return items[Pick(N)];
     }
 
-    const Splitter& Split() const { return m_splitter; }
+    [[nodiscard]] const Splitter& Split() const { return m_splitter; }
 
     // Nesting depth before each piece, and after the last one
-    std::vector<int> Depths(const std::vector<Piece>& pieces) const
+    [[nodiscard]] std::vector<int> Depths(const std::vector<Piece>& pieces) const
     {
         std::vector<int> depths(pieces.size() + 1, 0);
         int depth = 0;
@@ -397,7 +397,7 @@ public:
         return std::string(PickOf(ExpressionPool));
     }
 
-    Piece ExpressionPiece(std::string_view expression) const
+    [[nodiscard]] Piece ExpressionPiece(std::string_view expression) const
     {
         const auto& delims = m_splitter.delims;
         std::string text(delims.variableStart);
@@ -417,7 +417,7 @@ public:
     }
 
     // The end tags of the statements left open, innermost first
-    std::vector<Piece> Unclosed(const std::vector<Piece>& pieces) const
+    [[nodiscard]] std::vector<Piece> Unclosed(const std::vector<Piece>& pieces) const
     {
         std::vector<std::string> open;
         for (const auto& piece : pieces)
@@ -441,6 +441,27 @@ public:
             ends.push_back({ PieceKind::Statement, m_splitter.Convert("{% end" + *name + " %}") });
         }
         return ends;
+    }
+
+    void ReplaceWithExpression(std::vector<Piece>& pieces)
+    {
+        std::vector<std::size_t> targets;
+        for (std::size_t i = 0; i < pieces.size(); ++i)
+        {
+            if (pieces[i].kind == PieceKind::Expression || pieces[i].kind == PieceKind::Text)
+            {
+                targets.push_back(i);
+            }
+        }
+        auto piece = ExpressionPiece(Expression(pieces, nullptr));
+        if (targets.empty())
+        {
+            pieces.push_back(std::move(piece));
+        }
+        else
+        {
+            pieces[targets[Pick(targets.size())]] = std::move(piece);
+        }
     }
 
     // One structural mutation of `pieces`; false when it did not apply
@@ -493,26 +514,8 @@ public:
             return true;
         }
         case 4: // replace an expression, or a text piece, with an expression
-        {
-            std::vector<std::size_t> targets;
-            for (std::size_t i = 0; i < pieces.size(); ++i)
-            {
-                if (pieces[i].kind == PieceKind::Expression || pieces[i].kind == PieceKind::Text)
-                {
-                    targets.push_back(i);
-                }
-            }
-            auto piece = ExpressionPiece(Expression(pieces, nullptr));
-            if (targets.empty())
-            {
-                pieces.push_back(std::move(piece));
-            }
-            else
-            {
-                pieces[targets[Pick(targets.size())]] = std::move(piece);
-            }
+            ReplaceWithExpression(pieces);
             return true;
-        }
         case 5: // wrap a run of whole statements in a statement with a body
         {
             const auto [first, last] = BalancedRange(pieces);
@@ -623,12 +626,11 @@ std::size_t Join(const std::uint8_t* prefix, std::size_t prefixLength, const std
     {
         return 0;
     }
-    std::memmove(out, prefix, prefixLength);
-    std::size_t pos = prefixLength;
+    std::copy(prefix, prefix + prefixLength, out);
+    std::uint8_t* pos = out + prefixLength;
     for (const auto& piece : pieces)
     {
-        std::memcpy(out + pos, piece.text.data(), piece.text.size());
-        pos += piece.text.size();
+        pos = std::copy(piece.text.begin(), piece.text.end(), pos);
     }
     return size;
 }
@@ -692,7 +694,7 @@ std::size_t MutateTemplate(std::uint8_t* data, std::size_t size, std::size_t max
         {
             continue;
         }
-        std::memcpy(data + layout.prefixLength, text.data(), text.size());
+        std::copy(text.begin(), text.end(), data + layout.prefixLength);
         return layout.prefixLength + text.size();
     }
     return byteMutation();

@@ -31,7 +31,8 @@ std::size_t g_mutations = 0;
 // Stands in for LLVMFuzzerMutate: changes, inserts or erases one byte
 std::size_t MutateOneByte(std::uint8_t* data, std::size_t size, std::size_t maxSize)
 {
-    static std::mt19937 rng(95);
+    // A fixed seed: the smoke test sees the same mutants on every run
+    static std::mt19937 rng(95); // NOLINT(bugprone-random-generator-seed)
     std::uniform_int_distribution<std::size_t> pick(0, size == 0 ? 0 : size - 1);
     const std::size_t pos = pick(rng);
     switch (rng() % 3)
