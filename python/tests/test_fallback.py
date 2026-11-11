@@ -18,7 +18,7 @@ from jinja2 import nodes
 from jinja2cpp.nativetypes import NativeEnvironment
 
 # A syntax of Jinja2 the engine does not parse: a subscript of a literal by a tuple of slices in
-# a conditional that Jinja2 folds by its test (task 0463), here to "" whatever the environment
+# a conditional that Jinja2 folds by its test (task 0471), here to "" whatever the environment
 # (unfolded, it compiles to invalid Python). A template with NOPARSE in it goes to Jinja2;
 # test_candidate_is_unparsable checks it
 NOPARSE = '{{ (()[:, :] if 1 > 0) is undefined and "" }}'
