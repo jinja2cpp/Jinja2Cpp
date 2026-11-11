@@ -27,18 +27,22 @@ if (JINJA2CPP_BUILD_TESTS)
     endif ()
     add_test(NAME jinja2cpp_fuzz_regressions COMMAND jinja2cpp_fuzz_replay ${_fuzz_dir}/regressions)
 
-    # The allocation-failure target replaces the global operator new, so it has its own replay executable
-    add_executable(jinja2cpp_fuzz_alloc_replay ${_fuzz_dir}/replay_main.cpp ${_fuzz_dir}/alloc_failure_target.cpp)
-    target_compile_definitions(jinja2cpp_fuzz_alloc_replay PRIVATE JINJA2CPP_FUZZ_ALLOC_REPLAY)
-    target_link_libraries(jinja2cpp_fuzz_alloc_replay jinja2cpp_fuzz_targets)
-    set_target_properties(jinja2cpp_fuzz_alloc_replay PROPERTIES
-        CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
-        CXX_STANDARD_REQUIRED ON
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-        target_link_options(jinja2cpp_fuzz_alloc_replay PRIVATE /STACK:8388608)
+    # The allocation-failure target replaces the global operator new, so it has its own replay executable.
+    # The TSan and MSan runtimes define operator new themselves, so those builds go without it (as
+    # jinja2cpp_alloc_tests does)
+    if (NOT JINJA2CPP_WITH_SANITIZERS MATCHES "thread|memory")
+        add_executable(jinja2cpp_fuzz_alloc_replay ${_fuzz_dir}/replay_main.cpp ${_fuzz_dir}/alloc_failure_target.cpp)
+        target_compile_definitions(jinja2cpp_fuzz_alloc_replay PRIVATE JINJA2CPP_FUZZ_ALLOC_REPLAY)
+        target_link_libraries(jinja2cpp_fuzz_alloc_replay jinja2cpp_fuzz_targets)
+        set_target_properties(jinja2cpp_fuzz_alloc_replay PROPERTIES
+            CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+            CXX_STANDARD_REQUIRED ON
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+        if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+            target_link_options(jinja2cpp_fuzz_alloc_replay PRIVATE /STACK:8388608)
+        endif ()
+        add_test(NAME jinja2cpp_fuzz_alloc_regressions COMMAND jinja2cpp_fuzz_alloc_replay ${_fuzz_dir}/regressions)
     endif ()
-    add_test(NAME jinja2cpp_fuzz_alloc_regressions COMMAND jinja2cpp_fuzz_alloc_replay ${_fuzz_dir}/regressions)
 endif ()
 
 if (JINJA2CPP_BUILD_FUZZERS)
