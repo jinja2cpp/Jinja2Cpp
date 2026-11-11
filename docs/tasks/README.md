@@ -524,6 +524,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0454](0454-stack-canary-hot-frames.md) | Hot frames that gain a stack canary under -fstack-protector-strong | perf | medium | open |
 | [0455](0455-debug-checks-by-contract-level.md) | RenderContext's debug-only invariants follow the contract level, not NDEBUG | robustness | low | open |
 | [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | open |
-| [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | open |
+| [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | in-progress |
 | [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
 | [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | open |
+| [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
+| [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
