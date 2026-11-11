@@ -5,3 +5,5 @@
 subscripts.tuple_of_slices_literal match 0445 the module falls back to Jinja2 for the template the engine cannot parse
 statements.if_expr_chained_if match 0447 the module falls back to Jinja2 for the template the engine cannot parse
 whitespace.tag_unicode_space match 0447 the module falls back to Jinja2 for the template the engine cannot parse
+fuzz.dotted_filter_name_not_run match 0465 the module falls back to Jinja2 for the template the engine cannot parse
+fuzz.dotted_test_name_not_run match 0465 the module falls back to Jinja2 for the template the engine cannot parse
