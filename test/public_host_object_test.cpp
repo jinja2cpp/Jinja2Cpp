@@ -2096,10 +2096,10 @@ TEST(PublicHostObjectTest, ListOrTuplePrettyPrints)
     }
     broken += "]";
     const ValuesMap params{ { "l", items(numbers, false, true) },
-        { "g", items(numbers, false, false) },
-        { "t", items({ items(numbers, false, true) }, true, false) },
-        { "e", items({}, true, false) },
-        { "d", items({ Value(ValuesMap{ { "b", Value(1) }, { "a", Value(2) } }) }, false, true) } };
+                            { "g", items(numbers, false, false) },
+                            { "t", items({ items(numbers, false, true) }, true, false) },
+                            { "e", items({}, true, false) },
+                            { "d", items({ Value(ValuesMap{ { "b", Value(1) }, { "a", Value(2) } }) }, false, true) } };
     EXPECT_EQ(broken, Render("{{ l|pprint }}", params));
     EXPECT_EQ(broken, Render("{{ g|pprint }}", params));
     const auto tuple = Render("{{ t|pprint }}", params);
