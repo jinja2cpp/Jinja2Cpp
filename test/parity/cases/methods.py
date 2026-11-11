@@ -213,6 +213,8 @@ CASES = [
     ("str_format_map_positional", "{{ '{}'.format_map({}) }}"),
     ("str_format_map_index", "{{ '{0}'.format_map({0: 1}) }}"),
     ("str_format_map_missing", "{{ '{a}'.format_map({}) }}"),
+    ("str_format_map_method_name", "{{ '{items}'.format_map({}) }}"),
+    ("str_format_item_method_name", "{{ '{0[items]}'.format({}) }}|{{ '{0[keys]}'.format({'keys': 3}) }}"),
     ("str_format_map_not_subscriptable", "{{ '{a}'.format_map(5) }}"),
     ("str_format_map_no_args", "{{ '{a}'.format_map() }}"),
     ("str_format_map_kwargs", "{{ '{a}'.format_map(m={'a': 1}) }}"),

@@ -4446,6 +4446,56 @@
    }
   },
   {
+   "id": "methods.str_format_map_method_name",
+   "template": "{{ '{items}'.format_map({}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'items'"
+   }
+  },
+  {
+   "id": "methods.str_format_item_method_name",
+   "template": "{{ '{0[items]}'.format({}) }}|{{ '{0[keys]}'.format({'keys': 3}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'items'"
+   }
+  },
+  {
    "id": "methods.str_format_map_not_subscriptable",
    "template": "{{ '{a}'.format_map(5) }}",
    "context": {

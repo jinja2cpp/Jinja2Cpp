@@ -1790,6 +1790,11 @@ struct StrOps
         {
             Raise("'" + TypeName(value) + "' object is not subscriptable");
         }
+        // A dict's items only: GetItem would fall back to its methods ('{0[items]}' is a KeyError)
+        else if (map && value.Kind() == ValueKind::Map)
+        {
+            result = map->FindItem(key);
+        }
         else
         {
             result = GetItem(value, key, &context);
