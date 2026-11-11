@@ -564,7 +564,11 @@ render is running (the C++ rule for a member call). Both are undefined behaviour
    is a view of the host's data (item 1 applies), also while the render runs; Python shows the
    render's later writes there, a deliberate divergence. A global's data is handed out as the
    global's original. A module call's container keeps that call's final state: a later call's
-   write copies it first. Reading a kept value on another thread while its render runs is not
+   write copies it first; so do the items of a dictsort pair, a namespace's members and the
+   items a generator (`select`, `map`) made when the host got it, which it walks then
+   ([0347](tasks/0347-module-cells-in-lazy-and-namespace-exports.md)). A module macro the host
+   calls with a render's container writes a copy of its own: the render does not see the write
+   ([0407](tasks/0407-module-call-leaks-through-exports-and-closures.md)). Reading a kept value on another thread while its render runs is not
    supported, as for any value of a running render.
 10. **Copies of a generic container are one container** ([0348](tasks/0348-generic-list-shared-accessor.md)).
    A `GenericList` or `GenericMap` shares its accessor with every copy, including the copies the

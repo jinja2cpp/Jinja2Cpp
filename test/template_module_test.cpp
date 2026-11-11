@@ -893,3 +893,39 @@ TEST_F(TemplateModuleTest, ViewArgumentIsCopied)
     wide.reset();
     EXPECT_EQ("[['x'], 'wide text, long enough for the heap']", Call(module.exports["get"]).AsString());
 }
+
+// 0407: a render hands its own dict through a host callable to a module macro that writes it.
+// Nothing is a cycle, so nothing may leak (LSan). The host holds a read-only snapshot of the
+// render's dict (docs/api-2.0.md 3.10, item 9), so the macro writes a copy of its own and the render's
+// `d|list` stays ['a'], where Python, which shares the one dict, gives ['a', 'l']: deliberate
+TEST_F(TemplateModuleTest, RenderDictWrittenThroughAHostCallIntoAModule)
+{
+    auto module = Make("{% macro n(d) %}{% set _ = d.update(l=[1]) %}{% endmacro %}");
+    jinja2::ValuesMap params;
+    params["cbn"] = jinja2::UserCallable([&module](const jinja2::UserCallableParams& p) { return Call(module.exports["n"], { p["d"] }); }, { jinja2::ArgInfo{ "d" } });
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load("{% set d = {'a': [1]} %}{{ cbn(d) }}{{ d|list }}"));
+    auto out = tpl.RenderAsString(params);
+    ASSERT_TRUE(!!out) << out.error().ToString();
+    EXPECT_EQ("['a']", out.value());
+}
+
+// 0407: a module list that holds itself, captured by an inner macro the module stores, goes with
+// the module (LSan)
+TEST_F(TemplateModuleTest, SelfHoldingListCapturedByAStoredClosure)
+{
+    {
+        auto module = Make("{% set ns = namespace(f=none) %}{% macro outer() %}{% set cap = [] %}{% set _ = cap.append(cap) %}"
+                           "{% macro inner() %}{{ cap|length }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}"
+                           "{% macro get() %}{{ ns.f() }}{% endmacro %}");
+        Call(module.exports["outer"]);
+        EXPECT_EQ("1", Call(module.exports["get"]).AsString());
+    }
+    {
+        auto module = Make("{% set cap = [] %}{% set _ = cap.append(cap) %}{% set ns = namespace(f=none) %}"
+                           "{% macro inner() %}{{ cap|length }}{% endmacro %}{% macro store() %}{% set ns.f = inner %}{% endmacro %}"
+                           "{% macro get() %}{{ ns.f() }}{% endmacro %}");
+        Call(module.exports["store"]);
+        EXPECT_EQ("1", Call(module.exports["get"]).AsString());
+    }
+}

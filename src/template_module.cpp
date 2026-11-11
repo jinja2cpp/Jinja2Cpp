@@ -400,9 +400,17 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         // allocates; when that fails, the cycles noted so far are still freed and the rest leak.
         // The cells freeze first, noted to the collector: a cycle through one is then one among
         // the module's values (docs/tasks/0331)
-        // What only the copies the closures kept held is freed rather than counted as held
-        kept.Clear();
+        // What only the copies the closures kept held is freed rather than counted as held; a
+        // cycle among it is noted first (docs/tasks/0407)
         CycleCollector cycles;
+        try
+        {
+            kept.NoteNames();
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+        {
+        }
+        kept.Clear();
         cells.Release(&cycles);
         if (module)
         {
