@@ -31,6 +31,7 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
+#include <jinja2cpp/value_ptr.h>
 
 #include <algorithm>
 #include <array>
@@ -1183,17 +1184,10 @@ public:
         ~Enumerator() override = default;
 
         void Reset() override {}
-        bool MoveNext() override
-        {
-            auto next = m_list->Next();
-            if (!next)
-            {
-                return false;
-            }
-            m_current = std::move(*next);
-            return true;
-        }
-        [[nodiscard]] InternalValue GetCurrent() const override { return m_current; }
+        bool MoveNext() override { return m_list->Next(); }
+        // Made at each read rather than kept here, where the collector would not see the loop
+        // object the pair holds
+        [[nodiscard]] InternalValue GetCurrent() const override { return m_list->Current(); }
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, *this);
@@ -1205,12 +1199,15 @@ public:
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             const auto* val = dynamic_cast<const Enumerator*>(&other);
-            return val && m_list == val->m_list && m_current == val->m_current;
+            if (!val)
+            {
+                return false;
+            }
+            return m_list == val->m_list;
         }
 
     private:
         const LoopIteration* m_list;
-        InternalValue m_current;
     };
 
     explicit LoopIteration(LoopFrame& frame)
@@ -1230,18 +1227,20 @@ public:
     [[nodiscard]] GenericList CreateGenericList() const override { return GenericList(); }
     void Traverse(const TraverseFn& fn) const override { TraverseValue(m_loop, fn); }
 
-    [[nodiscard]] std::optional<InternalValue> Next() const
+    // Moves the loop to its next item, if it has one
+    [[nodiscard]] bool Next() const
     {
         auto& state = *m_state;
         state.Peek();
         if (state.isLast)
         {
-            return std::nullopt;
+            return false;
         }
         state.SetIndex(state.index0 + 1);
         state.isPeeked = false;
-        return InternalValue(ListAdapter::CreateAdapter(InternalValueList{ state.Item(state.index0), m_loop }).MarkAsTuple());
+        return true;
     }
+    [[nodiscard]] InternalValue Current() const { return ListAdapter::CreateAdapter(InternalValueList{ m_state->Item(m_state->index0), m_loop }).MarkAsTuple(); }
 
 private:
     // The loop's frame, which m_loop owns

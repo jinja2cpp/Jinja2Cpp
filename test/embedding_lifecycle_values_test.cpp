@@ -429,7 +429,7 @@ TEST(EmbeddingLifecycleTest, F6_NestedRenderSeesGlobalChangedInPlace)
     env.GetSettings().extensions.doStatement = true;
     env.AddGlobal("g", ValuesList{});
     auto inner = env.FromString("{{ g|length }}").value();
-    auto innerWide = env.FromString(std::wstring_view(L"{{ g|length }}")).value();
+    auto innerWide = env.FromString(Str<wchar_t>("{{ g|length }}")).value();
     env.AddGlobal("nested", MakeCallable([&inner] { return inner.RenderAsString({}).value(); }));
     env.AddGlobal("nestedWide", MakeCallable([&innerWide] { return innerWide.RenderAsString({}).value(); }));
     const char* source = "{{ nested() }}{% do g.append(1) %}{{ g|length }}|{{ nested() }}{{ nestedWide() }}{% do g.append(2) %}{{ nested() }}";
