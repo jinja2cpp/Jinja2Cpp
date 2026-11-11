@@ -8,7 +8,8 @@
 // (fuzz_common.h, narrow only); the template. The template first runs without a failure. Then a fresh template of the
 // same environment loads and renders it with the failure armed, and each call must return or throw std::bad_alloc,
 // never anything else. When the failure fired and no std::bad_alloc came out, the outcome must be the one of the
-// first runs (compared only when three runs agree and nothing in it may vary: `random`, an address, a time limit): an engine that swallows the failure into another result breaks the contract. Afterwards the environment
+// first runs (compared only when three runs agree and nothing in it may vary: an address, a time limit; `random` is replaced
+// by a filter that returns its input): an engine that swallows the failure into another result breaks the contract. Afterwards the environment
 // and the template must render as in the first run. With a Windows DLL build the library keeps its CRT's operator new,
 // so no failure is injected there.
 
@@ -17,6 +18,8 @@
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
 
 #include <atomic>
 #include <cstddef>
@@ -162,11 +165,11 @@ Run LoadAndRender(jinja2::Template& tpl, const std::string& source, bool load)
     return run;
 }
 
-// A render whose result may change between runs: the `random` filter, an address in the output (a bound method's
-// repr), a time limit hit
-bool Reproducible(const std::string& source, const Run& run)
+// A render whose result may change between runs: an address in the output (a bound method's repr), a time limit
+// hit. The `random` filter is replaced (FuzzAllocFailure), so a computed name (`map('ran' ~ 'dom')`) is reproducible too
+bool Reproducible(const Run& run)
 {
-    return source.find("random") == std::string::npos && run.code != jinja2::ErrorCode::ResourceLimitExceeded && (!run.output || run.output->find("0x") == std::string::npos);
+    return run.code != jinja2::ErrorCode::ResourceLimitExceeded && (!run.output || run.output->find("0x") == std::string::npos);
 }
 
 // Equal, unless either hit a limit: maxRenderTime makes a render near it end either way
@@ -197,11 +200,14 @@ void FuzzAllocFailure(const std::uint8_t* data, std::size_t size)
     auto fs = std::make_shared<jinja2::MemoryFileSystem>();
     AddSupportTemplates(*fs, source, DelimitersOf(settingsByte));
     env.AddFilesystemHandler(std::string(), fs);
+    // The built-in `random` draws from std::random_device; a registered filter of the name wins wherever the filter
+    // is looked up, by name or computed, so the renders below can be compared
+    env.AddFilter("random", jinja2::MakeCallable([](const jinja2::Value& value) { return value; }, jinja2::ArgInfo{ "value" }));
 
     // Only a render that depends on its source alone can be compared; any other still runs with the failure armed
     jinja2::Template first(&env);
     const Run expected = LoadAndRender(first, source, true);
-    bool comparable = Reproducible(source, expected);
+    bool comparable = Reproducible(expected);
     for (int n = 0; comparable && n < 2; ++n)
     {
         jinja2::Template other(&env);
