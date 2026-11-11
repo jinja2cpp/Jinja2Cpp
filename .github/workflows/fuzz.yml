@@ -9,6 +9,10 @@ name: fuzz
 #   corpus for an hour per target; the minimized corpus is saved to the Actions cache for the
 #   next runs, and the differential check against Python Jinja2 runs over the render corpus
 #   (report only). A crash it finds fails that run, not a pull request.
+# The template targets (parse, render, render_wide and the limits-on ones) mutate with the
+# structure-aware mutator of fuzz/template_mutator.h (docs/tasks/0095); `mutator: bytes` on a manual
+# run turns it off, to compare the two in one time budget. The nightly differential check also
+# renders templates from the grammar of fuzz/generate_templates.py, which Python always parses.
 # The targets with default settings report timeouts and out-of-memory inputs without failing:
 # a template may ask for unbounded work (range(10**9)). The limits-on targets (untrusted, host,
 # loader, alloc_failure; docs/tasks/0267) run under FuzzLimits() (fuzz_common.h), which bounds
@@ -33,6 +37,11 @@ on:
       seconds:
         description: Seconds per target
         default: '600'
+      mutator:
+        description: Mutation of the template targets (structure, or bytes only)
+        type: choice
+        options: [structure, bytes]
+        default: structure
 
 permissions:
   contents: read
@@ -67,6 +76,8 @@ jobs:
       STRICT: ${{ contains(fromJSON('["untrusted", "host", "loader", "alloc_failure"]'), matrix.target) }}
       # make_corpus.py --prefix for the targets that read bytes before the template
       SEED_PREFIX: ${{ contains(fromJSON('["untrusted", "host", "loader", "alloc_failure"]'), matrix.target) && format('--prefix {0}', matrix.target) || '' }}
+      # bytes turns the structure-aware mutator off (fuzz/template_mutator.h)
+      JINJA2CPP_FUZZ_MUTATOR: ${{ inputs.mutator || 'structure' }}
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -102,8 +113,9 @@ jobs:
         key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
         restore-keys: fuzz-corpus-${{ matrix.target }}-
 
+    # Generated templates (a fixed set) give the structure-aware mutator deep, well-formed starting points
     - name: Add seeds
-      run: python3 fuzz/make_corpus.py $SEED_PREFIX corpus
+      run: python3 fuzz/make_corpus.py $SEED_PREFIX --generated 500 corpus
 
     # The limits-on target must fail the job on a slow input: an input the target hangs on when
     # JINJA2CPP_FUZZ_INJECT_SLOW is set (untrusted_targets.cpp) has to make the replay fail
@@ -243,7 +255,18 @@ jobs:
         python fuzz/differential.py build/jinja2cpp_fuzz_replay corpus --known seeds-parity --out differential.md \
           | tee -a "$GITHUB_STEP_SUMMARY"
 
+    # Every generated template parses in Python, so each difference is a divergence, not a rejected input; a new seed
+    # each run reaches new combinations. The report gives the share both engines render (docs/tasks/0095)
+    - name: Compare generated templates
+      run: |
+        python fuzz/generate_templates.py generated --count 5000 --seed ${{ github.run_number }}
+        echo "generated templates, seed ${{ github.run_number }}:" >> "$GITHUB_STEP_SUMMARY"
+        python fuzz/differential.py build/jinja2cpp_fuzz_replay generated --out differential-generated.md \
+          --title "Differential report: generated templates (seed ${{ github.run_number }})" | tee -a "$GITHUB_STEP_SUMMARY"
+
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: differential-report
-        path: differential.md
+        path: |
+          differential.md
+          differential-generated.md
