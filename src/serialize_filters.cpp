@@ -215,7 +215,11 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     static std::optional<ListAdapter> HostSequence(const InternalValue& val)
     {
         const auto* host = GetHostObject(val);
-        if (!host || !host->IsSequence() || (host->IsTuple() && std::strcmp(host->TypeName(), "tuple") != 0 && host->GetAttr("_fields")))
+        if (!host)
+        {
+            return std::nullopt;
+        }
+        if (!host->IsSequence() || (host->IsTuple() && std::strcmp(host->TypeName(), "tuple") != 0 && host->GetAttr("_fields").has_value()))
         {
             return std::nullopt;
         }

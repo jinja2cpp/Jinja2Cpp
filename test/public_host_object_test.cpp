@@ -466,12 +466,12 @@ TEST(PublicHostObjectTest, NumbersOfAnObject)
 {
     ToySpec intOnly;
     intOnly.number = true;
-    intOnly.toInt = Value(int64_t(42));
+    intOnly.toInt = Value(static_cast<int64_t>(42));
     ToySpec floatOnly;
     floatOnly.toFloat = Value(3.75);
     ToySpec both;
     both.number = true;
-    both.toInt = Value(int64_t(7));
+    both.toInt = Value(static_cast<int64_t>(7));
     both.toFloat = Value(2.5);
     ToySpec neither;
     const ValuesMap params{ { "i", MakeToy(intOnly) }, { "f", MakeToy(floatOnly) }, { "b", MakeToy(both) }, { "n", MakeToy(neither) } };

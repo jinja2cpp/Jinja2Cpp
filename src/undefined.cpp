@@ -246,7 +246,11 @@ std::optional<InternalValue> UndefinedField(const UndefinedInfo& info, std::stri
     if (name == "_undefined_hint")
     {
         auto hint = HintOf(info);
-        return hint.empty() ? InternalValue(NoneValue{}) : InternalValue(std::move(hint));
+        if (hint.empty())
+        {
+            return InternalValue(NoneValue{});
+        }
+        return InternalValue(std::move(hint));
     }
     return std::nullopt;
 }
