@@ -512,7 +512,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     [[nodiscard]] static bool IsCallSlotHidden(const MapRef& values)
     {
         const char* objectClass = values.GetObjectClass();
-        return objectClass && !values.IsHost() && std::string_view(objectClass) != "Namespace";
+        return objectClass != nullptr && !values.IsHost() && std::string_view(objectClass) != "Namespace";
     }
 
     // Undefined for a missing name; a user's accessor (IMapItemAccessor) is asked through
