@@ -19,6 +19,7 @@
 #include <jinja2cpp/error_info.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -36,6 +37,245 @@ namespace jinja2
 {
 inline namespace v2
 {
+
+namespace
+{
+
+// Jinja2: `else` ends an `if`, `elif` or `for` body, and nothing may follow it but the end tag
+bool IsElseBranch(const NodeArena& nodes, const StatementInfo& info)
+{
+    return info.type == StatementInfo::ElseIfStatement && nodes.Get<ElseBranchStatement>(info.renderer).IsElse();
+}
+
+// A statement that is open: Jinja2's tag name for it and the tags its body looks for
+struct OpenTag
+{
+    const char* tag = "";
+    std::array<const char*, 3> ends{};
+};
+
+// The tag and end tags of the open statement `head`; `last` is the last of the `elif` and `else`
+// entries that continue it
+bool DescribeOpenTag(const NodeArena& nodes, const StatementInfo& head, const StatementInfo& last, OpenTag& result)
+{
+    const bool inElse = IsElseBranch(nodes, last);
+    switch (head.type)
+    {
+    case StatementInfo::IfStatement:
+        result = inElse ? OpenTag{ "if", { "endif" } } : OpenTag{ "if", { "elif", "else", "endif" } };
+        return true;
+    case StatementInfo::ForStatement:
+        result = inElse ? OpenTag{ "for", { "endfor" } } : OpenTag{ "for", { "endfor", "else" } };
+        return true;
+    case StatementInfo::SetStatement:
+        result = { "set", { "endset" } };
+        return true;
+    case StatementInfo::BlockStatement:
+        result = { "block", { "endblock" } };
+        return true;
+    case StatementInfo::MacroStatement:
+        result = { "macro", { "endmacro" } };
+        return true;
+    case StatementInfo::MacroCallStatement:
+        result = { "call", { "endcall" } };
+        return true;
+    case StatementInfo::WithStatement:
+        result = { "with", { "endwith" } };
+        return true;
+    case StatementInfo::FilterStatement:
+        result = { "filter", { "endfilter" } };
+        return true;
+    case StatementInfo::AutoescapeStatement:
+        result = { "autoescape", { "endautoescape" } };
+        return true;
+    case StatementInfo::GenerationStatement:
+        result = { "generation", { "endgeneration" } };
+        return true;
+    case StatementInfo::TransStatement:
+        // The extension reads its own body: no tag looks for an end in the parser's stack
+        result = { "trans", {} };
+        return true;
+    default:
+        return false;
+    }
+}
+
+// The open statements, outermost first. An `elif` or `else` entry belongs to the statement it continues
+std::vector<OpenTag> OpenTags(const NodeArena& nodes, const StatementInfoList& statementsInfo)
+{
+    std::vector<OpenTag> tags;
+    for (std::size_t idx = 1; idx < statementsInfo.size(); ++idx)
+    {
+        if (statementsInfo[idx].type == StatementInfo::ElseIfStatement)
+        {
+            continue;
+        }
+        std::size_t last = idx;
+        while (last + 1 < statementsInfo.size() && statementsInfo[last + 1].type == StatementInfo::ElseIfStatement)
+        {
+            ++last;
+        }
+        OpenTag tag;
+        if (DescribeOpenTag(nodes, statementsInfo[idx], statementsInfo[last], tag))
+        {
+            tags.push_back(tag);
+        }
+    }
+    return tags;
+}
+
+} // namespace
+
+namespace
+{
+// For the keywords of the tags that close a statement or continue an `if` or `for`: the statement
+// they usually close, which the innermost one being accepts the tag at once. TemplateRoot for others
+StatementInfo::Type ClosedStatement(Keyword keyword)
+{
+    switch (keyword)
+    {
+    case Keyword::Endfor:
+        return StatementInfo::ForStatement;
+    case Keyword::Else:
+    case Keyword::ElIf:
+    case Keyword::EndIf:
+        return StatementInfo::IfStatement;
+    case Keyword::EndSet:
+        return StatementInfo::SetStatement;
+    case Keyword::EndBlock:
+        return StatementInfo::BlockStatement;
+    case Keyword::EndMacro:
+        return StatementInfo::MacroStatement;
+    case Keyword::EndCall:
+        return StatementInfo::MacroCallStatement;
+    case Keyword::EndWith:
+        return StatementInfo::WithStatement;
+    case Keyword::EndFilter:
+        return StatementInfo::FilterStatement;
+    case Keyword::EndAutoescape:
+        return StatementInfo::AutoescapeStatement;
+    default:
+        return StatementInfo::TemplateRoot;
+    }
+}
+
+// Whether the innermost open statement looks for the tag of `keyword` (IsExpectedEndTag, without
+// the names: this runs for every closing tag)
+bool AcceptsClosingKeyword(const NodeArena& nodes, const StatementInfoList& statementsInfo, Keyword keyword)
+{
+    if (statementsInfo.size() <= 1)
+    {
+        return false;
+    }
+    const auto& last = statementsInfo.back();
+    std::size_t head = statementsInfo.size() - 1;
+    while (head > 1 && statementsInfo[head].type == StatementInfo::ElseIfStatement)
+    {
+        --head;
+    }
+    switch (statementsInfo[head].type)
+    {
+    case StatementInfo::IfStatement:
+        return IsElseBranch(nodes, last) ? keyword == Keyword::EndIf : (keyword == Keyword::ElIf || keyword == Keyword::Else || keyword == Keyword::EndIf);
+    case StatementInfo::ForStatement:
+        return IsElseBranch(nodes, last) ? keyword == Keyword::Endfor : (keyword == Keyword::Endfor || keyword == Keyword::Else);
+    case StatementInfo::SetStatement:
+        return keyword == Keyword::EndSet;
+    case StatementInfo::BlockStatement:
+        return keyword == Keyword::EndBlock;
+    case StatementInfo::MacroStatement:
+        return keyword == Keyword::EndMacro;
+    case StatementInfo::MacroCallStatement:
+        return keyword == Keyword::EndCall;
+    case StatementInfo::WithStatement:
+        return keyword == Keyword::EndWith;
+    case StatementInfo::FilterStatement:
+        return keyword == Keyword::EndFilter;
+    case StatementInfo::AutoescapeStatement:
+        return keyword == Keyword::EndAutoescape;
+    default:
+        return false;
+    }
+}
+} // namespace
+
+bool IsExpectedEndTag(const NodeArena& nodes, const StatementInfoList& statementsInfo, std::string_view name)
+{
+    if (statementsInfo.size() <= 1)
+    {
+        return false;
+    }
+    // The innermost entry: an `elif` or `else` continues the statement below it
+    std::size_t head = statementsInfo.size() - 1;
+    while (head > 1 && statementsInfo[head].type == StatementInfo::ElseIfStatement)
+    {
+        --head;
+    }
+    OpenTag tag;
+    if (!DescribeOpenTag(nodes, statementsInfo[head], statementsInfo.back(), tag))
+    {
+        return false;
+    }
+    return std::any_of(tag.ends.begin(), tag.ends.end(), [name](const char* end) { return end && name == end; });
+}
+
+std::string UnknownTagMessage(const NodeArena& nodes, const StatementInfoList& statementsInfo, std::string_view name)
+{
+    const auto tags = OpenTags(nodes, statementsInfo);
+    // The tags some open statement looks for, and the ones the innermost does
+    std::vector<std::string_view> expected;
+    const OpenTag* looking = nullptr;
+    for (const auto& tag : tags)
+    {
+        bool any = false;
+        for (const char* end : tag.ends)
+        {
+            if (end)
+            {
+                expected.emplace_back(end);
+                any = true;
+            }
+        }
+        if (any)
+        {
+            looking = &tag;
+        }
+    }
+
+    std::string message = name.empty() ? "Unexpected end of template." : "Encountered unknown tag '" + std::string(name) + "'.";
+    if (looking)
+    {
+        std::string ends;
+        for (const char* end : looking->ends)
+        {
+            if (end)
+            {
+                ends += ends.empty() ? "'" : " or '";
+                ends += end;
+                ends += "'";
+            }
+        }
+        if (!name.empty() && std::find(expected.begin(), expected.end(), name) != expected.end())
+        {
+            message += " You probably made a nesting mistake. Jinja is expecting this tag, but currently looking for " + ends + ".";
+        }
+        else
+        {
+            message += " Jinja was looking for the following tags: " + ends + ".";
+        }
+    }
+    if (!tags.empty())
+    {
+        message += std::string(" The innermost block that needs to be closed is '") + tags.back().tag + "'.";
+    }
+    return message;
+}
+
+JINJA2CPP_NOINLINE
+nonstd::unexpected_type<ParseError> StatementsParser::UnknownTagError(const StatementInfoList& statementsInfo, const Token& tok, std::string_view name) const
+{
+    return MakeParseErrorMsg(ErrorCode::UnexpectedStatement, tok, UnknownTagMessage(m_nodes, statementsInfo, name));
+}
 
 NodeRef<ComposedRenderer> StatementsParser::TakeFrameBody(StatementInfo& info)
 {
@@ -62,7 +302,7 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     // Jinja2: required blocks can only contain comments or whitespace
     if (keyword != Keyword::EndBlock && !statementsInfo.empty() && statementsInfo.back().type == StatementInfo::BlockStatement && m_nodes.Get<BlockStatement>(statementsInfo.back().renderer).IsRequired())
     {
-        return MakeParseError(ErrorCode::UnexpectedStatement, tok);
+        statementsInfo.back().requiredViolation = true;
     }
 
     // Jinja2's i18n extension: a trans block holds only text, `{{ name }}`, one pluralize and its endtrans
@@ -74,6 +314,14 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
             return MakeParseError(ErrorCode::ExpectedEndOfStatement, lexer.PeekNextToken());
         }
         return result;
+    }
+
+    // Jinja2 accepts an end tag, `elif` or `else` only where the innermost open statement looks for it. The
+    // innermost statement being the one the tag closes accepts it; only the others need the whole check
+    if (const auto closed = ClosedStatement(keyword);
+        closed != StatementInfo::TemplateRoot && (statementsInfo.size() <= 1 || statementsInfo.back().type != closed) && !AcceptsClosingKeyword(m_nodes, statementsInfo, keyword))
+    {
+        return UnknownTagError(statementsInfo, tok, lexer.GetAsString(tok));
     }
 
     switch (keyword)
@@ -215,10 +463,14 @@ StatementsParser::ParseResult StatementsParser::ParseNonKeywordStatement(LexScan
         {
             return ParseGeneration(lexer, statementsInfo, tok);
         }
-        if (name == "endgeneration")
+        if (name == "endgeneration" && IsExpectedEndTag(m_nodes, statementsInfo, name))
         {
             return ParseEndGeneration(lexer, statementsInfo, tok);
         }
+    }
+    if (tok == Token::Identifier)
+    {
+        return UnknownTagError(statementsInfo, tok, lexer.GetAsString(tok));
     }
     return MakeParseError(ErrorCode::UnexpectedToken, tok);
 }
@@ -638,17 +890,6 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
     return ParseResult();
 }
 
-namespace
-{
-
-// Jinja2: `else` ends an `if`, `elif` or `for` body, and nothing may follow it but the end tag
-bool IsElseBranch(const NodeArena& nodes, const StatementInfo& info)
-{
-    return info.type == StatementInfo::ElseIfStatement && nodes.Get<ElseBranchStatement>(info.renderer).IsElse();
-}
-
-} // namespace
-
 StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto& prev = statementsInfo.back();
@@ -859,6 +1100,12 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     modifierTok = lexer.PeekNextToken();
     if (modifierTok != Token::Eof)
     {
+        // Jinja2's parse_block checks for a hyphen after the modifiers (`{% block foo-bar %}`); here, so that a block that parses pays nothing
+        if (modifierTok == '-')
+        {
+            return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, modifierTok,
+                                     "Block names in Jinja have to be valid Python identifiers and may not contain hyphens, use an underscore instead.");
+        }
         return MakeParseErrorTL(ErrorCode::ExpectedToken, modifierTok, Token::Eof);
     }
 
@@ -893,6 +1140,12 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     if (statementsInfo.back().type != StatementInfo::BlockStatement)
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
+
+    // Jinja2: required blocks can only contain comments or whitespace
+    if (statementsInfo.back().requiredViolation)
+    {
+        return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, stmtTok, "Required blocks can only contain comments or whitespace");
     }
 
     auto info = PopStatement(statementsInfo);
@@ -1145,7 +1398,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     // Jinja2: the special "caller" argument must be omitted or be given a default
     if (renderer.HasInvalidCallerParam())
     {
-        return MakeParseError(ErrorCode::UnexpectedToken, info.token);
+        return MakeParseErrorMsg(ErrorCode::TemplateAssertionError, info.token, "When defining macros or call blocks the special \"caller\" argument must be omitted or be given a default.");
     }
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
@@ -1281,7 +1534,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     // Jinja2: the special "caller" argument must be omitted or be given a default
     if (renderer.HasInvalidCallerParam())
     {
-        return MakeParseError(ErrorCode::UnexpectedToken, info.token);
+        return MakeParseErrorMsg(ErrorCode::TemplateAssertionError, info.token, "When defining macros or call blocks the special \"caller\" argument must be omitted or be given a default.");
     }
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
@@ -1586,6 +1839,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         m_root.referenced.push_back(valueExpr);
     }
     m_nodes[renderer].SetImportNameExpr(valueExpr);
+    lexer.PositionText(stmtTok, [this, renderer](std::string_view text) { m_nodes[renderer].SetPosition(m_nodes.MakeText(text)); });
 
     // Every `name as alias` pair is kept in source order; a name imported twice binds both aliases
     std::vector<ImportName> names;
@@ -1878,7 +2132,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         // Jinja2: translatable variable defined twice
         if (trans->HasVariable(name))
         {
-            return MakeParseError(ErrorCode::UnexpectedToken, nameTok);
+            return MakeParseErrorMsg(ErrorCode::TemplateAssertionError, nameTok, "translatable variable '" + name + "' defined twice.");
         }
 
         NodeRef<Expression> value;
@@ -1933,7 +2187,11 @@ StatementsParser::ParseResult StatementsParser::ParseInTrans(LexScanner& lexer, 
     {
         return ParseEndTrans(lexer, statementsInfo, stmtTok);
     }
-    return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    if (name == "trans")
+    {
+        return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, stmtTok, "trans blocks can't be nested; did you mean `endtrans`?");
+    }
+    return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, stmtTok, "control structures in translatable sections are not allowed; saw `" + (stmtTok == Token::Identifier ? name : std::string("None")) + "`");
 }
 
 StatementsParser::ParseResult StatementsParser::ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
@@ -1942,7 +2200,7 @@ StatementsParser::ParseResult StatementsParser::ParsePluralize(LexScanner& lexer
     // Jinja2: a translatable section can have only one pluralize section
     if (trans.hasPlural)
     {
-        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+        return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, stmtTok, "a translatable section can have only one pluralize section");
     }
 
     // Without parameters the first name in the singular message selects the plural form
@@ -1963,7 +2221,7 @@ StatementsParser::ParseResult StatementsParser::ParsePluralize(LexScanner& lexer
         auto name = lexer.GetAsString(nameTok);
         if (!trans.HasParam(name))
         {
-            return MakeParseError(ErrorCode::UnexpectedToken, nameTok);
+            return MakeParseErrorMsg(ErrorCode::TemplateAssertionError, nameTok, "unknown variable '" + name + "' for pluralization");
         }
         trans.pluralVar = name;
     }
@@ -2060,7 +2318,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     // Jinja2: pluralize without variables
     if (trans.hasPlural && trans.pluralVar.empty())
     {
-        return MakeParseError(ErrorCode::UnexpectedStatement, info.token);
+        return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, info.token, "pluralize without variables");
     }
 
     AddTransMessageNames(m_nodes, m_names, trans);

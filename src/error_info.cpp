@@ -246,6 +246,10 @@ const char* CodeDescription(ErrorCode code) noexcept
         return "unexpected meta block begin";
     case ErrorCode::UnexpectedMetaEnd:
         return "unexpected meta block end";
+    case ErrorCode::TemplateSyntaxError:
+        return "template syntax error";
+    case ErrorCode::TemplateAssertionError:
+        return "template assertion error";
     }
     return "unknown error";
 }
@@ -423,9 +427,21 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<Char
     case ErrorCode::UnexpectedStatement:
     {
         auto& extraParams = errInfo.GetExtraParams();
-        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected statement: '{}'").GetValue<CharT>(), extraParams[0]);
+        if (extraParams.size() > 1)
+        {
+            // Jinja2's message of an unknown or misplaced tag
+            fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("{}").GetValue<CharT>(), extraParams[1]);
+        }
+        else
+        {
+            fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected statement: '{}'").GetValue<CharT>(), extraParams[0]);
+        }
         break;
     }
+    case ErrorCode::TemplateSyntaxError:
+    case ErrorCode::TemplateAssertionError:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("{}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
     case ErrorCode::UnexpectedCommentBegin:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Unexpected comment begin").GetValue<CharT>());
         break;

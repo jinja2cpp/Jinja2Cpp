@@ -215,6 +215,9 @@ struct LexerHelper
     virtual Keyword GetKeyword(const CharRange& range) = 0;
     // The line, from 1, of the source offset
     virtual unsigned GetLineNumber(size_t offset) = 0;
+    // Where the offset is, as Jinja2 words it in a message: `line 3`, or `line 3 in 'name'` for a named template.
+    // The text goes to `out`, from a buffer on the stack for a name that fits (a parse that succeeds allocates nothing)
+    virtual void PositionText(std::size_t offset, FunctionRef<void(std::string_view)> out) = 0;
 };
 
 using TokensList = std::vector<Token>;
@@ -983,6 +986,9 @@ public:
         }
         return m_helper->GetAsConvertedView(tok.range);
     }
+
+    // Where the token is, as Jinja2 words it in a message
+    void PositionText(const Token& tok, FunctionRef<void(std::string_view)> out) const { m_helper->PositionText(tok.range.startOffset, out); }
 
     // The value of a string or number literal
     [[nodiscard]] InternalValue GetValue(const Token& tok) const

@@ -19,7 +19,36 @@ from importlib import import_module
 
 from . import _jinja2cpp
 from .exceptions import TemplateNotFound
+from .exceptions import TemplatesNotFound
 from .exceptions import UnsupportedError
+
+
+def _not_in_search_path(template: t.Any, searchpath: t.Sequence[str]) -> TemplateNotFound:
+    """FileSystemLoader's TemplateNotFound, which names the search path as Jinja2's does."""
+    plural = "path" if len(searchpath) == 1 else "paths"
+    paths_str = ", ".join(repr(p) for p in searchpath)
+    return TemplateNotFound(template, f"{template!r} not found in search {plural}: {paths_str}")
+
+
+def _is_filesystem_loader(loader: t.Any) -> bool:
+    return any(c.__name__ == "FileSystemLoader" and c.__module__.split(".")[0] in ("jinja2", "jinja2cpp") for c in type(loader).__mro__)
+
+
+def _not_found(environment: t.Any, names: t.Any) -> TemplateNotFound:
+    """The exception for templates the engine did not find (the module raises it, docs/tasks/0432).
+
+    `names` is the name, or the list of names of an include, that the engine looked for. A list of
+    several is Jinja2's TemplatesNotFound (``.templates``, ``.name`` the last); one name under a
+    FileSystemLoader names the loader's search path as it is now.
+    """
+    if isinstance(names, (list, tuple)):
+        if len(names) != 1:
+            return TemplatesNotFound(list(names))
+        names = names[0]
+    loader = getattr(environment, "loader", None)
+    if isinstance(names, str) and _is_filesystem_loader(loader):
+        return _not_in_search_path(names, list(loader.searchpath))
+    return TemplateNotFound(names)
 
 
 def split_template_path(template: str) -> t.List[str]:
@@ -104,7 +133,7 @@ class FileSystemLoader(BaseLoader):
             if os.path.isfile(filename) and _confined(searchpath, filename):
                 break
         else:
-            raise TemplateNotFound(template)
+            raise _not_in_search_path(template, self.searchpath)
         with open(filename, encoding=self.encoding) as f:
             contents = f.read()
         mtime = os.path.getmtime(filename)

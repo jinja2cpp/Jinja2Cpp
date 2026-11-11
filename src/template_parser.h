@@ -13,6 +13,7 @@
 #include "load_settings.h"
 #include "make_unexpected.h"
 #include "node_arena.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "render_failure.h"
 #include "renderer.h"
@@ -32,6 +33,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -340,6 +342,9 @@ struct StatementInfo
     // A block's: what the enclosing body did with `self` before it (NodeArena::SelfUse). In the
     // padding after `renderer`, so the struct keeps its size
     NodeArena::SelfUse outerSelfUse = NodeArena::SelfUse::None;
+    // A required block's: it holds something but comments and whitespace, which Jinja2 reports at
+    // its end tag
+    bool requiredViolation = false;
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
     // The resolver's frame of the body (0117 P1)
@@ -372,6 +377,12 @@ struct StatementInfo
 // The statements open at the current tag, the template's root first. Few are open at once,
 // so the stack stays inline; no reference to an entry is kept across a push
 using StatementInfoList = SmallVector<StatementInfo, 4>;
+
+// Jinja2's message for a tag that is unknown or not where the innermost open statement looks for it
+// (parser.py `_fail_ut_eof`). An empty `name` is the end of the template
+std::string UnknownTagMessage(const NodeArena& nodes, const StatementInfoList& statementsInfo, std::string_view name);
+// Whether `name` is one of the tags the innermost open statement looks for (`endfor`, `else`, ...)
+bool IsExpectedEndTag(const NodeArena& nodes, const StatementInfoList& statementsInfo, std::string_view name);
 
 // What the template's root learns from its tags: the blocks it defines and whether it
 // extends another. The parse gives them to its TemplateRenderer at the end
@@ -515,6 +526,9 @@ public:
 
 private:
     ParseResult ParseNonKeywordStatement(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& tok);
+    // The tag is unknown, or not where Jinja2 looks for it: its message (parser.py `_fail_ut_eof`)
+    // (template_parser.cpp, out of the parse loop)
+    [[nodiscard]] nonstd::unexpected_type<ParseError> UnknownTagError(const StatementInfoList& statementsInfo, const Token& tok, std::string_view name) const;
     ParseResult ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
@@ -1675,7 +1689,7 @@ private:
         {
         case TextBlockType::RawBlock:
         case TextBlockType::RawText:
-            FineParseRawText(block, statementsStack, errors);
+            FineParseRawText(block, statementsStack);
             break;
         case TextBlockType::MetaBlock:
             FineParseMetaBlock(block);
@@ -1692,6 +1706,18 @@ private:
         }
     }
 
+    // Jinja2's error for a statement left open at the end of the template; out of line, off the parse's path
+    JINJA2CPP_NOINLINE
+    ParseError UnclosedError(const StatementInfoList& statementsStack) const
+    {
+        auto eof = m_template->size();
+        if (statementsStack.back().type == StatementInfo::TransStatement)
+        {
+            return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, MakeToken(Token::Eof, { eof, eof }), "unclosed translation block").error();
+        }
+        return MakeParseErrorMsg(ErrorCode::TemplateSyntaxError, MakeToken(Token::Eof, { eof, eof }), UnknownTagMessage(m_nodes, statementsStack, {})).error();
+    }
+
     nonstd::expected<void, std::vector<ParseError>> FinishFineParsing(NodeRef<TemplateRenderer> templateRef, StatementInfoList& statementsStack)
     {
         auto errors = std::move(m_fineErrors);
@@ -1703,11 +1729,7 @@ private:
         // Jinja2: a block statement left open at the end of the template is an error
         if (errors.empty() && statementsStack.size() > 1)
         {
-            auto eof = m_template->size();
-            auto& open = statementsStack.back();
-            errors.push_back(
-                MakeParseError(ErrorCode::ExpectedToken, MakeToken(Token::Eof, { eof, eof }), { MakeToken(GetEndToken(statementsStack), open.token.range) })
-                    .error());
+            errors.push_back(UnclosedError(statementsStack));
         }
 
         if (!errors.empty())
@@ -1744,7 +1766,7 @@ private:
         return nonstd::expected<void, std::vector<ParseError>>();
     }
 
-    void FineParseRawText(const TextBlockInfo& block, StatementInfoList& statementsStack, std::vector<ParseError>& errors)
+    void FineParseRawText(const TextBlockInfo& block, StatementInfoList& statementsStack)
     {
         auto range = block.range;
         if (range.size() == 0)
@@ -1753,8 +1775,7 @@ private:
         }
         if (IsInRequiredBlock(statementsStack) && !IsWhitespace(range))
         {
-            errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, range)).error());
-            return;
+            statementsStack.back().requiredViolation = true;
         }
         if (statementsStack.back().type == StatementInfo::TransStatement)
         {
@@ -1797,8 +1818,7 @@ private:
     {
         if (IsInRequiredBlock(statementsStack))
         {
-            errors.push_back(MakeParseError(ErrorCode::UnexpectedToken, MakeToken(Token::Identifier, block.range)).error());
-            return;
+            statementsStack.back().requiredViolation = true;
         }
         if (statementsStack.back().type == StatementInfo::TransStatement)
         {
@@ -1946,40 +1966,6 @@ private:
             return m_currentBlockInfo.range.startOffset < m_template->size();
         default:
             return false;
-        }
-    }
-
-    // The tag that closes the innermost open statement
-    static Token::Type GetEndToken(const StatementInfoList& statementsStack)
-    {
-        auto p = statementsStack.rbegin();
-        // `else` and `elif` are closed by the tag of the statement they continue
-        while (p->type == StatementInfo::ElseIfStatement && std::next(p) != statementsStack.rend())
-        {
-            ++p;
-        }
-        switch (p->type)
-        {
-        case StatementInfo::IfStatement:
-            return Token::EndIf;
-        case StatementInfo::ForStatement:
-            return Token::Endfor;
-        case StatementInfo::SetStatement:
-            return Token::EndSet;
-        case StatementInfo::BlockStatement:
-            return Token::EndBlock;
-        case StatementInfo::MacroStatement:
-            return Token::EndMacro;
-        case StatementInfo::MacroCallStatement:
-            return Token::EndCall;
-        case StatementInfo::WithStatement:
-            return Token::EndWith;
-        case StatementInfo::FilterStatement:
-            return Token::EndFilter;
-        case StatementInfo::AutoescapeStatement:
-            return Token::EndAutoescape;
-        default:
-            return Token::Eof;
         }
     }
 
@@ -2325,7 +2311,17 @@ private:
         errInfoData.srcLoc.fileName = m_templateName;
         OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
         errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
+        if (e.errorCode == ErrorCode::TemplateSyntaxError || e.errorCode == ErrorCode::TemplateAssertionError)
+        {
+            // Jinja2's message is all there is to it
+            errInfoData.extraParams.emplace_back(ConvertString<string_t>(e.message ? *e.message : std::string()));
+            return ErrorInfo(std::move(errInfoData));
+        }
         errInfoData.extraParams.emplace_back(TokenToString(e.errorToken));
+        if (e.message)
+        {
+            errInfoData.extraParams.emplace_back(ConvertString<string_t>(*e.message));
+        }
         for (const auto& tok : e.relatedTokens)
         {
             errInfoData.extraParams.emplace_back(TokenToString(tok));
@@ -2459,6 +2455,30 @@ public:
         return m_lineCount + 1;
     }
     bool TakeLiteralError() override { return std::exchange(m_literalError, false); }
+    void PositionText(std::size_t offset, FunctionRef<void(std::string_view)> out) override
+    {
+        const auto line = GetLineNumber(offset);
+        // A template from a string has no name in Jinja2 (the loader gives the default one)
+        const std::string_view name = m_templateName == "noname.j2tpl" ? std::string_view() : std::string_view(m_templateName);
+        constexpr std::string_view prefix = "line ";
+        constexpr std::string_view open = " in '";
+        std::array<char, 128> buffer{};
+        // "line " + at most 10 digits + " in '" + name + "'"
+        if (prefix.size() + 10 + open.size() + name.size() + 1 > buffer.size())
+        {
+            out("line " + std::to_string(line) + " in '" + std::string(name) + "'");
+            return;
+        }
+        auto* cur = std::copy(prefix.begin(), prefix.end(), buffer.data());
+        cur = std::to_chars(cur, buffer.data() + buffer.size(), line).ptr;
+        if (!name.empty())
+        {
+            cur = std::copy(open.begin(), open.end(), cur);
+            cur = std::copy(name.begin(), name.end(), cur);
+            *cur++ = '\'';
+        }
+        out(std::string_view(buffer.data(), static_cast<std::size_t>(cur - buffer.data())));
+    }
     Keyword GetKeyword(const CharRange& range) override
     {
         return traits_t::FindKeyword(std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size()));

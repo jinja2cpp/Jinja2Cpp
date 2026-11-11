@@ -128,6 +128,42 @@ public:
         }
         return written;
     }
+    // Each piece of output goes to the sink on its own (RenderOptions::writeEachPiece): a body flushes the
+    // stream after each of its nodes. Only the render's own stream is set; a stream that gathers a part of
+    // the output (a `{% set %}` block, a macro's result) never is
+    void WriteEachPiece() noexcept { m_eachPiece = true; }
+    [[nodiscard]] bool WritesEachPiece() const noexcept { return m_eachPiece; }
+    // A macro's output is one piece in Jinja2, as it is the value its call returns: the macro's body does not
+    // flush the stream while this lives
+    class PieceHold
+    {
+    public:
+        // Writes the stream only when it writes each piece: the usual render reads one flag
+        explicit PieceHold(OutStream& os) noexcept
+            : m_os(os)
+            , m_eachPiece(os.m_eachPiece)
+        {
+            if (m_eachPiece)
+            {
+                os.m_eachPiece = false;
+            }
+        }
+        ~PieceHold()
+        {
+            if (m_eachPiece)
+            {
+                m_os.m_eachPiece = true;
+            }
+        }
+        PieceHold(const PieceHold&) = delete;
+        PieceHold& operator=(const PieceHold&) = delete;
+        PieceHold(PieceHold&&) = delete;
+        PieceHold& operator=(PieceHold&&) = delete;
+
+    private:
+        OutStream& m_os;
+        bool m_eachPiece;
+    };
     // The sink a writer stream made from this one passes on (ReachesSink)
     [[nodiscard]] void* SinkToPassOn() const { return m_sink; }
 
@@ -208,6 +244,8 @@ private:
     alignas(wchar_t) unsigned char m_buffer[BufferLength * sizeof(wchar_t)];
     unsigned char* m_cur = m_buffer;
     unsigned char* m_end = m_buffer + BufferLength;
+    // Last: before m_buffer it pads to the alignas, which MSVC reports (C4324)
+    bool m_eachPiece = false;
 };
 
 // Renders into a new string with `render(OutStream&)` and returns it

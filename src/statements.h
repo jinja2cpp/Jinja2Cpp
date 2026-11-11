@@ -662,6 +662,9 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
+    // The lookup by the value of the name expression, out of Render's fast path for a constant name found before
+    void RenderByNames(RenderContext& values, FunctionRef<bool(const IRendererCallback::LoadTemplateResult&)> doRender) const;
+
     bool m_ignoreMissing{};
     bool m_withContext{};
     bool m_isConstant{};
@@ -676,6 +679,7 @@ public:
     {
         refs(m_nameExpr);
         refs(m_namespace);
+        refs(m_position);
         refs(m_namesToImport, [](detail::RefChecker& checker, const ImportName& name) {
             checker(name.name);
             checker(name.alias);
@@ -691,6 +695,9 @@ public:
         m_nameExpr = std::move(expr);
     }
 
+    // Where the statement is, as Jinja2 words it: `line 1`
+    void SetPosition(ArenaText position) { m_position = position; }
+
     // `import 'm' as namespace`
     void SetNamespace(ArenaText name, std::size_t hash)
     {
@@ -703,9 +710,10 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    void ImportNames(RenderContext& values, const ArenaView& nodes, const ImportedModule& module) const;
+    void ImportNames(RenderContext& values, const ArenaView& nodes, const ImportedModule& module, const InternalValue& moduleName) const;
 
     bool m_withContext{};
+    ArenaText m_position;
     NodeRef<Expression> m_nameExpr;
     // Empty for `from ... import`
     ArenaText m_namespace;

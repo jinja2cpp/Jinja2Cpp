@@ -49,7 +49,37 @@ public:
 class TemplateRuntimeError : public std::runtime_error
 {
 public:
+    //! The Python exception class Jinja2 raises for the failure, when the engine knows it
+    enum class PythonClass : unsigned char
+    {
+        Unknown,
+        TypeError,
+        ValueError
+    };
+
     using std::runtime_error::runtime_error;
+    TemplateRuntimeError(PythonClass pythonClass, const std::string& message)
+        : std::runtime_error(message)
+        , m_pythonClass(pythonClass)
+    {
+    }
+    //! The name of the class (ExtraParams[1] of the error), or null when unknown
+    [[nodiscard]] const char* PythonClassName() const noexcept
+    {
+        switch (m_pythonClass)
+        {
+        case PythonClass::TypeError:
+            return "TypeError";
+        case PythonClass::ValueError:
+            return "ValueError";
+        case PythonClass::Unknown:
+            break;
+        }
+        return nullptr;
+    }
+
+private:
+    PythonClass m_pythonClass = PythonClass::Unknown;
 };
 
 // Python's UndefinedError: ErrorCode::UndefinedError

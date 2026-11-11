@@ -356,7 +356,7 @@ INSTANTIATE_TEST_SUITE_P(BasicTest, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% if %}",
                                             "noname.j2tpl:1:7: error: Expected expression, got: '<<End of block>>'\n{% if %}\n   ---^-------"},
                             InputOutputPair{"{% endif %}",
-                                            "noname.j2tpl:1:4: error: Unexpected statement: 'endif'\n{% endif %}\n---^-------"},
+                                            "noname.j2tpl:1:4: error: Encountered unknown tag 'endif'.\n{% endif %}\n---^-------"},
                             InputOutputPair{"Hello World!\n    {% if %}",
                                             "noname.j2tpl:2:11: error: Expected expression, got: '<<End of block>>'\n    {% if %}\n       ---^-------"},
                             InputOutputPair{"Hello World!\n\t{% if %}",
@@ -460,15 +460,15 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% if %}",
                                             "noname.j2tpl:1:7: error: Expected expression, got: '<<End of block>>'\n{% if %}\n   ---^-------"},
                             InputOutputPair{"{% endif %}",
-                                            "noname.j2tpl:1:4: error: Unexpected statement: 'endif'\n{% endif %}\n---^-------"},
+                                            "noname.j2tpl:1:4: error: Encountered unknown tag 'endif'.\n{% endif %}\n---^-------"},
                             InputOutputPair{"{% endfor %}",
-                                            "noname.j2tpl:1:4: error: Unexpected statement: 'endfor'\n{% endfor %}\n---^-------"},
+                                            "noname.j2tpl:1:4: error: Encountered unknown tag 'endfor'.\n{% endfor %}\n---^-------"},
                             InputOutputPair{"{% else hello %}",
-                                            "noname.j2tpl:1:4: error: Unexpected statement: 'else'\n{% else hello %}\n---^-------"},
+                                            "noname.j2tpl:1:4: error: Encountered unknown tag 'else'.\n{% else hello %}\n---^-------"},
                             InputOutputPair{"{% if a %}{% else hello %}",
                                             "noname.j2tpl:1:19: error: Expected end of statement, got: 'hello'\n{% if a %}{% else hello %}\n               ---^-------"},
                             InputOutputPair{"{% elif %}",
-                                            "noname.j2tpl:1:4: error: Unexpected statement: 'elif'\n{% elif %}\n---^-------"},
+                                            "noname.j2tpl:1:4: error: Encountered unknown tag 'elif'.\n{% elif %}\n---^-------"},
                             InputOutputPair{"{% if a %}{% elif %}",
                                             "noname.j2tpl:1:19: error: Expected expression, got: '<<End of block>>'\n{% if a %}{% elif %}\n               ---^-------"},
                             InputOutputPair{"{% for %}",
@@ -480,7 +480,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% for i on range(10)%}",
                                             "noname.j2tpl:1:10: error: Unexpected token 'on'. Expected: '<<Identifier>>', 'in', ','\n{% for i on range(10)%}\n      ---^-------"},
                             InputOutputPair{"{% for i in range(10,)%}",
-                                            "noname.j2tpl:1:25: error: Unexpected token '<<End of block>>'. Expected: 'endfor'\n{% for i in range(10,)%}\n                     ---^-------"},
+                                            "noname.j2tpl:1:25: error: Unexpected end of template. Jinja was looking for the following tags: 'endfor' or 'else'. The innermost block that needs to be closed is 'for'.\n{% for i in range(10,)%}\n                     ---^-------"},
                             InputOutputPair{"{% for i in range(10) rec%}",
                                             "noname.j2tpl:1:23: error: Unexpected token 'rec'. Expected: 'if', 'recursive', '<<End of block>>'\n{% for i in range(10) rec%}\n                   ---^-------"},
                             InputOutputPair{"{% for i in range(10) endfor%}",
@@ -490,11 +490,11 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% for i in range(10) if true else hello %}",
                                             "noname.j2tpl:1:31: error: Expected end of statement, got: 'else'\n{% for i in range(10) if true else hello %}\n                           ---^-------"},
                             InputOutputPair{"{% for i in range(10) %}\n{% endif %}",
-                                            "noname.j2tpl:2:4: error: Unexpected statement: 'endif'\n{% endif %}\n---^-------"},
+                                            "noname.j2tpl:2:4: error: Encountered unknown tag 'endif'. Jinja was looking for the following tags: 'endfor' or 'else'. The innermost block that needs to be closed is 'for'.\n{% endif %}\n---^-------"},
                             InputOutputPair{"{% if true %}\n{% for i in range(10) %}\n{% endif %}",
-                                            "noname.j2tpl:3:4: error: Unexpected statement: 'endif'\n{% endif %}\n---^-------"},
+                                            "noname.j2tpl:3:4: error: Encountered unknown tag 'endif'. You probably made a nesting mistake. Jinja is expecting this tag, but currently looking for 'endfor' or 'else'. The innermost block that needs to be closed is 'for'.\n{% endif %}\n---^-------"},
                             InputOutputPair{"{% if true %}\n{% endfor %}",
-                                            "noname.j2tpl:2:4: error: Unexpected statement: 'endfor'\n{% endfor %}\n---^-------"},
+                                            "noname.j2tpl:2:4: error: Encountered unknown tag 'endfor'. Jinja was looking for the following tags: 'elif' or 'else' or 'endif'. The innermost block that needs to be closed is 'if'.\n{% endfor %}\n---^-------"},
                             InputOutputPair{"{% set %}",
                                             "noname.j2tpl:1:8: error: Identifier expected\n{% set %}\n    ---^-------"},
                             InputOutputPair{"{% set 10%}",
@@ -502,7 +502,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% set i = {key] %}",
                                             "noname.j2tpl:1:16: error: Unexpected token ']'. Expected: ':'\n{% set i = {key] %}\n            ---^-------"},
                             InputOutputPair{"{% set id=10%}\n{% endset %}",
-                                            "noname.j2tpl:2:4: error: Unexpected statement: 'endset'\n{% endset %}\n---^-------"},
+                                            "noname.j2tpl:2:4: error: Encountered unknown tag 'endset'.\n{% endset %}\n---^-------"},
                             InputOutputPair{"{% extends %}",
                                             "noname.j2tpl:1:12: error: Unexpected token: '<<End of block>>'\n{% extends %}\n        ---^-------"},
                             InputOutputPair{"{% for i in x %}{% extends 'a' %}{% endfor %}",
@@ -533,11 +533,11 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_1, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% block a %}{% endblock %}{% block a %}{% endblock %}",
                                             "noname.j2tpl:1:31: error: Unexpected statement: 'block'\n{% block a %}{% endblock %}{% block a %}{% endblock %}\n                           ---^-------"},
                             InputOutputPair{"{% block a required %}x{% endblock %}",
-                                            "noname.j2tpl:1:23: error: Unexpected token: 'x'\n{% block a required %}x{% endblock %}\n                   ---^-------"},
+                                            "noname.j2tpl:1:27: error: Required blocks can only contain comments or whitespace\n{% block a required %}x{% endblock %}\n                       ---^-------"},
                             InputOutputPair{"{% block a required %}{{ x }}{% endblock %}",
-                                            "noname.j2tpl:1:25: error: Unexpected token: ' x '\n{% block a required %}{{ x }}{% endblock %}\n                     ---^-------"},
+                                            "noname.j2tpl:1:33: error: Required blocks can only contain comments or whitespace\n{% block a required %}{{ x }}{% endblock %}\n                             ---^-------"},
                             InputOutputPair{"{% block a required %}{% if x %}{% endif %}{% endblock %}",
-                                            "noname.j2tpl:1:26: error: Unexpected statement: 'if'\n{% block a required %}{% if x %}{% endif %}{% endblock %}\n                      ---^-------"},
+                                            "noname.j2tpl:1:47: error: Required blocks can only contain comments or whitespace\n{% block a required %}{% if x %}{% endif %}{% endblock %}\n                                           ---^-------"},
                             InputOutputPair{"{% from 'foo' import %}",
                                             "noname.j2tpl:1:22: error: Unexpected token '<<End of block>>'. Expected: '<<Identifier>>'\n{% from 'foo' import %}\n                  ---^-------"},
                             InputOutputPair{"{% from 'foo' import bar, %}",
@@ -560,7 +560,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% block somename %}{% endblock 10 %}",
                                             "noname.j2tpl:1:33: error: Expected end of statement, got: '10'\n{% block somename %}{% endblock 10 %}\n                             ---^-------"},
                             InputOutputPair{"{% endblock %}{% endblock %}",
-                                            "noname.j2tpl:1:4: error: Unexpected statement: 'endblock'\n{% endblock %}{% endblock %}\n---^-------"},
+                                            "noname.j2tpl:1:4: error: Encountered unknown tag 'endblock'.\n{% endblock %}{% endblock %}\n---^-------"},
                             InputOutputPair{"{% macro 10 %}{% endmacro %}",
                                             "noname.j2tpl:1:10: error: Identifier expected\n{% macro 10 %}{% endmacro %}\n      ---^-------"},
                             InputOutputPair{"{% macro name(10) %}{% endmacro %}",
@@ -576,7 +576,7 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% macro name(param=*) %}{% endmacro %}",
                                             "noname.j2tpl:1:21: error: Unexpected token: '*'\n{% macro name(param=*) %}{% endmacro %}\n                 ---^-------"},
                             InputOutputPair{"{% block b %}{% endmacro %}",
-                                            "noname.j2tpl:1:17: error: Unexpected statement: 'endmacro'\n{% block b %}{% endmacro %}\n             ---^-------"},
+                                            "noname.j2tpl:1:17: error: Encountered unknown tag 'endmacro'. Jinja was looking for the following tags: 'endblock'. The innermost block that needs to be closed is 'block'.\n{% block b %}{% endmacro %}\n             ---^-------"},
                             InputOutputPair{"{% call 10 %}{% endcall %}",
                                             "noname.j2tpl:1:9: error: Unexpected token: '10'\n{% call 10 %}{% endcall %}\n     ---^-------"},
                             InputOutputPair{"{% call name(=10) %}{% endcall %}",
@@ -598,11 +598,11 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% call name(param=*) %}{% endcall %}",
                                             "noname.j2tpl:1:20: error: Unexpected token: '*'\n{% call name(param=*) %}{% endcall %}\n                ---^-------"},
                             InputOutputPair{"{% block b %}{% endcall %}",
-                                            "noname.j2tpl:1:17: error: Unexpected statement: 'endcall'\n{% block b %}{% endcall %}\n             ---^-------"},
+                                            "noname.j2tpl:1:17: error: Encountered unknown tag 'endcall'. Jinja was looking for the following tags: 'endblock'. The innermost block that needs to be closed is 'block'.\n{% block b %}{% endcall %}\n             ---^-------"},
                             InputOutputPair{"{% do 'Hello World' %}",
                                             "noname.j2tpl:1:4: error: Extension disabled\n{% do 'Hello World' %}\n---^-------"},
                             InputOutputPair{"{% with %}{% endif %}",
-                                            "noname.j2tpl:1:14: error: Unexpected statement: 'endif'\n{% with %}{% endif %}\n          ---^-------"},
+                                            "noname.j2tpl:1:14: error: Encountered unknown tag 'endif'. Jinja was looking for the following tags: 'endwith'. The innermost block that needs to be closed is 'with'.\n{% with %}{% endif %}\n          ---^-------"},
                             InputOutputPair{"{% with a %}{% endif %}",
                                             "noname.j2tpl:1:11: error: Unexpected token '<<End of block>>'. Expected: '='\n{% with a %}{% endif %}\n       ---^-------"},
                             InputOutputPair{"{% with a 42 %}{% endif %}",
@@ -612,13 +612,13 @@ INSTANTIATE_TEST_SUITE_P(StatementsTest_2, ErrorsGenericTest, ::testing::Values(
                             InputOutputPair{"{% with a = 42 b = 30 %}{% endif %}",
                                             "noname.j2tpl:1:16: error: Unexpected token 'b'. Expected: '<<End of block>>', ','\n{% with a = 42 b = 30 %}{% endif %}\n            ---^-------"},
                             InputOutputPair{"{% with a = 42, %}{% endif %}",
-                                            "noname.j2tpl:1:22: error: Unexpected statement: 'endif'\n{% with a = 42, %}{% endif %}\n                  ---^-------"},
+                                            "noname.j2tpl:1:22: error: Encountered unknown tag 'endif'. Jinja was looking for the following tags: 'endwith'. The innermost block that needs to be closed is 'with'.\n{% with a = 42, %}{% endif %}\n                  ---^-------"},
 // FIXME:                            InputOutputPair{"{% with a = 42 %}",
 //                                            "noname.j2tpl:1:4: error: Extension disabled\n{% do 'Hello World' %}\n---^-------"},
                             InputOutputPair{"{% with a = 42 %}{% endfor %}",
-                                            "noname.j2tpl:1:21: error: Unexpected statement: 'endfor'\n{% with a = 42 %}{% endfor %}\n                 ---^-------"},
+                                            "noname.j2tpl:1:21: error: Encountered unknown tag 'endfor'. Jinja was looking for the following tags: 'endwith'. The innermost block that needs to be closed is 'with'.\n{% with a = 42 %}{% endfor %}\n                 ---^-------"},
                             InputOutputPair{"{% if a == 42 %}{% endwith %}",
-                                            "noname.j2tpl:1:20: error: Unexpected statement: 'endwith'\n{% if a == 42 %}{% endwith %}\n                ---^-------"},
+                                            "noname.j2tpl:1:20: error: Encountered unknown tag 'endwith'. Jinja was looking for the following tags: 'elif' or 'else' or 'endif'. The innermost block that needs to be closed is 'if'.\n{% if a == 42 %}{% endwith %}\n                ---^-------"},
                             InputOutputPair{"{{}}",
                                             "noname.j2tpl:1:3: error: Unexpected token: '<<End of block>>'\n{{}}\n--^-------"},
                             InputOutputPair{"{% raw %}{% raw %}{{ x }{% endraw %}{% endraw %}",
@@ -1130,4 +1130,162 @@ TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
     EXPECT_TRUE(result.error().GetException());
+}
+
+// Jinja2's own messages and classes for what the parser and the evaluator reject (docs/tasks/0432). The
+// messages are those of Jinja2 3.1.6; the line is the offending tag's
+namespace
+{
+struct JinjaMessageRow
+{
+    const char* source;
+    ErrorCode code;
+    unsigned line;
+    const char* message;
+};
+
+const JinjaMessageRow kJinjaMessageRows[] = {
+    // Unknown and misplaced tags: UnexpectedStatement, ExtraParams[0] the tag, [1] the message
+    { "{% for item in seq %}...{% endif %}", ErrorCode::UnexpectedStatement, 1,
+      "Encountered unknown tag 'endif'. Jinja was looking for the following tags: 'endfor' or 'else'. The innermost block that needs to be closed is 'for'." },
+    { "{% if foo %}{% for item in seq %}...{% endfor %}{% endfor %}", ErrorCode::UnexpectedStatement, 1,
+      "Encountered unknown tag 'endfor'. Jinja was looking for the following tags: 'elif' or 'else' or 'endif'. The innermost block that needs to be closed is 'if'." },
+    { "{% endif %}", ErrorCode::UnexpectedStatement, 1,
+      "Encountered unknown tag 'endif'." },
+    { "\n{% unknown_tag %}", ErrorCode::UnexpectedStatement, 2,
+      "Encountered unknown tag 'unknown_tag'." },
+    { "{% block foo-bar-baz %}{% endblock %}", ErrorCode::TemplateSyntaxError, 1,
+      "Block names in Jinja have to be valid Python identifiers and may not contain hyphens, use an underscore instead." },
+    { "{% block a required -b %}{% endblock %}", ErrorCode::TemplateSyntaxError, 1,
+      "Block names in Jinja have to be valid Python identifiers and may not contain hyphens, use an underscore instead." },
+    { "{% for x in y %}{% else %}{% else %}", ErrorCode::UnexpectedStatement, 1,
+      "Encountered unknown tag 'else'. Jinja was looking for the following tags: 'endfor'. The innermost block that needs to be closed is 'for'." },
+    { "{% for x in y %}{% if a %}{% endfor %}", ErrorCode::UnexpectedStatement, 1,
+      "Encountered unknown tag 'endfor'. You probably made a nesting mistake. Jinja is expecting this tag, but currently looking for 'elif' or 'else' or 'endif'. The innermost "
+      "block that needs to be closed is 'if'." },
+    { "{% if a %}{% else %}{% elif b %}{% endif %}", ErrorCode::UnexpectedStatement, 1,
+      "Encountered unknown tag 'elif'. Jinja was looking for the following tags: 'endif'. The innermost block that needs to be closed is 'if'." },
+    { "{% macro m() %}\n{% endif %}", ErrorCode::UnexpectedStatement, 2,
+      "Encountered unknown tag 'endif'. Jinja was looking for the following tags: 'endmacro'. The innermost block that needs to be closed is 'macro'." },
+    { "{% pluralize %}", ErrorCode::UnexpectedStatement, 1,
+      "Encountered unknown tag 'pluralize'." },
+    // The end of the template inside a statement
+    { "{% if foo %}", ErrorCode::TemplateSyntaxError, 1,
+      "Unexpected end of template. Jinja was looking for the following tags: 'elif' or 'else' or 'endif'. The innermost block that needs to be closed is 'if'." },
+    { "{% for x in y %}{% if a %}{% else %}", ErrorCode::TemplateSyntaxError, 1,
+      "Unexpected end of template. Jinja was looking for the following tags: 'endif'. The innermost block that needs to be closed is 'if'." },
+    // The i18n extension
+    { "{% trans %}foo{% trans %}{% endtrans %}", ErrorCode::TemplateSyntaxError, 1,
+      "trans blocks can't be nested; did you mean `endtrans`?" },
+    { "{% trans %}foo{% wibble bar %}{% endwibble %}{% endtrans %}", ErrorCode::TemplateSyntaxError, 1,
+      "control structures in translatable sections are not allowed; saw `wibble`" },
+    { "{% trans %}foo{% pluralize %}a{% pluralize %}b{% endtrans %}", ErrorCode::TemplateSyntaxError, 1,
+      "a translatable section can have only one pluralize section" },
+    { "{% trans foo %}x{% pluralize bar %}y{% endtrans %}", ErrorCode::TemplateAssertionError, 1,
+      "unknown variable 'bar' for pluralization" },
+    { "{% trans x=1, x=2 %}x{% endtrans %}", ErrorCode::TemplateAssertionError, 1,
+      "translatable variable 'x' defined twice." },
+    { "{% trans %}foo", ErrorCode::TemplateSyntaxError, 1,
+      "unclosed translation block" },
+    { "{% trans %}{% pluralize %}x{% endtrans %}", ErrorCode::TemplateSyntaxError, 1,
+      "pluralize without variables" },
+    // Required blocks, reported at the end tag
+    { "{% block x required %}data {# c #}{% endblock %}", ErrorCode::TemplateSyntaxError, 1,
+      "Required blocks can only contain comments or whitespace" },
+    { "{% block x required %}{% block y %}{% endblock %}{% endblock %}", ErrorCode::TemplateSyntaxError, 1,
+      "Required blocks can only contain comments or whitespace" },
+    { "{% block x required %}{% if a %}{% endif %}{% endblock %}", ErrorCode::TemplateSyntaxError, 1,
+      "Required blocks can only contain comments or whitespace" },
+    { "{% block x required %}\n{{ a }}\n\n{% endblock %}", ErrorCode::TemplateSyntaxError, 4,
+      "Required blocks can only contain comments or whitespace" },
+    // The special caller argument
+    { "{% macro x(caller) %}{{ caller() }}{% endmacro %}", ErrorCode::TemplateAssertionError, 1,
+      "When defining macros or call blocks the special \"caller\" argument must be omitted or be given a default." },
+    { "{% call(caller) f() %}{{ caller() }}{% endcall %}", ErrorCode::TemplateAssertionError, 1,
+      "When defining macros or call blocks the special \"caller\" argument must be omitted or be given a default." },
+};
+
+template<typename CharT>
+void CheckJinjaMessageRow(const JinjaMessageRow& row)
+{
+    TemplateEnv env;
+    env.GetSettings().extensions.i18n = true;
+    BasicTemplate<CharT> tpl(&env);
+    auto result = tpl.Load(ConvertString<std::basic_string<CharT>>(std::string(row.source)));
+    ASSERT_FALSE(result.has_value()) << row.source;
+    const auto& error = result.error();
+    EXPECT_EQ(row.code, error.GetCode()) << row.source;
+    EXPECT_EQ(row.line, error.GetErrorLocation().line) << row.source;
+    const auto& params = error.GetExtraParams();
+    const std::size_t at = row.code == ErrorCode::UnexpectedStatement ? 1 : 0;
+    ASSERT_GT(params.size(), at) << row.source;
+    EXPECT_EQ(ConvertString<std::basic_string<CharT>>(std::string(row.message)), params[at].template As<std::basic_string<CharT>>()) << row.source;
+    // The text of the error is Jinja2's message
+    EXPECT_NE(std::string::npos, ConvertString<std::string>(error.ToString()).find(row.message)) << row.source;
+}
+} // namespace
+
+TEST(ErrorsJinjaMessagesTest, Narrow)
+{
+    for (const auto& row : kJinjaMessageRows)
+    {
+        CheckJinjaMessageRow<char>(row);
+    }
+}
+
+TEST(ErrorsJinjaMessagesTest, Wide)
+{
+    for (const auto& row : kJinjaMessageRows)
+    {
+        CheckJinjaMessageRow<wchar_t>(row);
+    }
+}
+
+TEST(ErrorsJinjaMessagesTest, UnknownTagKeepsItsNameFirst)
+{
+    Template tpl;
+    auto result = tpl.Load("{% for x in y %}{% endif %}");
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedStatement, result.error().GetCode());
+    EXPECT_EQ("endif", result.error().GetExtraParams().at(0).AsString());
+    static_assert(static_cast<int>(ErrorCode::TemplateSyntaxError) == 1023);
+    static_assert(static_cast<int>(ErrorCode::TemplateAssertionError) == 1024);
+}
+
+// The Python class of an engine runtime error, as ExtraParams[1] (docs/tasks/0432)
+TEST(ErrorsJinjaMessagesTest, RuntimeErrorsNameTheirPythonClass)
+{
+    struct Row
+    {
+        const char* source;
+        const char* pythonClass; // null: none
+        const char* message;
+    };
+    const Row rows[] = {
+        { "{% for item in none %}{% endfor %}", "TypeError", "'NoneType' object is not iterable" },
+        { "{{ 'abc'[missing:] }}", "TypeError", "slice indices must be integers or None or have an __index__ method" },
+        { "{{ {'class\\tonclick=alert(1)': 1}|xmlattr }}", "ValueError", "Invalid character in attribute name: 'class\\tonclick=alert(1)'" },
+        { "{{ {\"a'b c\": 1}|xmlattr }}", "ValueError", "Invalid character in attribute name: \"a'b c\"" },
+        { "{% macro m(caller=1) %}{{ caller }}{% endmacro %}{{ m(1, caller=2) }}", "TypeError",
+          "macro 'm' was invoked with two values for the special caller argument. This is most likely a bug." },
+        // Not reclassified
+        { "{{ 1 + 'a' }}", nullptr, nullptr },
+    };
+    for (const auto& row : rows)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(row.source).has_value()) << row.source;
+        const auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << row.source;
+        EXPECT_EQ(ErrorCode::TemplateRuntimeError, result.error().GetCode()) << row.source;
+        const auto& params = result.error().GetExtraParams();
+        if (!row.pythonClass)
+        {
+            EXPECT_EQ(1U, params.size()) << row.source;
+            continue;
+        }
+        ASSERT_EQ(2U, params.size()) << row.source;
+        EXPECT_EQ(row.message, params[0].AsString()) << row.source;
+        EXPECT_EQ(row.pythonClass, params[1].AsString()) << row.source;
+    }
 }

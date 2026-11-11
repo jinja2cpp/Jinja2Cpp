@@ -2008,7 +2008,7 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
         }
         else if (!IsEmpty(schemesVal) && !GetAsSameString(srcStr, schemesVal))
         {
-            throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(schemesVal) + "' object is not iterable");
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + Apply<visitors::PythonTypeNameGetter>(schemesVal) + "' object is not iterable");
         }
 
         // Python slices each URL with the limit, which fails for an undefined one (docs/tasks/0310)

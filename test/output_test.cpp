@@ -244,6 +244,76 @@ TEST(OutputTest, SinkGetsBufferedChunks)
     }
 }
 
+TEST(OutputTest, SinkGetsEachPieceWhenAsked)
+{
+    // RenderOptions::writeEachPiece: one Write for each piece, Jinja2's generate() items (docs/tasks/0436); a
+    // macro's or a call block's output is one piece, as the value its call returns
+    const char* source = "<ul>{% for item in seq %}<li>{{ loop.index }} - {{ item }}</li>{%- endfor %}</ul>"
+                         "{% macro m(a) %}[{{ a }}]{% endmacro %}{{ m(1) }}{% macro c() %}[{{ caller() }}]{% endmacro %}{% call c() %}{{ 2 }}{% endcall %}|{% set s %}a{{ 1 }}b{% endset %}{{ s }}";
+    const std::vector<std::string> expected = { "<ul>", "<li>", "1", " - ", "0", "</li>", "<li>", "2", " - ", "1", "</li>", "</ul>", "[1]", "[2]", "|", "a1b" };
+    const ValuesMap params = { { "seq", ValuesList{ 0, 1 } } };
+    RenderOptions options;
+    options.writeEachPiece = true;
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(source));
+    RecordingSink<char> sink;
+    ASSERT_TRUE(tpl.RenderTo(sink, params, options));
+    EXPECT_EQ(sink.chunks, expected);
+
+    TemplateW wide;
+    const std::string narrow = source;
+    ASSERT_TRUE(wide.Load(std::wstring(narrow.begin(), narrow.end())));
+    RecordingSink<wchar_t> wideSink;
+    ASSERT_TRUE(wide.RenderTo(wideSink, params, options));
+    ASSERT_EQ(wideSink.chunks.size(), expected.size());
+    for (std::size_t idx = 0; idx != expected.size(); ++idx)
+    {
+        EXPECT_EQ(wideSink.chunks[idx], std::wstring(expected[idx].begin(), expected[idx].end())) << idx;
+    }
+
+    // A render to a string ignores it, and the default gathers the pieces
+    std::string text;
+    ASSERT_TRUE(tpl.RenderTo(text, params, options));
+    EXPECT_EQ(text, tpl.RenderAsString(params).value());
+    RecordingSink<char> gathered;
+    ASSERT_TRUE(tpl.RenderTo(gathered, params));
+    EXPECT_EQ(gathered.chunks.size(), 1U);
+}
+
+TEST(OutputTest, EachPieceRenderKeepsItsPiecesAroundOthersOnTheThread)
+{
+    // The piece flush rides the stack check's slow path (EachPieceScope): a render with limits, and a render a
+    // callable runs inside it, leave the outer render's pieces as they are, and the next render gathers again
+    Template inner;
+    ASSERT_TRUE(inner.Load("x{{ 1 }}y"));
+    TemplateEnv env;
+    env.GetSettings().limits = UntrustedLimits();
+    Template limited(&env);
+    ASSERT_TRUE(limited.Load("p{{ 2 }}q"));
+    const ValuesMap params = { { "f", MakeCallable([&inner]() { return inner.RenderAsString({}).value(); }) },
+                               { "g", MakeCallable([&limited]() { return limited.RenderAsString({}).value(); }) } };
+    RenderOptions options;
+    options.writeEachPiece = true;
+
+    Template outer;
+    ASSERT_TRUE(outer.Load("a{{ f() }}b{{ g() }}c{{ 3 }}"));
+    RecordingSink<char> sink;
+    ASSERT_TRUE(outer.RenderTo(sink, params, options));
+    EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "a", "x1y", "b", "p2q", "c", "3" }));
+
+    // With limits of its own
+    Template outerLimited(&env);
+    ASSERT_TRUE(outerLimited.Load("a{{ f() }}b{{ 3 }}"));
+    RecordingSink<char> limitedSink;
+    ASSERT_TRUE(outerLimited.RenderTo(limitedSink, params, options));
+    EXPECT_EQ(limitedSink.chunks, (std::vector<std::string>{ "a", "x1y", "b", "3" }));
+
+    RecordingSink<char> gathered;
+    ASSERT_TRUE(outer.RenderTo(gathered, params));
+    EXPECT_EQ(gathered.chunks, (std::vector<std::string>{ "ax1ybp2qc3" }));
+}
+
 TEST(OutputTest, SinkGetsLongFragmentsAsTheirOwnChunks)
 {
     // A text fragment of 128 characters or more skips the buffer: what the buffer holds goes first

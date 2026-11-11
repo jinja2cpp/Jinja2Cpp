@@ -194,16 +194,16 @@ class Template(_jinja2cpp.Template):
             raise
 
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
-        """Render the template as a generator of strings: the chunks the engine writes (up to 512
-        characters each, docs/python.md). The render runs at the first item; an error it raises
-        comes after the chunks written before it, as in Jinja2."""
-        chunks: t.List[str] = []
+        """Render the template as a generator of strings: Jinja2's items (a run of text, the value of a
+        ``{{ }}``, a macro's output). The render runs at the first item, on the caller's thread
+        (docs/python.md); an error comes after the items written before it, as in Jinja2."""
+        items: t.List[str] = []
         error: t.Optional[BaseException] = None
         try:
-            self._render_to(chunks.append, *args, **kwargs)
-        except Exception as raised:  # noqa: BLE001 - raised again after the chunks before it
+            self._render_to(items.append, *args, **kwargs)
+        except BaseException as raised:  # noqa: BLE001 - raised again after the items before it
             error = raised
-        yield from chunks
+        yield from items
         if error is not None:
             raise error
 

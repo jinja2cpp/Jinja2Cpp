@@ -4,12 +4,16 @@
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/generic_list_iterator.h>
+#include <jinja2cpp/make_generic_list.h>
+#include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
+#include <vector>
 
 // Test cases are taken from the pandor/Jinja2 tests
 
@@ -192,4 +196,33 @@ R"({% macro outer(o) %}
 {{ outer("FOO") }})");
 
     EXPECT_EQ("\n\n\n\n(FOO)\n", result);
+}
+
+// A list of names a host passes (a GenericList, a reflected vector, a generated list) is tried
+// name by name, as a template list is (docs/tasks/0432)
+TEST_F(IncludeTest, TestChoiceIncludesFromHostList)
+{
+    const std::vector<std::string> names{ "missing", "header" };
+    jinja2::ValuesMap params{ { "foo", 42 }, { "x", jinja2::MakeGenericList(names.begin(), names.end()) } };
+    EXPECT_EQ("[42|23]", Render(R"({% include x %})", params));
+
+    params["x"] = jinja2::Reflect(names);
+    EXPECT_EQ("[42|23]", Render(R"({% include x %})", params));
+
+    params["x"] = jinja2::Value(jinja2::MakeGenericList(jinja2::ListGenerator([n = 0]() mutable -> std::optional<jinja2::Value> {
+        static const char* const generated[] = { "missing", "header" };
+        return n < 2 ? std::optional<jinja2::Value>(jinja2::Value(generated[n++])) : std::nullopt;
+    })));
+    EXPECT_EQ("[42|23]", Render(R"({% include x %})", params));
+
+    // Nothing found: the names tried are the error's list
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{% include x %}").has_value());
+    const std::vector<std::string> none{ "missing", "missing2" };
+    auto result = tpl.RenderAsString({ { "x", jinja2::MakeGenericList(none.begin(), none.end()) } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, result.error().GetCode());
+    const auto* tried = std::get_if<jinja2::GenericList>(&result.error().GetExtraParams().at(0).GetData());
+    ASSERT_NE(nullptr, tried);
+    EXPECT_EQ(2ULL, tried->GetSize().value());
 }

@@ -71,8 +71,33 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override
     {
-        // Every statement body: nested blocks recurse through here
-        CheckStack();
+        // Every statement body: nested blocks recurse through here. A render that writes each piece
+        // (RenderOptions::writeEachPiece) takes the check's slow path (EachPieceScope), so the usual
+        // render tests nothing more
+        if (CheckStackTookSlowPath() && os.WritesEachPiece())
+        {
+            RenderEachPiece(os, values);
+            return;
+        }
+        RenderNodes<false>(os, values);
+    }
+
+    [[nodiscard]] Span<const Child> Children() const
+    {
+        // NodeArena::MakeWithItems put them one past this node
+        return { std::launder(reinterpret_cast<const Child*>(this + 1)), m_count };
+    }
+
+private:
+    JINJA2CPP_NOINLINE
+    void RenderEachPiece(OutStream& os, RenderContext& values)
+    {
+        RenderNodes<true>(os, values);
+    }
+
+    template<bool flushEach>
+    void RenderNodes(OutStream& os, RenderContext& values)
+    {
         const auto& nodes = values.Nodes();
         const auto children = Children();
         const auto* const end = children.data() + children.size();
@@ -87,6 +112,11 @@ public:
             for (; child != end; ++child)
             {
                 nodes[*child].Render(os, values);
+                if constexpr (flushEach)
+                {
+                    // Each node's output is a piece of its own
+                    os.Flush();
+                }
                 if (values.HasLoopControl())
                 {
                     return;
@@ -106,13 +136,6 @@ public:
         }
     }
 
-    [[nodiscard]] Span<const Child> Children() const
-    {
-        // NodeArena::MakeWithItems put them one past this node
-        return { std::launder(reinterpret_cast<const Child*>(this + 1)), m_count };
-    }
-
-private:
     // Where the tag of `child` starts in the source: the offsets follow the children, last
     // child first, so that the end of the children finds them
     static std::uint32_t OffsetOf(const Child* child, const Child* end)

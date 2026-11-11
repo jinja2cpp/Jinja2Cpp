@@ -49,7 +49,8 @@ def test_chat_templates_render_as_transformers():
             case = f"{name}.{conversation}"
             try:
                 got = {"output": template.render(**conversations[conversation])}
-            except jinja2cpp.TemplateError as error:
+            # TypeError and ValueError where Jinja2 raises them (0432)
+            except (jinja2cpp.TemplateError, TypeError, ValueError) as error:
                 got = {"error": type(error).__name__, "message": str(error)}
             if "output" in want:
                 same = got.get("output") == want["output"]
@@ -79,11 +80,14 @@ def test_chat_environment_is_transformers_one():
         env.from_string("{% set l = [] %}{{ l.append(1) }}").render()
 
 
-transformers_utils = pytest.importorskip("transformers.utils.chat_template_utils", reason="transformers not installed")
+@pytest.fixture
+def transformers_utils():
+    # a fixture, not a module-level importorskip, so the tests above run without transformers
+    return pytest.importorskip("transformers.utils.chat_template_utils", reason="transformers not installed")
 
 
 @pytest.fixture
-def patched():
+def patched(transformers_utils):
     integration.patch()
     try:
         yield transformers_utils
@@ -99,7 +103,7 @@ def _render(utils, source, conversation, **kwargs):
     return utils.render_jinja_template(conversations=[messages], chat_template=source, **context, **kwargs)
 
 
-def test_patch_installs_and_restores():
+def test_patch_installs_and_restores(transformers_utils):
     original = transformers_utils._compile_jinja_template
     integration.patch()
     integration.patch()  # idempotent

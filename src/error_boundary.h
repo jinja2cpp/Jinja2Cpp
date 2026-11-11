@@ -49,6 +49,8 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
     bool hasMessage = true;
     // The Settings::Limits field a limit names, if any
     const char* limitField = nullptr;
+    // The Python class Jinja2 raises for a TemplateRuntimeError, if the engine knows it
+    const char* pythonClass = nullptr;
     try
     {
         std::rethrow_exception(exception);
@@ -100,6 +102,7 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
     {
         code = ErrorCode::TemplateRuntimeError;
         message = ex.what();
+        pythonClass = ex.PythonClassName();
         exception = nullptr;
     }
     catch (const RecursionLimitError&)
@@ -143,6 +146,10 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
     if (limitField)
     {
         errorData.extraParams.emplace_back(std::string(limitField));
+    }
+    if (pythonClass)
+    {
+        errorData.extraParams.emplace_back(std::string(pythonClass));
     }
     errorData.exception = std::move(exception);
     return errorData;

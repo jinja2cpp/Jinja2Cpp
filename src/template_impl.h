@@ -399,6 +399,8 @@ public:
         const std::function<void()>* poll = nullptr;
         // Where the render records its generation blocks (RenderOptions::generationSpans), or null
         std::vector<GenerationSpan>* generationSpans = nullptr;
+        // A sink's Write for each piece of output (RenderOptions::writeEachPiece)
+        bool writeEachPiece = false;
     };
 
     // The same with the public options: their globals, lent for the render and kept by any value a
@@ -537,8 +539,15 @@ public:
             OutStream outStream(os);
             // On the render's stack, so that it outlives every use of the callback's pointer to it
             [[maybe_unused]] std::conditional_t<hasHooks, detail::GenerationTracker, std::monostate> tracker;
+            // After limitsScope, and gone before it
+            [[maybe_unused]] std::conditional_t<hasHooks, std::optional<EachPieceScope>, std::monostate> eachPieceScope;
             if constexpr (hasHooks)
             {
+                if (hooks->writeEachPiece)
+                {
+                    outStream.WriteEachPiece();
+                    eachPieceScope.emplace();
+                }
                 if (hooks->generationSpans)
                 {
                     tracker.root = &outStream;

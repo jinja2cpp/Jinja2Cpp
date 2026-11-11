@@ -264,6 +264,23 @@ public:
     }
     void Clear() const noexcept { m_entries.clear(); }
 
+    // The source of `name` for a diagnostic, read again from the loader: None when it fails
+    [[nodiscard]] nb::object Source(const std::string& name) const
+    {
+        try
+        {
+            const auto triple = nb::steal(PyObject_CallMethod(m_loader, "get_source", "OO", m_environment, MakeStr(name).ptr()));
+            if (!triple)
+            {
+                throw nb::python_error();
+            }
+            return triple[0];
+        }
+        catch (const nb::python_error&) // NOLINT(bugprone-empty-catch): the source is optional
+        {
+        }
+        return nb::none();
+    }
     [[nodiscard]] nb::object Filename(const std::string& name) const
     {
         auto found = m_entries.find(name);
@@ -292,13 +309,13 @@ public:
     {
     }
     void Install(jinja2::TemplateEnv& env) const override { env.AddFilesystemHandler(std::string(), m_handler); }
-    [[nodiscard]] ErrorSource SourceOf(const std::string& name) const override
+    [[nodiscard]] ErrorSource SourceOf(const std::string& name, bool withSource) const override
     {
         ErrorSource source;
         source.name = MakeStr(name);
         try
         {
-            if (auto text = m_handler->Read(name))
+            if (auto text = withSource ? m_handler->Read(name) : std::nullopt)
             {
                 source.source = MakeStr(*text);
             }
@@ -340,7 +357,7 @@ public:
             env.AddFilesystemHandler(std::string(), handler);
         }
     }
-    [[nodiscard]] ErrorSource SourceOf(const std::string& name) const override
+    [[nodiscard]] ErrorSource SourceOf(const std::string& name, bool withSource) const override
     {
         ErrorSource source;
         source.name = MakeStr(name);
@@ -355,6 +372,10 @@ public:
                 continue;
             }
             source.filename = os.attr("join")(MakeStr(m_paths[i]), MakeStr(name));
+            if (!withSource)
+            {
+                break;
+            }
             const std::string data((std::istreambuf_iterator<char>(*bytes)), std::istreambuf_iterator<char>());
             PyObject* text = PyUnicode_Decode(data.data(), static_cast<Py_ssize_t>(data.size()), m_encoding.c_str(), "strict");
             if (text)
@@ -388,11 +409,15 @@ public:
     void Install(jinja2::TemplateEnv& env) const override { env.AddFilesystemHandler(std::string(), m_handler); }
     int Traverse(visitproc visit, void* arg) const override { return m_handler->Traverse(visit, arg); }
     void Clear() const noexcept override { m_handler->Clear(); }
-    [[nodiscard]] ErrorSource SourceOf(const std::string& name) const override
+    [[nodiscard]] ErrorSource SourceOf(const std::string& name, bool withSource) const override
     {
         ErrorSource source;
         source.name = MakeStr(name);
         source.filename = m_handler->Filename(name);
+        if (withSource)
+        {
+            source.source = m_handler->Source(name);
+        }
         return source;
     }
 

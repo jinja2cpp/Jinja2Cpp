@@ -45,7 +45,7 @@ enum class ErrorCode
     UnknownTest = 14,              //!< The template names a test that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     UserCallableException = 15,    //!< A user callable (context or global value, filter, test, finalize, gettext) threw. ExtraParams[0] contains `what()`, GetException() the exception
     IntegerOutOfRange = 16,        //!< Python's OverflowError for an integer: template arithmetic whose result is outside the `int64_t` range and has no big-integer backend, or an integer too big for a size or an index. ExtraParams[0] contains the message
-    TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message
+    TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message, ExtraParams[1] (when the engine knows the Python class Jinja2 raises) its name: `"TypeError"` or `"ValueError"`
     ResourceLimitExceeded = 18,    //!< A limit was passed: one of Settings::Limits, a built-in cap or a host's budget. ExtraParams[0] contains the message, ExtraParams[1] (for Settings::Limits) the name of the limit (`"maxRenderSteps"`)
     TemplateExpired = 19,          //!< A macro of a \ref BasicTemplateModule called a macro an earlier call stored, whose module ended with that call (docs/tasks/0301). ExtraParams[0] contains the macro's name, ExtraParams[1] is "ended". A Load no longer ends a module (docs/tasks/0321). A macro or `caller` a host's call got as an argument and called after that call ended has ExtraParams[0] "lent" (docs/tasks/0300)
     DataReadError = 20,            //!< \ref ToValue could not read a JSON document: its JsonTraits reported an error. ExtraParams[0] contains the message, ExtraParams[1] the JSON path of the value
@@ -61,7 +61,7 @@ enum class ErrorCode
     ExpectedRawEnd = 1009,         //!< {% endraw %} expected
     ExpectedMetaEnd = 1010,        //!< {% endmeta %} expected
     UnexpectedToken = 1011,        //!< Unexpected token. ExtraParams[0] contains the invalid token
-    UnexpectedStatement = 1012,    //!< Unexpected statement. ExtraParams[0] contains the invalid statement tag
+    UnexpectedStatement = 1012,    //!< Unexpected statement. ExtraParams[0] contains the invalid statement tag, ExtraParams[1] (for an unknown or misplaced tag) Jinja2's message ("Encountered unknown tag 'endif'. Jinja was looking for ...")
     UnexpectedCommentBegin = 1013, //!< Unexpected comment block begin (`{#`)
     UnexpectedCommentEnd = 1014,   //!< Unexpected comment block end (`#}`)
     UnexpectedExprBegin = 1015,    //!< Unexpected expression block begin (`{{`)
@@ -72,6 +72,8 @@ enum class ErrorCode
     UnexpectedRawEnd = 1020,       //!< Unexpected raw block end {% endraw %}
     UnexpectedMetaBegin = 1021,    //!< Unexpected meta block begin {% meta %}
     UnexpectedMetaEnd = 1022,      //!< Unexpected meta block end {% endmeta %}
+    TemplateSyntaxError = 1023,    //!< A construct Jinja2 rejects with a message of its own (Jinja2's TemplateSyntaxError). ExtraParams[0] contains Jinja2's message
+    TemplateAssertionError = 1024, //!< Like \ref TemplateSyntaxError, for Jinja2's TemplateAssertionError, the compile-time checks. ExtraParams[0] contains Jinja2's message
 };
 
 //! The `std::error_category` of \ref ErrorCode: `std::error_code ec = ErrorCode::TemplateNotFound;` compares equal to

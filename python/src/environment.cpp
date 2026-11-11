@@ -672,11 +672,18 @@ void PyEnvironment::CheckAlive() const
     }
 }
 
-ErrorSource PyEnvironment::SourceOf(const std::string& name) const
+ErrorSource SourceOfTemplate(nb::handle environment, const std::string& name, bool withSource)
+{
+    auto source = nb::cast<const PyEnvironment&>(environment).SourceOf(name, withSource);
+    source.environment = nb::borrow(environment);
+    return source;
+}
+
+ErrorSource PyEnvironment::SourceOf(const std::string& name, bool withSource) const
 {
     if (m_loaderHandler)
     {
-        return m_loaderHandler->SourceOf(name);
+        return m_loaderHandler->SourceOf(name, withSource);
     }
     ErrorSource source;
     source.name = MakeStr(name);
@@ -714,6 +721,7 @@ jinja2::Template PyEnvironment::Load(nb::handle source, const std::string& name)
     {
         ErrorSource where;
         where.source = nb::borrow(source);
+        where.environment = nb::find(this);
         if (!name.empty())
         {
             where.name = MakeStr(name);
@@ -764,11 +772,14 @@ nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::
         const auto& error = result.error();
         if (error.GetCode() == jinja2::ErrorCode::FileNotFound || error.GetCode() == jinja2::ErrorCode::TemplateNotFound)
         {
-            RaiseTemplateNotFound(name);
+            RaiseTemplateNotFound(nb::find(this), name);
         }
-        RaiseError(error, SourceOf(text));
+        auto where = SourceOf(text);
+        where.environment = nb::find(this);
+        RaiseError(error, where);
     }
-    auto where = SourceOf(text);
+    // Only the filename: the source is read for an error alone
+    auto where = SourceOf(text, false);
     return MakeTemplate(std::move(result).value(), globals, nb::borrow(name), where.filename, templateClass);
 }
 
@@ -836,7 +847,7 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
 }
 
 template<typename Target>
-void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs) const
+void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bool eachPiece) const
 {
     ++g_renders;
     auto& env = LiveEnvironment();
@@ -868,6 +879,7 @@ void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs) co
     jinja2::RenderOptions options;
     options.globals = std::move(globals);
     options.poll = RenderPoll();
+    options.writeEachPiece = eachPiece;
     auto result = [&] {
         const RenderScope scope(state);
         return m_template.RenderTo(target, params, options);
@@ -879,6 +891,7 @@ void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs) co
         ErrorSource where;
         where.name = m_name;
         where.filename = m_filename;
+        where.environment = m_environment;
         // The template itself parsed when it was loaded, so a syntax error here is in one it includes, imports or extends
         where.syntaxNote = kIncludedSyntaxNote;
         RaiseError(error, where);
@@ -913,7 +926,7 @@ private:
 void PyTemplate::RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const
 {
     CallbackSink sink(write);
-    RenderWith(sink, std::move(args), std::move(kwargs));
+    RenderWith(sink, std::move(args), std::move(kwargs), true);
 }
 
 int PyTemplate::Traverse(visitproc visit, void* arg) const

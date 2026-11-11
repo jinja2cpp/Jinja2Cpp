@@ -1769,7 +1769,10 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
         // Jinja2 rejects keys with whitespace, "/", ">" or "="
         if (std::any_of(key.begin(), key.end(), [](char ch) { return std::strchr(" \t\n\r\f\v/>=", ch) != nullptr && ch != 0; }))
         {
-            throw TemplateRuntimeError("xmlattr(): invalid character in attribute name: '" + key + "'");
+            // Jinja2: ValueError(f"Invalid character in attribute name: {key!r}")
+            std::string message = "Invalid character in attribute name: ";
+            Apply<visitors::ValueRenderer<char>>(keyValue, message, true);
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::ValueError, message);
         }
         // escape() takes __html__ of a value that has it: Markup, a host object, a template module
         auto* renderer = context.GetRendererCallback();

@@ -1,5 +1,7 @@
 """Exceptions: Jinja2's hierarchy and attributes, and a callable's own exception raised as itself."""
 
+import os
+
 import jinja2
 import jinja2cpp
 import pytest
@@ -124,3 +126,98 @@ def test_runtime_errors():
         ours, theirs = raised(jinja2cpp, source), raised(jinja2, source)
         assert isinstance(ours, jinja2cpp.TemplateRuntimeError), source
         assert str(ours) == str(theirs), source
+
+
+def test_include_of_several_missing_templates_is_templates_not_found():
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({"header": "H"}))
+        with pytest.raises(module.TemplatesNotFound) as info:
+            env.from_string('{% include ["missing", "missing2"] %}').render()
+        assert info.value.templates == ["missing", "missing2"]
+        assert info.value.name == "missing2"
+        assert str(info.value) == "none of the templates given were found: missing, missing2"
+
+
+def test_include_of_an_iterator_stops_at_the_first_template_found():
+    def names_then_fail():
+        yield "missing"
+        yield "header"
+        raise ValueError("read past the template found")
+
+    def endless():
+        while True:
+            yield "header"
+
+    def missing_names():
+        yield "missing"
+        yield 5
+        yield "missing2"
+
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({"header": "H"}))
+        include = env.from_string("{% include names %}|{% include names2 %}")
+        assert include.render(names=names_then_fail(), names2=endless()) == "H|H", module
+    # the names tried are reported (Jinja2's TemplatesNotFound fails on a generator with a TypeError)
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"header": "H"}))
+    with pytest.raises(jinja2cpp.TemplatesNotFound) as info:
+        env.from_string("{% include names %}").render(names=missing_names())
+    assert info.value.templates == ["missing", 5, "missing2"]
+
+
+def test_template_not_found_names_the_search_path(tmp_path):
+    for module in (jinja2cpp, jinja2):
+        loader = module.FileSystemLoader(str(tmp_path))
+        env = module.Environment(loader=loader)
+        with pytest.raises(module.TemplateNotFound) as info:
+            env.get_template("missing")
+        assert str(info.value) == f"'missing' not found in search path: {str(tmp_path)!r}"
+        loader.searchpath.append("other")
+        with pytest.raises(module.TemplateNotFound) as info:
+            env.from_string("{% include 'missing' %}").render()
+        assert str(info.value) == f"'missing' not found in search paths: {str(tmp_path)!r}, 'other'"
+
+
+def test_syntax_error_of_an_included_template_has_its_source():
+    source = "a\n{% for x in y %}\n{% endif %}"
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.ChoiceLoader([module.DictLoader({"inc": "{% include 'bad' %}"}), module.FunctionLoader(lambda name: source if name == "bad" else None)]))
+        with pytest.raises(module.TemplateSyntaxError) as info:
+            env.get_template("inc").render()
+        assert (info.value.name, info.value.lineno, info.value.source) == ("bad", 3, source)
+
+
+def test_tracebacks_show_the_templates_line(tmp_path):
+    # As Jinja2's rewritten tracebacks: the template's file and line between the caller and the callable
+    import traceback
+
+    (tmp_path / "broken.html").write_text("Before\n{{ fail() }}\nAfter\n", encoding="utf-8")
+    (tmp_path / "syntax.html").write_text("a\n{% for x in y %}\n{% endif %}\n", encoding="utf-8")
+    env = jinja2cpp.Environment(loader=jinja2cpp.FileSystemLoader(str(tmp_path)))
+    with pytest.raises(ZeroDivisionError) as info:
+        env.get_template("broken.html").render(fail=lambda: 1 / 0)
+    frames = traceback.extract_tb(info.tb)
+    assert [(os.path.basename(f.filename), f.lineno, f.line) for f in frames[-2:-1]] == [("broken.html", 2, "{{ fail() }}")]
+    assert frames[-1].name == "<lambda>"
+    with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
+        env.get_template("syntax.html")
+    last = traceback.extract_tb(info.tb)[-1]
+    assert (os.path.basename(last.filename), last.lineno, last.name, last.line) == ("syntax.html", 3, "template", "{% endif %}")
+
+
+def test_get_template_asks_a_python_loader_once():
+    # The source of a diagnostic is read for an error only, not on each get_template
+    for module in (jinja2cpp, jinja2):
+        calls = []
+        env = module.Environment(loader=module.FunctionLoader(lambda name: calls.append(name) or ("x{% include 'b' %}" if name == "a" else "B")))
+        env.get_template("a")
+        env.get_template("a").render()
+        assert calls == ["a", "b"], module.__name__
+
+
+def test_template_frame_of_a_template_without_a_file_is_template():
+    import traceback
+
+    with pytest.raises(ZeroDivisionError) as info:
+        jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"os.py": "\n{{ f() }}"})).get_template("os.py").render(f=lambda: 1 / 0)
+    frame = traceback.extract_tb(info.tb)[-2]
+    assert (frame.filename, frame.lineno, frame.line) == ("<template>", 2, "")

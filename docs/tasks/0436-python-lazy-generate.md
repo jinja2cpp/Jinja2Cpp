@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0355]
-touches: [python/src/environment.cpp, python/jinja2cpp/environment.py]
+touches: [python/src/environment.cpp, python/jinja2cpp/environment.py, include/jinja2cpp/template.h, src/renderer.h, src/out_stream.h, src/statements.cpp]
 shares: [python/tests/upstream/expected-failures.txt]
 ---
 # `Template.generate` renders on demand, in Jinja2's chunks
@@ -27,3 +27,22 @@ engine's (`test_api.py::TestStreaming::test_basic_streaming`, `test_buffered_str
 
 **Done when.** `next(t.generate())` returns before a later part of the template runs (a
 callable with a side effect shows it), and the two upstream tests pass or are `deliberate`.
+
+## Decisions
+
+- Items (part 2, done): `RenderOptions::writeEachPiece` (public, additive): a body flushes the
+  render's sink stream after each node; a macro or call block holds the flush
+  (`OutStream::PieceHold`), so its output is one item, as Jinja2's. It costs one register test per
+  body node when off (preflight `--perf`: largest change +0.64%). `generate()` renders with it at the
+  first item on the caller's thread and yields the items.
+- On demand (part 1): a worker-thread render was built and verified on this branch (commit
+  dc2a6fd9: daemon thread taking turns with the consumer, back-pressure of one 512-character
+  batch, contextvars copy, Ctrl-C through the poll). The verifier found it cannot keep Jinja2's
+  semantics: the template's callables run on another OS thread, so sqlite objects, `threading.local`
+  state and locks the caller holds break, gevent's patched Thread deadlocks, and a daemon consumer at
+  interpreter exit aborts (pthread_exit unwinding through noexcept destructors). Moved to 0457 for a
+  render that resumes on the caller's thread (decision card 2026-11-10, recommended option, taken
+  while Ruslan's answer was open).
+
+**Result.** `test_basic_streaming` and `test_buffered_streaming` pass (upstream 626 -> 628 of 856).
+Left: 0456 (items Jinja2 folds into one), 0457 (lazy rendering).

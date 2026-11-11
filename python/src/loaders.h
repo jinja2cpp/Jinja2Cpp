@@ -30,8 +30,9 @@ public:
     // environment): visited by the environment's tp_traverse and dropped by its tp_clear
     virtual int Traverse(visitproc /*visit*/, void* /*arg*/) const { return 0; }
     virtual void Clear() const noexcept {}
-    // The name, filename and source of a template it gives, for TemplateSyntaxError
-    [[nodiscard]] virtual ErrorSource SourceOf(const std::string& name) const = 0;
+    // The name, filename and source of a template it gives, for TemplateSyntaxError; without `withSource`
+    // the source is not read (a Python loader's get_source is not called again)
+    [[nodiscard]] virtual ErrorSource SourceOf(const std::string& name, bool withSource) const = 0;
 };
 using LoaderPtr = std::shared_ptr<const Loader>;
 

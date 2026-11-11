@@ -112,10 +112,10 @@ engines on a Release build of the module.
 - `env.select_template`, `env.get_or_select_template`, `env.list_templates(extensions=None,
   filter_func=None)` and `env.join_path`.
 - `template.generate()` and `template.stream()` with `TemplateStream` (`dump`,
-  `enable_buffering`, `disable_buffering`). They yield the chunks the engine writes to its
-  `OutputSink` (up to 512 characters each), and an error after the chunks written before it, as
-  Jinja2 does; but the whole render runs at the first item, and the chunks are not Jinja2's
-  one item per output node (lazy rendering is docs/tasks/0436).
+  `enable_buffering`, `disable_buffering`). They yield Jinja2's items (a run of text, the value of
+  a `{{ }}`, a macro or call block's output; the engine's `RenderOptions::writeEachPiece`, 0436),
+  and an error after the items written before it, as Jinja2 does; but the whole render runs at the
+  first item, on the caller's thread (lazy rendering is docs/tasks/0457).
 - `template.make_module(vars=None, shared=False, locals=None)` and `template.module`, from the
   engine's `Template::MakeModule`: the exports are attributes of a `TemplateModule`, `str()` is
   the rendered body, `__html__` is the same as Markup. An exported macro (also inside an exported
@@ -449,8 +449,16 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   raises `TemplateAssertionError`), and returns an opaque object that only `jinja2cpp.meta`
   takes, not Jinja2's node tree. `find_referenced_templates` gives the names of the tags in
   source order, `None` for a name that is not a literal.
-- `generate()` gives the output as one item, so `stream().enable_buffering(n)` has nothing to
-  combine and an error in the template surfaces at the first `next()` (0355).
+- `generate()` runs the whole template at the first item, where Jinja2 runs it item by item (0457).
+  Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here three), and
+  yields `super()`, `self.block()` and a recursive loop's call as one item, a macro's output of
+  more than 512 characters as one item, and an empty `{{ }}` as `''` (0456).
+- A Python loader's `get_source` runs again when a template it gave fails to compile, to show
+  the line of the error (twice more with the default fallback, which loads it through Jinja2);
+  Jinja2 calls it once.
+- Tracebacks name the classes `jinja2cpp.exceptions.*`, where Jinja2's say `jinja2.exceptions.*`
+  (0432). They show the template's file and line as a frame, as Jinja2's do: the line of the call
+  for an error a callable raised, and the line of a syntax error.
 - The `Context` a `pass_context` callable gets sees every variable of the call site, the loop
   variables, `{% with %}` names and macro locals included, where Jinja2's holds only the
   arguments, the globals and the template's top-level names; its `vars` and `parent` both hold
@@ -490,4 +498,3 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `UndefinedError`. `sort` and `unique` of an unsafe or missing attribute under
   `StrictUndefined` do not raise as Jinja2's do (0413). `sum(attribute=)` of a missing attribute
   is now an `UndefinedError` as in Jinja2 (it was a `TemplateRuntimeError`).
-- Not yet: real streaming (`generate` gives the whole output as one item, docs/tasks/0355).
