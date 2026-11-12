@@ -1272,7 +1272,28 @@ private:
         explicit Storage(T&& val)
             : items(std::move(val))
         {
+            ChargeRenderMemory(Bytes());
         }
+        Storage(const Storage&) = delete;
+        Storage(Storage&&) = delete;
+        Storage& operator=(const Storage&) = delete;
+        Storage& operator=(Storage&&) = delete;
+        ~Storage() override { ReleaseRenderMemory(Bytes()); }
+
+        // What the render's memory budget counts (docs/tasks/0459): the object, and a list's slots; a
+        // dict counts its entries itself (TemplateDict)
+        [[nodiscard]] std::uint64_t Bytes() const noexcept
+        {
+            if constexpr (std::is_same_v<T, InternalValueList>)
+            {
+                return sizeof(Storage) + (std::uint64_t{ items.capacity() } * sizeof(InternalValue));
+            }
+            else
+            {
+                return sizeof(Storage);
+            }
+        }
+
         mutable T items;
     };
 

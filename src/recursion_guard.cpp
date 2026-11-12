@@ -277,6 +277,12 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone, const BigI
     {
         state.loadsLeft = limits.maxTemplateLoads;
     }
+    // UINT64_MAX bytes is no limit, as the state cannot tell it from none
+    if (limits.maxRenderMemory != 0 && limits.maxRenderMemory != UINT64_MAX)
+    {
+        state.memoryLeft = limits.maxRenderMemory;
+        state.memoryBudget = limits.maxRenderMemory;
+    }
     state.maxRenderDepth = LimitOrNone(limits.maxRenderDepth);
     if (limits.maxRenderTime.count() > 0)
     {
@@ -330,6 +336,14 @@ void CountTemplateLoadSlow()
 void ThrowRangeTooLong(std::uint64_t size)
 {
     ThrowLimit("maxRange", "range() of " + std::to_string(size) + " items is longer than " + std::to_string(t_renderLimits.maxRange));
+}
+
+void ThrowRenderMemory(std::uint64_t bytes)
+{
+    const auto& limits = t_renderLimits;
+    ThrowLimit("maxRenderMemory",
+               "the render's strings, lists and dicts would take " + std::to_string(limits.memoryBudget - limits.memoryLeft + bytes) + " bytes, more than "
+                   + std::to_string(limits.memoryBudget));
 }
 } // namespace detail
 

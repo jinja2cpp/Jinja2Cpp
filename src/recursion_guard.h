@@ -124,6 +124,10 @@ struct RenderLimits
     std::uint64_t maxSequenceSize = std::uint64_t{ 1 } << 26;
     std::uint64_t maxRange = UINT64_MAX;
     std::uint64_t loadsLeft = UINT64_MAX;
+    // Bytes the render's strings, lists and dicts may still take (maxRenderMemory, docs/tasks/0459), and the budget
+    // they come from; UINT64_MAX in both without one
+    std::uint64_t memoryLeft = UINT64_MAX;
+    std::uint64_t memoryBudget = UINT64_MAX;
     unsigned maxRenderDepth = 256;
     // The render's output string (std::string, or std::wstring when `wideOutput`), or the count
     // of the characters its sink received (`sinkOutput`), and the size it may reach
@@ -252,7 +256,7 @@ inline bool HasRenderLimits(const Settings::Limits& limits)
 {
     const Settings::Limits defaults;
     return limits.maxRange != 0 || limits.maxSequenceSize != 0 || limits.maxOutputSize != 0 || limits.maxTemplateLoads != 0
-           || limits.maxRenderSteps != 0 || limits.maxRenderTime.count() > 0 || limits.maxRenderDepth != defaults.maxRenderDepth;
+           || limits.maxRenderSteps != 0 || limits.maxRenderMemory != 0 || limits.maxRenderTime.count() > 0 || limits.maxRenderDepth != defaults.maxRenderDepth;
 }
 
 // Bounds the render's output (Settings::Limits::maxOutputSize): `output` may grow to `start`
@@ -311,6 +315,50 @@ public:
 private:
     detail::ParseLimits m_saved;
 };
+
+namespace detail
+{
+[[noreturn]] void ThrowRenderMemory(std::uint64_t bytes);
+} // namespace detail
+
+// Counts `bytes` of a string, list or dict the running render makes or grows against its memory budget
+// (maxRenderMemory, docs/tasks/0459): throws ResourceLimitError when they do not fit. Without a budget one compare
+inline void ChargeRenderMemory(std::uint64_t bytes)
+{
+    auto& limits = detail::t_renderLimits;
+    if (limits.memoryLeft != UINT64_MAX)
+    {
+        if (bytes > limits.memoryLeft)
+        {
+            detail::ThrowRenderMemory(bytes);
+        }
+        limits.memoryLeft -= bytes;
+    }
+}
+// Throws ResourceLimitError when `bytes` would not fit in the running render's memory budget, without counting
+// them: checked before a buffer is allocated that is counted once it is wrapped in a value
+inline void CheckRenderMemoryFits(std::uint64_t bytes)
+{
+    if (bytes > detail::t_renderLimits.memoryLeft)
+    {
+        detail::ThrowRenderMemory(bytes);
+    }
+}
+// Whether the running render has a memory budget: a container that counts its parts one by one asks first
+inline bool RenderMemoryCounted() noexcept
+{
+    return detail::t_renderLimits.memoryLeft != UINT64_MAX;
+}
+// Gives back the bytes of one that is freed. Whichever render made it, the budget gains them (one made before the
+// render or by another render frees memory too), up to the whole budget
+inline void ReleaseRenderMemory(std::uint64_t bytes) noexcept
+{
+    auto& limits = detail::t_renderLimits;
+    if (limits.memoryLeft != UINT64_MAX)
+    {
+        limits.memoryLeft = bytes < limits.memoryBudget - limits.memoryLeft ? limits.memoryLeft + bytes : limits.memoryBudget;
+    }
+}
 
 namespace detail
 {

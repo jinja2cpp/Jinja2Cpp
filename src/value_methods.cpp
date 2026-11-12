@@ -9,6 +9,7 @@
 #include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "stable_sort_values.h"
 #include "template_dict.h"
@@ -2388,6 +2389,7 @@ InternalValue ListAppend(const InternalValue& self, const CallParams& params, Re
     CheckArgs(params, "append", 1, 1);
     auto& items = MutableItems(self);
     CheckSequenceSize(uint64_t{ items.size() } + 1, "a list");
+    ReserveCounted(items, items.size() + 1);
     NoteContainerStore(self, params.posParams[0]);
     items.push_back(params.posParams[0]);
     return InternalValue(NoneValue());
@@ -2406,6 +2408,7 @@ InternalValue ListExtend(const InternalValue& self, const CallParams& params, Re
     auto newItems = other.ToValueList();
     auto& items = MutableItems(self);
     CheckSequenceSize(uint64_t{ items.size() } + newItems.size(), "a list");
+    ReserveCounted(items, items.size() + newItems.size());
     for (auto& item : newItems)
     {
         NoteContainerStore(self, item);
@@ -2420,6 +2423,7 @@ InternalValue ListInsert(const InternalValue& self, const CallParams& params, Re
     auto& items = MutableItems(self);
     auto idx = SliceIndex(params.posParams.data(), items.size(), 0, "insert");
     CheckSequenceSize(uint64_t{ items.size() } + 1, "a list");
+    ReserveCounted(items, items.size() + 1);
     NoteContainerStore(self, params.posParams[1]);
     items.insert(items.begin() + static_cast<std::ptrdiff_t>(idx), params.posParams[1]);
     return InternalValue(NoneValue());
@@ -2494,6 +2498,8 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
 
     InternalValueList values;
     values.swap(MutableItems(self));
+    // The render's memory budget counted the buffer taken here (docs/tasks/0459)
+    const std::uint64_t takenCapacity = values.capacity();
     // The items are found again after the key calls: a module call a key function makes can hand
     // the list's items to the host and give the list new ones (docs/tasks/0331, D8), and the
     // items the host was handed are never written again
@@ -2560,7 +2566,11 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
         sorted.push_back(std::move(values[idx]));
     }
     values.clear();
+    // The taken buffer, and any a key call grew meanwhile, are freed for one that fits the items: the budget gives
+    // back the difference
+    const std::uint64_t replacedCapacity = takenCapacity + items.capacity();
     items = std::move(sorted);
+    ReleaseRenderMemory((replacedCapacity - items.capacity()) * sizeof(InternalValue));
     if (modified)
     {
         Raise("list modified during sort");

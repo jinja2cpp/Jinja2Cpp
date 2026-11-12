@@ -97,7 +97,7 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     }
     // Every Load compares the settings, so the limits compare as bytes: integers without padding, and a field added
     // to Settings::Limits changes the size checked here
-    static_assert(sizeof(Settings::Limits) == 72);
+    static_assert(sizeof(Settings::Limits) == 80);
     if (!IsSameBytes(lLimits, rLimits))
     {
         return false;
