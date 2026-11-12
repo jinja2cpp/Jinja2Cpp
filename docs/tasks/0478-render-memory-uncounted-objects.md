@@ -1,10 +1,11 @@
 ---
-status: open
+status: done
 priority: low
 area: robustness
 depends: [0459]
 touches: [src/internal_value.h, src/internal_value.cpp]
 shares: [docs/security.md]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/863
 ---
 # Count the objects the render memory budget leaves out
 
@@ -27,3 +28,23 @@ fixed charge per `ValueObject` the render makes) and give it back in their destr
 same with a big integer (`2 ** 1000`), each failing with `maxRenderMemory`.
 
 **Trust model.** When this lands, drop its entry under Known gaps in [docs/security.md](../security.md).
+
+**Resolution.** `ValueObject` has class-specific `operator new`/`operator delete` that charge and give back the
+object's own size (the size the deleting destructor passes), which covers every engine object at once: loop state,
+callables, bound methods, undefined info, generators, anchors. An allocation function may throw only
+`std::bad_alloc`, so past the budget `ChargeObjectMemory` notes an overdraft and makes the next step take the slow
+path, which fails the render with `maxRenderMemory`. `BigIntObject` charges its digits in `Make`; `StringObject`
+keeps its own count. Rows in `Cases()`: kept nested-loop objects, macros, undefined values and big integers fail,
+the dropped and plain-int controls pass; each kept row passes without the change.
+
+What outlives the render is made under `UncountedMemoryScope`: a loaded template (`TemplateEnv::LoadTemplate`),
+the thread's snapshot of the globals and the built-in globals, which the first render alone paid for otherwise
+(`LimitsCachesTest.FirstRenderPaysForNoCache`).
+
+A reload `EveryUse` drops as unchanged (0313) is freed uncounted too, or freeing it would credit the render with
+bytes it never paid (security review; `LimitsCachesTest.DroppedReloadGivesNoBudget`). The general rule, release only
+what was charged, is [0483](0483-render-memory-uncharged-release.md).
+
+**Next.** Objects made with `std::make_shared` (accessor copies, closure captures) bypass the allocation function
+and stay uncounted. What an object allocates apart (a loop's vectors, an undefined value's name strings) is still not
+counted; the per-object size is a lower bound.

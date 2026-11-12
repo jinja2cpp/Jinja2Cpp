@@ -225,10 +225,11 @@ struct Settings
         std::uint32_t maxBlockNesting = 248;
         //! Bytes the strings, lists and dicts a Render builds may hold at once: each is counted when it is made or
         //! grows and released when it is freed, so a render that keeps what it builds stops while one that drops it
-        //! does not. An estimate of the engine's own storage (characters, item and entry slots, dict keys), which may
-        //! change between releases; other objects (loop and macro state, host data) are not counted. A list whose size
-        //! is known up front is checked before it is allocated; one built item by item, or a string, may pass the
-        //! budget by one sequence (\ref maxSequenceSize bounds that) before the render stops. 0 is no limit
+        //! does not. An estimate of the engine's own storage (characters, item and entry slots, dict keys, and the
+        //! own size of every other object the render makes: loop state, macros, generators), which may change between
+        //! releases; host data is not counted. A list whose size is known up front is checked before it is allocated;
+        //! one built item by item, or a string, may pass the budget by one sequence (\ref maxSequenceSize bounds that)
+        //! before the render stops, and another object by itself, failing the render at its next step. 0 is no limit
         std::uint64_t maxRenderMemory = 0;
     };
     //! Bounds on Load and Render; none but the depth limits by default

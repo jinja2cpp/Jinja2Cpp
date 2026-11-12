@@ -1,6 +1,7 @@
 #include <jinja2cpp/template_env.h>
 
 #include "big_int.h"
+#include "recursion_guard.h"
 #include "error_boundary.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
@@ -332,6 +333,8 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
     // except std::bad_alloc, becomes the error (docs/api-2.0.md, 2.1)
     try
     {
+        // A loaded template is the environment's (its cache, other renders), not the render's that loads it first
+        const UncountedMemoryScope uncounted;
         auto& cache = Functions::GetCache(*this);
 
         {
@@ -383,6 +386,13 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
                 continue;
             }
 
+            // The date is asked before the text is read: a change during the read then makes the cached date older
+            // than the file's, so the next lookup reloads instead of keeping the old text as up to date (0325)
+            std::optional<TimePoint> lastModified;
+            if (settings.cacheSize != 0)
+            {
+                lastModified = fh.handler->GetLastModificationDate(fileName);
+            }
             auto stream = Functions::LoadFile(fileName, fh.handler.get());
             if (stream)
             {
@@ -394,7 +404,12 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
 
                 if (settings.cacheSize != 0)
                 {
-                    auto lastModified = fh.handler->GetLastModificationDate(fileName);
+                    if (!lastModified)
+                    {
+                        // A handler that learns the date only by reading the file (the Python module's loader
+                        // with its uptodate) has one now; a change during this read stays unseen there
+                        lastModified = fh.handler->GetLastModificationDate(fileName);
+                    }
                     // Templates this replaces (another thread loaded the same file concurrently, or
                     // a reload) or evicts are released after the lock: one may hold the last handle
                     // to this environment, and ~TemplateEnv takes the same lock

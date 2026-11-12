@@ -4,6 +4,7 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -15,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <istream>
 #include <sstream>
@@ -155,6 +157,14 @@ std::vector<LimitCase> Cases()
         { "MemoryHugeListUpFront", "{{ range(2**26)|list|length }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         { "MemorySortAfterClear", "{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.clear() %}{% set _ = x.sort() %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         { "MemorySortKeepsCount", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.sort() %}{% set _ = ns.l.append(x) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        // Every object counts, not only the slot that holds it (docs/tasks/0478): the lists below alone take at most
+        // 16384 slots of 32 bytes, half the budget
+        { "MemoryKeptLoops", "{% set l = [] %}{% for i in range(10000) %}{% for j in [i] %}{% set _ = l.append(loop) %}{% endfor %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryDroppedLoops", "{% for i in range(10000) %}{% for j in [i] %}{% set x = loop %}{% endfor %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
+        { "MemoryKeptMacros", "{% set l = [] %}{% for i in range(10000) %}{% macro m() %}{% endmacro %}{% set _ = l.append(m) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryKeptUndefined", "{% set l = [] %}{% for i in range(10000) %}{% set _ = l.append(missing) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryKeptBigInts", "{% set l = [] %}{% for i in range(5000) %}{% set _ = l.append(('1' * 300)|int) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryKeptInts", "{% set l = [] %}{% for i in range(10000) %}{% set _ = l.append(i) %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         // UINT64_MAX bytes is no limit
         { "MemoryMax", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = UINT64_MAX; }, "" },
     };
@@ -654,6 +664,58 @@ TEST_F(LimitsEnvTest, MemoryBudget)
     {
         EXPECT_EQ("500000", narrow.RenderAsString({}).value());
     }
+}
+
+// What outlives a render is not counted against the render that makes it (docs/tasks/0478): the thread's snapshot of
+// the globals and a loaded template are made by the first render and kept for those after it. On a fresh thread, so
+// that this thread's snapshot of another environment does not decide it
+TEST(LimitsCachesTest, FirstRenderPaysForNoCache)
+{
+    std::thread([] {
+        TemplateEnv env;
+        Settings settings;
+        settings.limits.maxRenderMemory = 64 << 10;
+        env.SetSettings(settings);
+        for (int n = 0; n != 5000; ++n)
+        {
+            env.AddGlobal("g" + std::to_string(n), ValuesList{ 1, 2 });
+        }
+        auto fs = std::make_shared<MemoryFileSystem>();
+        std::string included;
+        for (int n = 0; n != 3000; ++n)
+        {
+            included += "{% if false %}{{ 'x' ~ " + std::to_string(n) + " }}{% endif %}";
+        }
+        fs->AddFile("inc", included + "x1");
+        env.AddFilesystemHandler("", fs);
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load("{% include 'inc' %}|{{ g4999|length }}").has_value());
+        for (int run = 0; run != 2; ++run)
+        {
+            auto result = tpl.RenderAsString({});
+            EXPECT_EQ("x1|2", result ? *result : ErrorToString(result.error())) << run;
+        }
+    }).join();
+}
+
+// A template loaded again on every use and dropped as unchanged (TemplateLookup::EveryUse without a cache, 0313) was
+// made uncounted, so freeing it gives the budget nothing: the loop below once kept about 100 MB under 1 MiB
+TEST(LimitsCachesTest, DroppedReloadGivesNoBudget)
+{
+    TemplateEnv env;
+    Settings settings;
+    settings.limits.maxRenderMemory = 1 << 20;
+    settings.cacheSize = 0;
+    settings.templateLookup = TemplateLookup::EveryUse;
+    env.SetSettings(settings);
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("inc", "{% set s = '" + std::string(60000, 'x') + "' %}");
+    env.AddFilesystemHandler("", fs);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set ns = namespace(l=[]) %}{% for i in range(2000) %}{% include 'inc' %}{% set _ = ns.l.append(i ~ ('y' * 50000)) %}{% endfor %}{{ ns.l|length }}").has_value());
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
 }
 
 // UntrustedLimits() bounds what a render keeps: the template of docs/tasks/0459 kept about 1 GB before the step

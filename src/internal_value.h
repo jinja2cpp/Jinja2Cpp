@@ -168,6 +168,16 @@ public:
     }
     virtual ~ValueObject() = default;
 
+    // Every object a render makes counts against its memory budget (maxRenderMemory, docs/tasks/0478): the loops,
+    // callables, generators, anchors and undefined values a template keeps take more than the slot that holds them.
+    // The size is the object's own, without what it allocates apart; StringObject and BigIntObject count their
+    // characters themselves. An allocation function throws nothing but std::bad_alloc, so a render past its budget
+    // fails at its next step. Never inlined: GCC's -Wmismatched-new-delete takes ::operator new inlined into a
+    // new-expression for a mismatch with this operator delete.
+    // Exported, as code outside a shared library makes and frees objects
+    JINJA2CPP_EXPORT JINJA2CPP_NOINLINE static void* operator new(std::size_t size);
+    JINJA2CPP_EXPORT JINJA2CPP_NOINLINE static void operator delete(void* ptr, std::size_t size) noexcept;
+
     // NOLINTNEXTLINE(readability-identifier-naming): the name boost::intrusive_ref_counter uses
     [[nodiscard]] unsigned use_count() const noexcept { return m_refCount.load(std::memory_order_acquire); }
 
@@ -1166,6 +1176,15 @@ struct BigIntObject final : ValueObject
 
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the object
     [[nodiscard]] std::string_view Decimal() const noexcept { return { reinterpret_cast<const char*>(this) + sizeof(BigIntObject), m_size }; }
+
+    BigIntObject(const BigIntObject&) = delete;
+    BigIntObject(BigIntObject&&) = delete;
+    BigIntObject& operator=(const BigIntObject&) = delete;
+    BigIntObject& operator=(BigIntObject&&) = delete;
+    // Make counted the object and its digits against the render's memory budget (docs/tasks/0478)
+    ~BigIntObject() override { ReleaseRenderMemory(Bytes(m_size)); }
+
+    [[nodiscard]] static constexpr std::uint64_t Bytes(size_t digits) noexcept { return std::uint64_t{ sizeof(BigIntObject) } + digits; }
 
 private:
     explicit BigIntObject(size_t size) noexcept
