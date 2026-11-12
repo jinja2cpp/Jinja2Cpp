@@ -810,7 +810,7 @@ namespace
 // appends each `.name` that follows to `name`. A name after the dot may be any of Jinja2's names,
 // `true` and `none` among them. `nameTok` is widened to the whole name, which an unknown name's
 // error quotes
-nonstd::expected<void, ParseError> ReadDottedName(LexScanner& lexer, std::string& name, std::size_t& nameEnd)
+JINJA2CPP_NOINLINE_INLINE nonstd::expected<void, ParseError> ReadDottedName(LexScanner& lexer, std::string& name, std::size_t& nameEnd)
 {
     while (lexer.EatIfEqual('.'))
     {
@@ -898,7 +898,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     {
         return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
     }
-    if (auto dotted = ReadDottedName(lexer, name, nameTok.range.endOffset); !dotted)
+    if (auto dotted = lexer.PeekNextToken() == '.' ? ReadDottedName(lexer, name, nameTok.range.endOffset) : nonstd::expected<void, ParseError>(); !dotted)
     {
         return MakeUnexpected(dotted.error());
     }
@@ -1556,7 +1556,8 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
 
             std::string name = lexer.GetAsString(tok);
             auto nameEnd = tok.range.endOffset;
-            if (auto dotted = ReadDottedName(lexer, name, nameEnd); !dotted)
+            // Rare: out of line
+            if (auto dotted = lexer.PeekNextToken() == '.' ? ReadDottedName(lexer, name, nameEnd) : nonstd::expected<void, ParseError>(); !dotted)
             {
                 return MakeUnexpected(dotted.error());
             }
