@@ -383,6 +383,13 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
                 continue;
             }
 
+            // The date is asked before the text is read: a change during the read then makes the cached date older
+            // than the file's, so the next lookup reloads instead of keeping the old text as up to date (0325)
+            std::optional<TimePoint> lastModified;
+            if (settings.cacheSize != 0)
+            {
+                lastModified = fh.handler->GetLastModificationDate(fileName);
+            }
             auto stream = Functions::LoadFile(fileName, fh.handler.get());
             if (stream)
             {
@@ -394,7 +401,6 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
 
                 if (settings.cacheSize != 0)
                 {
-                    auto lastModified = fh.handler->GetLastModificationDate(fileName);
                     // Templates this replaces (another thread loaded the same file concurrently, or
                     // a reload) or evicts are released after the lock: one may hold the last handle
                     // to this environment, and ~TemplateEnv takes the same lock
