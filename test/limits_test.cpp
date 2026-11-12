@@ -338,6 +338,20 @@ TEST_F(LimitsEnvTest, ReprOfSharedItems)
     EXPECT_FALSE(wide.Load(L"{{ ()[:, [['x' * 100] * 100] * 100] is undefined }}").has_value());
 }
 
+// Checking a folded value's repr visits each item of repeated lists: under limits, each visit
+// is a render step
+TEST_F(LimitsEnvTest, FoldOfSharedItemsCountsSteps)
+{
+    Settings settings;
+    settings.limits.maxSequenceSize = 1000;
+    settings.limits.maxRenderSteps = 100000;
+    m_env.SetSettings(settings);
+    Template tpl(&m_env);
+    auto loaded = tpl.Load("{% set q = [[[[()[:, :] is undefined] * 1000] * 1000] * 1000] * 1000 %}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << ErrorToString(loaded.error());
+}
+
 // A tag that fails to parse leaves its fold candidates behind; the next tag's check must not
 // count them (their subscript indices are another parser's)
 TEST_F(LimitsEnvTest, FoldCandidatesOfAFailedTag)

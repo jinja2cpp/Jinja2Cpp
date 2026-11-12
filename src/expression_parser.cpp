@@ -1706,10 +1706,10 @@ namespace
 // code: None, bools, numbers, strings, and lists, tuples and dicts of them; not an undefined
 bool HasSafeRepr(const InternalValue& value)
 {
-    if (StackNearlyExhausted())
-    {
-        return false;
-    }
+    // Repeated lists share their items, so a small value can have very many: under limits
+    // each visit is a render step, which bounds the walk (RecursionLimitError near the
+    // stack's end, both failing the Load)
+    CheckStack();
     switch (value.Kind())
     {
     case ValueKind::None:
