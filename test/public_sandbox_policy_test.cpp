@@ -230,6 +230,9 @@ TEST(PublicSandboxPolicyTest, TheEnginesFormatAsksAboutFieldAttributes)
     EXPECT_EQ("|", RenderOrError(env, "{{ '{0.__class__}|'.format('s') }}"));
     EXPECT_EQ("an attribute the engine lacks", RenderOrError(env, "{{ '{0.extra}'.format('s') }}"));
     EXPECT_EQ("a-1", RenderOrError(env, "{{ '{}-{n}'.format('a', n=1) }}"));
+    // format_map's fields too (docs/tasks/0443)
+    EXPECT_EQ("|", RenderOrError(env, "{{ '{x.__class__}|'.format_map({'x': 's'}) }}"));
+    EXPECT_EQ("an attribute the engine lacks", RenderOrError(env, "{{ '{x.extra}'.format_map({'x': 's'}) }}"));
 }
 
 TEST(PublicSandboxPolicyTest, APolicyMayFormatItself)
@@ -239,6 +242,9 @@ TEST(PublicSandboxPolicyTest, APolicyMayFormatItself)
     EXPECT_EQ("format {}-{} 2", RenderOrError(env, "{{ '{}-{}'.format(1, 2) }}"));
     // A Markup's format too; its result is the policy's, not made Markup
     EXPECT_EQ("format &lt;{}&gt; 1", RenderOrError(env, "{{ ('<{}>'|e).format('x') }}"));
+    // format_map is asked with formatMap set, its one argument the mapping (docs/tasks/0443)
+    EXPECT_EQ("map {a} 1", RenderOrError(env, "{{ '{a}'.format_map({'a': 1}) }}"));
+    EXPECT_EQ("map &lt;{a}&gt; 1", RenderOrError(env, "{{ ('<{a}>'|e).format_map({'a': 1}) }}"));
 }
 
 TEST(PublicSandboxPolicyTest, ImmutableContainersRefuseTheMethodsThatChangeThem)

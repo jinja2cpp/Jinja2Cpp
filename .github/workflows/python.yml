@@ -52,6 +52,8 @@ jobs:
       matrix:
         include:
           - { python: '3.12', compiler: gcc-14 }
+          # The lazy generate()'s CPython stack-protection path (docs/tasks/0457 D5)
+          - { python: '3.14', compiler: gcc-14 }
 
     env:
       # The interpreter's own allocations at exit are no leaks of the module: the refcount

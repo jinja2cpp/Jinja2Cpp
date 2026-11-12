@@ -282,6 +282,7 @@ set(JINJA2CPP_SOURCES
     src/recursion_guard.cpp
     src/render_failure.cpp
     src/render_workspace.cpp
+    src/render_suspension.cpp
     src/serialize_filters.cpp
     src/statements.cpp
     src/string_converter_filter.cpp
@@ -628,6 +629,10 @@ if (JINJA2CPP_BUILD_TESTS)
         list(APPEND JINJA2CPP_TEST_SOURCES test/chat_templates/chat_template_test.cpp test/chat_template_preset_test.cpp)
     endif ()
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
+    # Suspendable renders run on the Python module's fiber switch (docs/tasks/0457)
+    include(python/src/fiber/fiber.cmake)
+    target_sources(jinja2cpp_tests PRIVATE test/suspendable_render_test.cpp)
+    target_link_libraries(jinja2cpp_tests jinja2cpp_fiber)
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
     # The parity corpus reads its cases with nlohmann::json and copies each context through the
     # binding's ToValue, whatever JINJA2CPP_TEST_BINDINGS lists

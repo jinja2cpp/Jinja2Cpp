@@ -465,6 +465,10 @@ TEST_F(RecursionLimitsTest, GrowthOperationsCheckSizeFirst)
         "{{ ('x' * 600)|replace('x', 'yy') }}",
         "{{ ('x ' * 600)|wordwrap(1) }}",
         "{{ ('x' * 600)|center(2000) }}",
+        "{{ ('\\t' * 1000).expandtabs(2**20) }}",
+        "{{ ('\\t' * 300).expandtabs(4) }}",
+        "{{ ('x' * 600).translate({120: 'yy'}) }}",
+        "{{ 'aa'.translate({97: 'x' * 600}) }}",
     };
     for (const auto& source : templates)
     {
@@ -475,6 +479,11 @@ TEST_F(RecursionLimitsTest, GrowthOperationsCheckSizeFirst)
         EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode()) << source << ": " << result.error().ToString();
     }
     TemplateW wide(&m_env);
+    TemplateW wideTabs(&m_env);
+    ASSERT_TRUE(wideTabs.Load(L"{{ ('\\t' * 1000).expandtabs(2**20) }}").has_value());
+    auto wideTabsResult = wideTabs.RenderAsString({});
+    ASSERT_FALSE(wideTabsResult.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wideTabsResult.error().GetCode());
     ASSERT_TRUE(wide.Load(L"{{ 'x'.center(2**27) }}{{ lipsum(300000) }}").has_value());
     EXPECT_FALSE(wide.RenderAsString({}).has_value());
     TemplateW wideDoubling(&m_env);

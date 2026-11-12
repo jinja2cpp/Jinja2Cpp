@@ -195,8 +195,19 @@ class Template(_jinja2cpp.Template):
 
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
         """Render the template as a generator of strings: Jinja2's items (a run of text, the value of a
-        ``{{ }}``, a macro's output). The render runs at the first item, on the caller's thread
-        (docs/python.md); an error comes after the items written before it, as in Jinja2."""
+        ``{{ }}``, a macro's output). The template runs as far as the items asked for, on the caller's
+        thread, as in Jinja2; an error comes after the items before it. Where that is not available (see
+        docs/python.md) the whole render runs at the first item."""
+        lazy = self._lazy(*args, **kwargs)
+        if lazy is not None:
+            try:
+                while True:
+                    item = lazy._next()
+                    if item is None:
+                        return
+                    yield item
+            finally:
+                lazy.close()
         items: t.List[str] = []
         error: t.Optional[BaseException] = None
         try:

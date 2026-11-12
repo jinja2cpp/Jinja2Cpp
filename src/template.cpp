@@ -3,6 +3,7 @@
 #include "internal_value.h"
 #include "make_unexpected.h"
 #include "markup.h"
+#include "render_suspension.h"
 #include "render_workspace.h"
 #include "shared_owner.h"
 #include "template_impl.h"
@@ -277,6 +278,13 @@ Result<void, CharT> BasicTemplate<CharT>::RenderTo(StringType& out, const Values
 template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::RenderTo(BasicOutputSink<CharT>& sink, const ValuesMap& params, const RenderOptions& options) const
 {
+    if (options.suspension)
+    {
+        // A Load of this object while the render is suspended must not free what it runs: nothing
+        // keeps the replaced template for it then (RenderWorkspace::Retire, docs/tasks/0457)
+        const auto impl = m_impl;
+        return ToResult(GetImpl<CharT>(impl)->RenderWithOptions(sink, params, options));
+    }
     return ToResult(GetImpl<CharT>(m_impl)->RenderWithOptions(sink, params, options));
 }
 
@@ -322,6 +330,7 @@ bool ReleaseThreadCaches() noexcept
     {
         return false;
     }
+    detail::ReleaseSuspensionPool();
     std::string().swap(detail::HtmlEscapeBuffer());
     return true;
 }

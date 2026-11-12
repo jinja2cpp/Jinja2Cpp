@@ -121,21 +121,29 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame)
         const auto bounds = CurrentThreadStack();
         // A stack too small for the reserve, or of unknown bounds, is not checked
         const bool known = bounds.high - bounds.low > StackReserve;
-        stack.low = known ? bounds.low : 0;
-        stack.limit = known ? bounds.low + StackReserve : 0;
-#ifdef JINJA2CPP_TSAN
-        if (known && bounds.high - bounds.low > StackBudget)
-        {
-            stack.limit = std::max(stack.limit, bounds.high - StackBudget);
-        }
-#endif
-        if (!t_renderLimits.active && !t_renderLimits.eachPiece)
-        {
-            stack.renderLimit = stack.limit;
-        }
+        const auto renderLimit = stack.renderLimit;
+        stack = known ? StackOf(bounds.low, bounds.high) : ThreadStack{ 0, 0, 0 };
+        stack.renderLimit = t_renderLimits.active || t_renderLimits.eachPiece ? renderLimit : stack.limit;
     }
     // A frame below the stack runs on one of its own (a fiber, a coroutine): no check
     return frame >= stack.low && frame < stack.limit;
+}
+
+ThreadStack StackOf(std::uintptr_t low, std::uintptr_t high) noexcept
+{
+    ThreadStack stack;
+    stack.low = low;
+    // A fiber's stack no larger than the reserve fails the render at its first check rather than
+    // overflow: its host chose it, and nothing on it may be left unchecked (docs/tasks/0457)
+    stack.limit = high - low > StackReserve ? low + StackReserve : high;
+#ifdef JINJA2CPP_TSAN
+    if (high - low > StackBudget)
+    {
+        stack.limit = std::max(stack.limit, high - StackBudget);
+    }
+#endif
+    stack.renderLimit = stack.limit;
+    return stack;
 }
 
 namespace
@@ -269,6 +277,12 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone, const BigI
     {
         state.loadsLeft = limits.maxTemplateLoads;
     }
+    // UINT64_MAX bytes is no limit, as the state cannot tell it from none
+    if (limits.maxRenderMemory != 0 && limits.maxRenderMemory != UINT64_MAX)
+    {
+        state.memoryLeft = limits.maxRenderMemory;
+        state.memoryBudget = limits.maxRenderMemory;
+    }
     state.maxRenderDepth = LimitOrNone(limits.maxRenderDepth);
     if (limits.maxRenderTime.count() > 0)
     {
@@ -322,6 +336,14 @@ void CountTemplateLoadSlow()
 void ThrowRangeTooLong(std::uint64_t size)
 {
     ThrowLimit("maxRange", "range() of " + std::to_string(size) + " items is longer than " + std::to_string(t_renderLimits.maxRange));
+}
+
+void ThrowRenderMemory(std::uint64_t bytes)
+{
+    const auto& limits = t_renderLimits;
+    ThrowLimit("maxRenderMemory",
+               "the render's strings, lists and dicts would take " + std::to_string(limits.memoryBudget - limits.memoryLeft + bytes) + " bytes, more than "
+                   + std::to_string(limits.memoryBudget));
 }
 } // namespace detail
 
