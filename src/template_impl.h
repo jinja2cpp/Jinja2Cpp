@@ -339,6 +339,7 @@ public:
         const bool isNamed = !tplName.empty();
         std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
         NodeArena nodes;
+        bool selectedAutoescape = false;
         // Whatever parsing throws, except std::bad_alloc, becomes the error: the template that was loaded before stays.
         // The checks of the tree's handles (NodeRefChecks) in Seal fail only on a bug in the parser.
         try
@@ -358,6 +359,7 @@ public:
                     return detail::HostExceptionToError<CharT>(name);
                 }
                 parser.SetAutoescape(autoescape);
+                selectedAutoescape = autoescape;
             }
 
             const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
@@ -387,6 +389,7 @@ public:
         // Last: the parser refers to the name
         m_templateName = std::move(name);
         m_isNamed = isNamed;
+        m_selectedAutoescape = selectedAutoescape;
         m_origin.source = m_template.get();
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
@@ -851,10 +854,11 @@ public:
     }
 
     // Whether `other` was parsed from the same source, under the same name and load settings, so that its tree is
-    // this one's: a lookup that reloaded an unchanged template keeps the tree it has (docs/tasks/0313)
+    // this one's: a lookup that reloaded an unchanged template keeps the tree it has (docs/tasks/0313). A stateful
+    // autoescapeSelector can choose differently for the same name, so its answer is compared too
     [[nodiscard]] bool SameParseAs(const TemplateImpl<CharT>& other) const
     {
-        return m_settings == other.m_settings && m_templateName == other.m_templateName && m_isNamed == other.m_isNamed && *this == other;
+        return m_settings == other.m_settings && m_templateName == other.m_templateName && m_isNamed == other.m_isNamed && m_selectedAutoescape == other.m_selectedAutoescape && *this == other;
     }
 
     bool operator==(const TemplateImpl<CharT>& other) const
@@ -1280,6 +1284,8 @@ private:
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;
     bool m_isNamed = false;
+    // What the autoescapeSelector chose at Load, false without one
+    bool m_selectedAutoescape = false;
     bool m_mayReadLoop = false;
     // Owns the tree
     SealedArena m_nodes;
