@@ -25,7 +25,7 @@ Recommended: document and report upstream; the default binding is `boost`.
 **Done when.** The limitation is documented (or fixed) and the metadata row runs, or is
 skipped with a pointer to the documentation, in nlohmann builds.
 
-**Resolution (0256's PR).** Documented: docs/api-2.0.md 3.9 and the binding header's Doxygen.
+**Resolution ([#861](https://github.com/jinja2cpp/Jinja2Cpp/pull/861)).** Documented: docs/api-2.0.md 3.9 and the binding header's Doxygen.
 The metadata row runs in every build since 0230 replaced the nlohmann metadata reader; the new
 `JsonAllocationFailureTest.NlohmannDocumentReadsOrThrowsBadAlloc` sweeps a borrowed view and a
 `ToValue` copy of an nlohmann document. Documents the library owns (`Reflect` of an rvalue, a

@@ -32,7 +32,7 @@ nlohmann::json's destructor allocates, so OOM there terminates the process (0279
 
 **Perf.** Tests only; no library change expected.
 
-**Landed (PR to be linked).** `JINJA2CPP_ALLOC_EXHAUSTED=1` and the ctest entry
+**Landed ([#861](https://github.com/jinja2cpp/Jinja2Cpp/pull/861)).** `JINJA2CPP_ALLOC_EXHAUSTED=1` and the ctest entry
 `jinja2cpp_alloc_tests_exhausted` (every allocation after the N-th fails); `TemplateW` Load and
 Render sweeps (`Wide*SucceedsOrThrowsBadAlloc`) over every row; i18n rows (`{% trans %}` with a
 variable and a plural, the gettext globals); a per-test LeakSanitizer check
