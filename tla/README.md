@@ -103,7 +103,7 @@ What the model abstracts:
 | 2 | A snapshot the host keeps never changes after its call ends | `SnapshotStable` |
 | 3 | No two threads write the same cell, adapter or storage, unless both hold the module's lock | `NoCrossThreadWrite` |
 | 4 | Nothing reads freed storage, and no live adapter points at a freed cell | `NoUseAfterFree` |
-| 5 | A lookup never returns a cell of other data (identity reuse) or a live cell of another render | `NoForeignCell` |
+| 5 | A lookup never returns a cell of other data (identity reuse) or a live cell of another render, but a global's adapter in a render nested in the cell's render on the same thread (0324, `FixShareNested`) | `NoForeignCell` |
 | 6 | Between module calls, the registry holds no cell of a finished call's own data | `RegistryBounded` |
 | + | An alias never reads the host's data while its render has a cell of it | `AliasesAgree` |
 | + | No moved-from item is stored | `NoUndefItems` |
@@ -141,8 +141,8 @@ explores every behaviour up to it and none past it.
 | `no-enum-refetch-kept` | f83b89f out, no release of exports | counterexample: `NoUseAfterFree` (the loop's accessor freed while the export keeps the items) |
 | `no-sort-refetch` | 1e15c2d/89df914 out (Codex P0) | counterexample: `SnapshotStable` |
 | `no-call-restore` | 1e15c2d out (Codex P1), without `FixCallPin` | counterexample: `SnapshotStable` (with `FixCallPin` no error: no write compares call ids) |
-| `no-nested-global` | 9c91ffc out (Codex P2) | counterexample: `NoForeignCell` |
-| `no-mark-order` | 5e37c24 out (verifier r11) | counterexample: `NoForeignCell` |
+| `no-nested-global` | 9c91ffc out (Codex P2), without `FixShareNested` (the design before 0324) | counterexample: `NoForeignCell` |
+| `no-mark-order` | 5e37c24 out (verifier r11), without `FixShareNested` | counterexample: `NoForeignCell` |
 | `no-sort-mutable-first` | 9c91ffc out (Codex P2) | counterexample: `NoUndefItems` |
 | `no-marker-after-copy` | b3993a5 out (Ruslan's P2) | counterexample: `SnapshotStable` |
 | `no-read-only-export` | 0331 A1 out (b2.cpp shapes) | counterexample: `NoCrossThreadWrite` (a kept global adapter linked by another thread's render) |
@@ -284,6 +284,16 @@ any other link. The model has one level of items (`LendGItem`, `Evict`, `Forget`
 `no-generic-owner` keeps a cell per call (`RegistryBounded`); a drop without the host-copy test
 loses the writes a later call with the same container must see (`generic-drop-without-host-test`,
 `NoLostWrites`).
+
+**A nested render shares the outer render's globals (`FixShareNested`: 0324, after 0211).** A
+render started inside another one on the same thread (a host callable rendering a template)
+reads the outer render's snapshot of the globals instead of converting its own, so its global
+adapters stay attached to the outer render's live cells: it sees what the outer render changed in
+place, and the outer render sees what it then writes there. `NoForeignCell` allows that read, and
+only that one: a global's adapter, a cell of a render below the running frame on the same thread.
+Later renders and other threads still get their own snapshots and cells. A global the nested
+render writes first still gets a cell of its own registry (task 0463). `no-nested-global` and
+`no-mark-order` guard the design before it (each render its own cells) and run without it.
 
 **Closed since.** 0342, the epoch wrap: the C++ epoch is 64 bits, so it never returns to a stored
 value, which is the unbounded counter the pass runs use; `epoch-wrap` (`MaxEpoch = 2`) keeps the
@@ -643,7 +653,7 @@ trace can show it. The events and what the spec checks at each:
 |---|---|
 | `skip` (`CellLink::MayHaveCell` false) | the epoch is the one the adapter saw at its last lookup (`EpochAgrees`); the running registry has no cell of its data (`AliasesAgree`) |
 | `find`, `link`, `linkfail` (`Find`, `Link`) | the lookup finds the registry's cell of that identity and kind (`TableAgrees`); a link only to a live, unfrozen cell, by its registry's writer (`NoCrossThreadWrite`) |
-| `hit` (an attached adapter's read) | the adapter is attached to that cell (`LinksAgree`); the cell is alive and, unless frozen, of the running registry (`NoForeignCell`) |
+| `hit` (an attached adapter's read) | the adapter is attached to that cell (`LinksAgree`); the cell is alive and, unless frozen, of the running registry or of a live render registry of the same thread older than it, which the running render is nested in (`NoForeignCell`, 0324) |
 | `unlink`, `inherit`, `dieatt` | the link set agrees, and whether the link owns its cell (`CellRules!LinkOwns`); an owning link lets go on any thread, a listed (global's) link changes a live cell's list on its writer's thread only; an adapter never goes attached (`NoDanglingLink`) |
 | `leave` (`CellLink::LeaveSnapshot`, 0346) | a listed link of a live cell leaves the list and owns the cell, on the cell's writer's thread |
 | `adopt`, `adoptno`, `promote` | a new cell only where the table has none; the live count (`LiveCount`, one-thread traces) |

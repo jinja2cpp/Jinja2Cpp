@@ -34,6 +34,9 @@ CONSTANTS
     FixSortRefetch,       \* 1e15c2d/89df914: sort fetches the cell's items after its key calls
     FixCallRestore,       \* 1e15c2d: a nested module call restores the outer call's id
     FixNestedGlobal,      \* 9c91ffc: a render nested in one that attached a global converts its own
+    FixShareNested,       \* 0324: a render nested in another on the same thread reads its snapshot
+                          \* of the globals, whose adapters stay attached to the outer render's
+                          \* cells (supersedes FixNestedGlobal inside a render)
     FixMarkOrder,         \* 5e37c24: the global-attached mark is cleared after the conversion
     FixSortMutableFirst,  \* 9c91ffc: sort gets MutableItems before it moves the restore values
     FixMarkerAfterCopy,   \* b3993a5: Unshare clears m_exportedIn only after the copy is in place
@@ -305,9 +308,17 @@ GetR(t, a, f) ==
                       failed |-> FALSE]
 
 \* The cell Get returned is of this data and, unless frozen, of the running render or call
+\* r is the registry of a render that t's running frame is nested in
+EnclosingReg(t, r) == \E i \in Frames(t) : i < Depth(t) /\ fr[t][i].kind = "render" /\ fr[t][i].reg = r
+\* A render below the running frame on t, whose snapshot a render started now shares (0324)
+InRender(t) == \E i \in Frames(t) : fr[t][i].kind = "render"
+
+\* A global's adapter of the shared snapshot reads a cell of the render the running one is
+\* nested in (FixShareNested): not another render's, which nests in no other
 Foreign(t, a, c) ==
     c # 0 /\ (cl[c].idn # ad[a].idn \/ cl[c].inc # ad[a].inc
-              \/ (~cl[c].frozen /\ cl[c].reg # CurReg(t)))
+              \/ (~cl[c].frozen /\ cl[c].reg # CurReg(t)
+                  /\ ~(FixShareNested /\ ad[a].held /\ EnclosingReg(t, cl[c].reg))))
 
 \* @type: (Int, $get) => Int -> $ad;
 ApplyGetAd(a, R) == [ad EXCEPT ![a] = R.A2]
@@ -617,7 +628,7 @@ CanNest(t) == Depth(t) < MaxDepth /\ IF Depth(t) = 0 THEN TRUE ELSE Top(t).phase
 
 StartRender(t) ==
     /\ Idle /\ t \in RenderThreads /\ CanNest(t)
-    /\ LET conv == gsnap[t] = 0 \/ (FixNestedGlobal /\ gatt[t]) IN
+    /\ LET conv == gsnap[t] = 0 \/ (FixNestedGlobal /\ gatt[t] /\ ~(FixShareNested /\ InRender(t))) IN
        \E f \in BOOLEAN :
         /\ f => (conv /\ fails < MaxFail)
         /\ IF f

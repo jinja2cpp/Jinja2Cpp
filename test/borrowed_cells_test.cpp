@@ -112,14 +112,15 @@ TEST(BorrowedCellsSingle, NestedRenderHasItsOwnCells)
 TEST(BorrowedCellsSingle, NestedRenderOfAGlobalWrittenThroughAnAlias)
 {
     // The thread keeps the globals' adapters for the next render; a write through an alias does
-    // not mark the global scope written, yet a render nested in this one must not see its cell
+    // not mark the global scope written. A render nested in this one shares its snapshot, and so
+    // its cell, both ways; the next render reads the environment's list (docs/tasks/0211, 0324)
     TemplateEnv env;
     env.AddGlobal("g", ValuesList{ 0 });
     Template inner(&env);
     ASSERT_TRUE(!!inner.Load("{% set _ = g.append(2) %}{{ g }}"));
     ValuesMap params;
     params["inner"] = MakeCallable([&inner]() { return inner.RenderAsString({}).value(); });
-    EXPECT_EQ("[0, 2]|[0, 1]", Render("{% set y = g %}{% set _ = y.append(1) %}{{ inner() }}|{{ g }}", params, &env));
+    EXPECT_EQ("[0, 1, 2]|[0, 1, 2]", Render("{% set y = g %}{% set _ = y.append(1) %}{{ inner() }}|{{ g }}", params, &env));
     EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
 }
 

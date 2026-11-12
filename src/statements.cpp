@@ -873,20 +873,8 @@ public:
     // Iterating it takes the rest of the loop's own items, each as (item, loop), so that the
     // running loop goes on after them: Jinja2's LoopContext.__next__ (docs/tasks/0219)
     [[nodiscard]] bool Iterates() const override { return true; }
-    bool GetIteration(ListAdapter& items) const override
-    {
-        items = ListAdapter::CreateAdapter([state = m_state, loop = InternalValue(MapAdapter(MakeRef<LoopAccessor>(*this)))]() -> std::optional<InternalValue> {
-            state->Peek();
-            if (state->isLast)
-            {
-                return std::nullopt;
-            }
-            state->SetIndex(state->index0 + 1);
-            state->isPeeked = false;
-            return InternalValue(ListAdapter::CreateAdapter(InternalValueList{ state->Item(state->index0), loop }).MarkAsTuple());
-        });
-        return true;
-    }
+    // `for a in loop`: (item, loop) pairs, made from the loop's state as it advances
+    bool GetIteration(ListAdapter& items) const override;
     [[nodiscard]] const LoopState* State() const { return m_state; }
     [[nodiscard]] const void* GetIdentity() const override { return m_state; }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -1168,6 +1156,29 @@ void intrusive_ptr_release(const LoopFrame* frame) noexcept
     intrusive_ptr_release(static_cast<const ValueObject*>(frame));
 }
 } // namespace detail
+
+// It holds the loop object, the frame's own accessor, where the cycle collector sees it: in a
+// std::function capture a kept loop over `loop` (`set ns.k = loop`) closed a cycle through the
+// outer loop that nothing freed (docs/tasks/0400)
+bool LoopAccessor::GetIteration(ListAdapter& items) const
+{
+    // Every loop state is a frame's (LoopFramePool)
+    auto& frame = *static_cast<detail::LoopFrame*>(m_state);
+    items = ListAdapter::CreateGenerator(
+        MapAdapter(&frame.accessor, ValueObjectPtr(&frame)),
+        [state = m_state]() {
+            state->Peek();
+            if (state->isLast)
+            {
+                return false;
+            }
+            state->SetIndex(state->index0 + 1);
+            state->isPeeked = false;
+            return true;
+        },
+        [state = m_state](const InternalValue& loop) { return InternalValue(ListAdapter::CreateAdapter(InternalValueList{ state->Item(state->index0), loop }).MarkAsTuple()); });
+    return true;
+}
 
 namespace
 {

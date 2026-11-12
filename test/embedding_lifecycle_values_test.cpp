@@ -419,3 +419,26 @@ TEST(EmbeddingLifecycleTest, F5_CallerCalledAfterItsMacroReturned)
         EXPECT_EQ(L"x|body V", Text(wide.RenderAsString({})));
     }
 }
+
+// 3.10 globals: a host callable renders another template of the environment inside a render that changed a global in place.
+// The nested render sees the change, as Jinja2's renders share the global object, and a later render sees the global as the
+// environment has it (docs/tasks/0211, 0324)
+TEST(EmbeddingLifecycleTest, F6_NestedRenderSeesGlobalChangedInPlace)
+{
+    TemplateEnv env;
+    env.GetSettings().extensions.doStatement = true;
+    env.AddGlobal("g", ValuesList{});
+    auto inner = env.FromString("{{ g|length }}").value();
+    auto innerWide = env.FromString(Str<wchar_t>("{{ g|length }}")).value();
+    env.AddGlobal("nested", MakeCallable([&inner] { return inner.RenderAsString({}).value(); }));
+    env.AddGlobal("nestedWide", MakeCallable([&innerWide] { return innerWide.RenderAsString({}).value(); }));
+    const char* source = "{{ nested() }}{% do g.append(1) %}{{ g|length }}|{{ nested() }}{{ nestedWide() }}{% do g.append(2) %}{{ nested() }}";
+    auto narrow = env.FromString(source).value();
+    auto wide = env.FromString(Str<wchar_t>(source)).value();
+    for (int i = 0; i < 2; ++i)
+    {
+        EXPECT_EQ("01|112", Out(narrow.RenderAsString({})));
+        EXPECT_EQ(L"01|112", Text(wide.RenderAsString({})));
+        EXPECT_EQ("0", Out(inner.RenderAsString({})));
+    }
+}

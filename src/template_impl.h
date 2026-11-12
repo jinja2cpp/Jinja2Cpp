@@ -103,6 +103,7 @@ public:
 
     [[nodiscard]] InternalValueMap& Params() const { return m_maps.params; }
     [[nodiscard]] InternalValueMap& TopScope() const { return m_maps.topScope; }
+    [[nodiscard]] RenderWorkspace& Workspace() const { return m_workspace; }
 
 private:
     RenderWorkspace& m_workspace;
@@ -118,13 +119,27 @@ inline std::shared_ptr<const GlobalsSnapshot>& ThreadGlobalsSnapshot()
 // The globals of `env` for a render on this thread: converted again only when they changed since
 // the last render here, or a render changed one in place. The render holds the result, which a
 // render it starts may replace. A render that attached a global to one of its cells keeps its
-// snapshot, and one it starts converts its own
+// snapshot; one it starts with the same environment and generation reads that snapshot, and a
+// later one converts its own
 inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::TemplateEnvImpl& env)
 {
     auto& workspace = RenderWorkspace::ForThisThread();
     auto& cached = workspace.Globals();
-    if (workspace.IsGlobalAttached() || !cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
+    const auto generation = env.globalsGeneration.load(std::memory_order_acquire);
+    if (workspace.IsGlobalAttached() || !cached || cached->generation != generation)
     {
+        // A render started inside another of the same environment shares its snapshot, with the
+        // globals that one changed in place, as Jinja2's renders share the globals' objects: the
+        // outer render no longer caches it (GlobalScopeWritten), and its adapters of the globals
+        // stay attached to its cells while this one runs (docs/tasks/0211, 0324)
+        for (const auto* running = workspace.Running(); running; running = running->outer)
+        {
+            const auto& globals = *running->owner;
+            if (globals && globals->generation == generation)
+            {
+                return globals;
+            }
+        }
         auto snapshot = std::make_shared<GlobalsSnapshot>();
         {
             const detail::ReaderLock lock(env.guard);
@@ -513,6 +528,8 @@ public:
             // Under the limits and in the error boundary, as the params are: a host global may be a big integer past the cap
             std::conditional_t<hasHooks, InternalValueMap, NoGlobals> convertedGlobals;
             const InternalValueMap* hostGlobals = GlobalsOf(convertedGlobals, hooks);
+            static const InternalValueMap noGlobals;
+            const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
@@ -521,9 +538,6 @@ public:
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
                 intParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
-
-            static const InternalValueMap noGlobals;
-            const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
@@ -542,7 +556,7 @@ public:
                 }
             }
             RendererCallback callback(this);
-            callback.SetGlobals(globals.get());
+            callback.SetGlobals(maps.Workspace(), globals);
             const InternalValueMap& renderGlobals = hostGlobals ? *hostGlobals : globals ? globals->values
                                                                                          : noGlobals;
             RenderContext context(intParams,
@@ -964,7 +978,29 @@ private:
                 cached.reset();
             }
         }
-        void SetGlobals(const GlobalsSnapshot* globals) { m_globals = globals; }
+        // The render reads `globals` (null without an environment); the renders started inside it
+        // find them here (GetGlobalsSnapshot, docs/tasks/0324). The callback is the render's own
+        // object whose address the render hands out anyway, so naming them costs it no reloads
+        void SetGlobals(RenderWorkspace& workspace, const std::shared_ptr<const GlobalsSnapshot>& globals) noexcept
+        {
+            m_globals = globals.get();
+            m_workspace = &workspace;
+            m_running = { &globals, workspace.Running() };
+            workspace.SetRunning(&m_running);
+        }
+        // A module's callback outlives the call that made it, so it names its globals to no render
+        void SetGlobals(const GlobalsSnapshot* globals) noexcept { m_globals = globals; }
+        RendererCallback(const RendererCallback&) = delete;
+        RendererCallback(RendererCallback&&) = delete;
+        RendererCallback& operator=(const RendererCallback&) = delete;
+        RendererCallback& operator=(RendererCallback&&) = delete;
+        ~RendererCallback() override
+        {
+            if (m_workspace)
+            {
+                m_workspace->SetRunning(m_running.outer);
+            }
+        }
 
         OutStream GetStreamOnString(TargetString& str) override
         {
@@ -1213,6 +1249,8 @@ private:
         std::minstd_rand m_random;
         // The globals this render uses, which it keeps alive; only compared
         const GlobalsSnapshot* m_globals = nullptr;
+        RenderWorkspace* m_workspace = nullptr;
+        RenderWorkspace::RunningGlobals m_running;
     };
 
     // Keeps the environment's state alive for as long as the template lives
