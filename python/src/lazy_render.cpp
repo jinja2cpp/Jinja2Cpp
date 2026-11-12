@@ -262,8 +262,9 @@ void PyLazyRender::Resume()
 {
     // The module's per-render thread-locals, the engine's (swapped by the engine around Write) and CPython's
     // stack bounds are the render's while it runs, and the consumer's again when it suspends
-    ExchangeModuleThreadState(m_threadState);
+    // The push may throw: before the exchange, so a failure leaves the caller's state in place
     t_running.push_back(m_fiber.get());
+    ExchangeModuleThreadState(m_threadState);
     ProtectStack();
     m_resumeFrame = CurrentPythonFrame();
     try
