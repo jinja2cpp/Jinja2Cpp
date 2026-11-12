@@ -1066,16 +1066,25 @@ class TupleSliceExpression final : public Expression
 {
 public:
     static constexpr NodeKind Kind = NodeKind::TupleSliceExpr;
+    // An item of the tuple: an expression (parts[0]) or a slice start:stop:step, any part omitted
+    struct Item
+    {
+        NodeRef<Expression> parts[3];
+        bool isSlice = false;
+    };
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_value);
-        refs(m_parts);
+        refs(m_items, [](detail::RefChecker& r, const Item& item) {
+            r(item.parts[0]);
+            r(item.parts[1]);
+            r(item.parts[2]);
+        });
     }
 
-    // `parts`: the parts of the tuple's items in the order Python evaluates them, omitted ones left out
-    TupleSliceExpression(NodeRef<Expression> value, ArenaSpan<NodeRef<Expression>> parts)
+    TupleSliceExpression(NodeRef<Expression> value, ArenaSpan<Item> items)
         : m_value(value)
-        , m_parts(parts)
+        , m_items(items)
     {
     }
     InternalValue Evaluate(RenderContext& context) override;
@@ -1084,7 +1093,7 @@ public:
 
 private:
     NodeRef<Expression> m_value;
-    ArenaSpan<NodeRef<Expression>> m_parts;
+    ArenaSpan<Item> m_items;
 };
 
 class CallExpression final : public Expression

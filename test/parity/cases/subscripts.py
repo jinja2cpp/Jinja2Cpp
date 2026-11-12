@@ -114,5 +114,15 @@ CASES = [
     # an item or attribute of the undefined fails its own fold, but a fold around it that does not
     # evaluate it (`true or ...`) leaves valid code; the engine rejects any item of it (0479)
     ("tuple_of_slices_item_not_evaluated", "[{{ true or [1][:, :][0] }}|{{ (true or [1][:, :].x) and '' }}]"),
+    # a filter chain or test folds with its operand (the verifier of 0471)
+    ("tuple_of_slices_chain_operand", "[{{ [1][:, :]|length ~ x }}|{{ [1][:, :] is undefined ~ x }}|{{ x or [1][:, :] is undefined }}|{{ not [1][:, :]|e in 'ab' }}]"),
+    ("tuple_of_slices_chain_statements", "{% if [1][:, :]|sort|first is undefined %}a{% endif %}{% if x and [1][:, :] is undefined %}b{% endif %}{% for i in [1, 2] if [1][:, :] is undefined and i %}{{ i }}{% endfor %}"),
+    # filters that fail on an undefined fail the fold, which leaves invalid Python
+    ("tuple_of_slices_int", "[{{ [1][:, :]|int }}]"),
+    ("tuple_of_slices_tojson", "[{{ [1][:, :]|tojson is undefined }}]"),
+    ("tuple_of_slices_debug", "[{{ [1][:, :] }}|{{ ()[1:2, 'a'] }}]", {"env": {"undefined": "debug"}}),
+    ("tuple_of_slices_chainable_item", "[{{ [1][:, :].a }}]", {"env": {"undefined": "chainable"}}),
+    ("tuple_of_slices_strict_short_circuit", "{% set q = ()[:, :] or true if 1 and none else 1 %}[{{ q }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_list_compare", "[{{ [1, 2] == ([()[:, :], ()[:, :]]) }}]", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_set", "{% set q = ()[:, :] ~ 'a' %}[{{ q }}]", {"env": {"undefined": "strict"}}),
 ]

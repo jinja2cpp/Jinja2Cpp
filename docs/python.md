@@ -221,7 +221,7 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 | `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
 | `compile_expression`, `lex`, `preprocess`, `compile` | called on a Jinja2 environment of the same configuration |
 | `Template.blocks`, `new_context`, `root_render_func` | read from the template loaded by Jinja2 from the same source or name |
-| A template the engine cannot parse (for example a subscript of a literal by a tuple of slices in a conditional Jinja2 folds by its test, `(()[:, :] if 1 > 0) is undefined`) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
+| A template the engine cannot parse (for example an item of a subscript of a literal by a tuple of slices that Jinja2 folds away, `true or [1][:, :][0]`) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
 
 **Tier C: never.** Bytecode-level internals of the engine: `jinja2.compiler` and
 `jinja2.nodes` as engine objects (`env.parse` of a native environment is opaque, for

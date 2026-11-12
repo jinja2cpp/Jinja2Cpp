@@ -714,18 +714,10 @@ public:
         return templateRenderer;
     }
 
-    // The folds the Load checks on the sealed tree (FoldCheck), and the error of each, worked out
-    // before ReleaseParseState
+    // The folds the Load checks on the sealed tree (FoldCheck), and the error of one that fails,
+    // worked out before ReleaseParseState
     [[nodiscard]] const std::vector<FoldCheck>& GetFoldChecks() const { return m_unknown.GetFoldChecks(); }
-    [[nodiscard]] std::vector<ErrorInfo> GetFoldCheckErrors()
-    {
-        std::vector<ErrorInfo> errors;
-        for (const auto& check : m_unknown.GetFoldChecks())
-        {
-            errors.push_back(ParseErrorToErrorInfo(check.error));
-        }
-        return errors;
-    }
+    [[nodiscard]] ErrorInfo GetFoldCheckError(const FoldCheck& check) { return ParseErrorToErrorInfo(check.error); }
 
     // Frees what only the parse needed. Load calls it before Seal makes the tree's buffer,
     // so that the two are not held at once

@@ -25,8 +25,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -141,6 +139,33 @@ InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) co
 
 namespace
 {
+// Whether the candidates of `check` that `counts` (by index) cover each of its subscripts, in
+// one sweep over their ranges
+template<typename Counts>
+bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
+{
+    std::vector<int> starts(check.to - check.from + 1, 0);
+    for (std::size_t index = 0; index != check.candidates.size(); ++index)
+    {
+        const auto& candidate = check.candidates[index];
+        if (counts(index))
+        {
+            ++starts[candidate.from - check.from];
+            --starts[candidate.to - check.from];
+        }
+    }
+    int open = 0;
+    for (unsigned subscript = 0; subscript != check.to - check.from; ++subscript)
+    {
+        open += starts[subscript];
+        if (open <= 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 // In a top-level expression while it lives (ExpressionParser::m_inFoldRoot)
 class FoldRootScope
 {
@@ -223,13 +248,9 @@ nonstd::expected<void, ParseError> ExpressionParser::FinishFoldRoot(const Token&
     candidates.clear();
     check.from = m_foldRootFrom;
     check.to = m_tupleSliceSubscripts;
-    for (unsigned subscript = check.from; subscript != check.to; ++subscript)
+    if (!CoversEverySubscript(check, [](std::size_t /*index*/) { return true; }))
     {
-        const auto covers = [subscript](const FoldCandidate& candidate) { return candidate.from <= subscript && subscript < candidate.to; };
-        if (std::none_of(check.candidates.begin(), check.candidates.end(), covers))
-        {
-            return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
-        }
+        return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
     }
     check.strictUndefined = m_strictUndefined;
     check.error = ParseError(ErrorCode::ExpectedSquareBracket, tok);
@@ -613,6 +634,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
     const auto& tok = lexer.PeekNextToken();
     if (tok == '+' || tok == '-')
     {
+        const unsigned foldFrom = m_tupleSliceSubscripts;
         lexer.EatToken();
         if (!AddOperator())
         {
@@ -630,7 +652,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
         {
             return unary;
         }
-        return ParseOperandSuffix(lexer, unary, withFilter);
+        return ParseOperandSuffix(lexer, unary, withFilter, foldFrom);
     }
 
     return ParseValueExpression(lexer, withFilter);
@@ -638,7 +660,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperandSuffix(LexScanner& lexer,
                                                                                         NodeRef<Expression> operand,
-                                                                                        bool withFilter)
+                                                                                        bool withFilter,
+                                                                                        unsigned foldFrom)
 {
     const auto& next = lexer.PeekNextToken();
     if (next == '.' || next == '[' || next == '(')
@@ -653,7 +676,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperan
     const auto& filterStart = lexer.PeekNextToken();
     if (withFilter && (filterStart == '|' || filterStart == '(' || filterStart.keyword == Keyword::Is))
     {
-        return ParseFiltersAndTests(lexer, operand);
+        return ParseFiltersAndTests(lexer, operand, foldFrom);
     }
 
     return operand;
@@ -661,6 +684,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperan
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer, bool withFilter)
 {
+    // The operand's subscripts are the chain's too (ParseFiltersAndTests)
+    const unsigned foldFrom = m_tupleSliceSubscripts;
     const auto& tok = lexer.NextToken();
 
     NodeRef<Expression> value;
@@ -749,7 +774,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
     {
         return value;
     }
-    return ParseOperandSuffix(lexer, value, withFilter);
+    return ParseOperandSuffix(lexer, value, withFilter, foldFrom);
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef)
@@ -803,19 +828,12 @@ nonstd::expected<void, ParseError> ReadDottedName(LexScanner& lexer, std::string
 } // namespace
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFiltersAndTests(LexScanner& lexer,
-                                                                                          NodeRef<Expression> valueRef)
+                                                                                          NodeRef<Expression> valueRef,
+                                                                                          unsigned foldFrom)
 {
     ParseResult<NodeRef<Expression>> result = valueRef;
-    // Jinja2's optimizer folds each filter and test of a chain (FoldCheck)
-    const unsigned foldFrom = m_tupleSliceSubscripts;
-    bool chained = false;
     while (result)
     {
-        if (chained)
-        {
-            NoteFoldCandidate(*result, foldFrom);
-        }
-        chained = true;
         const auto& opTok = lexer.PeekNextToken();
         if (lexer.EatIfEqual('|'))
         {
@@ -852,6 +870,12 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFilter
         }
     }
 
+    // Jinja2's optimizer folds each filter and test of a chain, its operand included (FoldCheck):
+    // the whole chain is the candidate, so that a long chain is evaluated once
+    if (result)
+    {
+        NoteFoldCandidate(*result, foldFrom);
+    }
     return result;
 }
 
@@ -1277,8 +1301,8 @@ struct BracketSubscript
     // is foldable; the parts themselves are not kept
     bool isTupleOfSlices = false;
     bool foldable = true;
-    // Of a tuple of slices: its parts in the order Python evaluates them, the omitted ones left out
-    ArenaSpan<NodeRef<Expression>> tupleParts;
+    // Of a tuple of slices: its items
+    ArenaSpan<TupleSliceExpression::Item> tupleItems;
 };
 
 bool EndsSlicePart(LexScanner& lexer)
@@ -1359,17 +1383,14 @@ SubscriptParseResult<BracketSubscript> ParseSubscriptTuple(ExpressionParser& par
     std::vector<NodeRef<Expression>> items;
     bool hasSlice = first.isSlice;
     bool foldable = true;
-    std::vector<NodeRef<Expression>> parts;
-    const auto addItem = [&nodes, &foldable, &items, &parts](const BracketSubscript& item) {
+    std::vector<TupleSliceExpression::Item> sliceItems;
+    const auto addItem = [&nodes, &foldable, &items, &sliceItems](const BracketSubscript& item) {
         for (const auto& part : item.parts)
         {
             foldable = foldable && (!part || nodes[part].IsFoldable(nodes));
-            if (part)
-            {
-                parts.push_back(part);
-            }
         }
         items.push_back(item.parts[0]);
+        sliceItems.push_back(TupleSliceExpression::Item{ { item.parts[0], item.parts[1], item.parts[2] }, item.isSlice });
     };
     if (first.parts[0] || first.isSlice)
     {
@@ -1395,7 +1416,7 @@ SubscriptParseResult<BracketSubscript> ParseSubscriptTuple(ExpressionParser& par
     {
         result.isTupleOfSlices = true;
         result.foldable = foldable;
-        result.tupleParts = nodes.MakeSpan(parts);
+        result.tupleItems = nodes.MakeSpan(sliceItems);
     }
     else
     {
@@ -1478,7 +1499,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
                 return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
             }
             ++m_tupleSliceSubscripts;
-            const NodeRef<Expression> undefined = m_nodes.Make<TupleSliceExpression>(valueRef, bracket->tupleParts);
+            const NodeRef<Expression> undefined = m_nodes.Make<TupleSliceExpression>(valueRef, bracket->tupleItems);
             m_tupleSliceValue = undefined;
             return undefined;
         }
@@ -1738,11 +1759,17 @@ FoldOutcome FoldOf(const FoldCandidate& candidate, RenderContext& context, bool 
         }
         return HasSafeRepr(value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
     }
-    catch (const std::bad_alloc&)
+    // What Jinja2's as_const turns into Impossible or UndefinedError; a limit of the render, a
+    // recursion limit or a bug fails the Load as it is
+    catch (const TemplateRuntimeError&)
     {
-        throw;
+        return FoldOutcome::Fails;
     }
-    catch (const std::exception&)
+    catch (const UndefinedError&)
+    {
+        return FoldOutcome::Fails;
+    }
+    catch (const IntegerOutOfRangeError&)
     {
         return FoldOutcome::Fails;
     }
@@ -1763,20 +1790,7 @@ bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
             return false;
         }
     }
-    for (unsigned subscript = check.from; subscript != check.to; ++subscript)
-    {
-        bool folded = false;
-        for (std::size_t index = 0; index != check.candidates.size() && !folded; ++index)
-        {
-            const auto& candidate = check.candidates[index];
-            folded = candidate.from <= subscript && subscript < candidate.to && outcomes[index] == FoldOutcome::Folds;
-        }
-        if (!folded)
-        {
-            return false;
-        }
-    }
-    return true;
+    return CoversEverySubscript(check, [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds; });
 }
 
 } // namespace v2

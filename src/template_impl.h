@@ -367,22 +367,23 @@ public:
                 return parseResult.error()[0];
             }
 
-            // Rare: only a template with a subscript by a tuple of slices has fold checks
-            std::vector<BasicErrorInfo<CharT>> foldErrors;
-            if (!parser.GetFoldChecks().empty())
+            // Only a template with a subscript by a tuple of slices has fold checks, which need the
+            // sealed tree, and the parse's state for the error: such a template holds both at once
+            const auto& foldChecks = parser.GetFoldChecks();
+            if (foldChecks.empty())
             {
-                foldErrors = parser.GetFoldCheckErrors();
+                parser.ReleaseParseState();
             }
-            parser.ReleaseParseState();
             // Its fields are set once the Load succeeds
             nodes.SetOrigin(&m_origin);
             auto sealed = nodes.Seal(*parseResult);
-            if (!foldErrors.empty())
+            if (!foldChecks.empty())
             {
-                if (auto failed = FailedFold(parser.GetFoldChecks(), sealed.View()); failed < foldErrors.size())
+                if (const auto failed = FailedFold(foldChecks, sealed.View()); failed < foldChecks.size())
                 {
-                    return foldErrors[failed];
+                    return parser.GetFoldCheckError(foldChecks[failed]);
                 }
+                parser.ReleaseParseState();
             }
             auto convertedTexts = parser.TakeConvertedTexts();
             auto metadataInfo = parser.GetMetadataInfo();
@@ -417,6 +418,8 @@ public:
             return 0;
         }
         const InternalValueMap noValues;
+        // A fold may compute as much as a render: under the template's limits
+        const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
         RendererCallback callback(this);
         RenderContext context(noValues, noValues, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
         context.SetLookupCache(&LookupCache::ForThisThread());

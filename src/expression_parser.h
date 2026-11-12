@@ -240,11 +240,12 @@ private:
                                                       bool negated);
     ParseResult<NodeRef<Expression>> ParseUnaryPlusMinus(LexScanner& lexer, bool withFilter = true);
     // The postfix operators, filters and tests after an operand
-    ParseResult<NodeRef<Expression>> ParseOperandSuffix(LexScanner& lexer, NodeRef<Expression> operand, bool withFilter);
+    // foldFrom: m_tupleSliceSubscripts before the operand (NoteFoldCandidate)
+    ParseResult<NodeRef<Expression>> ParseOperandSuffix(LexScanner& lexer, NodeRef<Expression> operand, bool withFilter, unsigned foldFrom);
     // A name, literal or bracketed expression with its postfix operators, and with withFilter its filters and tests
     ParseResult<NodeRef<Expression>> ParseValueExpression(LexScanner& lexer, bool withFilter);
     ParseResult<NodeRef<Expression>> ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef);
-    ParseResult<NodeRef<Expression>> ParseFiltersAndTests(LexScanner& lexer, NodeRef<Expression> valueRef);
+    ParseResult<NodeRef<Expression>> ParseFiltersAndTests(LexScanner& lexer, NodeRef<Expression> valueRef, unsigned foldFrom);
     ParseResult<NodeRef<Expression>> ParseTest(LexScanner& lexer, NodeRef<Expression> valueRef);
     ParseResult<NodeRef<Expression>> ParseBracedExpressionOrTuple(LexScanner& lexer);
     ParseResult<NodeRef<Expression>> ParseDictionary(LexScanner& lexer);

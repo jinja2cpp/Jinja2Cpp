@@ -1298,18 +1298,27 @@ InternalValue TupleSliceExpression::Evaluate(RenderContext& context)
     {
         throw TemplateRuntimeError("an undefined value has no items");
     }
-    for (const auto& part : context.Nodes()[m_parts])
+    // The parts in the order Python evaluates them, each item's repr for the undefined's name
+    std::string key = "(";
+    const auto repr = [&context](const NodeRef<Expression>& part) {
+        std::string text;
+        if (!part)
+        {
+            return std::string("None");
+        }
+        Apply<visitors::ValueRenderer<char>>(context.Nodes()[part].Evaluate(context), text, true);
+        return text;
+    };
+    bool first = true;
+    for (const auto& item : context.Nodes()[m_items])
     {
-        context.Nodes()[part].Evaluate(context);
+        key += first ? "" : ", ";
+        first = false;
+        key += item.isSlice ? "slice(" + repr(item.parts[0]) + ", " + repr(item.parts[1]) + ", " + repr(item.parts[2]) + ")" : repr(item.parts[0]);
     }
-    // getitem's undefined for the TypeError (KeyError of a dict). The policy decides only how
-    // a strict one fails, which the Load checked (docs/tasks/0471): the others print empty as before
-    auto* callback = context.GetRendererCallback();
-    if (callback && callback->GetSettings().undefinedPolicy == UndefinedPolicy::Strict)
-    {
-        return MakeUndefinedItem(&context, value, "(slice, ...)");
-    }
-    return {};
+    key += ")";
+    // getitem's undefined for the TypeError (KeyError of a dict), of the template's policy
+    return MakeUndefinedItem(&context, value, std::move(key));
 }
 
 bool TupleCreator::IsFoldable(const NodeArena& nodes) const

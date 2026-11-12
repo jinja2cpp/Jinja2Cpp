@@ -6,7 +6,7 @@ depends: [0471]
 touches: [src/expression_parser.cpp#ParseSubscript]
 shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt, python/tests/test_fallback.py]
 ---
-# An item of a tuple-of-slices subscript that Jinja2's fold never evaluates
+# Tuple-of-slices folds the Load check still decides differently from Jinja2
 
 **Problem.** Since 0471 the engine keeps a subscript of a literal by a tuple of slices (`[1][:, :]`)
 where Jinja2's optimizer folds an expression around it, and checks the fold at Load. An item or
@@ -17,9 +17,24 @@ in Jinja2 (`subscripts.tuple_of_slices_item_not_evaluated`), and the engine reje
 module's tests use this template as the syntax the engine lacks (`NOPARSE` in
 `python/tests/test_fallback.py`).
 
+The verifier of 0471 found more, pinned in `test/parity/cases/subscripts.py`:
+
+- under ChainableUndefined an attribute or item of such a subscript folds too, `{{ [1][:, :].a }}`
+  renders empty (`tuple_of_slices_chainable_item`), and the parser rejects it;
+- with StrictUndefined Jinja2's optimizer folds every expression of the tree, so a strict
+  undefined fails inside an `or` that a folded test skips (`tuple_of_slices_strict_short_circuit`);
+  the engine evaluates only the candidates it records (ExpressionParser::AddFoldCandidate);
+- comparing lists that hold a strict undefined raises in Python, not in the engine
+  (`tuple_of_slices_strict_list_compare`);
+- with StrictUndefined `[1][:, :]|batch(2)`, `|slice(2)` and `|unique` fold in Jinja2, whose
+  filters return generators, and fail in the engine, which evaluates them eagerly (no case: the
+  output is a generator's repr with its address);
+- the candidates of a filter chain are the whole chain, so a chain whose last filter does not
+  fold loses a fold of an earlier step (`[1][:, :] is undefined|host_filter`).
+
 **Proposal.** Low value. Make the item or attribute of such a subscript a node whose evaluation
 fails (as Jinja2's fold of it does), and let the Load's fold check (`FoldCheckPasses`) decide, as it
 does for the subscript itself; or keep the line and its use as the fallback sample.
 
-**Done when.** The case matches in narrow and wide runs and its divergence lines are gone; then
+**Done when.** The cases match in narrow and wide runs and its divergence lines are gone; then
 `NOPARSE` needs another syntax the engine lacks, or the tests that need one are dropped.
