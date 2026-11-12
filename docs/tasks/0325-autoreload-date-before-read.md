@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: robustness
 touches: [src/template_env.cpp]
