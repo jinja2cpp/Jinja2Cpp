@@ -1,6 +1,7 @@
 ---
 status: in-progress
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/870
 area: robustness
 depends: [0336]
 touches: [src/internal_value.cpp, src/borrowed_cells.cpp, test/borrowed_cells_test.cpp]

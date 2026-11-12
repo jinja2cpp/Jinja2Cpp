@@ -1,6 +1,7 @@
 ---
 status: in-progress
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/870
 area: robustness
 depends: [0357]
 touches: [src/cycle_collector.cpp]

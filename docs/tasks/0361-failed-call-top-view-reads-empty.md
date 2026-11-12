@@ -1,6 +1,7 @@
 ---
 status: in-progress
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/870
 area: lifetime
 touches: [src/internal_value.cpp]
 shares: [src/borrowed_cells.h, src/borrowed_cells.cpp, test/allocation_failure_test.cpp]

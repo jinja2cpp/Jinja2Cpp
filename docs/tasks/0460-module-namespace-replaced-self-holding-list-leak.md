@@ -1,6 +1,7 @@
 ---
 status: in-progress
 priority: medium
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/870
 area: robustness
 depends: []
 touches: [src/borrowed_cells.cpp, src/cycle_collector.cpp, src/template_module.cpp, test/template_module_test.cpp]
