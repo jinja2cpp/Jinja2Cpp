@@ -23,9 +23,8 @@ side instead of waiting for upstream.
    binding implements it as an allocation-free post-order drain: descend to a container whose
    last child is a scalar or an empty container, `pop_back()` / `erase()` that child (destroying a
    scalar or an empty container never allocates), repeat; the root ends empty and its destructor
-   reserves nothing. No recursion (deep host documents), no heap; O(n * depth) only in the worst
-   case, so try nlohmann's own path first only when it cannot fail is not possible: measure the
-   drain on the bench JSON documents and keep it if the cost is noise next to the free calls.
+   reserves nothing. No recursion (deep host documents), no heap, O(n * depth) in the worst
+   case: measure it on the bench JSON documents against nlohmann's own destructor.
 2. `Create(Json doc)`: move into the shared storage only after it is allocated (allocate the
    control block with an empty `Json`, then swap), so a failed `make_shared` leaves the caller's
    document untouched instead of destroying a by-value copy during unwinding.
