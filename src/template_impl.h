@@ -14,6 +14,7 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "render_failure.h"
+#include "render_suspension.h"
 #include "render_workspace.h"
 #include "renderer.h"
 #include "statements.h"
@@ -401,6 +402,8 @@ public:
         std::vector<GenerationSpan>* generationSpans = nullptr;
         // A sink's Write for each piece of output (RenderOptions::writeEachPiece)
         bool writeEachPiece = false;
+        // The stack of a render whose sink may suspend it (RenderOptions::suspension), or null
+        const RenderSuspension* suspension = nullptr;
     };
 
     // The same with the public options: their globals, lent for the render and kept by any value a
@@ -467,6 +470,20 @@ public:
     std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const RenderHooks* hooks) const
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
+        constexpr bool suspendable = hasHooks && std::is_same_v<Target, BasicOutputSink<CharT>>;
+        // Before anything else: a render whose sink may suspend it runs with the thread's state of
+        // its own, swapped out around each Write (docs/tasks/0457)
+        [[maybe_unused]] std::conditional_t<suspendable, std::optional<detail::SuspendedRenderScope>, std::monostate> suspended;
+        [[maybe_unused]] std::conditional_t<suspendable, std::optional<detail::DetachingSink<CharT>>, std::monostate> detaching;
+        Target* target = &os;
+        if constexpr (suspendable)
+        {
+            if (hooks->suspension)
+            {
+                suspended.emplace(*hooks->suspension);
+                target = &detaching.emplace(os, suspended->State());
+            }
+        }
         std::optional<BasicErrorInfo<CharT>> normalResult;
         // Ends last, after the error conversion: until then a Load on this thread keeps the
         // template it replaces, which may be this one (docs/tasks/0321)
@@ -536,7 +553,7 @@ public:
             context.SetLookupCache(&LookupCache::ForThisThread());
             context.SetNodes(Nodes());
             const auto output = BeginOutput(os);
-            OutStream outStream(os);
+            OutStream outStream(*target);
             // On the render's stack, so that it outlives every use of the callback's pointer to it
             [[maybe_unused]] std::conditional_t<hasHooks, detail::GenerationTracker, std::monostate> tracker;
             // After limitsScope, and gone before it

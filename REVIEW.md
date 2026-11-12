@@ -90,6 +90,12 @@ are what this codebase has actually got wrong.
   callback runs under a lock; cached objects are published only when complete.
   Settings and handler mutation concurrent with rendering is outside the contract.
   Check supported operations with TSan where available.
+- **Suspendable renders.** A render with `RenderOptions::suspension` lets its thread go in
+  its sink's `Write` while other renders run there (task 0457). A new per-render
+  `thread_local` in `src/` joins `detail::RenderThreadState` (src/render_suspension.h) or
+  carries a comment saying why it can be shared; a missed one is a P0 interleaving bug
+  only a suspended render shows. Flag a sink `Write` reached from a `catch` handler or
+  while a host callable runs: a switch there would hand that state to other code.
 - **Supply chain.** A new or bumped dependency is pinned with its `URL_HASH` in
   `thirdparty/internal_deps.cmake`, listed in `sbom/components.json` and has a
   compatible license. TLS and checksum verification are never weakened.

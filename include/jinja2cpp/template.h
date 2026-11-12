@@ -61,6 +61,21 @@ struct GenerationSpan
 };
 
 /*!
+ * \brief The stack a render to a sink runs on, whose sink may switch the thread away (\ref RenderOptions::suspension)
+ *
+ * A host that runs a render on a stack of its own (a fiber) and switches back to its own code
+ * inside `Write`, to resume the render later, gives the render that stack's bounds here
+ * (docs/tasks/0457). The Python module's lazy `Template.generate()` does so.
+ */
+struct RenderSuspension
+{
+    //! The lowest usable address of the stack, above any guard page
+    const void* stackLow = nullptr;
+    //! Its size in bytes; 0 when the render runs on its thread's own stack
+    std::size_t stackSize = 0;
+};
+
+/*!
  * \brief What a render takes besides its params (\ref BasicTemplate::RenderTo)
  *
  * ```cpp
@@ -123,6 +138,28 @@ struct RenderOptions
      * chunk. A render to a string ignores it.
      */
     bool writeEachPiece = false;
+    /*!
+     * Makes a render to a sink (\ref BasicOutputSink) suspendable: its sink's `Write` may switch the
+     * thread to other code and back before it returns, as a fiber does (docs/tasks/0457). Null, the
+     * default, costs nothing. A render to a string ignores it.
+     *
+     * - While a `Write` runs, the thread is as if this render were not running: other renders,
+     *   plain or suspendable, may run, start and finish there, and interleave with this one.
+     * - `Write` returns on the thread the render started on. Resuming it on another thread is
+     *   undefined behaviour.
+     * - The render checks its stack against these bounds, as it checks a thread's: a deep
+     *   template fails with a recursion error rather than overflow the stack. A stack no larger
+     *   than the engine's reserve (128 KiB, 512 KiB under AddressSanitizer) fails at the first
+     *   check. Give at least as much as a thread has (8 MiB) where callables recurse deeply.
+     * - The render does not inherit a poll, limits or render depth from a render that is running
+     *   where it starts, and lends no state to one: each suspendable render has its own.
+     * - Settings::Limits::maxRenderTime counts the time it is suspended too.
+     * - The template, and the environment it was loaded from, must outlive the render: a Load of
+     *   the same Template object while it is suspended keeps the template it replaces alive until
+     *   the render ends.
+     * - The pointee must live through the call.
+     */
+    const RenderSuspension* suspension = nullptr;
 };
 
 /*!
