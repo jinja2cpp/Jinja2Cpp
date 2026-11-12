@@ -9,6 +9,7 @@
 #include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "stable_sort_values.h"
 #include "template_dict.h"

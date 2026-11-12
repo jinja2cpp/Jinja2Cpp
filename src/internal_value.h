@@ -553,9 +553,6 @@ inline void CheckSequenceSize(uint64_t size, const char* what)
     {
         ThrowSequenceTooLong(size, what);
     }
-    // Every item or character takes at least a byte: a sequence past the render's memory budget fails before its
-    // buffer is allocated (docs/tasks/0459)
-    CheckRenderMemoryFits(size);
 }
 
 // A template so that reserve() is instantiated where it is called, with InternalValue complete
