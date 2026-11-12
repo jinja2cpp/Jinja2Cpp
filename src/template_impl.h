@@ -147,7 +147,8 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
             snapshot->source = env.globalValues;
         }
         // The values keep the map: a host callable or a value the template made may keep one
-        // after the global is replaced and this snapshot goes
+        // after the global is replaced and this snapshot goes. The snapshot outlives the render
+        const UncountedMemoryScope uncounted;
         for (const auto& [name, value] : *snapshot->source)
         {
             snapshot->values[name] = LendGlobal(value, snapshot->source);
@@ -338,6 +339,7 @@ public:
         const bool isNamed = !tplName.empty();
         std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
         NodeArena nodes;
+        bool selectedAutoescape = false;
         // Whatever parsing throws, except std::bad_alloc, becomes the error: the template that was loaded before stays.
         // The checks of the tree's handles (NodeRefChecks) in Seal fail only on a bug in the parser.
         try
@@ -357,6 +359,7 @@ public:
                     return detail::HostExceptionToError<CharT>(name);
                 }
                 parser.SetAutoescape(autoescape);
+                selectedAutoescape = autoescape;
             }
 
             const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
@@ -386,6 +389,7 @@ public:
         // Last: the parser refers to the name
         m_templateName = std::move(name);
         m_isNamed = isNamed;
+        m_selectedAutoescape = selectedAutoescape;
         m_origin.source = m_template.get();
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
@@ -849,6 +853,14 @@ public:
         return names;
     }
 
+    // Whether `other` was parsed from the same source, under the same name and load settings, so that its tree is
+    // this one's: a lookup that reloaded an unchanged template keeps the tree it has (docs/tasks/0313). A stateful
+    // autoescapeSelector can choose differently for the same name, so its answer is compared too
+    [[nodiscard]] bool SameParseAs(const TemplateImpl<CharT>& other) const
+    {
+        return m_settings == other.m_settings && m_templateName == other.m_templateName && m_isNamed == other.m_isNamed && m_selectedAutoescape == other.m_selectedAutoescape && *this == other;
+    }
+
     bool operator==(const TemplateImpl<CharT>& other) const
     {
         if (m_env && other.m_env)
@@ -1025,10 +1037,19 @@ private:
             {
                 CountTemplateLoad();
                 auto result = m_host->LoadTemplate(fileName);
-                // A reloaded template is kept as a new result: a render may still be running the one it replaces
+                // A reloaded template is kept as a new result: a render may still be running the one it replaces. One
+                // whose source did not change is dropped, so that a module or a loop over an include does not keep a
+                // tree per use when nothing caches the template (docs/tasks/0313)
                 if (!IsSameTemplate(result, *entry.latest))
                 {
                     entry.latest = &Loaded().replaced.emplace_back(std::move(result));
+                }
+                else
+                {
+                    // Made uncounted (TemplateEnv::LoadTemplate), so freed uncounted: its bytes must not give the
+                    // render budget it never took, which a loop over an include would turn into room without bound
+                    const UncountedMemoryScope uncounted;
+                    [[maybe_unused]] const LoadTemplateResult dropped = std::move(result);
                 }
             }
             return *entry.latest;
@@ -1204,7 +1225,7 @@ private:
                     else
                     {
                         const auto& r = std::get<T>(rhs);
-                        return l.has_value() == r.has_value() && (!l || l.value() == r.value());
+                        return l.has_value() == r.has_value() && (!l || l.value() == r.value() || (l.value() && r.value() && l.value()->SameParseAs(*r.value())));
                     }
                 },
                 lhs);
@@ -1263,6 +1284,8 @@ private:
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;
     bool m_isNamed = false;
+    // What the autoescapeSelector chose at Load, false without one
+    bool m_selectedAutoescape = false;
     bool m_mayReadLoop = false;
     // Owns the tree
     SealedArena m_nodes;

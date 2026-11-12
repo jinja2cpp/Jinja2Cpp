@@ -194,6 +194,13 @@ void StepsSlow()
 {
     auto& limits = t_renderLimits;
     limits.stepsTaken += limits.chunk;
+    if (limits.memoryOverdraft != 0)
+    {
+        // Every later step fails too
+        limits.chunk = 0;
+        limits.stepsLeft = 1;
+        ThrowLimit("maxRenderMemory", "the render's values took " + std::to_string(limits.memoryBudget + limits.memoryOverdraft) + " bytes, more than " + std::to_string(limits.memoryBudget));
+    }
     if (limits.maxSteps != 0 && limits.stepsTaken > limits.maxSteps)
     {
         // Every later step fails too
@@ -338,11 +345,25 @@ void ThrowRangeTooLong(std::uint64_t size)
     ThrowLimit("maxRange", "range() of " + std::to_string(size) + " items is longer than " + std::to_string(t_renderLimits.maxRange));
 }
 
+void OverdrawRenderMemory(std::uint64_t bytes) noexcept
+{
+    auto& limits = t_renderLimits;
+    // An object's size: the sum of them stays far from overflowing
+    limits.memoryOverdraft += bytes - limits.memoryLeft;
+    limits.memoryLeft = 0;
+    if (limits.active && limits.stepsLeft > 1)
+    {
+        // The steps of the countdown taken so far, and this one: StepsSlow then counts what was taken
+        limits.chunk -= limits.stepsLeft - 1;
+        limits.stepsLeft = 1;
+    }
+}
+
 void ThrowRenderMemory(std::uint64_t bytes)
 {
     const auto& limits = t_renderLimits;
     ThrowLimit("maxRenderMemory",
-               "the render's strings, lists and dicts would take " + std::to_string(limits.memoryBudget - limits.memoryLeft + bytes) + " bytes, more than "
+               "the render's values would take " + std::to_string(limits.memoryBudget - limits.memoryLeft + bytes) + " bytes, more than "
                    + std::to_string(limits.memoryBudget));
 }
 } // namespace detail

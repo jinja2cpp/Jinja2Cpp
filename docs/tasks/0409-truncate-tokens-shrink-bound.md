@@ -1,10 +1,11 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0359]
 touches: [src/token_budget.cpp#TruncateText]
 shares: [test/filters_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/863
 ---
 # Bound the host calls of truncate_tokens' shrink loop
 
@@ -19,3 +20,8 @@ prefix plus `end`, or an error if `end` alone exceeds `n`), or shrink geometrica
 
 **Acceptance.** A test with a non-monotonic fake tokenizer and a large `n` makes a bounded number
 of calls, narrow and wide.
+
+**Resolution.** The shrink loop lowers the budget by the excess for four passes, then also halves it, so a host
+tokenizer whose counts do not follow the text gets at most about 4 + log2(n) passes (two host calls each); the
+`count(result) <= n` guarantee holds since a zero budget leaves only `end`. Test:
+`TokenBudget.NonMonotonicTokenizerMakesBoundedCalls`, narrow and wide.

@@ -2200,6 +2200,31 @@ TEST(TokenBudget, MergingTokensAcrossTheJoin)
     EXPECT_EQ("aaaac", TokenRender<TemplateW>(env, "{{ 'aaaabcdd'|truncate_tokens(6, 'c') }}", {}));
 }
 
+// docs/tasks/0409: a host whose counts do not follow the text (any non-empty text counts n + 1) used to lower the prefix
+// budget by one per pass, one host call per token of n; past a few passes the budget halves
+TEST(TokenBudget, NonMonotonicTokenizerMakesBoundedCalls)
+{
+    TemplateEnv env;
+    auto calls = std::make_shared<TokenCalls>();
+    env.GetSettings().tokenizer = Tokenizer(
+        [calls](std::string_view text) {
+            ++calls->count;
+            return text.empty() ? std::size_t{ 0 } : std::size_t{ 1000001 };
+        },
+        [calls](std::string_view text, std::size_t) {
+            ++calls->prefix;
+            return text.size();
+        });
+    EXPECT_EQ("", TokenRender<Template>(env, "{{ 'a b c'|truncate_tokens(1000000, end='') }}", {}));
+    EXPECT_LT(calls->prefix.load(), 40u);
+    EXPECT_LT(calls->count.load(), 40u);
+    calls->prefix = 0;
+    calls->count = 0;
+    EXPECT_EQ("", TokenRender<TemplateW>(env, "{{ 'a b c'|truncate_tokens(1000000, end='') }}", {}));
+    EXPECT_LT(calls->prefix.load(), 40u);
+    EXPECT_LT(calls->count.load(), 40u);
+}
+
 TEST(TokenBudget, TruncatedTextObeysTheSequenceCap)
 {
     // Host text may be longer than the cap; the truncated result is checked before it is built

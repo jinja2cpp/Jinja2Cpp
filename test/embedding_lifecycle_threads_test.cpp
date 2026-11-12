@@ -330,12 +330,9 @@ TEST(EmbeddingLifecycleTest, C6_ReloadsRaceRendersOfTheIncluder)
         worker.join();
     }
     EXPECT_EQ("", failures.Summary());
-    // With the threads gone one more change is seen. Not asserted before: a render that reloads while the file changes can
-    // pair the new date with the old text, as Jinja2's loader can, so the last change of the loop may stay unseen
-    fs.Set("inc.j2", "last");
-    fs.Touch("inc.j2");
-    EXPECT_TRUE(env.LoadTemplate("inc.j2"));
-    EXPECT_EQ("last|last", Out(main->RenderAsString({})));
+    // Every change is seen, the last one of the loop too: the date is asked before the text is read, so a render that
+    // reloads while the file changes caches an older date than the file's and the next lookup reloads (0325)
+    EXPECT_EQ("v50|v50", Out(main->RenderAsString({})));
 }
 
 // 3.10 threads: two threads open a wide-stored MemoryFileSystem file through the narrow API, directly and through an

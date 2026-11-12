@@ -284,8 +284,11 @@ InternalValue TruncateText(const TokenMeter& meter, const InternalValue& value, 
     }
 
     // The prefix of m tokens and end make at most length tokens, unless the tokens merge across the join: then m drops
+    // by the excess. A merging tokenizer settles in a pass or two; one whose counts do not follow the text could take a
+    // pass per token of length, which the template sets, so past a few passes m also halves (docs/tasks/0409)
+    constexpr int excessPasses = 4;
     auto budget = static_cast<std::size_t>(static_cast<std::uint64_t>(length) - endTokens);
-    for (;;)
+    for (int pass = 1;; ++pass)
     {
         const std::size_t prefixSize = meter.PrefixSize<CharT>(*view, budget);
         // Host text may exceed the cap, and a token budget does not bound characters
@@ -298,7 +301,8 @@ InternalValue TruncateText(const TokenMeter& meter, const InternalValue& value, 
             return InternalValue(std::move(result));
         }
         const std::size_t excess = tokens - static_cast<std::size_t>(length);
-        budget = budget > excess ? budget - excess : 0;
+        const std::size_t lowered = budget > excess ? budget - excess : 0;
+        budget = pass < excessPasses ? lowered : std::min(lowered, budget / 2);
     }
 }
 // The order pack considers the items in: that of sort(attribute=by, reverse=reverse), or their own, the last first with
