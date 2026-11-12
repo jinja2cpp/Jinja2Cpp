@@ -108,6 +108,10 @@ engines on a Release build of the module.
   `(weakref.ref(loader), name)`): `get_template` gives the same `Template` again while it is cached
   and the engine's cache holds it unchanged (not reloaded by `auto_reload`, the loader's `uptodate`),
   and a call with `globals` updates that template's globals, as Jinja2's `_load_template` (0433).
+  Clearing `env.cache`, deleting an entry or replacing it drops the engine's cache as a whole, so the
+  next `get_template` of every name reads the loader again and gives a new `Template` (Jinja2 keeps the
+  other entries). A change of an option the engine environment is rebuilt for (`autoescape`, `filters`,
+  ...) also gives new templates, which take the new options; Jinja2 gives the cached ones.
 - Subclasses of `Environment` and `Template` in Python, as in Jinja2: an `__init__` that
   forwards its keyword arguments, attributes of any name, and `env.template_class` (the class
   `from_string`, `get_template` and `select_template` make; a subclass of `jinja2cpp.Template`).
@@ -448,7 +452,8 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, and so does
   the one `get_template` gives from its cache (0433), but an imported template sees the importer's
   dict: after `env.globals = {...}` Jinja2's imports of a cached template still see the old one
-  (0405).
+  (0405). Likewise the `globals` a `get_template` call gave reach that template's imports and
+  `without context` includes, which in Jinja2 see the environment's.
 - An environment keeps every filter, test, `finalize`, `autoescape` callable and loader it was
   ever given alive for as long as it lives, because a template loaded earlier may still call
   one: replacing `env.filters` entries in a loop grows the environment (0406).

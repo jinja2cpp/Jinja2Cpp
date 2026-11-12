@@ -46,6 +46,9 @@ public:
     // ConfigureForChatTemplates on every rebuild, with `clock` (a callable giving a POSIX
     // timestamp, kept alive by the environment; None for the system clock) as strftime_now's clock
     void SetChatTemplates(nb::handle clock);
+    // Environment.cache cleared, an entry deleted or the cache replaced: the engine's cache goes too, so that the next
+    // get_template reads the loader again, as Jinja2's does (templates loaded before keep what they have)
+    void DropEngineCache() noexcept { m_env.reset(); }
     [[nodiscard]] bool NewstyleGettext() const noexcept { return m_newstyleGettext; }
     void SetNewstyleGettext(bool newstyle) noexcept { m_newstyleGettext = newstyle; }
 

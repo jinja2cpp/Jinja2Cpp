@@ -973,6 +973,7 @@ void BindEnvironment(nb::module_& module)
                                "source"_a,
                                "globals"_a.none(),
                                "template_class"_a)
+                           .def("_drop_engine_cache", &PyEnvironment::DropEngineCache)
                            .def(
                                "_load",
                                [](PyEnvironment& self, nb::handle name, nb::handle globals, nb::handle templateClass, nb::handle cached) { return self.LoadTemplate(name, globals, templateClass, cached); },

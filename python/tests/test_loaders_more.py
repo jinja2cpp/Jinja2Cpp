@@ -1,6 +1,7 @@
 """ChoiceLoader, PrefixLoader, FunctionLoader, PackageLoader, ModuleLoader and BaseLoader.load."""
 
 import sys
+import weakref
 import zipfile
 
 import jinja2
@@ -299,3 +300,37 @@ def test_get_template_cache_with_auto_reload_off():
         first = env.get_template("a")
         mapping["a"] = "changed"
         assert env.get_template("a") is first and first.render() == "A", module
+
+
+@pytest.mark.parametrize("drop", ["clear", "del", "none", "dict"])
+@pytest.mark.parametrize("size", [-1, 400])
+def test_dropping_a_cached_template_reads_the_loader_again(drop, size):
+    # A loader without uptodate is never reloaded by itself; Jinja2's idiom is to drop the cache entry
+    def trace(module):
+        source = ["v1"]
+        env = module.Environment(loader=module.FunctionLoader(lambda name: source[0]), cache_size=size)
+        out = [env.get_template("a").render()]
+        source[0] = "v2"
+        out.append(env.get_template("a").render())
+        if drop == "clear":
+            env.cache.clear()
+        elif drop == "del":
+            del env.cache[(weakref.ref(env.loader), "a")]
+        else:
+            env.cache = None if drop == "none" else {}
+        out.append(env.get_template("a").render())
+        out.append([key[1] for key in env.cache] if env.cache is not None else None)
+        return out
+
+    assert trace(jinja2cpp) == trace(jinja2)
+
+
+def test_cache_mapping_api():
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({"a": "A", "b": "B"}), cache_size=5)
+        env.get_template("a")
+        env.get_template("b")
+        names = [key[1] for key in env.cache]
+        assert names == ["b", "a"] and [key[1] for key in reversed(env.cache)] == ["a", "b"], module
+        assert [key[1] for key in env.cache.keys()] == names and len(env.cache.values()) == 2, module
+        assert [key[1] for key in env.cache.copy().keys()] == names, module

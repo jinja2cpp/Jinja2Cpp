@@ -154,14 +154,17 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
             if (source.render && raised.matches(PyExc_StopIteration))
             {
                 const auto stop = nb::borrow(raised.value());
-                const auto runtime = nb::steal(PyObject_CallFunction(PyExc_RuntimeError, "s", "generator raised StopIteration"));
+                auto runtime = nb::steal(PyObject_CallFunction(PyExc_RuntimeError, "s", "generator raised StopIteration"));
                 if (!runtime)
                 {
                     throw nb::python_error();
                 }
                 PyException_SetCause(runtime.ptr(), stop.inc_ref().ptr());   // steals the reference
                 PyException_SetContext(runtime.ptr(), stop.inc_ref().ptr()); // steals the reference
-                Raise(runtime.type(), runtime);
+                // Restored, not set: PyErr_SetObject would chain an exception the caller is handling as the context
+                PyObject* const type = runtime.type().inc_ref().ptr();
+                PyErr_Restore(type, runtime.release().ptr(), nullptr);
+                throw nb::python_error();
             }
             throw;
         }

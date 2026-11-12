@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0477]
-touches: [src/statements.cpp, python/src/adapters.cpp]
+touches: [src/statements.cpp, python/src/adapters.cpp, python/src/environment.cpp]
 shares: [python/tests/test_values.py, docs/python.md]
 ---
 # A StopIteration out of a macro the template calls is undefined in Jinja2
@@ -19,6 +19,13 @@ StopIteration` (0477). Found by 0477.
 ```
 
 `test_stop_iteration_from_a_call_is_undefined` in python/tests/test_values.py pins the module's answer.
+
+Other Python callables the engine calls without `PyHost::Call` have the same gap (found by the 0477
+verifier): `_`, `gettext`, `ngettext` and `{% trans %}` with `install_gettext_callables` raising
+StopIteration (Jinja2: UndefinedError "value was undefined because a callable raised a StopIteration
+exception"), and in a sandbox `'{a.p}'.format_map(d)` / `.format(...)` where the property `p` raises it,
+or a `wrap_str_format` that does (Jinja2 renders `''`). `{% call m() %}` and `{{ m().x }}` follow the
+macro case.
 
 **Proposal.** Where the engine's call of a template callable (a macro, `caller`) fails with a host
 exception, let the host say whether the failure is a "stop" (an `IHostObject`/`ISandboxPolicy`-free

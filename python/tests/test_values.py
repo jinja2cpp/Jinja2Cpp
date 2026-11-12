@@ -380,6 +380,12 @@ def test_stop_iteration_from_a_call_is_undefined():
                 with pytest.raises(RuntimeError, match="^generator raised StopIteration$") as raised:
                     call()
                 assert isinstance(raised.value.__cause__, StopIteration), source
+            try:  # an exception the caller is handling is not the context: the StopIteration is
+                raise ValueError
+            except ValueError:
+                with pytest.raises(RuntimeError) as raised:
+                    template.render()
+            assert isinstance(raised.value.__context__, StopIteration), source
     # A macro the template calls goes through Context.call too, so Jinja2 gives undefined; the engine's macro
     # call does not stop the StopIteration (docs/tasks/0479)
     for module in (jinja2cpp, jinja2):
