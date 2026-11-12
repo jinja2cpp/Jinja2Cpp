@@ -620,6 +620,11 @@ class Environment(_jinja2cpp.Environment):
             delegate.env.cache = value
             return
         self.__dict__["_cache"] = value
+        # Another cache than the environment's own (None, a mapping of the caller's) is the only one: loads go past the
+        # engine's cache, so that its misses read the loader as Jinja2's do (0433)
+        own = isinstance(value, (_LRUCache, _UnboundedCache)) and value._env_ref is not None and value._env_ref() is self
+        self.__dict__["_foreign_cache"] = not own
+        self.__dict__.pop("_foreign_uptodate", None)
         self._drop_engine_cache()  # a replaced cache is an empty one: the next loads read the loader again
 
     @property
@@ -722,6 +727,8 @@ class Environment(_jinja2cpp.Environment):
         if cache is not None and isinstance(name, str) and self.loader is not None:
             key = (weakref.ref(self.loader), name)
             cached = cache.get(key)
+        if self.__dict__.get("_foreign_cache") and isinstance(name, str) and self.loader is not None:
+            return self._load_past_the_engine_cache(name, globals, cache, key, cached)
         try:
             template = self._load(name, globals, self.template_class, cached)
         except TemplateSyntaxError as error:
@@ -737,6 +744,29 @@ class Environment(_jinja2cpp.Environment):
         fallback._count("loads_native")
         if isinstance(name, str):
             fallback.remember(template, name=name)
+        return template  # type: ignore[no-any-return]
+
+    def _load_past_the_engine_cache(self, name: str, globals: t.Optional[t.Mapping[str, t.Any]], cache: t.Any, key: t.Any, cached: t.Any) -> Template:
+        """A load with a cache the caller set (``env.cache = None`` or a mapping of theirs): that cache alone decides,
+        as in Jinja2, so a miss reads the loader past the engine's cache, and a hit is checked with the loader's
+        ``uptodate`` under ``auto_reload``."""
+        uptodate = self.__dict__.setdefault("_foreign_uptodate", {})
+        if cached is not None:
+            check = uptodate.get(key, (None, None))
+            if check[0] is cached and (not self.auto_reload or check[1] is None or check[1]()):
+                if globals:
+                    cached.globals.update(globals)
+                return cached  # type: ignore[no-any-return]
+        source, filename, is_up_to_date = self.loader.get_source(self, name)
+        try:
+            template = self._compile(source, name, filename, globals, self.template_class)
+        except TemplateSyntaxError as error:
+            return fallback.load_fallback(self, error, lambda j: j.get_template(name, None, globals))  # type: ignore[no-any-return]
+        if cache is not None:
+            cache[key] = template
+            uptodate[key] = (template, is_up_to_date)
+        fallback._count("loads_native")
+        fallback.remember(template, name=name)
         return template  # type: ignore[no-any-return]
 
     def get_template(self, name: t.Any, parent: t.Optional[str] = None, globals: t.Optional[t.Mapping[str, t.Any]] = None) -> Template:

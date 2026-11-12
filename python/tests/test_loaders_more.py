@@ -334,3 +334,27 @@ def test_cache_mapping_api():
         assert names == ["b", "a"] and [key[1] for key in reversed(env.cache)] == ["a", "b"], module
         assert [key[1] for key in env.cache.keys()] == names and len(env.cache.values()) == 2, module
         assert [key[1] for key in env.cache.copy().keys()] == names, module
+
+
+@pytest.mark.parametrize("replacement", ["none", "dict"])
+def test_a_replaced_cache_alone_decides_later_loads(replacement):
+    # Codex on #859: after env.cache = None every load reads the loader; after env.cache = {} a miss does, so
+    # clearing that dict reloads, and a hit is checked with the loader's uptodate under auto_reload
+    def trace(module):
+        source = {"f": "v1", "d": "d1"}
+        loader = module.ChoiceLoader([module.FunctionLoader(lambda name: source[name] if name == "f" else None), module.DictLoader(source)])
+        env = module.Environment(loader=loader)
+        env.cache = None if replacement == "none" else {}
+        out = []
+        for step in range(3):
+            first = env.get_template("f")
+            out.append(first.render())
+            out.append(first is env.get_template("f"))
+            out.append(env.get_template("d").render())
+            source["f"] = f"v{step + 2}"
+            source["d"] = f"d{step + 2}"
+            if env.cache is not None and step == 1:
+                env.cache.clear()
+        return out
+
+    assert trace(jinja2cpp) == trace(jinja2)
