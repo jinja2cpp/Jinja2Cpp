@@ -376,9 +376,10 @@ TEST_F(FilesystemHandlerTest, AutoReloadChecksOncePerRender)
     EXPECT_EQ("<01234>", tpl.RenderAsString({}).value());
     EXPECT_EQ(1, fs.opens["item.j2"]);
     EXPECT_EQ(1, fs.opens["base.j2"]);
-    // Recorded once when first loaded and cached, then checked once by the second render
-    EXPECT_EQ(2, fs.dateChecks["item.j2"]);
-    EXPECT_EQ(2, fs.dateChecks["base.j2"]);
+    // Recorded when first loaded and cached, then checked once by the second render. This handler has no dates, so
+    // the load asks before the read and once more after it (0325)
+    EXPECT_EQ(3, fs.dateChecks["item.j2"]);
+    EXPECT_EQ(3, fs.dateChecks["base.j2"]);
 }
 
 // One loaded template rendered from several threads, each render resolving its includes in the shared environment
