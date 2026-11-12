@@ -247,8 +247,8 @@ void OnFreshThread(F&& f)
     thread.join();
 }
 
-// Under LeakSanitizer (the ASan jobs), each test ends with a leak check: a leak after a failed allocation is reported
-// by the test that made it, not only once the process exits (task 0256)
+// Under LeakSanitizer (the ASan jobs), each test ends with a leak check, not only the process: the first test that
+// fails it made the leak (a check reports every leak still unreachable, so the tests after it fail too, task 0256)
 class LeakCheckedTest : public testing::Test
 {
 protected:
@@ -576,7 +576,8 @@ TEST_F(JsonAllocationFailureTest, BigIntegerIsExactOrThrowsBadAlloc)
     }
 }
 
-// An nlohmann::json document the host keeps, read through a view (Reflect of a const reference) or copied (ToValue):
+// An nlohmann::json document the host keeps, read through a view (Reflect of a const reference; a non-const lvalue
+// would be copied into an owned view) or copied (ToValue):
 // running out of memory while reading it is std::bad_alloc, and the document stays as it was. A document the library
 // owns (Reflect of an rvalue, a std::shared_ptr) is not covered: nlohmann::json's destructor allocates, so running out
 // of memory while the last Value of it drops ends the process (docs/api-2.0.md 3.9, task 0279)
