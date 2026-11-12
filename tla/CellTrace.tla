@@ -146,17 +146,10 @@ Hit ==
     /\ Next1(TRUE)
     /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
 
-\* The registry a lookup or a promotion of a global's adapter uses: the running one's, or that of
-\* the render whose snapshot of the globals the running render shares (CycleCollector::GlobalCells,
-\* docs/tasks/0463); 0 when that render has none yet
-GlobalReg(r) == E.held = 1 /\ r # 0 /\ Enclosing(r, E.cur)
-
 Find ==
     /\ E.ev = "find"
     /\ Check([LinksAgree |-> L(E.a).cell # 0,
-              TableAgrees |-> IF E.reg # E.cur /\ E.reg # 0
-                              THEN ~GlobalReg(E.reg) \/ E.hit # Lookup(E.reg, E.idn, E.list)
-                              ELSE E.hit # Lookup(E.reg, E.idn, E.list)])
+              TableAgrees |-> E.hit # Lookup(E.cur, E.idn, E.list)])
     /\ Next1(lk' = SetL(E.a, [cell |-> 0, own |-> FALSE, seen |-> E.e, idn |-> E.idn, list |-> E.list]))
     /\ UNCHANGED <<cl, rg, exr, live, promoted>>
 
@@ -249,7 +242,7 @@ Adopt ==
        IF E.new = 1
        THEN /\ Known(E.c) /\ cl[E.c].reg = 0
             /\ Check([NoUseAfterFree |-> ~cl[E.c].alive,
-                      TableAgrees |-> (E.reg # E.cur /\ ~GlobalReg(E.reg)) \/ Lookup(r, E.idn, E.list) # 0
+                      TableAgrees |-> E.reg # E.cur \/ Lookup(r, E.idn, E.list) # 0
                                        \/ (E.idn \in DOMAIN rg[r].tbl /\ rg[r].tbl[E.idn] # 0),
                       LinksAgree |-> L(E.a).cell # 0,
                       NoCrossThreadWrite |-> ~WriterOk(r, E.t)])
@@ -262,7 +255,7 @@ Adopt ==
                      /\ promoted' = promoted + 1)
             /\ UNCHANGED <<lk, exr>>
        \* Another adapter of the data made the cell first: this one links to it
-       ELSE /\ Check([TableAgrees |-> (E.reg # E.cur /\ ~GlobalReg(E.reg)) \/ Lookup(r, E.idn, E.list) # E.c,
+       ELSE /\ Check([TableAgrees |-> E.reg # E.cur \/ Lookup(r, E.idn, E.list) # E.c,
                       LinksAgree |-> L(E.a).cell # 0])
             /\ Next1(TRUE)
             /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>

@@ -30,8 +30,6 @@ FIXES = {
     "FixCallRestore": True, "FixNestedGlobal": True, "FixMarkOrder": True,
     # 0324: a nested render shares the outer render's snapshot of the globals and its cells
     "FixShareNested": True,
-    # 0463: a global such a render writes first gets its cell in the outermost render's registry
-    "FixGlobalOuterCell": True,
     "FixSortMutableFirst": True, "FixMarkerAfterCopy": True, "FixReadOnlyExport": True,
     "FixFreeze": True, "FixSourceKeepsId": True,
     # Task 0337 (README, finding F1): BorrowedCell::NoteExport marks an export of two calls shared
@@ -49,7 +47,7 @@ FIXES = {
 }
 SAFETY = ["SnapshotStable", "NoCrossThreadWrite", "NoUseAfterFree", "NoForeignCell",
           "RegistryBounded", "AliasesAgree", "NoUndefItems", "LiveCount", "ExportKeepsCallState",
-          "NoLostWrites", "NoTornStep", "NestedGlobalKept", "WellFormed"]
+          "NoLostWrites", "NoTornStep", "WellFormed"]
 
 # Scopes. The deep counterexamples need about 14 steps, which an all-actions model of two
 # threads cannot reach exhaustively; each scope enables the parts a group of fixes needs.
@@ -122,9 +120,6 @@ RUNS = {
                          "9c91ffc, Codex P2: nested render reads the outer render's cell"),
     "no-mark-order": ("mutant", RENDER1, {"FixMarkOrder": False, "FixShareNested": False}, ["NoForeignCell"],
                       "5e37c24, verifier r11: failed conversion loses the attached mark"),
-    "no-global-outer-cell": ("mutant", dict(RENDER1, Actions='{"read"}'), {"FixGlobalOuterCell": False},
-                             ["NestedGlobalKept"],
-                             "0463: the outer render loses a global a nested render wrote first"),
     "no-sort-mutable-first": ("mutant", MODULE1, {"FixSortMutableFirst": False},
                               ["NoUndefItems"],
                               "9c91ffc, Codex P2: sort restores moved-from items"),

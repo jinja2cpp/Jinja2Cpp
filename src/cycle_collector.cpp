@@ -1,7 +1,6 @@
 #include "cycle_collector.h"
 
 #include "internal_value.h"
-#include "render_workspace.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -232,53 +231,6 @@ BorrowedCells* CycleCollector::CellsForWrite()
         collector->m_notes = std::make_unique<Notes>();
     }
     return &collector->m_notes->cells;
-}
-
-CycleCollector* CycleCollector::SnapshotOwner() noexcept
-{
-    auto* collector = s_current;
-    if (!collector || collector->m_module)
-    {
-        return nullptr;
-    }
-    // The chain starts at the running render's own entry: none for code of a module's call, or of
-    // a render called back from inside another one (Reentry)
-    const auto* running = RenderWorkspace::ForThisThread().Running();
-    if (!running || running->collector != collector || !running->owner || !*running->owner)
-    {
-        return nullptr;
-    }
-    const auto* snapshot = running->owner->get();
-    const auto* owner = running;
-    for (const auto* outer = running->outer; outer && outer->owner && outer->owner->get() == snapshot; outer = outer->outer)
-    {
-        owner = outer;
-    }
-    return owner != running && owner->collector && !owner->collector->m_module ? owner->collector : nullptr;
-}
-
-BorrowedCells* CycleCollector::GlobalCells() noexcept
-{
-    auto* owner = SnapshotOwner();
-    if (!owner)
-    {
-        return CurrentCells();
-    }
-    return owner->m_notes ? &owner->m_notes->cells : nullptr;
-}
-
-BorrowedCells* CycleCollector::GlobalCellsForWrite()
-{
-    auto* owner = SnapshotOwner();
-    if (!owner)
-    {
-        return CellsForWrite();
-    }
-    if (!owner->m_notes)
-    {
-        owner->m_notes = std::make_unique<Notes>();
-    }
-    return &owner->m_notes->cells;
 }
 
 void CycleCollector::NoteStore(const InternalValue& container)

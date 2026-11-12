@@ -149,14 +149,6 @@ public:
     }
     // The registry a promotion adds its cell to, made on the first one; null outside a render
     static BorrowedCells* CellsForWrite();
-    // CurrentCells and CellsForWrite for an adapter of a global (ValueObject::IsGlobalData): the
-    // registry of the outermost render running on this thread whose snapshot of the globals the
-    // running one shares (docs/tasks/0324). A global that a render started inside another one
-    // writes first gets its cell there, so the outer render sees the write once the inner one has
-    // ended, as Python's renders share the globals' objects (docs/tasks/0463); the cell's links
-    // detach when that outer render ends. Else the running render's own
-    [[nodiscard]] static BorrowedCells* GlobalCells() noexcept;
-    static BorrowedCells* GlobalCellsForWrite();
     // Holds `object` until the render running on this thread ends, and releases it before the
     // walk, so that what only it held is freed rather than counted as held from outside: the
     // names a closure keeps of its ended frames (ClosureCapture), which the closure reaches
@@ -239,8 +231,6 @@ private:
     friend struct detail::RenderThreadState;
 
     void Finish() noexcept;
-    // The collector of the render whose registry GlobalCells finds, or null for the running one's
-    [[nodiscard]] static CycleCollector* SnapshotOwner() noexcept;
     void Add(ValueObjectPtr object);
     void NoteDroppedInCall(const InternalValue& value);
     // Drops the candidates nothing else holds; false when there were none
