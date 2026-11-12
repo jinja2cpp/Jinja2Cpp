@@ -404,6 +404,12 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
 
                 if (settings.cacheSize != 0)
                 {
+                    if (!lastModified)
+                    {
+                        // A handler that learns the date only by reading the file (the Python module's loader
+                        // with its uptodate) has one now; a change during this read stays unseen there
+                        lastModified = fh.handler->GetLastModificationDate(fileName);
+                    }
                     // Templates this replaces (another thread loaded the same file concurrently, or
                     // a reload) or evicts are released after the lock: one may hold the last handle
                     // to this environment, and ~TemplateEnv takes the same lock
