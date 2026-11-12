@@ -1610,23 +1610,20 @@ public:
         , m_keep(std::move(keep))
         , m_identity(identity)
         , m_container(std::move(container))
-        , m_host(std::move(host.container))
+        , m_hostOwner(host.items.items ? std::move(host.items.owner) : std::shared_ptr<const void>(detail::GenericAccessorAccess::Get(host.container)))
+        , m_hostItems(host.items.items)
+        , m_hostList(host.items.items ? nullptr : host.container.GetAccessor())
     {
-        if (host.items.items)
-        {
-            m_hostView.emplace(*host.items.items, std::move(host.items.owner));
-        }
     }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override
     {
         const auto* items = Items();
-        const auto* host = items ? nullptr : Host();
-        if (host)
+        if (!items)
         {
-            return host->GetSize();
+            return ReadHost([](const IListItemAccessor* host) { return host ? host->GetSize() : std::optional<size_t>(0); });
         }
-        return items ? items->size() : 0;
+        return items->size();
     }
     [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
     [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
@@ -1635,9 +1632,10 @@ public:
         const auto* items = Items();
         if (!items)
         {
-            const auto* host = Host();
-            const auto* indexer = host ? host->GetIndexer() : nullptr;
-            return indexer ? indexer->GetItemByIndex(idx) : Value();
+            return ReadHost([idx](const IListItemAccessor* host) {
+                const auto* indexer = host ? host->GetIndexer() : nullptr;
+                return indexer ? indexer->GetItemByIndex(idx) : Value();
+            });
         }
         if (idx < 0 || static_cast<size_t>(idx) >= items->size())
         {
@@ -1666,26 +1664,28 @@ private:
         return list ? list->GetMutableItems() : nullptr;
     }
     // The host's list, which a view of a cell reads when Items finds no storage
-    [[nodiscard]] const IListItemAccessor* Host() const noexcept
+    // Calls `read` with it: a view of its items made for the read, or its own list; null for
+    // the template's list
+    template<typename Read>
+    auto ReadHost(const Read& read) const
     {
-        if (!m_identity)
+        if (m_identity && m_hostItems)
         {
-            return nullptr;
+            const ExportListView view(*m_hostItems, m_hostOwner);
+            return read(&view);
         }
-        if (m_hostView)
-        {
-            return &*m_hostView;
-        }
-        return m_host.GetAccessor();
+        return read(m_identity ? m_hostList : nullptr);
     }
 
     const CallExports& m_exports;
     std::shared_ptr<const CallExports> m_keep;
     const void* m_identity;
     InternalValue m_container;
-    // The host's items when the adapter gave them (GetHostItems), else its list
-    std::optional<ExportListView> m_hostView;
-    GenericList m_host;
+    // The host's items when the adapter gave them (GetHostItems), else its list; the owner keeps
+    // either
+    std::shared_ptr<const void> m_hostOwner;
+    const ValuesList* m_hostItems;
+    const IListItemAccessor* m_hostList;
 };
 
 class CallMapView final : public IMapItemAccessor
@@ -1697,12 +1697,10 @@ public:
         , m_keep(std::move(keep))
         , m_identity(identity)
         , m_container(std::move(container))
-        , m_host(std::move(host.container))
+        , m_hostOwner(host.items.items ? std::move(host.items.owner) : std::shared_ptr<const void>(detail::GenericAccessorAccess::Get(host.container)))
+        , m_hostItems(host.items.items)
+        , m_hostMap(host.items.items ? nullptr : host.container.GetAccessor())
     {
-        if (host.items.items)
-        {
-            m_hostView.emplace(*host.items.items, std::move(host.items.owner));
-        }
     }
 
     [[nodiscard]] size_t GetSize() const override
@@ -1710,8 +1708,7 @@ public:
         const auto* dict = Dict();
         if (!dict)
         {
-            const auto* host = Host();
-            return host ? host->GetSize() : 0;
+            return ReadHost([](const IMapItemAccessor* host) { return host ? host->GetSize() : size_t{ 0 }; });
         }
         return dict->HasKeyValues() ? Snapshot(*dict).size() : dict->size();
     }
@@ -1720,8 +1717,7 @@ public:
         const auto* dict = Dict();
         if (!dict)
         {
-            const auto* host = Host();
-            return host != nullptr && host->HasValue(name);
+            return ReadHost([&name](const IMapItemAccessor* host) { return host != nullptr && host->HasValue(name); });
         }
         return dict->HasKeyValues() ? Snapshot(*dict).count(name) != 0 : dict->FindString(name) != dict->end();
     }
@@ -1730,8 +1726,7 @@ public:
         const auto* dict = Dict();
         if (!dict)
         {
-            const auto* host = Host();
-            return host ? host->GetValueByName(name) : Value();
+            return ReadHost([&name](const IMapItemAccessor* host) { return host ? host->GetValueByName(name) : Value(); });
         }
         if (dict->HasKeyValues())
         {
@@ -1748,8 +1743,7 @@ public:
         const auto* dict = Dict();
         if (!dict)
         {
-            const auto* host = Host();
-            return host ? host->GetKeys() : result;
+            return ReadHost([&result](const IMapItemAccessor* host) { return host ? host->GetKeys() : std::move(result); });
         }
         if (dict->HasKeyValues())
         {
@@ -1787,17 +1781,15 @@ private:
         return map ? map->GetMutableItems() : nullptr;
     }
     // As CallListView's
-    [[nodiscard]] const IMapItemAccessor* Host() const noexcept
+    template<typename Read>
+    auto ReadHost(const Read& read) const
     {
-        if (!m_identity)
+        if (m_identity && m_hostItems)
         {
-            return nullptr;
+            const ExportMapView view(*m_hostItems, m_hostOwner);
+            return read(&view);
         }
-        if (m_hostView)
-        {
-            return &*m_hostView;
-        }
-        return m_host.GetAccessor();
+        return read(m_identity ? m_hostMap : nullptr);
     }
     // A dict with a key that is not a string, spelled as SharedDictAdapter::CreateSnapshot does
     [[nodiscard]] ValuesMap Snapshot(const TemplateDict& dict) const
@@ -1815,8 +1807,9 @@ private:
     const void* m_identity;
     InternalValue m_container;
     // As CallListView's
-    std::optional<ExportMapView> m_hostView;
-    GenericMap m_host;
+    std::shared_ptr<const void> m_hostOwner;
+    const ValuesMap* m_hostItems;
+    const IMapItemAccessor* m_hostMap;
 };
 
 // The module's data, or the host's when the module has no cell of it; null for plain data
