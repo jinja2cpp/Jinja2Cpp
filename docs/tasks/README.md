@@ -327,7 +327,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0253](0253-error-contract-types.md) | Error contract P1: public error types and the Load/Render boundary | api | high | done |
 | [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | done |
 | [0255](0255-engine-runtime-error-codes.md) | Error contract P3: the engine's own runtime errors get their own codes | robustness | medium | done |
-| [0256](0256-survive-allocation-failure.md) | Survive allocation failure in Load and Render: remaining coverage | robustness | high | open |
+| [0256](0256-survive-allocation-failure.md) | Survive allocation failure in Load and Render: remaining coverage | robustness | high | done |
 | [0257](0257-render-to-string-and-sink.md) | `RenderTo` a caller's string or an output sink | api | high | done |
 | [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | done |
 | [0259](0259-vendored-internal-namespaces.md) | Vendored robin_hood and lexertk still live in global namespaces | release | medium | open |
@@ -350,7 +350,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0276](0276-memory-contract-docs.md) | User documentation for the memory contract | docs | medium | open |
 | [0277](0277-markup-escape-helper.md) | A public escape helper for Markup | api | low | done |
 | [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |
-| [0279](0279-nlohmann-destructor-allocates.md) | nlohmann::json destruction allocates, so OOM there terminates | robustness | low | open |
+| [0279](0279-nlohmann-destructor-allocates.md) | nlohmann::json destruction allocates, so OOM there terminates | robustness | low | done |
 | [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | done |
 | [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | done |
 | [0282](0282-settings-limits-followups.md) | `Settings::Limits` follow-ups (0262 leftovers) | api | low | open |
@@ -500,7 +500,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0430](0430-python-fallback-static-include-routing.md) | Route static include, import and extends names at load time (Python fallback) | api | low | open |
 | [0431](0431-upstream-suite-syntax-gaps.md) | Syntax gaps the upstream Jinja2 suite found | parity | medium | done |
 | [0432](0432-upstream-suite-error-types-and-messages.md) | Error classes, messages and tracebacks the upstream Jinja2 suite checks | parity | medium | done |
-| [0433](0433-python-template-cache-identity.md) | `get_template` returns a new Template object each time, and template globals of includes | parity | medium | open |
+| [0433](0433-python-template-cache-identity.md) | `get_template` returns a new Template object each time, and template globals of includes | parity | medium | done |
 | [0434](0434-python-values-leftovers-upstream-suite.md) | Values, filters and macros: leftovers the upstream Jinja2 suite found | parity | low | done |
 | [0435](0435-python-environment-policies.md) | `Environment.policies` | parity | low | open |
 | [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | done |
@@ -533,10 +533,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0463](0463-outer-render-sees-nested-global-write.md) | The outer render does not see a global a nested render changed first | robustness | low | open |
 | [0464](0464-lower-upper-tests-cased-letters.md) | `lower` and `upper` tests: a string with no cased letter is neither | parity | medium | open |
 | [0465](0465-dotted-filter-test-names.md) | Dotted filter and test names (`x|ns.f`, `x is ns.t`) | parity | low | open |
-| [0466](0466-python-format-map-native-attribute.md) | The Python module answers format_map from NativeAttribute, which the engine now has | python | low | open |
+| [0466](0466-python-format-map-native-attribute.md) | The Python module answers format_map from NativeAttribute, which the engine now has | python | low | done |
 | [0471](0471-tuple-of-slices-fold-by-choice.md) | Tuple-of-slices subscripts: folds the engine decides differently from Jinja2 | parity | low | open |
 | [0474](0474-loop-call-bound-method-repr.md) | `loop.__call__` prints nothing | parity | low | open |
 | [0475](0475-undefined-identity-and-range-extremes.md) | Leftovers of 0413 and 0420: undefined identity, range extremes, repeat messages | parity | low | open |
 | [0476](0476-class-attribute-of-values.md) | `x.__class__` of the engine's values | parity | low | open |
-| [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | open |
+| [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | done |
 | [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | open |
+| [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | open |
+| [0485](0485-list-sort-restore-needs-memory.md) | A failed list.sort() loses the list's items when memory stays spent | robustness | low | open |
+| [0486](0486-cycle-walk-needs-memory.md) | Reference cycles leak when memory stays spent at the end of a render | robustness | low | open |
