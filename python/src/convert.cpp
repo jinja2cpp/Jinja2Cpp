@@ -76,6 +76,7 @@ public:
     RecursionGuard& operator=(RecursionGuard&&) = delete;
 
 private:
+    friend void jinja2cpp_py::ExchangeModuleThreadState(ModuleThreadState& state) noexcept;
     static thread_local int t_depth;
 };
 thread_local int RecursionGuard::t_depth = 0;
@@ -598,6 +599,13 @@ std::string TextOf(const Value& value)
     return value.ToString();
 }
 } // namespace
+
+void ExchangeModuleThreadState(ModuleThreadState& state) noexcept
+{
+    std::swap(t_render, state.render);
+    std::swap(t_lease, state.lease);
+    std::swap(RecursionGuard::t_depth, state.depth);
+}
 
 RenderState* CurrentRender() noexcept
 {

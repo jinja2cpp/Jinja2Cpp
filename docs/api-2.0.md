@@ -256,13 +256,14 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 limit beyond the built-in caps: `maxRange`, `maxSequenceSize` (only lowers the 2^26 cap),
 `maxOutputSize`, `maxTemplateSize` (Load, loader-sourced templates included),
 `maxTemplateLoads`, `maxRenderSteps`, `maxRenderTime` (polled every 1024 steps and after each
-host callable returns), and the depth limits `maxRenderDepth` (256), `maxExpressionDepth`
+host callable returns), `maxRenderMemory` (bytes of strings, lists and dicts a render holds at
+once, counted when built and given back when freed, 0459), and the depth limits `maxRenderDepth` (256), `maxExpressionDepth`
 (70), `maxExpressionOperators` (491), `maxBlockNesting` (248), which used to be constants (defaults where Python Jinja2 stops, 0098). A
 limit fails the call with `ErrorCode::ResourceLimitExceeded`, `extraParams[1]` naming the field;
 the depth limits keep `RecursionLimitExceeded`. A render started by a host callable inside
 another keeps its own template's limits. Presets: `UntrustedLimits()` (Jinja2
 `SandboxedEnvironment` anchors: `range()` 100000, sequences 2^20, 16 MiB of output, 10^7
-steps) and `UntrustedSettings()` (the same with `autoescape`). A step is a statement body,
+steps, and 256 MiB of render memory) and `UntrustedSettings()` (the same with `autoescape`). A step is a statement body,
 an item a loop's `if` looks at, a render level, or the evaluation of an operator, call or
 filter: the chat-template benchmarks take 550-1000. With every limit at its default a render
 pays nothing per step: steps are counted in the stack check's slow path, which only a render
@@ -328,6 +329,20 @@ output up to the 512-character buffer), so the Python module's `generate()` yiel
 Considered: a separate sink callback per piece (a second sink interface for one flag) and
 splitting in the module (the module cannot see node boundaries). Like `generationSpans`, the growth
 of `RenderOptions` must land before G1.
+
+**Suspendable renders (task 0457, Ruslan 2026-11-11 D1, before G1).** `RenderOptions` grows by
+`const RenderSuspension* suspension` (`struct RenderSuspension { const void* stackLow; size_t stackSize; }`).
+A render to a sink with it set may be suspended inside `Write`: its host runs it on a stack of its own (a
+fiber) and switches back to its own code there, to resume the render later on the same thread. The engine
+then keeps the render's per-thread state (workspace contents, limits, stack bounds, poll, render depth, cycle
+collector) in a bundle of its own, swapped with the thread's at entry, around each `Write` and at exit, so
+other renders, plain or suspendable, run and interleave on the thread while one is suspended; and it checks
+the stack against the given bounds. Null costs nothing (the code is in the hooks instantiation and a cold
+translation unit); a render to a string ignores it. The Python module's lazy `Template.generate()` is the
+user. Considered: an additive `RenderTo(sink, params, options, const RenderSuspension&)` overload after G1
+(a fourth `RenderTo` overload for one pointer), and a public resumable render class owning the fiber (the
+core would gain platform assembly and stack management, docs/design/0457-lazy-generate-plan.md option b).
+Like `generationSpans`, the growth of `RenderOptions` must land before G1.
 
 **Prompt escaping and token budgets (tasks 0358, 0359, decided by Ruslan 2026-11-05).** A new,
 always installed header `jinja2cpp/prompt.h` (core, included by `template_env.h`, not behind

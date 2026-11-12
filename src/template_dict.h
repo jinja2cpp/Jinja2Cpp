@@ -2,8 +2,10 @@
 #define JINJA2CPP_SRC_TEMPLATE_DICT_H
 
 #include "internal_value.h"
+#include "recursion_guard.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -66,11 +68,12 @@ public:
     // A dict of string keys, such as the names of keyword arguments, which never start with the mark
     explicit TemplateDict(InternalDict&& items);
     TemplateDict(const TemplateDict& other);
-    // OrderedMap's moves allocate on MSVC (see ordered_map.h), so these are noexcept only where its are
+    // OrderedMap's moves allocate on MSVC (see ordered_map.h), so these are noexcept only where its are. The entries
+    // move with their count against the render's memory budget: OrderedMap's moves leave the map moved from empty
     TemplateDict(TemplateDict&& other) noexcept(std::is_nothrow_move_constructible_v<InternalDict>) = default;
     TemplateDict& operator=(const TemplateDict& other);
-    TemplateDict& operator=(TemplateDict&& other) noexcept(std::is_nothrow_move_assignable_v<InternalDict>) = default;
-    ~TemplateDict() = default;
+    TemplateDict& operator=(TemplateDict&& other) noexcept(std::is_nothrow_move_assignable_v<InternalDict>);
+    ~TemplateDict() { ReleaseEntries(); }
 
     // The entries under their tokens: for the count and the values. Read the keys through KeyOf
     [[nodiscard]] const InternalDict& Items() const { return m_items; }
@@ -124,6 +127,26 @@ public:
 
 private:
     using KeyTable = std::unordered_map<std::string, InternalValue>;
+
+    // The render's memory budget (docs/tasks/0459) counts each entry from when it is added until it is erased or
+    // the dict is freed, by its stored key alone, so that adding and freeing count the same
+    static std::uint64_t EntryBytes(const std::string& stored) noexcept;
+    void ChargeEntries() const
+    {
+        if (RenderMemoryCounted())
+        {
+            ChargeEntriesSlow();
+        }
+    }
+    void ChargeEntriesSlow() const;
+    void ReleaseEntries() const noexcept
+    {
+        if (RenderMemoryCounted())
+        {
+            ReleaseEntriesSlow();
+        }
+    }
+    void ReleaseEntriesSlow() const noexcept;
 
     InternalDict m_items;
     // Token to first spelling, for the entries that are not stored under their own string

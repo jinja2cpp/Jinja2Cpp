@@ -152,14 +152,12 @@ inline const Delimiters& DelimitersOf(std::uint8_t settingsByte)
 
 // UntrustedLimits() (docs/tasks/0262) made tight enough that a template cannot legitimately take longer than the
 // fuzzer's timeout or more memory than its RSS limit, so that the targets running under them can treat a timeout or an
-// out-of-memory as a finding (docs/tasks/0267). No limit bounds memory directly (docs/tasks/0459): a render may keep
-// what each step builds, so memory is bounded by steps times the sequence cap, and both are lowered here.
+// out-of-memory as a finding (docs/tasks/0267). Its memory budget bounds what a render keeps (docs/tasks/0459), so its
+// step and sequence limits stay as they are; the time limit is what is lowered here.
 inline jinja2::Settings::Limits FuzzLimits()
 {
     auto limits = jinja2::UntrustedLimits();
-    limits.maxSequenceSize = std::uint64_t{ 1 } << 16;
     limits.maxOutputSize = std::uint64_t{ 1 } << 20;
-    limits.maxRenderSteps = 20000;
     limits.maxRenderTime = std::chrono::milliseconds(2000);
     limits.maxTemplateSize = std::uint64_t{ 1 } << 16;
     limits.maxTemplateLoads = 64;

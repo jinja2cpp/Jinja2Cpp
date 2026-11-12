@@ -15,6 +15,10 @@ namespace jinja2
 {
 inline namespace v2
 {
+namespace detail
+{
+struct RenderThreadState;
+} // namespace detail
 
 // What CycleCollector::KeepUntilEnd holds, each object with the owner it is of use to: released
 // once its owner has expired, or all at once
@@ -187,6 +191,10 @@ public:
     }
 
 private:
+    // A suspendable render has a collector of its own, apart from the renders it interleaves with
+    // (detail::RenderThreadState, docs/tasks/0457)
+    friend struct detail::RenderThreadState;
+
     void Finish() noexcept;
     void Add(ValueObjectPtr object);
     // Drops the candidates nothing else holds; false when there were none

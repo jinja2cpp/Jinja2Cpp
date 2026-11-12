@@ -2149,7 +2149,7 @@ struct BinaryMathOperation : BaseVisitor<>
         // The result is lazy, but a template can still walk or copy it (docs/tasks/0263)
         CheckSequenceSize(size * static_cast<uint64_t>(count > 0 ? count : 0), "a repeated list");
         const auto listSize = size * static_cast<size_t>(count > 0 ? count : 0);
-        auto result = ListAdapter::CreateAdapter(listSize, [size, values = std::move(values)](size_t idx) { return values[idx % size]; });
+        auto result = ListAdapter::CreateAdapter(listSize, [size, values = CountedItems(std::move(values))](size_t idx) { return values[idx % size]; });
         if (list.IsTuple())
         {
             result.MarkAsTuple();

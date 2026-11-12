@@ -560,7 +560,23 @@ template<typename List>
 void ReserveHint(List& list, size_t size)
 {
     CheckSequenceSize(size, "a list");
+    CheckRenderMemoryFits(std::uint64_t{ size } * sizeof(typename List::value_type));
     list.reserve(size);
+}
+
+// Makes room for `size` items in a list the template owns and counts the slots it adds against the
+// render's memory budget (docs/tasks/0459), before they are allocated; grows as push_back does
+template<typename List>
+void ReserveCounted(List& list, size_t size)
+{
+    const auto capacity = list.capacity();
+    if (size <= capacity)
+    {
+        return;
+    }
+    const auto newCapacity = std::max(size, capacity * 2);
+    ChargeRenderMemory(std::uint64_t{ newCapacity - capacity } * sizeof(typename List::value_type));
+    list.reserve(newCapacity);
 }
 
 // Mappings a template can iterate (dict literals, kwargs) keep insertion order, as Python
@@ -1084,6 +1100,7 @@ struct StringObject final : ValueObject
     // The caller writes them before it shares the object
     static IntrusivePtr<StringObject> Make(size_t size)
     {
+        ChargeRenderMemory(Bytes(size));
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
         return IntrusivePtr<StringObject>(new (CharCount{ size }) StringObject(size));
     }
@@ -1108,11 +1125,20 @@ struct StringObject final : ValueObject
     }
     // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
 
+    StringObject(const StringObject&) = delete;
+    StringObject(StringObject&&) = delete;
+    StringObject& operator=(const StringObject&) = delete;
+    StringObject& operator=(StringObject&&) = delete;
+    ~StringObject() override { ReleaseRenderMemory(Bytes(m_size)); }
+
 private:
     explicit StringObject(size_t size) noexcept
         : m_size(size)
     {
     }
+
+    // What the render's memory budget counts for it (docs/tasks/0459)
+    static constexpr std::uint64_t Bytes(size_t size) noexcept { return sizeof(StringObject) + (std::uint64_t{ size } * sizeof(CharT)); }
 
     size_t m_size;
 };
@@ -1526,6 +1552,35 @@ private:
 };
 
 static_assert(sizeof(InternalValue) == 32, "docs/tasks/0140");
+
+// The items a generated list reads (a lambda's capture, ListAdapter::CreateAdapter(size, fn)), counted against the
+// render's memory budget as a list's storage is (docs/tasks/0459): each copy is counted, and a move leaves none behind
+class CountedItems
+{
+public:
+    explicit CountedItems(InternalValueList&& items)
+        : m_items(std::move(items))
+    {
+        ChargeRenderMemory(Bytes());
+    }
+    CountedItems(const CountedItems& other)
+        : m_items(other.m_items)
+    {
+        ChargeRenderMemory(Bytes());
+    }
+    // A moved vector is left empty, with no storage
+    CountedItems(CountedItems&& other) noexcept = default;
+    CountedItems& operator=(const CountedItems&) = delete;
+    CountedItems& operator=(CountedItems&&) = delete;
+    ~CountedItems() { ReleaseRenderMemory(Bytes()); }
+
+    [[nodiscard]] const InternalValue& operator[](size_t idx) const { return m_items[idx]; }
+
+private:
+    [[nodiscard]] std::uint64_t Bytes() const noexcept { return std::uint64_t{ m_items.capacity() } * sizeof(InternalValue); }
+
+    InternalValueList m_items;
+};
 
 namespace detail
 {
