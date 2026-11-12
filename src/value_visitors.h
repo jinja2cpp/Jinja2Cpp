@@ -386,6 +386,11 @@ struct ValueRendererBase
     template<typename T>
     void RenderConverted(const T& val) const;
     void RenderRepr(const InternalValue& val, ContainerStack* containers) const;
+    // A container's items each fit the sequence cap, but shared items repeat in its repr:
+    // [[s] * n] * n prints n * n copies of s. The repr of one container is a sequence
+    // too, so its growth since `start` is held to the cap after each item; m_os may hold
+    // output written before it, which does not count
+    void CheckReprSize(size_t start) const { CheckSequenceSize(uint64_t{ m_os->size() - start }, "a repr"); }
     // Returns false (and prints the placeholder) when the container is already being printed
     bool EnterContainer(const void* id, ContainerStack& containers, const char* placeholder) const;
 
@@ -777,6 +782,7 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
         return;
     }
 
+    const size_t start = m_os->size();
     AppendAscii(isTuple ? "(" : "[");
     size_t count = 0;
     for (const auto& item : list)
@@ -786,6 +792,7 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
             AppendAscii(", ");
         }
         RenderRepr(item, &containers);
+        CheckReprSize(start);
     }
     if (isTuple && count == 1)
     {
@@ -867,6 +874,7 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
     // structs report sorted keys
     auto entries = map.GetEntries();
 
+    const size_t start = m_os->size();
     AppendAscii("{");
     bool isFirst = true;
     for (auto& [key, value] : entries)
@@ -879,6 +887,7 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
         RenderRepr(key, &containers);
         AppendAscii(": ");
         RenderRepr(value, &containers);
+        CheckReprSize(start);
     }
     AppendAscii("}");
     if (objectClass)

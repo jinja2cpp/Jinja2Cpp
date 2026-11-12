@@ -1315,6 +1315,8 @@ InternalValue TupleSliceExpression::Evaluate(RenderContext& context)
         key += first ? "" : ", ";
         first = false;
         key += item.isSlice ? "slice(" + repr(item.parts[0]) + ", " + repr(item.parts[1]) + ", " + repr(item.parts[2]) + ")" : repr(item.parts[0]);
+        // Each part fits the sequence cap, the name made of them all must too
+        CheckSequenceSize(key.size(), "the name of an undefined item");
     }
     key += ")";
     // getitem's undefined for the TypeError (KeyError of a dict), of the template's policy

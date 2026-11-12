@@ -42,7 +42,13 @@ The verifier of 0471 found more, pinned in `test/parity/cases/subscripts.py`:
 - cost: under StrictUndefined nested brackets evaluate each level's candidate, so a chain nested
   to the depth limit is evaluated up to about 35 times (the default policy skips the candidates
   inside one that folds); a host filter in a candidate is called once per candidate it is in, where
-  Jinja2 calls it once.
+  Jinja2 calls it once. Each such evaluation is bounded by the render limits, so the worst Load
+  costs about the depth limit times a worst render of the tag (PR #865 security review);
+- per render: Jinja2 replaces the folded subscript by its constant, while the engine's sealed
+  tree keeps a TupleSliceExpression, which evaluates its literal operand and parts and builds
+  the undefined's name each time it runs (in a loop, once per iteration). Caching the value
+  needs per-template storage for the constants the Load's fold check computed, since sealed
+  nodes are shared and immutable (Codex P2 on #865).
 
 **Proposal.** Low value. Make the item or attribute of such a subscript a node whose evaluation
 fails (as Jinja2's fold of it does), and let the Load's fold check (`FoldCheckPasses`) decide, as it

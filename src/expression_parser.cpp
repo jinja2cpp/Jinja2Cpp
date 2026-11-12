@@ -148,7 +148,9 @@ bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
     for (std::size_t index = 0; index != check.candidates.size(); ++index)
     {
         const auto& candidate = check.candidates[index];
-        if (counts(index))
+        // Only a candidate inside the check's range counts: an index outside it would write
+        // past `starts`
+        if (candidate.from >= check.from && candidate.to <= check.to && candidate.from <= candidate.to && counts(index))
         {
             ++starts[candidate.from - check.from];
             --starts[candidate.to - check.from];
@@ -191,7 +193,7 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
     m_volatile = isVolatile;
     const auto startTok = lexer.PeekNextToken();
     const FoldRootScope foldRoot(m_inFoldRoot);
-    m_foldRootFrom = m_tupleSliceSubscripts;
+    BeginFoldRoot();
     auto evaluator = ParseTupleOrExpression(lexer);
     if (!evaluator)
     {
@@ -226,6 +228,14 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
     return result;
 }
 
+void ExpressionParser::BeginFoldRoot()
+{
+    m_foldRootFrom = m_tupleSliceSubscripts;
+    // A root that failed to parse returned before FinishFoldRoot and left its candidates, with
+    // subscript indices of its own parser: none belongs to the root starting here
+    m_unknown.FoldCandidates().clear();
+}
+
 void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output)
 {
     if (!m_inFoldRoot)
@@ -242,8 +252,11 @@ nonstd::expected<void, ParseError> ExpressionParser::FinishFoldRoot(const Token&
 {
     FoldCheck check;
     auto& candidates = m_unknown.FoldCandidates();
-    // Only this root's: a failed parse may have left others, and fails the Load anyway
-    candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [this](const FoldCandidate& candidate) { return candidate.from < m_foldRootFrom; }), candidates.end());
+    // Only this root's (BeginFoldRoot cleared the rest)
+    candidates.erase(std::remove_if(candidates.begin(),
+                                    candidates.end(),
+                                    [this](const FoldCandidate& candidate) { return candidate.from < m_foldRootFrom || candidate.to > m_tupleSliceSubscripts; }),
+                     candidates.end());
     check.candidates = std::move(candidates);
     candidates.clear();
     check.from = m_foldRootFrom;
@@ -280,7 +293,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     const FoldRootScope foldRoot(m_inFoldRoot);
     if (isFoldRoot)
     {
-        m_foldRootFrom = m_tupleSliceSubscripts;
+        BeginFoldRoot();
     }
     const unsigned foldFrom = m_tupleSliceSubscripts;
 

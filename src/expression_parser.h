@@ -264,6 +264,8 @@ private:
             AddFoldCandidate(node, from, output);
         }
     }
+    // Starts a top-level expression: its subscripts are counted from here, with no candidates
+    void BeginFoldRoot();
     void AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output);
     // At the end of the top-level expression starting at `tok`: an error if one of its subscripts
     // cannot fold, else the check goes to the Load
