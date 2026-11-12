@@ -130,6 +130,10 @@ std::vector<LimitCase> Cases()
         { "TargetDepthOver", "{% for (((a))) in [1] %}{% endfor %}", [](auto& l) { l.maxExpressionDepth = 3; }, "RecursionLimitExceeded", true },
         { "OperatorsOver", "{{ 1 + 1 + 1 + 1 + 1 }}", [](auto& l) { l.maxExpressionOperators = 3; }, "RecursionLimitExceeded", true },
         { "OperatorsAt", "{{ 1 + 1 + 1 + 1 }}", [](auto& l) { l.maxExpressionOperators = 3; }, "" },
+        // `a if b if c` chains like an operator (docs/tasks/0447)
+        { "ChainedIfOver", "{{ 1 if 1 if 1 if 1 if 1 if 1 }}", [](auto& l) { l.maxExpressionOperators = 3; }, "RecursionLimitExceeded", true },
+        { "ChainedIfAt", "{{ 1 if 1 if 1 if 1 if 1 }}", [](auto& l) { l.maxExpressionOperators = 3; }, "" },
+        { "ChainedIfLong", "{{ 1" + Repeat(" if 1", 400) + " }}", [](auto& l) { l.maxExpressionOperators = 300; }, "RecursionLimitExceeded", true },
         // The template's top level is a block too
         { "BlocksOver", "{% if 1 %}{% if 1 %}{% if 1 %}{% endif %}{% endif %}{% endif %}", [](auto& l) { l.maxBlockNesting = 3; }, "RecursionLimitExceeded", true },
         { "BlocksAt", "{% if 1 %}{% if 1 %}{% endif %}{% endif %}", [](auto& l) { l.maxBlockNesting = 3; }, "" },
