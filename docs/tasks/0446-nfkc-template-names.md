@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: []
@@ -22,3 +22,8 @@ implement it or record the line as deliberate with the decision.
 
 **Done when.** `statements.name_nfkc_alias` matches or its line says `deliberate` with the
 decision.
+
+**Decision (Ruslan, 2026-11-12).** Deliberate: the line stays as `deliberate`. Only templates whose own
+names use compatibility characters (ligatures, math or fullwidth letters) differ, and they read the
+other spelling as undefined rather than a wrong value; context lookups, ASCII names and ordinary
+non-Latin scripts are unaffected. NFKC tables can be added later if a user asks for it.
