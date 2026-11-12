@@ -366,10 +366,15 @@ public:
                 return parseResult.error()[0];
             }
 
+            auto foldErrors = parser.GetFoldCheckErrors();
             parser.ReleaseParseState();
             // Its fields are set once the Load succeeds
             nodes.SetOrigin(&m_origin);
             auto sealed = nodes.Seal(*parseResult);
+            if (auto failed = FailedFold(parser.GetFoldChecks(), sealed.View()); failed < foldErrors.size())
+            {
+                return foldErrors[failed];
+            }
             auto convertedTexts = parser.TakeConvertedTexts();
             auto metadataInfo = parser.GetMetadataInfo();
             m_nodes = std::move(sealed);
@@ -391,6 +396,30 @@ public:
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
         ResetMetadataCache();
         return std::optional<BasicErrorInfo<CharT>>();
+    }
+
+    // The first of `checks` that fails on the sealed tree `nodes`, or checks.size() (FoldCheck,
+    // docs/tasks/0471): Jinja2 folds when it compiles, so the folds are evaluated in a context of
+    // their own, with no values, in the template's settings
+    std::size_t FailedFold(const std::vector<FoldCheck>& checks, const ArenaView& nodes) const
+    {
+        if (checks.empty())
+        {
+            return 0;
+        }
+        const InternalValueMap noValues;
+        RendererCallback callback(this);
+        RenderContext context(noValues, noValues, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
+        context.SetLookupCache(&LookupCache::ForThisThread());
+        context.SetNodes(nodes);
+        for (std::size_t index = 0; index != checks.size(); ++index)
+        {
+            if (!FoldCheckPasses(checks[index], context))
+            {
+                return index;
+            }
+        }
+        return checks.size();
     }
 
     // BasicTemplate::Load of a template another object may hold: parses into a new template with

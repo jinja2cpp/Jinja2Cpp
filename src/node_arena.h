@@ -81,6 +81,7 @@ enum class NodeKind : std::uint8_t
     CompareExpr,
     ConcatExpr,
     SliceExpr,
+    TupleSliceExpr,
     CallExpr,
     FilterChain,
     IfExpr,

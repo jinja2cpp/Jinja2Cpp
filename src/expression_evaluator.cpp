@@ -1289,6 +1289,29 @@ InternalValue SliceExpression::SliceOther(const InternalValue& value, InternalVa
     throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not subscriptable");
 }
 
+InternalValue TupleSliceExpression::Evaluate(RenderContext& context)
+{
+    CheckStack();
+    InternalValue value = context.Nodes()[m_value].Evaluate(context);
+    // An item of an undefined raises UndefinedError, which fails Jinja2's fold
+    if (value.IsUndefined())
+    {
+        throw TemplateRuntimeError("an undefined value has no items");
+    }
+    for (const auto& part : context.Nodes()[m_parts])
+    {
+        context.Nodes()[part].Evaluate(context);
+    }
+    // getitem's undefined for the TypeError (KeyError of a dict). The policy decides only how
+    // a strict one fails, which the Load checked (docs/tasks/0471): the others print empty as before
+    auto* callback = context.GetRendererCallback();
+    if (callback && callback->GetSettings().undefinedPolicy == UndefinedPolicy::Strict)
+    {
+        return MakeUndefinedItem(&context, value, "(slice, ...)");
+    }
+    return {};
+}
+
 bool TupleCreator::IsFoldable(const NodeArena& nodes) const
 {
     if (FoldWalkTooDeep())

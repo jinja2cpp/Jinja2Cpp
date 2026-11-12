@@ -1056,6 +1056,37 @@ private:
     bool m_foldPrepared = false;
 };
 
+// A subscript of a literal by a tuple holding a slice, `[1, 2][1:2, 3]` (docs/tasks/0445): Python's
+// extended slice, which Jinja2 compiles only where it folds the subscript, through
+// Environment.getitem, to an undefined. The parser keeps it only where such a fold makes it go
+// (ExpressionParser::FoldRoot), and the Load checks that the fold succeeds (docs/tasks/0471).
+// Evaluating it fails where Jinja2's fold of it fails: on an undefined value (whose item
+// raises) or a part that raises
+class TupleSliceExpression final : public Expression
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::TupleSliceExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_value);
+        refs(m_parts);
+    }
+
+    // `parts`: the parts of the tuple's items in the order Python evaluates them, omitted ones left out
+    TupleSliceExpression(NodeRef<Expression> value, ArenaSpan<NodeRef<Expression>> parts)
+        : m_value(value)
+        , m_parts(parts)
+    {
+    }
+    InternalValue Evaluate(RenderContext& context) override;
+    // The parser makes one only of foldable operands
+    [[nodiscard]] bool IsFoldable(const NodeArena& /*nodes*/) const override { return true; }
+
+private:
+    NodeRef<Expression> m_value;
+    ArenaSpan<NodeRef<Expression>> m_parts;
+};
+
 class CallExpression final : public Expression
 {
 public:

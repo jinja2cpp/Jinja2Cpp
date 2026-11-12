@@ -95,4 +95,24 @@ CASES = [
     # Jinja2 folds a conditional whose test folds by the branch it picks; the engine decides that
     # only when it renders, so at load it rejects an unfolded tuple of slices there (0471)
     ("tuple_of_slices_fold_by_choice", "[{{ (()[:, :] if 1 > 0) is undefined and '' }}|{{ (()[:, :] if 1 > 0 else x) is undefined and '' }}]"),
+    # 0471: the optimizer folds any expression around the subscript whose value has a safe repr (a
+    # statement's, a test, a loop's filter, a part of an output); an undefined, or a fold that
+    # fails, leaves it unfolded; with StrictUndefined a fold that uses the undefined fails the compile
+    ("tuple_of_slices_other_branch", "{{ (()[:, :] if 1 < 0 else x) is undefined and '' }}"),
+    ("tuple_of_slices_test_folds_away", "[{{ 1 if [1][:, :] is defined }}|{{ (1 if true else ()[:, :]) ~ x }}]"),
+    ("tuple_of_slices_statements", "{% set q = [[1][:, :] is undefined] %}[{{ q }}|{% if [1][:, :] is undefined %}y{% endif %}|{% for i in [1] if [1][:, :] is undefined %}y{% endfor %}]"),
+    ("tuple_of_slices_set_undefined", "{% set q = ()[:, :] if true else 1 %}[{{ q }}]"),
+    ("tuple_of_slices_print_parts", "[{% print ()[:, :] ~ 'a', 1 if [1][:, :] is undefined %}]"),
+    ("tuple_of_slices_unpicked_failing_part", "[{{ [1 / 0][:, :] if false else 5 }}|{{ none[:, :] }}|{{ 1[:, :] }}|{{ 'ab'[:, :] }}]"),
+    ("tuple_of_slices_strict_tests", "[{{ ()[:, :] is undefined }}|{{ ()[:, :]|default('d') }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_compare", "[{{ ()[:, :] == 1 }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_not", "[{{ not ()[:, :] }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_or", "[{{ ()[:, :] or 1 }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_length", "[{{ ()[:, :]|length }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_branch", "[{{ ()[:, :] if true else 1 }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_test", "[{{ 1 if ()[:, :] else 2 }}]", {"env": {"undefined": "strict"}}),
+    # an item or attribute of the undefined fails its own fold, but a fold around it that does not
+    # evaluate it (`true or ...`) leaves valid code; the engine rejects any item of it (0479)
+    ("tuple_of_slices_item_not_evaluated", "[{{ true or [1][:, :][0] }}|{{ (true or [1][:, :].x) and '' }}]"),
+    ("tuple_of_slices_strict_set", "{% set q = ()[:, :] ~ 'a' %}[{{ q }}]", {"env": {"undefined": "strict"}}),
 ]

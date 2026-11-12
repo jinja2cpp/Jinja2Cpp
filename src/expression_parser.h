@@ -22,6 +22,42 @@ namespace jinja2
 {
 inline namespace v2
 {
+// A subscript by a tuple of slices (TupleSliceExpression) compiles in Jinja2 only where its
+// optimizer folds an expression around it into a constant of a safe repr (Optimizer, `{% set %}`,
+// a test, a loop's filter), or the compiler folds the output it is in into a str (visit_Output):
+// unfolded, it is invalid Python (docs/tasks/0445, 0471). Whether a fold succeeds may take
+// evaluating it, which only the sealed tree can do, so the parser records the expressions
+// around such subscripts that may fold and the Load evaluates them (FoldCheckPasses)
+struct FoldCandidate
+{
+    NodeRef<Expression> node;
+    // The tuple-slice subscripts inside it, numbered in the order the parser made them: [from, to)
+    unsigned from = 0;
+    unsigned to = 0;
+    // Its PrepareFold, never 0
+    std::uint8_t fold = 0;
+    // The whole value of an output: folds whatever its value, which is printed
+    bool output = false;
+};
+
+// The subscripts of one top-level expression and where it may fold; the error is the Load's
+// if one of them stays unfolded
+struct FoldCheck
+{
+    std::vector<FoldCandidate> candidates;
+    unsigned from = 0;
+    unsigned to = 0;
+    bool strictUndefined = false;
+    ParseError error;
+};
+
+class RenderContext;
+// Whether every subscript of the check is folded away, evaluated in `context`, a context on the
+// sealed tree. With StrictUndefined, Jinja2's fold also fails the Load where its optimizer
+// stringifies or tests the undefined such a subscript gives, so any candidate whose evaluation
+// fails fails the check
+bool FoldCheckPasses(const FoldCheck& check, RenderContext& context);
+
 // Jinja2 rejects a filter or test it does not know when it compiles the template, except in
 // an `if` statement or an inline if, which leave the check to the call (Frame.soft_frame in
 // jinja2/compiler.py). The expression parsers of one template report each unknown name here.
@@ -105,8 +141,14 @@ public:
         return first;
     }
 
+    // The folds the Load checks on the sealed tree (FoldCheck): the parse-wide list of what is
+    // left to check after the parse, as the names are
+    void AddFoldCheck(FoldCheck check) { m_foldChecks.push_back(std::move(check)); }
+    [[nodiscard]] const std::vector<FoldCheck>& GetFoldChecks() const { return m_foldChecks; }
+
 private:
     std::vector<Name> m_names;
+    std::vector<FoldCheck> m_foldChecks;
     // m_names.size(), which every expression reads twice: a load, not a division by sizeof(Name)
     // (docs/tasks/0205)
     std::size_t m_count = 0;
@@ -150,6 +192,9 @@ public:
     // The expressions that follow are output in volatile code (Parse sets it for `{{ }}`; a
     // `print` statement sets it itself): their filters and tests are not folded
     void SetVolatile(bool isVolatile) { m_volatile = isVolatile; }
+    // Each top-level expression that follows is a value of an output (a `print` statement's):
+    // Jinja2 folds it whole whatever its value (FoldCandidate::output)
+    void SetOutputExpressions(bool isOutput) { m_outputExpressions = isOutput; }
     ParseResult<NodeRef<Expression>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
     ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
@@ -205,6 +250,19 @@ private:
     NodeRef<SubscriptExpression> MakeSubscript(NodeRef<Expression> value, const std::string& attrName);
     // valueOffset: where the value before `if` starts, the position Jinja2 reports for the conditional
     ParseResult<NodeRef<IfExpression>> ParseIfExpression(LexScanner& lexer, size_t valueOffset);
+    // `node`, parsed since m_tupleSliceSubscripts was `from`, is where Jinja2 may fold the
+    // tuple-slice subscripts made since: recorded if any were and it may fold at all
+    void NoteFoldCandidate(NodeRef<Expression> node, unsigned from, bool output = false)
+    {
+        if (m_tupleSliceSubscripts != from)
+        {
+            AddFoldCandidate(node, from, output);
+        }
+    }
+    void AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output);
+    // At the end of the top-level expression starting at `tok`: an error if one of its subscripts
+    // cannot fold, else the check goes to the Load
+    nonstd::expected<void, ParseError> FinishFoldRoot(const Token& tok);
     // Counts one more chained operator; false past Settings::Limits::maxExpressionOperators
     bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
@@ -220,10 +278,16 @@ private:
     InternalValue m_finalize;
     // Parse's isVolatile
     bool m_volatile = false;
-    // In Parse, the `{{ }}` whose value Jinja2 folds at compile time when it can
-    bool m_inOutput = false;
+    // SetOutputExpressions
+    bool m_outputExpressions = false;
+    // In a top-level expression (Parse, or a statement's ParseFullExpression), which do not
+    // nest: the tuple-slice subscripts it makes start at m_foldRootFrom, and m_foldCandidates
+    // are the expressions in it that may fold them away
+    bool m_inFoldRoot = false;
+    unsigned m_foldRootFrom = 0;
+    std::vector<FoldCandidate> m_foldCandidates;
     // Subscripts by a tuple holding a slice (`[1, 2][1:2, 3]`) made so far: Jinja2 compiles one
-    // only when it folds an output's whole value, else it writes invalid Python (docs/tasks/0445)
+    // only where it folds an expression around it, else it writes invalid Python (FoldCheck)
     unsigned m_tupleSliceSubscripts = 0;
     // The undefined the last of them folds to
     NodeRef<Expression> m_tupleSliceValue;

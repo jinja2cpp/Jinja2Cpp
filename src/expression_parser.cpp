@@ -137,22 +137,52 @@ InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) co
     return tester ? visitors::InputValueConvertor::ConvertUserCallable(*tester) : InternalValue();
 }
 
+namespace
+{
+// In a top-level expression while it lives (ExpressionParser::m_inFoldRoot)
+class FoldRootScope
+{
+public:
+    explicit FoldRootScope(bool& inRoot)
+        : m_inRoot(inRoot)
+        , m_saved(inRoot)
+    {
+        inRoot = true;
+    }
+    ~FoldRootScope() { m_inRoot = m_saved; }
+    FoldRootScope(const FoldRootScope&) = delete;
+    FoldRootScope& operator=(const FoldRootScope&) = delete;
+
+private:
+    bool& m_inRoot;
+    bool m_saved;
+};
+} // namespace
+
 ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(LexScanner& lexer, bool isVolatile)
 {
     m_volatile = isVolatile;
     const auto startTok = lexer.PeekNextToken();
-    const unsigned tupleSlices = m_tupleSliceSubscripts;
-    m_inOutput = true;
+    const FoldRootScope foldRoot(m_inFoldRoot);
+    m_foldRootFrom = m_tupleSliceSubscripts;
     auto evaluator = ParseTupleOrExpression(lexer);
-    m_inOutput = false;
     if (!evaluator)
     {
         return MakeUnexpected(evaluator.error());
     }
-    // A subscript by a tuple of slices compiles only inside an output Jinja2 folds whole
-    if (m_tupleSliceSubscripts != tupleSlices && (!m_nodes[*evaluator].IsFoldable(m_nodes) || (m_strictUndefined && &m_nodes[*evaluator] == &m_nodes[m_tupleSliceValue])))
+    // A subscript by a tuple of slices compiles where Jinja2 folds an expression around it, or
+    // the output's whole value (FoldCheck); printing the strict undefined it folds to fails
+    if (m_tupleSliceSubscripts != m_foldRootFrom)
     {
-        return MakeParseError(ErrorCode::ExpectedSquareBracket, startTok);
+        if (m_strictUndefined && &m_nodes[*evaluator] == &m_nodes[m_tupleSliceValue])
+        {
+            return MakeParseError(ErrorCode::ExpectedSquareBracket, startTok);
+        }
+        AddFoldCandidate(*evaluator, m_foldRootFrom, true);
+        if (auto finished = FinishFoldRoot(startTok); !finished)
+        {
+            return MakeUnexpected(finished.error());
+        }
     }
 
     const auto& tok = lexer.NextToken();
@@ -169,10 +199,44 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
     return result;
 }
 
+void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output)
+{
+    if (!m_inFoldRoot)
+    {
+        return;
+    }
+    if (const auto fold = m_nodes[node].PrepareFold(m_nodes); fold != 0)
+    {
+        m_foldCandidates.push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output });
+    }
+}
+
+nonstd::expected<void, ParseError> ExpressionParser::FinishFoldRoot(const Token& tok)
+{
+    FoldCheck check;
+    check.candidates = std::move(m_foldCandidates);
+    m_foldCandidates.clear();
+    check.from = m_foldRootFrom;
+    check.to = m_tupleSliceSubscripts;
+    for (unsigned subscript = check.from; subscript != check.to; ++subscript)
+    {
+        const auto covers = [subscript](const FoldCandidate& candidate) { return candidate.from <= subscript && subscript < candidate.to; };
+        if (std::none_of(check.candidates.begin(), check.candidates.end(), covers))
+        {
+            return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
+        }
+    }
+    check.strictUndefined = m_strictUndefined;
+    check.error = ParseError(ErrorCode::ExpectedSquareBracket, tok);
+    m_unknown.AddFoldCheck(std::move(check));
+    return {};
+}
+
 bool ExpressionParser::AddOperator()
 {
     return ++m_operators <= detail::t_parseLimits.maxExpressionOperators && !StackNearlyExhausted();
 }
+
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
 {
@@ -185,6 +249,14 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     }
     LexScanner::StateSaver saver(lexer);
     const auto unknownMark = m_unknown.Mark();
+    // A statement's expression is a top-level one (FoldCheck); an output's is Parse's
+    const bool isFoldRoot = !m_inFoldRoot;
+    const FoldRootScope foldRoot(m_inFoldRoot);
+    if (isFoldRoot)
+    {
+        m_foldRootFrom = m_tupleSliceSubscripts;
+    }
+    const unsigned foldFrom = m_tupleSliceSubscripts;
 
     auto value = ParseBinary(lexer, Precedence::Or);
     if (!value)
@@ -228,6 +300,14 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
         chained = true;
     }
 
+    NoteFoldCandidate(result, foldFrom, isFoldRoot && m_outputExpressions);
+    if (isFoldRoot && m_tupleSliceSubscripts != m_foldRootFrom)
+    {
+        if (auto finished = FinishFoldRoot(*saver.m_state.m_cur); !finished)
+        {
+            return MakeUnexpected(finished.error());
+        }
+    }
     saver.Commit();
     return result;
 }
@@ -721,8 +801,16 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFilter
                                                                                           NodeRef<Expression> valueRef)
 {
     ParseResult<NodeRef<Expression>> result = valueRef;
+    // Jinja2's optimizer folds each filter and test of a chain (FoldCheck)
+    const unsigned foldFrom = m_tupleSliceSubscripts;
+    bool chained = false;
     while (result)
     {
+        if (chained)
+        {
+            NoteFoldCandidate(*result, foldFrom);
+        }
+        chained = true;
         const auto& opTok = lexer.PeekNextToken();
         if (lexer.EatIfEqual('|'))
         {
@@ -1184,6 +1272,8 @@ struct BracketSubscript
     // is foldable; the parts themselves are not kept
     bool isTupleOfSlices = false;
     bool foldable = true;
+    // Of a tuple of slices: its parts in the order Python evaluates them, the omitted ones left out
+    ArenaSpan<NodeRef<Expression>> tupleParts;
 };
 
 bool EndsSlicePart(LexScanner& lexer)
@@ -1264,10 +1354,15 @@ SubscriptParseResult<BracketSubscript> ParseSubscriptTuple(ExpressionParser& par
     std::vector<NodeRef<Expression>> items;
     bool hasSlice = first.isSlice;
     bool foldable = true;
-    const auto addItem = [&nodes, &foldable, &items](const BracketSubscript& item) {
+    std::vector<NodeRef<Expression>> parts;
+    const auto addItem = [&nodes, &foldable, &items, &parts](const BracketSubscript& item) {
         for (const auto& part : item.parts)
         {
             foldable = foldable && (!part || nodes[part].IsFoldable(nodes));
+            if (part)
+            {
+                parts.push_back(part);
+            }
         }
         items.push_back(item.parts[0]);
     };
@@ -1295,6 +1390,7 @@ SubscriptParseResult<BracketSubscript> ParseSubscriptTuple(ExpressionParser& par
     {
         result.isTupleOfSlices = true;
         result.foldable = foldable;
+        result.tupleParts = nodes.MakeSpan(parts);
     }
     else
     {
@@ -1372,12 +1468,12 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
             // Jinja2 folds a subscript of a literal by constants through Environment.getitem,
             // which gives an undefined for the TypeError of a list, tuple or string and the
             // KeyError of a dict. Unfolded, the slice inside the tuple is invalid Python
-            if (!m_inOutput || !bracket->foldable || !m_nodes[valueRef].IsFoldable(m_nodes))
+            if (!m_inFoldRoot || !bracket->foldable || !m_nodes[valueRef].IsFoldable(m_nodes))
             {
                 return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
             }
             ++m_tupleSliceSubscripts;
-            const NodeRef<Expression> undefined = m_nodes.Make<ConstantExpression>(InternalValue());
+            const NodeRef<Expression> undefined = m_nodes.Make<TupleSliceExpression>(valueRef, bracket->tupleParts);
             m_tupleSliceValue = undefined;
             return undefined;
         }
@@ -1510,11 +1606,14 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
 
     try
     {
+        const unsigned foldFrom = m_tupleSliceSubscripts;
         auto testExpr = ParseBinary(lexer, Precedence::Or);
         if (!testExpr)
         {
             return MakeUnexpected(testExpr.error());
         }
+        // Folded by the optimizer whatever the conditional does (FoldCheck)
+        NoteFoldCandidate(*testExpr, foldFrom);
 
         ParseResult<NodeRef<Expression>> altValue;
         if (lexer.PeekNextToken().keyword == Keyword::Else)
@@ -1555,6 +1654,120 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
     }
 
     return result;
+}
+
+namespace
+{
+// Jinja2's has_safe_repr, which the optimizer asks of a folded value before it puts it in the
+// code: None, bools, numbers, strings, and lists, tuples and dicts of them; not an undefined
+bool HasSafeRepr(const InternalValue& value)
+{
+    if (StackNearlyExhausted())
+    {
+        return false;
+    }
+    switch (value.Kind())
+    {
+    case ValueKind::None:
+    case ValueKind::Bool:
+    case ValueKind::String:
+    case ValueKind::Int:
+    case ValueKind::Double:
+    case ValueKind::BigInt:
+        return true;
+    case ValueKind::List:
+    {
+        const auto list = AsList(value);
+        if (!list || list->GetIteratorKind() != IteratorKind::None)
+        {
+            return false;
+        }
+        bool safe = true;
+        list->ForEach([&safe](InternalValue&& item) {
+            safe = HasSafeRepr(item);
+            return safe;
+        });
+        return safe;
+    }
+    case ValueKind::Map:
+    {
+        const auto map = AsMap(value);
+        if (!map || map->IsHost() || map->IsNamespace())
+        {
+            return false;
+        }
+        const auto entries = map->GetEntries();
+        return std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return HasSafeRepr(entry.key) && HasSafeRepr(entry.value); });
+    }
+    default:
+        return false;
+    }
+}
+
+enum class FoldOutcome : std::uint8_t
+{
+    Folds,
+    DoesNotFold,
+    // Its evaluation failed
+    Fails,
+};
+
+FoldOutcome FoldOf(const FoldCandidate& candidate, RenderContext& context, bool strictUndefined)
+{
+    try
+    {
+        auto& node = context.Nodes()[candidate.node];
+        if ((candidate.fold & FoldAlways) == 0 && !node.IsFoldableAt(context))
+        {
+            return FoldOutcome::DoesNotFold;
+        }
+        const auto value = node.Evaluate(context);
+        // An output folds into str(value), which fails for a strict undefined
+        if (candidate.output)
+        {
+            return strictUndefined && value.IsUndefined() ? FoldOutcome::Fails : FoldOutcome::Folds;
+        }
+        return HasSafeRepr(value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+    }
+    catch (const std::bad_alloc&)
+    {
+        throw;
+    }
+    catch (const std::exception&)
+    {
+        return FoldOutcome::Fails;
+    }
+}
+} // namespace
+
+bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
+{
+    std::vector<FoldOutcome> outcomes;
+    outcomes.reserve(check.candidates.size());
+    for (const auto& candidate : check.candidates)
+    {
+        outcomes.push_back(FoldOf(candidate, context, check.strictUndefined));
+        // Jinja2's optimizer folds every expression of the tree, and a strict undefined that
+        // fails a fold fails the compile (UndefinedError) where an Impossible would not
+        if (check.strictUndefined && outcomes.back() == FoldOutcome::Fails)
+        {
+            return false;
+        }
+    }
+    for (unsigned subscript = check.from; subscript != check.to; ++subscript)
+    {
+        bool folded = false;
+        for (std::size_t index = 0; index != check.candidates.size() && !folded; ++index)
+        {
+            const auto& candidate = check.candidates[index];
+            folded = candidate.from <= subscript && subscript < candidate.to && outcomes[index] == FoldOutcome::Folds;
+        }
+        if (!folded)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace v2
