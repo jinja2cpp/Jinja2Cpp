@@ -31,7 +31,7 @@ side instead of waiting for upstream.
    document untouched instead of destroying a by-value copy during unwinding.
 3. Check the vendored `polymorphic`/`indirect` and the other bindings (boost_json, simdjson when
    0302 lands) for the same pattern: a `noexcept` destructor or release path that allocates.
-4. Optional: report upstream with the draft in the project files (0279/nlohmann-upstream-issue-draft.md).
+4. The upstream report is 0488.
 
 **Tests.** test/allocation_failure_test.cpp: `Reflect(std::move(doc))`, `Reflect(doc)` of a
 non-const lvalue and `Reflect(std::make_shared<nlohmann::json>(...))` rows, in both modes of
