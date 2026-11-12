@@ -458,8 +458,9 @@ section 2.1 (0250).
   reads it, and `nlohmann::json`'s destructor allocates (v3.12 flattens a non-empty array or
   object into a `std::vector`) in a `noexcept` path: OOM there terminates the process. A
   document the host keeps and reflects by reference, or copies with `ToValue`, is not affected
-  (0279). Also known: a failed `list.sort()` on a module's list handed to the host may leave the
-  list empty when memory stays spent (0485).
+  (0279). Also known, when memory stays spent: the reference cycles of a failed render leak
+  (0486), and a failed `list.sort()` on a module's list handed to the host may leave the list
+  empty (0485).
 - **Caller-owned output** ([0257](tasks/0257-render-to-string-and-sink.md)):
   - `RenderTo(StringType& out, params)` appends; on any failure `out` is truncated back to its
     size at entry;
