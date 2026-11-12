@@ -1,6 +1,8 @@
 """ChoiceLoader, PrefixLoader, FunctionLoader, PackageLoader, ModuleLoader and BaseLoader.load."""
 
+import gc
 import sys
+import weakref
 import zipfile
 
 import jinja2
@@ -247,3 +249,126 @@ def test_jinja2_package_loader_in_our_environment(package_dir):
     env = jinja2cpp.Environment(loader=jinja2.ChoiceLoader([jinja2.DictLoader({"own": "{% include 'inc.html' %}"}), jinja2.PackageLoader(package_dir.name)]))
     assert env.get_template("own").render() == "[inc]"
     assert env.get_template("page.html").render(x=1) == "index 1"
+
+
+# --- The get_template cache (0433) ------------------------------------------------------------------------------
+
+
+def cache_trace(module):
+    """What Jinja2's Environment._load_template answers for a sequence of loads, as identities and renders."""
+    mapping = {"a": "{{ x }}{{ y }}", "b": "B", "c": "C", "inc": "{% include 'a' %}"}
+    loader = module.DictLoader(mapping)
+    env = module.Environment(loader=loader, cache_size=2)
+    env.globals.update(x="x", y="y")
+    out = []
+    first = env.get_template("a")
+    out.append(first is env.get_template("a"))
+    out.append(env.get_template("a", globals={"x": 1}).render())  # a hit updates the cached template's globals
+    out.append(first.render())  # the same object
+    out.append(env.get_template("inc", globals={"y": 2}).render())  # the includer's globals reach the include
+    out.append(env.get_template("a").render())  # the include did not change a's
+    env.get_template("b")
+    env.get_template("c")  # past the size: "a", the least recently used, is dropped
+    out.append(first is env.get_template("a"))
+    out.append(sorted(key[1] for key in env.cache.keys()))
+    mapping["b"] = "B2"  # DictLoader's uptodate: a changed source is a new template
+    out.append(env.get_template("b").render())
+    env.globals = {"x": "new"}  # a cached template keeps the dict it was made with (0405)
+    out.append(env.get_template("c").render() + env.get_template("b").globals.get("x", "-"))
+    env.loader = module.DictLoader({"a": "other"})  # keyed by the loader: another one's templates are not its
+    out.append(env.get_template("a").render())
+    return out
+
+
+def test_get_template_cache_matches_jinja2():
+    assert cache_trace(jinja2cpp) == cache_trace(jinja2)
+
+
+@pytest.mark.parametrize("size", [0, -1, 1])
+def test_get_template_cache_sizes(size):
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({"a": "A", "b": "B"}), cache_size=size)
+        first = env.get_template("a")
+        env.get_template("b")
+        assert (first is env.get_template("a")) == (size < 0), module
+        assert (env.cache is None) == (size == 0), module
+
+
+def test_get_template_cache_with_auto_reload_off():
+    for module in (jinja2cpp, jinja2):
+        mapping = {"a": "A"}
+        env = module.Environment(loader=module.DictLoader(mapping), auto_reload=False)
+        first = env.get_template("a")
+        mapping["a"] = "changed"
+        assert env.get_template("a") is first and first.render() == "A", module
+
+
+@pytest.mark.parametrize("drop", ["clear", "del", "none", "dict"])
+@pytest.mark.parametrize("size", [-1, 400])
+def test_dropping_a_cached_template_reads_the_loader_again(drop, size):
+    # A loader without uptodate is never reloaded by itself; Jinja2's idiom is to drop the cache entry
+    def trace(module):
+        source = ["v1"]
+        env = module.Environment(loader=module.FunctionLoader(lambda name: source[0]), cache_size=size)
+        out = [env.get_template("a").render()]
+        source[0] = "v2"
+        out.append(env.get_template("a").render())
+        if drop == "clear":
+            env.cache.clear()
+        elif drop == "del":
+            del env.cache[(weakref.ref(env.loader), "a")]
+        else:
+            env.cache = None if drop == "none" else {}
+        out.append(env.get_template("a").render())
+        out.append([key[1] for key in env.cache] if env.cache is not None else None)
+        return out
+
+    assert trace(jinja2cpp) == trace(jinja2)
+
+
+def test_cache_mapping_api():
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({"a": "A", "b": "B"}), cache_size=5)
+        env.get_template("a")
+        env.get_template("b")
+        names = [key[1] for key in env.cache]
+        assert names == ["b", "a"] and [key[1] for key in reversed(env.cache)] == ["a", "b"], module
+        assert [key[1] for key in env.cache.keys()] == names and len(env.cache.values()) == 2, module
+        assert [key[1] for key in env.cache.copy().keys()] == names, module
+
+
+@pytest.mark.parametrize("replacement", ["none", "dict"])
+def test_a_replaced_cache_alone_decides_later_loads(replacement):
+    # Codex on #859: after env.cache = None every load reads the loader; after env.cache = {} a miss does, so
+    # clearing that dict reloads, and a hit is checked with the loader's uptodate under auto_reload
+    def trace(module):
+        source = {"f": "v1", "d": "d1"}
+        loader = module.ChoiceLoader([module.FunctionLoader(lambda name: source[name] if name == "f" else None), module.DictLoader(source)])
+        env = module.Environment(loader=loader)
+        env.cache = None if replacement == "none" else {}
+        out = []
+        for step in range(3):
+            first = env.get_template("f")
+            out.append(first.render())
+            out.append(first is env.get_template("f"))
+            out.append(env.get_template("d").render())
+            source["f"] = f"v{step + 2}"
+            source["d"] = f"d{step + 2}"
+            if env.cache is not None and step == 1:
+                env.cache.clear()
+        return out
+
+    assert trace(jinja2cpp) == trace(jinja2)
+
+
+def test_a_replaced_cache_keeps_no_dropped_template_alive():
+    # Codex on #859: the freshness of a replacement cache's entry went with the environment, not with the entry
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({f"t{i}": str(i) for i in range(50)}))
+    env.cache = {}
+    refs = []
+    for i in range(50):
+        refs.append(weakref.ref(env.get_template(f"t{i}")))
+        env.cache.clear()
+    gc.collect()
+    assert not any(ref() for ref in refs)
+    assert len(env.__dict__.get("_foreign_uptodate", {})) == 0

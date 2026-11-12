@@ -46,13 +46,18 @@ public:
     // ConfigureForChatTemplates on every rebuild, with `clock` (a callable giving a POSIX
     // timestamp, kept alive by the environment; None for the system clock) as strftime_now's clock
     void SetChatTemplates(nb::handle clock);
+    // Environment.cache cleared, an entry deleted or the cache replaced: the engine's cache goes too, so that the next
+    // get_template reads the loader again, as Jinja2's does (templates loaded before keep what they have)
+    void DropEngineCache() noexcept { m_env.reset(); }
     [[nodiscard]] bool NewstyleGettext() const noexcept { return m_newstyleGettext; }
     void SetNewstyleGettext(bool newstyle) noexcept { m_newstyleGettext = newstyle; }
 
     // The template of a source or of a loader's name, an instance of `templateClass` (Jinja2's
     // Environment.template_class: a subclass of Template)
     nb::object FromString(nb::handle source, nb::handle globals, nb::handle templateClass);
-    nb::object LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass);
+    // `cached`, the template an earlier load of `name` gave (Environment.cache), is given again while the engine
+    // has the same template cached: not reloaded, its source not changed (0433)
+    nb::object LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass, nb::handle cached);
     // A source a loader gave, with its name and filename (BaseLoader.load)
     nb::object Compile(nb::handle source, nb::handle name, nb::handle filename, nb::handle globals, nb::handle templateClass);
     // The engine's template of a source named `name` in its errors

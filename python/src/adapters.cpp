@@ -734,17 +734,6 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
     return ToPython(empty ? *empty : obj);
 }
 
-// Whether `value` is a string of the template's, owned or viewed
-bool IsText(const jinja2::Value& value)
-{
-    return std::visit(
-        [](const auto& data) {
-            using T = std::decay_t<decltype(data)>;
-            return std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view> || std::is_same_v<T, std::wstring> || std::is_same_v<T, std::wstring_view> || std::is_same_v<T, jinja2::Markup> || std::is_same_v<T, jinja2::WMarkup>;
-        },
-        value.GetData());
-}
-
 // The ISandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
 // for the engine's values. It borrows the environment, which holds the engine environment that holds this
 class PySandboxPolicy final : public jinja2::ISandboxPolicy
@@ -758,34 +747,6 @@ public:
 
     [[nodiscard]] std::optional<jinja2::Value> NativeAttribute(const jinja2::Value& obj, std::string_view name) const override
     {
-        if (name == "format_map" && IsText(obj))
-        {
-            // The engine's strings have no format_map; the sandbox's is SandboxedFormatter's
-            // The callable may be kept past the render (a host argument is not lent): it refers to the environment
-            // weakly, as a strong reference would make a cycle the garbage collector cannot see, and raises once the
-            // environment is gone
-            auto weak = PyRef::Steal(PyWeakref_NewRef(m_environment, nullptr));
-            if (!weak)
-            {
-                throw nb::python_error();
-            }
-            jinja2::UserCallable formatMap([obj, weak = std::move(weak)](const jinja2::UserCallableParams& params) {
-                // Calling the weak reference gives the environment or None (PyWeakref_GetRef is not in 3.12's stable ABI)
-                const auto owner = PyRef::Steal(PyObject_CallNoArgs(weak.Get()));
-                if (!owner.Get())
-                {
-                    throw nb::python_error();
-                }
-                if (owner.Get() == Py_None)
-                {
-                    RaiseTemplateRuntimeError("a value of the template was used after the call it was passed to ended");
-                }
-                return FormatWith(owner.Get(), obj, true, params);
-            },
-                                           { jinja2::ArgInfo(jinja2::ArgInfo::VarArgs), jinja2::ArgInfo(jinja2::ArgInfo::VarKwArgs) });
-            formatMap.keepUndefined = true;
-            return jinja2::Value(std::move(formatMap));
-        }
         // Python's objects have attributes the engine's values have not: __class__, __init__, ...
         // A public name is the environment's to judge only when its is_safe_attribute is not Jinja2's, which
         // refuses private names and the methods of lists and dicts that change them (the engine does the latter)
@@ -826,15 +787,10 @@ public:
 
     [[nodiscard]] std::optional<jinja2::Value> Format(const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params) const override
     {
-        return FormatWith(m_environment, self, formatMap, params);
-    }
-
-private:
-    [[nodiscard]] static jinja2::Value FormatWith(PyObject* environment, const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params)
-    {
+        // str.format and str.format_map of the engine's strings: Python's, through the environment's wrap_str_format
         const auto text = ToPython(self);
         const auto method = Steal(PyObject_GetAttrString(text.ptr(), formatMap ? "format_map" : "format"));
-        auto wrapped = Steal(PyObject_CallMethod(environment, "wrap_str_format", "O", method.ptr()));
+        auto wrapped = Steal(PyObject_CallMethod(m_environment, "wrap_str_format", "O", method.ptr()));
         if (wrapped.is_none())
         {
             wrapped = method;
@@ -842,6 +798,7 @@ private:
         return CallPython(wrapped.ptr(), params);
     }
 
+private:
     PyObject* m_environment;
     bool m_allNames;
 };

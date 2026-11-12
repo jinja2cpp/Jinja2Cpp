@@ -20,6 +20,9 @@ struct ErrorSource
     // The jinja2cpp.Environment the template is in, or None: the error's template, when it is another one
     // (an included template), is looked up in its loader, and TemplateNotFound names its search path
     nb::object environment = nb::none();
+    // A render (render, generate, make_module) raised it: Jinja2 renders through a generator, so a StopIteration
+    // ends it as `RuntimeError: generator raised StopIteration` (PEP 479), with the StopIteration as its cause (0477)
+    bool render = false;
 };
 
 // The source of the template `name` in the loader of `environment` (a jinja2cpp.Environment)
