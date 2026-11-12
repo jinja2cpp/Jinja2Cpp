@@ -509,6 +509,98 @@
    "output": "TTF"
   },
   {
+   "id": "tests.lower_test_no_cased_letter",
+   "template": "{{ '3' is lower }}|{{ '' is lower }}|{{ '-7' is upper }}|{{ '3a' is lower }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|False|False|True"
+  },
+  {
+   "id": "tests.upper_test_titlecase",
+   "template": "{{ 'ǅ' is upper }}|{{ 'ǅ' is lower }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|False"
+  },
+  {
+   "id": "tests.lower_upper_non_ascii",
+   "template": "{{ 'é' is lower }}|{{ 'ÉA' is upper }}|{{ 'Straße' is lower }}|{{ 'ß' is upper }}|{{ 'abc1-' is lower }}|{{ 'ΑΒ' is upper }}|{{ '𝐀' is upper }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True|False|False|True|True|True"
+  },
+  {
+   "id": "tests.lower_upper_markup",
+   "template": "{{ 'abc'|safe is lower }}|{{ 'ABC'|safe is upper }}|{{ ''|safe is lower }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True|False"
+  },
+  {
    "id": "tests.mapping",
    "template": "{{ 'T' if d is mapping else 'F' }}{{ 'T' if l is mapping else 'F' }}",
    "context": {
