@@ -3,13 +3,18 @@
 // renders; each run must succeed or throw std::bad_alloc and leave the template and environment usable. Run under
 // ASan, it also checks that the unwinding leaks nothing.
 //
+// With JINJA2CPP_ALLOC_EXHAUSTED=1 (the jinja2cpp_alloc_tests_exhausted run), every allocation after the Nth fails too,
+// as when memory is really spent: catch handlers, unwinding and the error paths then cannot allocate either (task 0256).
+//
 // A separate executable: the replacement would hide the sanitizers' own operator new from every other test. With a
 // Windows DLL build the library keeps its CRT's operator new, so the tests skip there.
 
+#include <jinja2cpp/binding/nlohmann_json.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/json_adapter.h>
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -19,6 +24,17 @@
 
 #include "binding/toy_json.h"
 
+#if defined(__linux__) && defined(__SANITIZE_ADDRESS__)
+#define JINJA2CPP_ALLOC_TESTS_LEAK_CHECK 1
+#elif defined(__linux__) && defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define JINJA2CPP_ALLOC_TESTS_LEAK_CHECK 1
+#endif
+#endif
+#ifdef JINJA2CPP_ALLOC_TESTS_LEAK_CHECK
+#include <sanitizer/lsan_interface.h>
+#endif
+
 #include <atomic>
 #include <csignal>
 #include <cstddef>
@@ -26,10 +42,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <map>
 #include <memory>
-#include <utility>
 #include <new>
 #include <string>
+#include <utility>
 #include <thread>
 #include <vector>
 #if defined(_MSC_VER) && defined(__cpp_lib_stacktrace)
@@ -46,6 +63,25 @@ std::atomic<long> g_countdown{ -1 };
 std::atomic<long> g_armed{ -1 };
 // The allocations not freed yet, for the steady-state checks
 std::atomic<long> g_live{ 0 };
+// Set when the armed failure happens in the exhausted mode: every later allocation fails too, until disarmed
+std::atomic<bool> g_spent{ false };
+
+// JINJA2CPP_ALLOC_EXHAUSTED=1: memory stays spent once the armed failure happens. Read with malloc, before any test
+bool ReadExhaustedMode() noexcept
+{
+#ifdef _MSC_VER
+    // std::getenv is C4996 under /W4 /WX
+    char* value = nullptr;
+    _dupenv_s(&value, nullptr, "JINJA2CPP_ALLOC_EXHAUSTED");
+    const bool exhausted = value != nullptr && value[0] == '1';
+    std::free(value);
+    return exhausted;
+#else
+    const char* value = std::getenv("JINJA2CPP_ALLOC_EXHAUSTED");
+    return value != nullptr && value[0] == '1';
+#endif
+}
+const bool g_exhausted = ReadExhaustedMode();
 
 // MSVC's checked iterators (_ITERATOR_DEBUG_LEVEL above 0) give every container a heap proxy, made
 // in noexcept constructors such as basic_string(), so failing one ends in std::terminate. A
@@ -61,9 +97,14 @@ bool Injectable([[maybe_unused]] std::size_t size)
 
 void* Allocate(std::size_t size)
 {
+    if (g_spent.load(std::memory_order_relaxed) && Injectable(size))
+    {
+        throw std::bad_alloc();
+    }
     if (g_countdown.load(std::memory_order_relaxed) >= 0 && Injectable(size)
         && g_countdown.fetch_sub(1, std::memory_order_relaxed) == 0)
     {
+        g_spent.store(g_exhausted, std::memory_order_relaxed);
         throw std::bad_alloc();
     }
     if (void* p = std::malloc(size == 0 ? 1 : size))
@@ -138,7 +179,8 @@ namespace
 {
 using namespace jinja2;
 
-// Fails the allocation after `succeed` more have succeeded, until disarmed
+// Fails the allocation after `succeed` more have succeeded (and, in the exhausted mode, every one after it), until
+// disarmed
 struct Injection
 {
     explicit Injection(long succeed)
@@ -146,7 +188,11 @@ struct Injection
         g_armed.store(succeed, std::memory_order_relaxed);
         g_countdown.store(succeed, std::memory_order_relaxed);
     }
-    ~Injection() { g_countdown.store(-1, std::memory_order_relaxed); }
+    ~Injection()
+    {
+        g_countdown.store(-1, std::memory_order_relaxed);
+        g_spent.store(false, std::memory_order_relaxed);
+    }
     Injection(const Injection&) = delete;
     Injection& operator=(const Injection&) = delete;
     // Whether the armed failure happened
@@ -161,7 +207,8 @@ constexpr long maxAllocations = 100000;
 void ReportCrash(const char* what)
 {
     g_countdown.store(-1, std::memory_order_relaxed);
-    std::fprintf(stderr, "%s with allocation %ld failing\n", what, g_armed.load(std::memory_order_relaxed));
+    g_spent.store(false, std::memory_order_relaxed);
+    std::fprintf(stderr, "%s with allocation %ld failing%s\n", what, g_armed.load(std::memory_order_relaxed), g_exhausted ? " (and every one after it)" : "");
 #if defined(_MSC_VER) && defined(__cpp_lib_stacktrace)
     std::cerr << std::stacktrace::current() << std::endl;
 #endif
@@ -200,13 +247,71 @@ void OnFreshThread(F&& f)
     thread.join();
 }
 
+// Under LeakSanitizer (the ASan jobs), each test ends with a leak check, not only the process: the first test that
+// fails it made the leak (a check reports every leak still unreachable, so the tests after it fail too, task 0256)
+class LeakCheckedTest : public testing::Test
+{
+protected:
+    void TearDown() override
+    {
+#ifdef JINJA2CPP_ALLOC_TESTS_LEAK_CHECK
+        EXPECT_EQ(0, __lsan_do_recoverable_leak_check()) << "LeakSanitizer found leaks (reported above)";
+#endif
+    }
+};
+
+// Stops LeakSanitizer reporting what this thread allocates while it lives, when `pause` is set
+class LeakCheckPause
+{
+public:
+    explicit LeakCheckPause([[maybe_unused]] bool pause)
+#ifdef JINJA2CPP_ALLOC_TESTS_LEAK_CHECK
+        : m_paused(pause)
+    {
+        if (m_paused)
+        {
+            __lsan_disable();
+        }
+    }
+    ~LeakCheckPause()
+    {
+        if (m_paused)
+        {
+            __lsan_enable();
+        }
+    }
+#else
+    {
+    }
+    ~LeakCheckPause() = default;
+#endif
+    LeakCheckPause(const LeakCheckPause&) = delete;
+    LeakCheckPause& operator=(const LeakCheckPause&) = delete;
+
+private:
+#ifdef JINJA2CPP_ALLOC_TESTS_LEAK_CHECK
+    bool m_paused;
+#endif
+};
+
 struct Case
 {
     std::string source;
     std::string expected;
+    // Makes reference cycles: when memory stays spent, the walk at the end of the render that breaks them cannot
+    // allocate its tables and they leak (known gap, task 0486), so the exhausted mode does not leak-check its Render
+    bool makesCycles = false;
 };
 
-class AllocationFailureTest : public testing::TestWithParam<Case>
+// The sources and outputs are ASCII: a wide row widens each character
+template<typename CharT>
+std::basic_string<CharT> Widen(const std::string& text)
+{
+    return std::basic_string<CharT>(text.begin(), text.end());
+}
+
+class AllocationFailureTest : public LeakCheckedTest
+    , public testing::WithParamInterface<Case>
 {
 protected:
     void SetUp() override
@@ -216,6 +321,21 @@ protected:
         fs->AddFile("macros.j2", "{% macro item(x, sep=', ') %}[{{ x }}]{{ sep }}{% endmacro %}");
         fs->AddFile("base.j2", "<{% block body %}base{% endblock %}>");
         m_env.AddFilesystemHandler(std::string(), fs);
+        // The i18n extension, with a catalog the host translates through (task 0256)
+        m_env.GetSettings().extensions.i18n = true;
+        const std::map<std::string, std::string> catalog{ { "Hello %(name)s!", "Hallo %(name)s!" }, { "%(n)s item", "%(n)s Ding" } };
+        m_env.InstallGettextCallables(
+            MakeCallable(
+                [catalog](const std::string& message) {
+                    const auto found = catalog.find(message);
+                    return found == catalog.end() ? message : found->second;
+                },
+                ArgInfo{ "message" }),
+            MakeCallable([](const std::string& singular, const std::string& plural, int64_t n) { return n == 1 ? singular : plural; },
+                         ArgInfo{ "singular" },
+                         ArgInfo{ "plural" },
+                         ArgInfo{ "n" }),
+            MakeCallable([](const std::string& context, const std::string& message) { return context + ":" + message; }, ArgInfo{ "context" }, ArgInfo{ "message" }));
     }
 
     [[nodiscard]] ValuesMap Params() const
@@ -228,97 +348,128 @@ protected:
         };
     }
 
+    // Fails each allocation of a Load in turn: Load succeeds or throws std::bad_alloc, and the template loads and
+    // renders after it
+    template<typename CharT>
+    void SweepLoad(const Case& param)
+    {
+        const auto source = Widen<CharT>(param.source);
+        const auto expected = Widen<CharT>(param.expected);
+        long n = 0;
+        for (; n < maxAllocations; ++n)
+        {
+            BasicTemplate<CharT> tpl(&m_env);
+            bool threw = false;
+            bool loaded = false;
+            bool fired = false;
+            OnFreshThread([&] {
+                Injection injection(n);
+                try
+                {
+                    loaded = tpl.Load(source).has_value();
+                }
+                catch (const std::bad_alloc&)
+                {
+                    threw = true;
+                }
+                fired = Injection::Fired();
+            });
+            if (!threw)
+            {
+                ASSERT_TRUE(loaded) << "allocation " << n << " failed and Load returned an error\n"
+                                    << param.source;
+            }
+            else
+            {
+                ASSERT_TRUE(tpl.Load(source).has_value()) << param.source;
+            }
+            auto result = tpl.RenderAsString(Params());
+            ASSERT_TRUE(result.has_value()) << "after allocation " << n << " failed: " << ToString(result.error().ToString());
+            EXPECT_EQ(expected, result.value()) << "after allocation " << n << " failed";
+            if (!fired)
+            {
+                break;
+            }
+        }
+        RecordProperty("allocations", static_cast<int>(n));
+        EXPECT_LT(0, n) << "no allocation reached the injection";
+        EXPECT_LT(n, maxAllocations);
+    }
+
+    // Fails each allocation of a Render in turn: Render succeeds with the expected output or throws std::bad_alloc,
+    // and the next Render prints the expected output
+    template<typename CharT>
+    void SweepRender(const Case& param)
+    {
+        const auto source = Widen<CharT>(param.source);
+        const auto expected = Widen<CharT>(param.expected);
+        BasicTemplate<CharT> tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << param.source;
+        const auto params = Params();
+        long n = 0;
+        for (; n < maxAllocations; ++n)
+        {
+            bool threw = false;
+            bool fired = false;
+            Result<std::basic_string<CharT>, CharT> result;
+            OnFreshThread([&] {
+                const LeakCheckPause pause(g_exhausted && param.makesCycles);
+                Injection injection(n);
+                try
+                {
+                    result = tpl.RenderAsString(params);
+                }
+                catch (const std::bad_alloc&)
+                {
+                    threw = true;
+                }
+                fired = Injection::Fired();
+            });
+            if (!threw)
+            {
+                ASSERT_TRUE(result.has_value()) << "allocation " << n << " failed and Render returned an error: " << ToString(result.error().ToString());
+                EXPECT_EQ(expected, result.value()) << "allocation " << n << " failed and Render printed something else";
+            }
+            auto again = tpl.RenderAsString(params);
+            ASSERT_TRUE(again.has_value()) << "after allocation " << n << " failed: " << ToString(again.error().ToString());
+            EXPECT_EQ(expected, again.value()) << "after allocation " << n << " failed";
+            if (!fired)
+            {
+                break;
+            }
+        }
+        RecordProperty("allocations", static_cast<int>(n));
+        EXPECT_LT(0, n) << "no allocation reached the injection";
+        EXPECT_LT(n, maxAllocations);
+    }
+
     TemplateEnv m_env;
 };
 
 TEST_P(AllocationFailureTest, LoadSucceedsOrThrowsBadAlloc)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
-    const auto& param = GetParam();
-    long n = 0;
-    for (; n < maxAllocations; ++n)
-    {
-        Template tpl(&m_env);
-        bool threw = false;
-        bool loaded = false;
-        bool fired = false;
-        OnFreshThread([&] {
-            Injection injection(n);
-            try
-            {
-                loaded = tpl.Load(param.source).has_value();
-            }
-            catch (const std::bad_alloc&)
-            {
-                threw = true;
-            }
-            fired = Injection::Fired();
-        });
-        if (!threw)
-        {
-            ASSERT_TRUE(loaded) << "allocation " << n << " failed and Load returned an error\n"
-                                << param.source;
-        }
-        else
-        {
-            ASSERT_TRUE(tpl.Load(param.source).has_value()) << param.source;
-        }
-        auto result = tpl.RenderAsString(Params());
-        ASSERT_TRUE(result.has_value()) << "after allocation " << n << " failed: " << result.error().ToString();
-        EXPECT_EQ(param.expected, result.value()) << "after allocation " << n << " failed";
-        if (!fired)
-        {
-            break;
-        }
-    }
-    RecordProperty("allocations", static_cast<int>(n));
-    EXPECT_LT(0, n) << "no allocation reached the injection";
-    EXPECT_LT(n, maxAllocations);
+    SweepLoad<char>(GetParam());
 }
 
 TEST_P(AllocationFailureTest, RenderSucceedsOrThrowsBadAlloc)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
-    const auto& param = GetParam();
-    Template tpl(&m_env);
-    ASSERT_TRUE(tpl.Load(param.source).has_value()) << param.source;
-    const auto params = Params();
-    long n = 0;
-    for (; n < maxAllocations; ++n)
-    {
-        bool threw = false;
-        bool fired = false;
-        Result<std::string> result;
-        OnFreshThread([&] {
-            Injection injection(n);
-            try
-            {
-                result = tpl.RenderAsString(params);
-            }
-            catch (const std::bad_alloc&)
-            {
-                threw = true;
-            }
-            fired = Injection::Fired();
-        });
-        if (!threw)
-        {
-            ASSERT_TRUE(result.has_value()) << "allocation " << n << " failed and Render returned an error: " << result.error().ToString();
-            EXPECT_EQ(param.expected, result.value()) << "allocation " << n << " failed and Render printed something else";
-        }
-        auto again = tpl.RenderAsString(params);
-        ASSERT_TRUE(again.has_value()) << "after allocation " << n << " failed: " << again.error().ToString();
-        EXPECT_EQ(param.expected, again.value()) << "after allocation " << n << " failed";
-        if (!fired)
-        {
-            break;
-        }
-    }
-    RecordProperty("allocations", static_cast<int>(n));
-    EXPECT_LT(0, n) << "no allocation reached the injection";
-    EXPECT_LT(n, maxAllocations);
+    SweepRender<char>(GetParam());
 }
 
+// The same rows as TemplateW: the wide lexer, the conversions of narrow host data and files (task 0256)
+TEST_P(AllocationFailureTest, WideLoadSucceedsOrThrowsBadAlloc)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    SweepLoad<wchar_t>(GetParam());
+}
+
+TEST_P(AllocationFailureTest, WideRenderSucceedsOrThrowsBadAlloc)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    SweepRender<wchar_t>(GetParam());
+}
 TEST_F(AllocationFailureTest, MetadataSucceedsOrThrowsBadAlloc)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
@@ -362,7 +513,9 @@ TEST_F(AllocationFailureTest, MetadataSucceedsOrThrowsBadAlloc)
 
 // A big integer read from JSON text either arrives exact or the copy or the view throws std::bad_alloc; running out
 // of memory is never reported as a malformed integer (DataReadError) or read as none (task 0311)
-TEST(JsonAllocationFailureTest, BigIntegerIsExactOrThrowsBadAlloc)
+using JsonAllocationFailureTest = LeakCheckedTest;
+
+TEST_F(JsonAllocationFailureTest, BigIntegerIsExactOrThrowsBadAlloc)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
     const std::string text = "[123456789012345678901234567890123456789012345678901234567890]";
@@ -421,6 +574,68 @@ TEST(JsonAllocationFailureTest, BigIntegerIsExactOrThrowsBadAlloc)
         EXPECT_LT(0, n) << "no allocation reached the injection";
         EXPECT_LT(n, maxAllocations);
     }
+}
+
+// An nlohmann::json document the host keeps, read through a view (Reflect of a const reference; a non-const lvalue
+// would be copied into an owned view) or copied (ToValue):
+// running out of memory while reading it is std::bad_alloc, and the document stays as it was. A document the library
+// owns (Reflect of an rvalue, a std::shared_ptr) is not covered: nlohmann::json's destructor allocates, so running out
+// of memory while the last Value of it drops ends the process (docs/api-2.0.md 3.9, task 0279)
+TEST_F(JsonAllocationFailureTest, NlohmannDocumentReadsOrThrowsBadAlloc)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    const auto doc = nlohmann::json::parse(R"({"a": [1, 2, 3], "o": {"k": "v", "n": [true, null, 2.5]}})");
+    const std::string expected = R"(1,2,3|v|3|{"a": [1, 2, 3], "o": {"k": "v", "n": [true, null, 2.5]}})";
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{{ d.a|join(',') }}|{{ d.o.k }}|{{ d.o.n|length }}|{{ d|tojson }}"));
+    for (const bool view : { true, false })
+    {
+        SCOPED_TRACE(view ? "Reflect" : "ToValue");
+        long n = 0;
+        for (; n < maxAllocations; ++n)
+        {
+            bool threw = false;
+            bool fired = false;
+            Result<std::string> result;
+            std::string failure;
+            OnFreshThread([&] {
+                const Injection injection(n);
+                try
+                {
+                    if (view)
+                    {
+                        result = tpl.RenderAsString(ValuesMap{ { "d", Reflect(doc) } });
+                    }
+                    else if (auto copy = ToValue(doc))
+                    {
+                        result = tpl.RenderAsString(ValuesMap{ { "d", std::move(*copy) } });
+                    }
+                    else
+                    {
+                        failure = copy.error().ToString();
+                    }
+                }
+                catch (const std::bad_alloc&)
+                {
+                    threw = true;
+                }
+                fired = Injection::Fired();
+            });
+            if (!threw)
+            {
+                ASSERT_EQ("", failure) << "allocation " << n;
+                ASSERT_TRUE(result.has_value()) << "allocation " << n << ": " << result.error().ToString();
+                ASSERT_EQ(expected, result.value()) << "allocation " << n;
+            }
+            if (!fired)
+            {
+                break;
+            }
+        }
+        EXPECT_LT(0, n) << "no allocation reached the injection";
+        EXPECT_LT(n, maxAllocations);
+    }
+    EXPECT_EQ(3u, doc["a"].size());
 }
 
 // A module the host keeps and calls once per request: what a call imports with context ends
@@ -698,7 +913,10 @@ TEST_F(AllocationFailureTest, ModuleSortKeepsItsItemsWhenTheCopyFails)
         const auto shown = call("show");
         if (threw)
         {
-            ASSERT_TRUE(shown == "[[3], [1], [2]]" || shown == "[[1], [2], [3]]") << shown << " at allocation " << n;
+            // Known gap (task 0485): with memory spent, the copy the restore needs fails too, and the list is left
+            // empty. Remove the allowance when 0485 lands
+            const bool known = g_exhausted && shown == "[]";
+            ASSERT_TRUE(shown == "[[3], [1], [2]]" || shown == "[[1], [2], [3]]" || known) << shown << " at allocation " << n;
         }
         else
         {
@@ -979,10 +1197,20 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                          // allocation fails (docs/tasks/0283, LeakSanitizer in the sanitizer job)
                                          Case{ "{% set ns = namespace(l=[]) %}{% set ns.self = ns %}{% set l = [1] %}{{ l.append(l) or '' }}"
                                                "{% set ns.c = cycler(ns) %}{% set ns.f = ns.l.append %}{{ l|length }}",
-                                               "2" },
+                                               "2",
+                                               true },
                                          // Writes to the host's data through its aliases, and a cycle through
                                          // its cell (docs/tasks/0049)
                                          Case{ "{% set y = items %}{% set r = user.roles %}{{ y.append(6) or '' }}{{ r.append('ops') or '' }}"
                                                "{% set f = user.update %}{{ f(x=1) or '' }}{{ items.append(items) or '' }}{{ items|length }}{{ user.roles|length }}{{ user.x }}",
-                                               "731" }));
+                                               "731",
+                                               true },
+                                         // The i18n extension: {% trans %} with a variable and a plural, and the
+                                         // gettext globals (task 0256)
+                                         Case{ "{% trans name=user.name %}Hello {{ name }}!{% endtrans %}|{% trans n=items|length %}{{ n }} item"
+                                               "{% pluralize %}{{ n }} items{% endtrans %}|{% trans %}{{ title }} 100%{% endtrans %}",
+                                               "Hallo Ann!|5 items|Report 100%" },
+                                         Case{ "{{ _('Hello %(name)s!', name=user.name) }}|{{ ngettext('%(num)d apple', '%(num)d apples', 3) }}|"
+                                               "{{ pgettext('menu', 'Open') }}|{{ gettext('%(n)s item', n=1) }}",
+                                               "Hallo Ann!|3 apples|menu:Open|1 Ding" }));
 } // namespace

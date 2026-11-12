@@ -22,6 +22,13 @@ inline namespace v2
  *
  * `nlohmann::json` iterates objects in key order; `nlohmann::ordered_json` keeps the document order, as a Python dict
  * from `json.loads` does (docs/tasks/0043). Binary values and discarded values read as null.
+ *
+ * Out of memory: `nlohmann::json`'s destructor allocates (it flattens a non-empty array or object into a
+ * `std::vector`) and is `noexcept`, so an allocation failure while a document is destroyed ends the process. A
+ * document reflected from an rvalue, a `std::shared_ptr` or a non-const lvalue (which is copied) is destroyed with the
+ * last \ref Value that reads it, or while a copy that ran out of memory unwinds; reflect a document the host keeps by
+ * const reference (`Reflect(std::as_const(doc))`), or copy it with \ref ToValue, where `std::bad_alloc` must stay
+ * catchable (docs/api-2.0.md 3.9, docs/tasks/0279).
  */
 template<typename Json>
 struct NlohmannJsonTraits : DomJsonTraits<Json>

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: robustness
 depends: [0252]
@@ -31,3 +31,11 @@ The successor of robin_hood (0231) must keep passing these tests. Known limit, n
 nlohmann::json's destructor allocates, so OOM there terminates the process (0279).
 
 **Perf.** Tests only; no library change expected.
+
+**Landed ([#861](https://github.com/jinja2cpp/Jinja2Cpp/pull/861)).** `JINJA2CPP_ALLOC_EXHAUSTED=1` and the ctest entry
+`jinja2cpp_alloc_tests_exhausted` (every allocation after the N-th fails); `TemplateW` Load and
+Render sweeps (`Wide*SucceedsOrThrowsBadAlloc`) over every row; i18n rows (`{% trans %}` with a
+variable and a plural, the gettext globals); a per-test LeakSanitizer check
+(`__lsan_do_recoverable_leak_check`) in the ASan jobs; `NodeArenaTest.ArenaLimitIsResourceLimitExceeded`
+(the 4 GiB arena cap cannot be reached by a test template, so the row drives `NodeArena` directly
+and maps the error as Load does). The exhausted mode found 0485 and 0486, pinned in the tests.
