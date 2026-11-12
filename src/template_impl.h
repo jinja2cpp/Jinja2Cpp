@@ -147,7 +147,8 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
             snapshot->source = env.globalValues;
         }
         // The values keep the map: a host callable or a value the template made may keep one
-        // after the global is replaced and this snapshot goes
+        // after the global is replaced and this snapshot goes. The snapshot outlives the render
+        const UncountedMemoryScope uncounted;
         for (const auto& [name, value] : *snapshot->source)
         {
             snapshot->values[name] = LendGlobal(value, snapshot->source);

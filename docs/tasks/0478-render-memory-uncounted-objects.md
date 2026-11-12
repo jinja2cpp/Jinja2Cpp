@@ -36,5 +36,10 @@ path, which fails the render with `maxRenderMemory`. `BigIntObject` charges its 
 keeps its own count. Rows in `Cases()`: kept nested-loop objects, macros, undefined values and big integers fail,
 the dropped and plain-int controls pass; each kept row passes without the change.
 
-**Next.** What an object allocates apart (a loop's vectors, an undefined value's name strings) is still not
+What outlives the render is made under `UncountedMemoryScope`: a loaded template (`TemplateEnv::LoadTemplate`),
+the thread's snapshot of the globals and the built-in globals, which the first render alone paid for otherwise
+(`LimitsCachesTest.FirstRenderPaysForNoCache`).
+
+**Next.** Objects made with `std::make_shared` (accessor copies, closure captures) bypass the allocation function
+and stay uncounted. What an object allocates apart (a loop's vectors, an undefined value's name strings) is still not
 counted; the per-object size is a lower bound.

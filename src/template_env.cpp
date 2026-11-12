@@ -1,6 +1,7 @@
 #include <jinja2cpp/template_env.h>
 
 #include "big_int.h"
+#include "recursion_guard.h"
 #include "error_boundary.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
@@ -332,6 +333,8 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
     // except std::bad_alloc, becomes the error (docs/api-2.0.md, 2.1)
     try
     {
+        // A loaded template is the environment's (its cache, other renders), not the render's that loads it first
+        const UncountedMemoryScope uncounted;
         auto& cache = Functions::GetCache(*this);
 
         {

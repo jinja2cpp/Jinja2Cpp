@@ -576,6 +576,38 @@ TEST_F(LimitsEnvTest, MemoryBudget)
     }
 }
 
+// What outlives a render is not counted against the render that makes it (docs/tasks/0478): the thread's snapshot of
+// the globals and a loaded template are made by the first render and kept for those after it. On a fresh thread, so
+// that this thread's snapshot of another environment does not decide it
+TEST(LimitsCachesTest, FirstRenderPaysForNoCache)
+{
+    std::thread([] {
+        TemplateEnv env;
+        Settings settings;
+        settings.limits.maxRenderMemory = 64 << 10;
+        env.SetSettings(settings);
+        for (int n = 0; n != 5000; ++n)
+        {
+            env.AddGlobal("g" + std::to_string(n), ValuesList{ 1, 2 });
+        }
+        auto fs = std::make_shared<MemoryFileSystem>();
+        std::string included;
+        for (int n = 0; n != 3000; ++n)
+        {
+            included += "{% if false %}{{ 'x' ~ " + std::to_string(n) + " }}{% endif %}";
+        }
+        fs->AddFile("inc", included + "x1");
+        env.AddFilesystemHandler("", fs);
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load("{% include 'inc' %}|{{ g4999|length }}").has_value());
+        for (int run = 0; run != 2; ++run)
+        {
+            auto result = tpl.RenderAsString({});
+            EXPECT_EQ("x1|2", result ? *result : ErrorToString(result.error())) << run;
+        }
+    }).join();
+}
+
 // UntrustedLimits() bounds what a render keeps: the template of docs/tasks/0459 kept about 1 GB before the step
 // limit stopped it, and now stops on the memory budget
 TEST_F(LimitsEnvTest, UntrustedLimitsBoundMemory)

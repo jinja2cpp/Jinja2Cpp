@@ -382,6 +382,26 @@ inline void ReleaseRenderMemory(std::uint64_t bytes) noexcept
     }
 }
 
+// Objects made while it lives are not counted against the running render's memory budget: those of a cache that
+// outlives the render (a loaded template, the thread's snapshot of the globals, the built-in globals), which the
+// first render alone would pay for otherwise (docs/tasks/0478)
+class UncountedMemoryScope
+{
+public:
+    UncountedMemoryScope() noexcept
+        : m_saved(std::exchange(detail::t_renderLimits.memoryLeft, UINT64_MAX))
+    {
+    }
+    UncountedMemoryScope(const UncountedMemoryScope&) = delete;
+    UncountedMemoryScope(UncountedMemoryScope&&) = delete;
+    UncountedMemoryScope& operator=(const UncountedMemoryScope&) = delete;
+    UncountedMemoryScope& operator=(UncountedMemoryScope&&) = delete;
+    ~UncountedMemoryScope() { detail::t_renderLimits.memoryLeft = m_saved; }
+
+private:
+    std::uint64_t m_saved;
+};
+
 namespace detail
 {
 void CountTemplateLoadSlow();

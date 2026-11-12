@@ -263,6 +263,30 @@ void CheckLeastRecentlyUsedEviction()
 }
 } // namespace
 
+// A change that lands while the file is read: the date is asked before the read, so the cached date is older than the
+// file's and the next lookup reloads; asked after the read it paired the new date with the old text for good (0325)
+TEST(EmbeddingLifecycleTest, A5_ChangeDuringReadIsSeenNext)
+{
+    CountingFs fs(true);
+    fs.Set("a.j2", "v0");
+    TemplateEnv env;
+    env.AddFilesystemHandler("", fs);
+    bool changed = false;
+    fs.SetOpenHook([&fs, &changed](const std::string& name) {
+        if (!std::exchange(changed, true))
+        {
+            fs.Set(name, "v1");
+            fs.Touch(name);
+        }
+    });
+    for (const char* expected : { "v0", "v1", "v1" })
+    {
+        auto tpl = env.LoadTemplate("a.j2");
+        ASSERT_TRUE(tpl) << tpl.error().ToString();
+        EXPECT_EQ(expected, Out(tpl->RenderAsString({})));
+    }
+}
+
 // 3.10 caching 2: past cacheSize the least recently used template is dropped, as a reload drops it. The host's template
 // and a render that holds the dropped one keep it; a long run of new names keeps at most cacheSize of them (0264)
 TEST(EmbeddingLifecycleTest, A6_LeastRecentlyUsedEviction)
