@@ -330,6 +330,15 @@ inline void ChargeRenderMemory(std::uint64_t bytes)
         limits.memoryLeft -= bytes;
     }
 }
+// Throws ResourceLimitError when `bytes` would not fit in the running render's memory budget, without counting
+// them: checked before a buffer is allocated that is counted once it is wrapped in a value
+inline void CheckRenderMemoryFits(std::uint64_t bytes)
+{
+    if (bytes > detail::t_renderLimits.memoryLeft)
+    {
+        detail::ThrowRenderMemory(bytes);
+    }
+}
 // Whether the running render has a memory budget: a container that counts its parts one by one asks first
 inline bool RenderMemoryCounted() noexcept
 {

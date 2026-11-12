@@ -146,6 +146,11 @@ std::vector<LimitCase> Cases()
         { "MemoryDictKeysList", "{% set d = {} %}{% for j in range(100) %}{% set _ = d.update({j: j}) %}{% endfor %}{% set l = [] %}{% for i in range(1000) %}{% set _ = l.append(d|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         { "MemoryRepeatedList", "{% set r = range(1000)|list %}{% set l = [] %}{% for i in range(100) %}{% set _ = l.append(r * 1) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         { "MemoryLoopChanged", "{% set r = range(1000)|list %}{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% for q in range(1) %}{% set _ = loop.changed(*r) %}{% endfor %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        // A list past the budget fails before its buffer is allocated, and sort() gives back the buffer it replaces
+        // (Codex on #849)
+        { "MemoryHugeListUpFront", "{{ range(2**26)|list|length }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemorySortAfterClear", "{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.clear() %}{% set _ = x.sort() %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
+        { "MemorySortKeepsCount", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.sort() %}{% set _ = ns.l.append(x) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         // UINT64_MAX bytes is no limit
         { "MemoryMax", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = UINT64_MAX; }, "" },
     };
@@ -220,10 +225,11 @@ TEST_P(LimitsTest, Enforced)
 TEST_P(LimitsTest, DefaultsRender)
 {
     const auto& param = GetParam();
-    if (param.name == "StepsMacro" || param.name == "RenderDepthStackOnly" || param.name == "RepeatAboveCap" || param.name == "StepsMaxWithTime" || param.name == "CenterAboveCap")
+    if (param.name == "StepsMacro" || param.name == "RenderDepthStackOnly" || param.name == "RepeatAboveCap" || param.name == "StepsMaxWithTime" || param.name == "CenterAboveCap"
+        || param.name == "MemoryHugeListUpFront")
     {
         // 2^40 calls and 10^9 iterations would render, in time; 400 levels pass the default depth; the
-        // above-cap rows fail on the internal cap without a limit
+        // above-cap rows fail on the internal cap without a limit; a list of 2^26 items takes 2 GiB
         return;
     }
     bool failedAtLoad = false;

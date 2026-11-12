@@ -553,6 +553,9 @@ inline void CheckSequenceSize(uint64_t size, const char* what)
     {
         ThrowSequenceTooLong(size, what);
     }
+    // Every item or character takes at least a byte: a sequence past the render's memory budget fails before its
+    // buffer is allocated (docs/tasks/0459)
+    CheckRenderMemoryFits(size);
 }
 
 // A template so that reserve() is instantiated where it is called, with InternalValue complete
@@ -560,6 +563,7 @@ template<typename List>
 void ReserveHint(List& list, size_t size)
 {
     CheckSequenceSize(size, "a list");
+    CheckRenderMemoryFits(std::uint64_t{ size } * sizeof(typename List::value_type));
     list.reserve(size);
 }
 
