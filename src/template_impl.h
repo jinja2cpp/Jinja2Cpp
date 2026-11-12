@@ -1040,6 +1040,13 @@ private:
                 {
                     entry.latest = &Loaded().replaced.emplace_back(std::move(result));
                 }
+                else
+                {
+                    // Made uncounted (TemplateEnv::LoadTemplate), so freed uncounted: its bytes must not give the
+                    // render budget it never took, which a loop over an include would turn into room without bound
+                    const UncountedMemoryScope uncounted;
+                    [[maybe_unused]] const LoadTemplateResult dropped = std::move(result);
+                }
             }
             return *entry.latest;
         }

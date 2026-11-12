@@ -41,6 +41,10 @@ What outlives the render is made under `UncountedMemoryScope`: a loaded template
 the thread's snapshot of the globals and the built-in globals, which the first render alone paid for otherwise
 (`LimitsCachesTest.FirstRenderPaysForNoCache`).
 
+A reload `EveryUse` drops as unchanged (0313) is freed uncounted too, or freeing it would credit the render with
+bytes it never paid (security review; `LimitsCachesTest.DroppedReloadGivesNoBudget`). The general rule, release only
+what was charged, is [0483](0483-render-memory-uncharged-release.md).
+
 **Next.** Objects made with `std::make_shared` (accessor copies, closure captures) bypass the allocation function
 and stay uncounted. What an object allocates apart (a loop's vectors, an undefined value's name strings) is still not
 counted; the per-object size is a lower bound.

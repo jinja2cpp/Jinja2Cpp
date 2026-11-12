@@ -610,6 +610,26 @@ TEST(LimitsCachesTest, FirstRenderPaysForNoCache)
     }).join();
 }
 
+// A template loaded again on every use and dropped as unchanged (TemplateLookup::EveryUse without a cache, 0313) was
+// made uncounted, so freeing it gives the budget nothing: the loop below once kept about 100 MB under 1 MiB
+TEST(LimitsCachesTest, DroppedReloadGivesNoBudget)
+{
+    TemplateEnv env;
+    Settings settings;
+    settings.limits.maxRenderMemory = 1 << 20;
+    settings.cacheSize = 0;
+    settings.templateLookup = TemplateLookup::EveryUse;
+    env.SetSettings(settings);
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("inc", "{% set s = '" + std::string(60000, 'x') + "' %}");
+    env.AddFilesystemHandler("", fs);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set ns = namespace(l=[]) %}{% for i in range(2000) %}{% include 'inc' %}{% set _ = ns.l.append(i ~ ('y' * 50000)) %}{% endfor %}{{ ns.l|length }}").has_value());
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
+}
+
 // UntrustedLimits() bounds what a render keeps: the template of docs/tasks/0459 kept about 1 GB before the step
 // limit stopped it, and now stops on the memory budget
 TEST_F(LimitsEnvTest, UntrustedLimitsBoundMemory)
