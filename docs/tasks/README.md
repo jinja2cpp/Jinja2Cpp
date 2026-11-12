@@ -503,7 +503,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0433](0433-python-template-cache-identity.md) | `get_template` returns a new Template object each time, and template globals of includes | parity | medium | open |
 | [0434](0434-python-values-leftovers-upstream-suite.md) | Values, filters and macros: leftovers the upstream Jinja2 suite found | parity | low | open |
 | [0435](0435-python-environment-policies.md) | `Environment.policies` | parity | low | open |
-| [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | in-progress |
+| [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | done |
 | [0437](0437-python-gil-released-render.md) | Render with the GIL released when the data is JSON-like (0248 plan D5, phase 3) | perf | low | open |
 | [0438](0438-sandbox-arms-cold-without-policy.md) | Sandbox checks cost nothing when no policy is installed | perf | low | open |
 | [0439](0439-python-lent-engine-callable-name.md) | Python module: an engine callable lent to Python prints without its name | parity | low | open |
@@ -524,7 +524,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0454](0454-stack-canary-hot-frames.md) | Hot frames that gain a stack canary under -fstack-protector-strong | perf | medium | open |
 | [0455](0455-debug-checks-by-contract-level.md) | RenderContext's debug-only invariants follow the contract level, not NDEBUG | robustness | low | open |
 | [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | open |
-| [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | in-progress |
+| [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | done |
 | [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
 | [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | open |
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | open |
