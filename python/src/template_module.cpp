@@ -477,6 +477,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         where.name = m_name;
         where.filename = m_filename;
         where.syntaxNote = kIncludedSyntaxNote;
+        where.render = true;
         RaiseError(result.error(), where);
     }
     auto module = std::move(result).value();

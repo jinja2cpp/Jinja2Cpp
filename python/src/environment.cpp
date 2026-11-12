@@ -746,7 +746,7 @@ nb::object PyEnvironment::Compile(nb::handle source, nb::handle name, nb::handle
     return MakeTemplate(Load(source, name.is_none() ? std::string() : Utf8(name)), globals, nb::borrow(name), nb::borrow(filename), templateClass);
 }
 
-nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass)
+nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass, nb::handle cached)
 {
     if (nb::isinstance<PyTemplate>(name))
     {
@@ -778,6 +778,10 @@ nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::
         auto where = SourceOf(text);
         where.environment = nb::find(this);
         RaiseError(error, where);
+    }
+    if (cached.is_valid() && nb::isinstance<PyTemplate>(cached) && nb::inst_ptr<PyTemplate>(cached)->Engine() == result.value())
+    {
+        return nb::borrow(cached);
     }
     // Only the filename: the source is read for an error alone
     auto where = SourceOf(text, false);
@@ -896,6 +900,7 @@ void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bo
         where.environment = m_environment;
         // The template itself parsed when it was loaded, so a syntax error here is in one it includes, imports or extends
         where.syntaxNote = kIncludedSyntaxNote;
+        where.render = true;
         RaiseError(error, where);
     }
 }
@@ -970,10 +975,11 @@ void BindEnvironment(nb::module_& module)
                                "template_class"_a)
                            .def(
                                "_load",
-                               [](PyEnvironment& self, nb::handle name, nb::handle globals, nb::handle templateClass) { return self.LoadTemplate(name, globals, templateClass); },
+                               [](PyEnvironment& self, nb::handle name, nb::handle globals, nb::handle templateClass, nb::handle cached) { return self.LoadTemplate(name, globals, templateClass, cached); },
                                "name"_a.none(),
                                "globals"_a.none(),
-                               "template_class"_a)
+                               "template_class"_a,
+                               "cached"_a.none() = nb::none())
                            .def(
                                "_compile",
                                [](PyEnvironment& self, nb::handle source, nb::handle name, nb::handle filename, nb::handle globals, nb::handle templateClass) {

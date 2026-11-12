@@ -1290,17 +1290,22 @@ def test_a_stock_hook_of_another_environment_or_a_patched_class_is_an_override(m
 
 
 def test_format_map_kept_past_the_render():
-    # The sandbox's str.format_map is a callable of the environment's: one a callable keeps formats while the
-    # environment lives and raises once it is gone (it used to read the freed environment)
+    # The sandbox's str.format_map is the engine's bound method, as str.format is (0466): lent to a call, it formats
+    # through SandboxedFormatter during the call and raises once the call ended, while the environment lives and
+    # after it is gone (an older callable of the module's own read the freed environment)
     kept = []
     env = jinja2cpp.sandbox.SandboxedEnvironment()
     env.globals["keep"] = lambda f: kept.append(f) or ""
-    assert env.from_string("{{ keep('{a}'.format_map) }}").render() == ""
-    assert kept[0]({"a": 1}) == "1"
-    del env
-    gc.collect()
-    with pytest.raises(jinja2cpp.TemplateRuntimeError):
-        kept[0]({"a": 1})
+    env.globals["call"] = lambda f, arg: f(arg)
+    source = "{{ keep('{a}'.format_map) }}{{ keep('{0}'.format) }}{{ call('{a}'.format_map, {'a': 5}) }}|{{ call('{a.__class__}'.format_map, {'a': 5}) }}"
+    assert env.from_string(source).render() == "5|"
+    for _ in range(2):
+        for method, arg in zip(kept, ({"a": 1}, 1)):
+            with pytest.raises(jinja2cpp.TemplateRuntimeError, match="called after the host's call it was passed to ended"):
+                method(arg)
+        del env
+        gc.collect()
+        env = None
 
 
 def test_a_long_string_reaches_is_safe_attribute_as_an_empty_one_of_its_type():

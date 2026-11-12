@@ -103,7 +103,11 @@ engines on a Release build of the module.
   other extensions go to Jinja2, see "Fallback").
   `optimized`, `bytecode_cache` and `enable_async=False` are accepted and change nothing.
 - `env.from_string`, `env.get_template(name, parent=None, globals=None)`, `Template(source, **options)`,
-  and `render(*args, **kwargs)` with Jinja2's `dict(*args, **kwargs)` rule.
+  and `render(*args, **kwargs)` with Jinja2's `dict(*args, **kwargs)` rule. `env.cache` is Jinja2's
+  (`None` for `cache_size=0`, a dict for a negative size, else an LRU of that size, keyed by
+  `(weakref.ref(loader), name)`): `get_template` gives the same `Template` again while it is cached
+  and the engine's cache holds it unchanged (not reloaded by `auto_reload`, the loader's `uptodate`),
+  and a call with `globals` updates that template's globals, as Jinja2's `_load_template` (0433).
 - Subclasses of `Environment` and `Template` in Python, as in Jinja2: an `__init__` that
   forwards its keyword arguments, attributes of any name, and `env.template_class` (the class
   `from_string`, `get_template` and `select_template` make; a subclass of `jinja2cpp.Template`).
@@ -147,7 +151,12 @@ engines on a Release build of the module.
   `except jinja2.TemplateNotFound` catches ours; without Jinja2 they stand alone.
   `jinja2cpp.UnsupportedError` is a `TemplateError` and a `NotImplementedError`: what the subset
   does not do raises it or `NotImplementedError`.
-  An exception that a Python filter, test, global or attribute raises is raised as itself.
+  An exception that a Python filter, test, global or attribute raises is raised as itself, except
+  a `StopIteration`: a call in the template makes it undefined (Jinja2's `Context.call`), and out of
+  a filter, test or `finalize` it ends `render`, `generate`, `stream` and `module` as
+  `RuntimeError: generator raised StopIteration` with the `StopIteration` as its cause, as Jinja2's
+  generator render does (PEP 479, 0477). Out of a macro the template calls Jinja2 gives undefined
+  and the module the `RuntimeError` (0479).
 - `pass_context`, `pass_eval_context` and `pass_environment` (`jinja2cpp.pass_context`, also in
   `jinja2cpp.utils`; a function marked by Jinja2's own decorators works too, the marker
   `jinja_pass_arg` is read by its name). They apply as in Jinja2 to filters, tests, globals,
@@ -384,9 +393,9 @@ inside the adapters that let the engine read Python objects, not in generated co
   missing, after it finds one of its methods, and at `str.format`. A private name (`__class__`,
   `__init__`, `_x`) on one is asked of `is_safe_attribute` with a stand-in object of the Python
   type and is refused with the same undefined; so is a public name when the subclass's
-  `is_safe_attribute` is not Jinja2's. `format_map` of a string (which the module
-  answers from `NativeAttribute`, ahead of the engine's own, 0466) and `str.format` are
-  Python's, run through `SandboxedFormatter`. `ImmutableSandboxedEnvironment`
+  `is_safe_attribute` is not Jinja2's. `str.format` and `str.format_map` of the engine's
+  strings are its own methods, which ask the policy's `Format`: Python's, run through
+  `SandboxedFormatter` (0466). `ImmutableSandboxedEnvironment`
   also refuses the methods of the engine's lists and dicts that change them (`append`, `update`,
   ...) with Jinja2's message and `ErrorCode::SecurityError` (`Dialect::ImmutableSandbox`, the read-only containers of the
   transformers preset).
@@ -436,10 +445,10 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   literals (0403).
 - `urlencode` reads any mapping as a dict; Jinja2 does so only for a `dict` and iterates
   another `Mapping`, which gives its keys (0404).
-- A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, but
-  `get_template` makes a new `Template` with the dict of that moment, and an imported template
-  sees the importer's: after `env.globals = {...}` Jinja2's cached templates still see the old
-  dict (0405).
+- A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, and so does
+  the one `get_template` gives from its cache (0433), but an imported template sees the importer's
+  dict: after `env.globals = {...}` Jinja2's imports of a cached template still see the old one
+  (0405).
 - An environment keeps every filter, test, `finalize`, `autoescape` callable and loader it was
   ever given alive for as long as it lives, because a template loaded earlier may still call
   one: replacing `env.filters` entries in a loop grows the environment (0406).

@@ -55,14 +55,9 @@ test_lexnparse.py::TestLexer::test_lineno_with_strip                            
 test_lexnparse.py::TestLexer::test_operators                                           internals   jinja2.lexer.operators
 test_lexnparse.py::TestSyntax::test_neg_filter_priority                                internals   Environment.parse node types
 test_lexnparse.py::TestTokenStream                                                     internals   jinja2.lexer.TokenStream
-test_loader.py::TestFileSystemLoader::test_caches_template_based_on_mtime              divergence  0433 get_template returns the cached Template object
-test_loader.py::TestLoaders::test_caching                                              divergence  0433 get_template returns the cached Template object
-test_loader.py::TestLoaders::test_limited_size_cache                                   divergence  0433 get_template returns the cached Template object
 test_loader.py::TestModuleLoader                                                       unsupported ModuleLoader and compile_templates (compiled Python modules)
 test_nativetypes.py                                                                    unsupported NativeEnvironment
 test_pickle.py::test_environment                                                       unsupported pickling an Environment
-test_regression.py::TestBug::test_cached_extends[extends]                              divergence  0433 template globals given to get_template overlay the included template's
-test_regression.py::TestBug::test_cached_extends[include]                              divergence  0433 template globals given to get_template overlay the included template's
 test_regression.py::TestBug::test_custom_context                                       unsupported a custom context_class
 test_regression.py::TestBug::test_grouper_repr                                         internals   jinja2.filters._GroupTuple
 test_runtime.py                                                                        internals   jinja2.runtime.LoopContext built by hand

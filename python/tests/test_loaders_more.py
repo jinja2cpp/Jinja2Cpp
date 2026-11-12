@@ -247,3 +247,55 @@ def test_jinja2_package_loader_in_our_environment(package_dir):
     env = jinja2cpp.Environment(loader=jinja2.ChoiceLoader([jinja2.DictLoader({"own": "{% include 'inc.html' %}"}), jinja2.PackageLoader(package_dir.name)]))
     assert env.get_template("own").render() == "[inc]"
     assert env.get_template("page.html").render(x=1) == "index 1"
+
+
+# --- The get_template cache (0433) ------------------------------------------------------------------------------
+
+
+def cache_trace(module):
+    """What Jinja2's Environment._load_template answers for a sequence of loads, as identities and renders."""
+    mapping = {"a": "{{ x }}{{ y }}", "b": "B", "c": "C", "inc": "{% include 'a' %}"}
+    loader = module.DictLoader(mapping)
+    env = module.Environment(loader=loader, cache_size=2)
+    env.globals.update(x="x", y="y")
+    out = []
+    first = env.get_template("a")
+    out.append(first is env.get_template("a"))
+    out.append(env.get_template("a", globals={"x": 1}).render())  # a hit updates the cached template's globals
+    out.append(first.render())  # the same object
+    out.append(env.get_template("inc", globals={"y": 2}).render())  # the includer's globals reach the include
+    out.append(env.get_template("a").render())  # the include did not change a's
+    env.get_template("b")
+    env.get_template("c")  # past the size: "a", the least recently used, is dropped
+    out.append(first is env.get_template("a"))
+    out.append(sorted(key[1] for key in env.cache.keys()))
+    mapping["b"] = "B2"  # DictLoader's uptodate: a changed source is a new template
+    out.append(env.get_template("b").render())
+    env.globals = {"x": "new"}  # a cached template keeps the dict it was made with (0405)
+    out.append(env.get_template("c").render() + env.get_template("b").globals.get("x", "-"))
+    env.loader = module.DictLoader({"a": "other"})  # keyed by the loader: another one's templates are not its
+    out.append(env.get_template("a").render())
+    return out
+
+
+def test_get_template_cache_matches_jinja2():
+    assert cache_trace(jinja2cpp) == cache_trace(jinja2)
+
+
+@pytest.mark.parametrize("size", [0, -1, 1])
+def test_get_template_cache_sizes(size):
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({"a": "A", "b": "B"}), cache_size=size)
+        first = env.get_template("a")
+        env.get_template("b")
+        assert (first is env.get_template("a")) == (size < 0), module
+        assert (env.cache is None) == (size == 0), module
+
+
+def test_get_template_cache_with_auto_reload_off():
+    for module in (jinja2cpp, jinja2):
+        mapping = {"a": "A"}
+        env = module.Environment(loader=module.DictLoader(mapping), auto_reload=False)
+        first = env.get_template("a")
+        mapping["a"] = "changed"
+        assert env.get_template("a") is first and first.render() == "A", module

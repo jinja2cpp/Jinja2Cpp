@@ -365,13 +365,32 @@ def test_stop_iteration_from_a_call_is_undefined():
     for module in (jinja2cpp, jinja2):
         with pytest.raises(module.UndefinedError):
             module.Environment().from_string("{{ f().x }}").render(f=stop)
-    # A filter is not called through Context.call: the render fails (Jinja2 raises RuntimeError, as its render is a
-    # generator: docs/tasks/0477)
+    # A filter, test or finalize is not called through Context.call: the render fails with the RuntimeError Python
+    # makes of a StopIteration out of a generator, which Jinja2's render is (PEP 479, docs/tasks/0477)
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(finalize=lambda value: stop() if value == "f" else value)
+        env.filters["stop"] = lambda value: stop()
+        env.tests["stop"] = lambda value: stop()
+        env.globals["f"] = stop
+        sources = ["{{ 1|stop }}", "{{ 1 is stop }}", "{{ 'f' }}", "{% for x in [1]|stop %}{% endfor %}"]
+        for source in sources:
+            template = env.from_string(source)
+            calls = (template.render, lambda: list(template.generate()), lambda: template.module, lambda: list(template.stream()))
+            for call in calls:
+                with pytest.raises(RuntimeError, match="^generator raised StopIteration$") as raised:
+                    call()
+                assert isinstance(raised.value.__cause__, StopIteration), source
+    # A macro the template calls goes through Context.call too, so Jinja2 gives undefined; the engine's macro
+    # call does not stop the StopIteration (docs/tasks/0479)
     for module in (jinja2cpp, jinja2):
         env = module.Environment()
         env.filters["stop"] = lambda value: stop()
-        with pytest.raises((StopIteration, RuntimeError)):
-            env.from_string("{{ 1|stop }}").render()
+        template = env.from_string("{% macro m() %}{{ 1|stop }}{% endmacro %}[{{ m() }}]")
+        if module is jinja2:
+            assert template.render() == "[]"
+        else:
+            with pytest.raises(RuntimeError, match="^generator raised StopIteration$"):
+                template.render()
 
 
 class IntOnly:

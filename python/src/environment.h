@@ -52,7 +52,9 @@ public:
     // The template of a source or of a loader's name, an instance of `templateClass` (Jinja2's
     // Environment.template_class: a subclass of Template)
     nb::object FromString(nb::handle source, nb::handle globals, nb::handle templateClass);
-    nb::object LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass);
+    // `cached`, the template an earlier load of `name` gave (Environment.cache), is given again while the engine
+    // has the same template cached: not reloaded, its source not changed (0433)
+    nb::object LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass, nb::handle cached);
     // A source a loader gave, with its name and filename (BaseLoader.load)
     nb::object Compile(nb::handle source, nb::handle name, nb::handle filename, nb::handle globals, nb::handle templateClass);
     // The engine's template of a source named `name` in its errors

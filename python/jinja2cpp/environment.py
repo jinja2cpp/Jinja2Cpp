@@ -6,7 +6,10 @@ of an environment are its ``template_class``. Ported from Jinja2 3.1.6 (BSD-3-Cl
 Projects) where the code is Jinja2's: the stream, select_template and list_templates.
 """
 
+import threading
 import typing as t
+import weakref
+from collections import OrderedDict
 from functools import partial
 from itertools import chain
 
@@ -423,6 +426,65 @@ def _forwarded(name: str) -> property:
     return property(fget, fset, doc=f"Environment.{name}")
 
 
+class _LRUCache:
+    """Jinja2's ``Environment.cache`` of a ``cache_size`` above 0: the templates ``get_template`` gave by
+    ``(weakref.ref(loader), name)``, the least recently used one dropped past the size (jinja2.utils.LRUCache)."""
+
+    def __init__(self, capacity: int) -> None:
+        self.capacity = capacity
+        self._mapping: "OrderedDict[t.Any, t.Any]" = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key: t.Any, default: t.Any = None) -> t.Any:
+        with self._lock:
+            value = self._mapping.get(key, default)
+            if key in self._mapping:
+                self._mapping.move_to_end(key)
+            return value
+
+    def __setitem__(self, key: t.Any, value: t.Any) -> None:
+        with self._lock:
+            self._mapping[key] = value
+            self._mapping.move_to_end(key)
+            while len(self._mapping) > self.capacity:
+                self._mapping.popitem(last=False)
+
+    def __getitem__(self, key: t.Any) -> t.Any:
+        with self._lock:
+            value = self._mapping[key]
+            self._mapping.move_to_end(key)
+            return value
+
+    def __delitem__(self, key: t.Any) -> None:
+        with self._lock:
+            del self._mapping[key]
+
+    def __contains__(self, key: t.Any) -> bool:
+        return key in self._mapping
+
+    def __len__(self) -> int:
+        return len(self._mapping)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._mapping.clear()
+
+    def keys(self) -> t.List[t.Any]:
+        return list(reversed(self._mapping))
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self._mapping!r}>"
+
+
+def _create_cache(size: int) -> t.Any:
+    """Jinja2's create_cache: none for 0, a dict for a negative size, an LRU cache otherwise."""
+    if size == 0:
+        return None
+    if size < 0:
+        return {}
+    return _LRUCache(size)
+
+
 def _default_policies() -> t.Dict[str, t.Any]:
     policies = dict(fallback.DEFAULT_POLICIES)
     policies["json.dumps_kwargs"] = dict(policies["json.dumps_kwargs"])
@@ -457,6 +519,8 @@ class Environment(_jinja2cpp.Environment):
         reason = fallback.options_reason(type(self), kwargs)
         if reason is None:
             super().__init__(**kwargs)
+            # The templates get_template gave, given again while the engine's cache has them unchanged (0433)
+            self.__dict__["cache"] = _create_cache(self.cache_size)
             fallback._count("environments_native")
             return
         # Tier B: real Jinja2 is the environment
@@ -569,12 +633,26 @@ class Environment(_jinja2cpp.Environment):
     def _load_template(self, name: t.Any, globals: t.Optional[t.Mapping[str, t.Any]]) -> Template:
         if self._uses_jinja2() and isinstance(name, str):
             return self._from_jinja2(lambda j: j.get_template(name, None, globals))  # type: ignore[no-any-return]
+        # Jinja2's Environment._load_template: the template an earlier call gave while it is cached and up to date
+        # (the engine's cache decides: the same compiled template), its globals updated with the call's
+        cache = self.__dict__.get("cache")
+        key = None
+        cached = None
+        if cache is not None and isinstance(name, str) and self.loader is not None:
+            key = (weakref.ref(self.loader), name)
+            cached = cache.get(key)
         try:
-            template = self._load(name, globals, self.template_class)
+            template = self._load(name, globals, self.template_class, cached)
         except TemplateSyntaxError as error:
             if not isinstance(name, str):
                 raise
             return fallback.load_fallback(self, error, lambda j: j.get_template(name, None, globals))  # type: ignore[no-any-return]
+        if template is cached and cached is not None:
+            if globals:
+                template.globals.update(globals)
+            return template  # type: ignore[no-any-return]
+        if key is not None:
+            cache[key] = template
         fallback._count("loads_native")
         if isinstance(name, str):
             fallback.remember(template, name=name)

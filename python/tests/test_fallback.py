@@ -459,11 +459,11 @@ def test_stats_count_native_and_fallback():
     env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"a": "{{ 1 }}"}))
     env.from_string("{{ 1 }}").render()
     env.get_template("a").render()
-    env.get_template("a").render()
-    assert jinja2cpp.stats() == {"environments_native": 1, "environments_fallback": 0, "loads_native": 3, "loads_fallback": 0, "renders_native": 3, "renders_fallback": 0}
+    env.get_template("a").render()  # the cached template (0433): not loaded again
+    assert jinja2cpp.stats() == {"environments_native": 1, "environments_fallback": 0, "loads_native": 2, "loads_fallback": 0, "renders_native": 3, "renders_fallback": 0}
     jinja2cpp.Environment(enable_async=True).from_string("x").render()
     env.from_string(UNPARSABLE).render()
-    assert jinja2cpp.stats() == {"environments_native": 1, "environments_fallback": 1, "loads_native": 3, "loads_fallback": 2, "renders_native": 3, "renders_fallback": 2}
+    assert jinja2cpp.stats() == {"environments_native": 1, "environments_fallback": 1, "loads_native": 2, "loads_fallback": 2, "renders_native": 3, "renders_fallback": 2}
     snapshot = jinja2cpp.stats(reset=True)
     assert snapshot["renders_fallback"] == 2
     assert all(v == 0 for v in jinja2cpp.stats().values())
