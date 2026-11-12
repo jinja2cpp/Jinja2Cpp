@@ -5,6 +5,7 @@
 #include "engine_errors.h"
 
 #include <jinja2cpp/big_int_backend.h>
+#include <jinja2cpp/config.h>
 #include <jinja2cpp/template_env.h>
 
 #include <algorithm>
