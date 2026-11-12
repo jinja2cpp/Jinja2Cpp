@@ -180,4 +180,5 @@ CASES = [
     ('range_times_str', "{{ range(3) * 'a' }}"),
     ('str_times_range', "{{ 'a' * range(3) }}"),
     ('list_times_float', "{{ [1] * 1.5 }}"),
+    ('format_field_range_attribute_item', "{{ '{0[start]}'.format(range(3)) }}"),
 ]

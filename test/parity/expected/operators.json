@@ -3905,6 +3905,32 @@
     "type": "TypeError",
     "message": "can't multiply sequence by non-int of type 'float'"
    }
+  },
+  {
+   "id": "operators.format_field_range_attribute_item",
+   "template": "{{ '{0[start]}'.format(range(3)) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "range indices must be integers or slices, not str"
+   }
   }
  ]
 }
