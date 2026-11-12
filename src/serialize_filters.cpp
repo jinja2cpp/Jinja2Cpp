@@ -106,11 +106,9 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     // A value as pprint prints it: Markup as Markup('...')
     static std::string Print(const InternalValue& val, const RenderContext* context)
     {
-        if (auto items = HostSequence(val))
-        {
-            return Apply<PrettyPrinter>(InternalValue(std::move(*items)), context);
-        }
-        auto text = Apply<PrettyPrinter>(val, context);
+        // One Apply call: a second one here moved the inlining of this file's tojson writer (+1% on chat renders)
+        const auto hostList = host::ExactListOrTupleValue(val);
+        auto text = Apply<PrettyPrinter>(hostList ? *hostList : val, context);
         return val.IsMarkup() && IsStringValue(val) ? "Markup(" + text + ")" : text;
     }
 
@@ -208,28 +206,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     // _format: indent is the column the value starts at, allowance the columns the text
     // after it on its last line takes, level its nesting (1 for the value pformat prints)
-    // A host's list or tuple as the engine's list of what iterating it gives, which pprint prints and breaks as a list
-    // of the engine, as pformat does. Only an exact `list` or `tuple`: a subclass may have a __repr__ of its own (a
-    // namedtuple, or one that hides its items), which the engine cannot see, so it prints as its Repr on one line
-    // (docs/tasks/0453)
-    static std::optional<ListAdapter> HostSequence(const InternalValue& val)
-    {
-        const auto* host = GetHostObject(val);
-        if (!host)
-        {
-            return std::nullopt;
-        }
-        if (!host->IsSequence() || std::strcmp(host->TypeName(), host->IsTuple() ? "tuple" : "list") != 0)
-        {
-            return std::nullopt;
-        }
-        auto items = host->Iterate();
-        if (items && host->IsTuple())
-        {
-            items->MarkAsTuple();
-        }
-        return items;
-    }
+    // A host's exact list or tuple, which pprint prints and breaks as a list of the engine, as pformat does
+    static std::optional<ListAdapter> HostSequence(const InternalValue& val) { return host::ExactListOrTuple(val); }
 
     // The list val is, or the one HostSequence gives, which `hostItems` holds
     static std::optional<ListRef> ListOf(const InternalValue& val, std::optional<ListAdapter>& hostItems)

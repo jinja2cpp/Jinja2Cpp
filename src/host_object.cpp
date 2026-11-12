@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -272,6 +273,33 @@ bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const 
     }
     // Python's default __eq__: the same object
     return left != nullptr && right != nullptr && left->Identity() == right->Identity();
+}
+std::optional<ListAdapter> ExactListOrTuple(const InternalValue& value)
+{
+    const auto* host = GetHostObject(value);
+    if (!host)
+    {
+        return std::nullopt;
+    }
+    if (!host->IsSequence() || std::strcmp(host->TypeName(), host->IsTuple() ? "tuple" : "list") != 0)
+    {
+        return std::nullopt;
+    }
+    auto items = host->Iterate();
+    if (items && host->IsTuple())
+    {
+        items->MarkAsTuple();
+    }
+    return items;
+}
+std::optional<InternalValue> ExactListOrTupleValue(const InternalValue& value)
+{
+    auto items = ExactListOrTuple(value);
+    if (!items)
+    {
+        return std::nullopt;
+    }
+    return InternalValue(std::move(*items));
 }
 } // namespace host
 

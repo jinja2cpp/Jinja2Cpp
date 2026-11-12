@@ -255,6 +255,21 @@ std::optional<InternalValue> UndefinedField(const UndefinedInfo& info, std::stri
     return std::nullopt;
 }
 
+InternalValue UndefinedAttribute(const InternalValue& undefined, const UndefinedInfo& info, const std::string* attrName, const RenderContext& context)
+{
+    // The sandbox refuses a name that starts with an underscore; the first-character test keeps the common miss
+    // (message.tool_calls) to one compare
+    if (attrName && !attrName->empty() && attrName->front() == '_' && !context.GetSandboxPolicy())
+    {
+        if (auto field = UndefinedField(info, *attrName))
+        {
+            return std::move(*field);
+        }
+    }
+    CheckUndefinedUse(undefined, UndefinedUse::Attribute);
+    return undefined;
+}
+
 const char* UndefinedClassName(const UndefinedInfo& info)
 {
     switch (info.policy)

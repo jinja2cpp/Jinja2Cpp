@@ -169,6 +169,11 @@ inline bool IsMarkupLike(const InternalValue& value)
     const auto* object = GetHostObject(value);
     return object != nullptr && object->IsMarkupLike();
 }
+// An exact host `list` or `tuple` as the engine's list of what iterating it gives (a tuple marked so), for pprint;
+// nullopt for any other value, a subclass among them, whose own __repr__ the engine cannot see (docs/tasks/0453)
+std::optional<ListAdapter> ExactListOrTuple(const InternalValue& value);
+// The same as a value
+std::optional<InternalValue> ExactListOrTupleValue(const InternalValue& value);
 // x(...) of a host object as a callable value of the engine, which keeps the object alive;
 // throws Python's TypeError for an object that is not callable
 Callable MakeCall(const InternalValue& object, const IEngineHostObject& host);

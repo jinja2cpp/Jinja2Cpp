@@ -399,18 +399,8 @@ InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const I
 {
     if (const auto* info = GetUndefinedInfo(cur))
     {
-        // Jinja2's Undefined has these as fields, which getattr finds before __getattr__; the sandbox refuses a
-        // name that starts with an underscore. The first-character test keeps the common miss (message.tool_calls)
-        // to one compare
-        if (idx.isAttr && !idx.attrName.empty() && idx.attrName.front() == '_' && !values.GetSandboxPolicy())
-        {
-            if (auto field = UndefinedField(*info, idx.attrName))
-            {
-                return std::move(*field);
-            }
-        }
-        CheckUndefinedUse(cur, UndefinedUse::Attribute);
-        return cur;
+        // Jinja2's Undefined has fields, which getattr finds before __getattr__
+        return UndefinedAttribute(cur, *info, idx.isAttr ? &idx.attrName : nullptr, values);
     }
     return LookupDefinedIndex(cur, idx, key, values);
 }
