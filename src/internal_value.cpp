@@ -1337,6 +1337,9 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
     return Value2IntValue(std::move(item));
 }
 
+// Whether the host's callable that runs keeps undefined values (defined with OutputValueConvertor)
+extern thread_local bool t_keepUndefinedExport;
+
 namespace
 {
 // What the host reads of the host's data the render hands it: a read-only view of the list or
@@ -1543,6 +1546,13 @@ public:
         const auto* view = dynamic_cast<const CallListView*>(&other);
         return view != nullptr && view->Items() == Items();
     }
+    // A tuple the template made stays one (GenericList::IsTuple): a keepUndefined callable gets
+    // a dictsort pair as a 2-tuple (docs/tasks/0347)
+    [[nodiscard]] bool IsTuple() const override
+    {
+        const auto list = m_identity ? std::nullopt : AsList(m_container);
+        return list && list->IsTuple();
+    }
 
 private:
     [[nodiscard]] const InternalValueList* Items() const
@@ -1631,6 +1641,13 @@ public:
         const auto* view = dynamic_cast<const CallMapView*>(&other);
         return view != nullptr && view->Dict() == Dict();
     }
+    // A namespace stays one to the host (GenericMap::GetObjectClass, docs/tasks/0347)
+    [[nodiscard]] const char* GetObjectClass() const override
+    {
+        const auto map = m_identity ? std::nullopt : AsMap(m_container);
+        const auto* accessor = map ? map->GetAccessor() : nullptr;
+        return accessor ? accessor->GetObjectClass() : nullptr;
+    }
 
 private:
     [[nodiscard]] const TemplateDict* Dict() const
@@ -1709,6 +1726,16 @@ Value CallExportItem(const CallExports& exports, const InternalValue& item)
         {
             exported = CallExportMap(exports, accessor, item);
         }
+    }
+    else if (const auto* pair = GetIf<KeyValuePair>(&item))
+    {
+        // A dictsort or items() pair: its key and value are the module's data too (docs/tasks/0347),
+        // spelled as IntValue2Value spells a pair
+        if (t_keepUndefinedExport)
+        {
+            return CallExportItem(exports, InternalValue(visitors::PairAsTuple(*pair)));
+        }
+        return ValuesMap{ { "key", CallExportItem(exports, pair->key) }, { "value", CallExportItem(exports, pair->value) } };
     }
     return exported ? std::move(*exported) : IntValue2Value(item);
 }
@@ -3462,6 +3489,12 @@ public:
         {
             return std::move(*snapshot);
         }
+        // Its members that are the module's data read what the call left them, as a dict's do
+        // (docs/tasks/0347)
+        if (auto* call = RunningModuleCall())
+        {
+            return ExportCallMap(*call, nullptr, InternalValue(MapAdapter(MakeRef<NamespaceAdapter>(*this))));
+        }
         return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
     }
 };
@@ -4593,14 +4626,20 @@ struct LendFrame
 
 thread_local const LendFrame* t_lendFrame = nullptr;
 
+// The read runs in the render that lent the container (docs/tasks/0407): its collector is the
+// current one while the call runs, none once it ended. A template module's macro the host calls
+// with the container, which reads it, does not take the render's data for the module's own: an
+// export of the module's call would hold the render's list, and the module's copy of the
+// container holding that export would hold the call's exports, which hold the copy
 class LendFrameScope
 {
 public:
     explicit LendFrameScope(const LendFrame& frame)
         : m_saved(t_lendFrame)
+        , m_frame(IsCurrent(frame) ? &frame : nullptr)
+        , m_collector(m_frame ? frame.lease->collector : nullptr)
     {
-        // The thread first: another thread must not read isActive
-        t_lendFrame = frame.lease->thread == std::this_thread::get_id() && frame.lease->isActive ? &frame : nullptr;
+        t_lendFrame = m_frame;
     }
     LendFrameScope(const LendFrameScope&) = delete;
     LendFrameScope(LendFrameScope&&) = delete;
@@ -4609,7 +4648,12 @@ public:
     ~LendFrameScope() { t_lendFrame = m_saved; }
 
 private:
+    // The thread first: another thread must not read isActive
+    static bool IsCurrent(const LendFrame& frame) noexcept { return frame.lease->thread == std::this_thread::get_id() && frame.lease->isActive; }
+
     const LendFrame* m_saved;
+    const LendFrame* m_frame;
+    CycleCollector::Reentry m_collector;
 };
 
 // `exported`, wrapped when it may hold template callables

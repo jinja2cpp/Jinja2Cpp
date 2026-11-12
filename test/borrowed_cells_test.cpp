@@ -5,6 +5,7 @@
 
 #include "../src/borrowed_cells.h"
 
+#include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
@@ -793,38 +794,132 @@ TEST(BorrowedCellsKept, ModuleKeptValueSeesTheCallsLaterWrites)
     EXPECT_EQ("[0, 1, 10]", m.module.exports["add"].As<UserCallable>().callable(callParams).AsString());
 }
 
+TEST(BorrowedCellsKept, ModuleCellInsideALazyValue)
+{
+    // 0347: a value whose items are made on demand shows the call's final state too, whichever
+    // later call of the module writes `l`. A dictsort pair and a namespace member read the
+    // module's list by identity, as a dict's item does. A generator (select, map, batch) is walked
+    // when the host gets it, on the call's thread: the items it made then are its values, and a
+    // list among them is the module's data, read as the call left it
+    struct Row
+    {
+        const char* kept;
+        const char* expected;
+    };
+    const Row rows[] = {
+        { "{'k': l}|dictsort", "[{'key': 'k', 'value': [0, 1, 10]}]" },
+        { "{'k': l}.items()", "[['k', [0, 1, 10]]]" },
+        { "namespace(x=l)", "{'x': [0, 1, 10]}" },
+        { "[namespace(x=l)]", "[{'x': [0, 1, 10]}]" },
+        { "l|map('string')", "['0', '1']" },
+        { "l|select", "[1]" },
+        { "l|batch(2)", "[[0, 1]]" },
+        { "[l]|select", "[[0, 1, 10]]" },
+        { "[l, l]|batch(1)", "[[[0, 1, 10]], [[0, 1, 10]]]" },
+        { "('k', l)", "['k', [0, 1, 10]]" },
+        { "[{'k': l}|dictsort]", "[[{'key': 'k', 'value': [0, 1, 10]}]]" },
+        { "{'s': [l]|select}", "{'s': [[0, 1, 10]]}" },
+    };
+    for (const auto& row : rows)
+    {
+        SCOPED_TRACE(row.kept);
+        KeepingModule m(std::string("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(") + row.kept + ") %}{% set _ = l.append(x * 10) %}{% endmacro %}");
+        m.Call(1);
+        m.Call(2);
+        EXPECT_EQ(row.expected, m.keeper.Show(0));
+        // The second call's value is that call's
+        EXPECT_NE(m.keeper.Show(0), m.keeper.Show(1));
+    }
+}
+
+TEST(BorrowedCellsKept, ModuleTupleToAKeepUndefinedCallable)
+{
+    // 0347: a callable that keeps undefined values gets a dictsort or items() pair, and a tuple,
+    // as a 2-tuple from a module's call too (UserCallable::keepUndefined)
+    std::string seen;
+    UserCallable probe(
+        [&seen](const UserCallableParams& p) {
+            const Value value = p["v"];
+            const auto& list = value.As<GenericList>();
+            seen += list.IsTuple() ? "tuple;" : "list;";
+            for (const auto& item : list)
+            {
+                const auto* inner = item.GetIf<GenericList>();
+                seen += inner && inner->IsTuple() ? "tuple;" : "other;";
+            }
+            return Value();
+        },
+        { ArgInfo{ "v" } });
+    probe.keepUndefined = true;
+    ValuesMap params{ { "l", ValuesList{ 0 } }, { "probe", probe } };
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add() %}{% set _ = l.append(1) %}{% set _ = probe({'k': l}|dictsort) %}{% set _ = probe({'k': l}.items()) %}"
+                           "{% set _ = probe([('k', l)]) %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    module.exports["add"].As<UserCallable>().callable(UserCallableParams{});
+    EXPECT_EQ("list;tuple;list;tuple;list;tuple;", seen);
+}
+
+TEST(BorrowedCellsKept, ModuleNamespaceStaysANamespace)
+{
+    // 0347 (Codex on #836): a namespace a module call hands out keeps its class, which the Python
+    // module turns into a namespace object rather than a dict
+    KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(namespace(x=l)) %}{% set _ = keep({'x': l}) %}{% endmacro %}");
+    m.Call(1);
+    const auto& ns = m.keeper.kept.at(0).As<GenericMap>();
+    ASSERT_NE(nullptr, ns.GetObjectClass());
+    EXPECT_STREQ("Namespace", ns.GetObjectClass());
+    EXPECT_EQ(nullptr, m.keeper.kept.at(1).As<GenericMap>().GetObjectClass());
+}
+
 TEST(BorrowedCellsKept, ModuleCellInsideAKeptListReadFromThreads)
 {
     // 0332, TSan: two threads call the module, which writes `l` in every call, while a third reads
-    // the list the first call handed out
-    KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep([l]) %}{% endmacro %}");
-    m.Call(1);
-    const Value first = m.keeper.kept.at(0);
-    std::vector<std::thread> threads;
-    threads.reserve(3);
-    for (int t = 0; t != 2; ++t)
+    // the value the first call handed out. 0347: also through a dictsort pair, a namespace member
+    // and a generator's item
+    struct Row
     {
-        threads.emplace_back([&m]() {
+        const char* kept;
+        const char* expected;
+    };
+    const Row rows[] = {
+        { "[l]", "[[0, 1]]" },
+        { "{'k': l}|dictsort", "[{'key': 'k', 'value': [0, 1]}]" },
+        { "namespace(x=l)", "{'x': [0, 1]}" },
+        { "[l]|select", "[[0, 1]]" },
+    };
+    for (const auto& row : rows)
+    {
+        SCOPED_TRACE(row.kept);
+        KeepingModule m(std::string("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(") + row.kept + ") %}{% endmacro %}");
+        m.Call(1);
+        const Value first = m.keeper.kept.at(0);
+        std::vector<std::thread> threads;
+        threads.reserve(3);
+        for (int t = 0; t != 2; ++t)
+        {
+            threads.emplace_back([&m]() {
+                for (int i = 0; i != 50; ++i)
+                {
+                    UserCallableParams callParams;
+                    callParams.extraPosArgs = ValuesList{ int64_t{ 2 } };
+                    m.module.exports.at("add").As<UserCallable>().callable(callParams);
+                }
+            });
+        }
+        std::string seen;
+        threads.emplace_back([&first, &seen]() {
             for (int i = 0; i != 50; ++i)
             {
-                UserCallableParams callParams;
-                callParams.extraPosArgs = ValuesList{ int64_t{ 2 } };
-                m.module.exports.at("add").As<UserCallable>().callable(callParams);
+                seen = Render("{{ k }}", ValuesMap{ { "k", first } });
             }
         });
-    }
-    std::string seen;
-    threads.emplace_back([&first, &seen]() {
-        for (int i = 0; i != 50; ++i)
+        for (auto& thread : threads)
         {
-            seen = Render("{{ k }}", ValuesMap{ { "k", first } });
+            thread.join();
         }
-    });
-    for (auto& thread : threads)
-    {
-        thread.join();
+        EXPECT_EQ(row.expected, seen);
     }
-    EXPECT_EQ("[[0, 1]]", seen);
 }
 
 TEST(BorrowedCellsKept, KeptListDroppedOnAnotherThreadWhileTheRenderRuns)
