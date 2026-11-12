@@ -207,15 +207,18 @@ void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from,
     }
     if (const auto fold = m_nodes[node].PrepareFold(m_nodes); fold != 0)
     {
-        m_foldCandidates.push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output });
+        m_unknown.FoldCandidates().push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output });
     }
 }
 
 nonstd::expected<void, ParseError> ExpressionParser::FinishFoldRoot(const Token& tok)
 {
     FoldCheck check;
-    check.candidates = std::move(m_foldCandidates);
-    m_foldCandidates.clear();
+    auto& candidates = m_unknown.FoldCandidates();
+    // Only this root's: a failed parse may have left others, and fails the Load anyway
+    candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [this](const FoldCandidate& candidate) { return candidate.from < m_foldRootFrom; }), candidates.end());
+    check.candidates = std::move(candidates);
+    candidates.clear();
     check.from = m_foldRootFrom;
     check.to = m_tupleSliceSubscripts;
     for (unsigned subscript = check.from; subscript != check.to; ++subscript)
@@ -780,7 +783,7 @@ namespace
 // appends each `.name` that follows to `name`. A name after the dot may be any of Jinja2's names,
 // `true` and `none` among them. `nameTok` is widened to the whole name, which an unknown name's
 // error quotes
-nonstd::expected<void, ParseError> ReadDottedName(LexScanner& lexer, std::string& name, Token& nameTok)
+nonstd::expected<void, ParseError> ReadDottedName(LexScanner& lexer, std::string& name, std::size_t& nameEnd)
 {
     while (lexer.EatIfEqual('.'))
     {
@@ -791,7 +794,7 @@ nonstd::expected<void, ParseError> ReadDottedName(LexScanner& lexer, std::string
         }
         name += '.';
         name += lexer.GetAsString(tok);
-        nameTok.range.endOffset = tok.range.endOffset;
+        nameEnd = tok.range.endOffset;
     }
     return {};
 }
@@ -869,7 +872,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     {
         return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
     }
-    if (auto dotted = ReadDottedName(lexer, name, nameTok); !dotted)
+    if (auto dotted = ReadDottedName(lexer, name, nameTok.range.endOffset); !dotted)
     {
         return MakeUnexpected(dotted.error());
     }
@@ -1522,14 +1525,15 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
     {
         do
         {
-            Token tok = lexer.NextToken();
+            const auto& tok = lexer.NextToken();
             if (tok != Token::Identifier)
             {
                 return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
             }
 
             std::string name = lexer.GetAsString(tok);
-            if (auto dotted = ReadDottedName(lexer, name, tok); !dotted)
+            auto nameEnd = tok.range.endOffset;
+            if (auto dotted = ReadDottedName(lexer, name, nameEnd); !dotted)
             {
                 return MakeUnexpected(dotted.error());
             }
@@ -1560,7 +1564,10 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             }
             if (unknown)
             {
-                m_unknown.Add(tok, false);
+                // Quoting the whole dotted name
+                auto nameTok = tok;
+                nameTok.range.endOffset = nameEnd;
+                m_unknown.Add(nameTok, false);
                 if (m_names.ReadsOpen())
                 {
                     m_names.AddReadOfName(name);

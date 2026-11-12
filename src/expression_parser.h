@@ -145,10 +145,13 @@ public:
     // left to check after the parse, as the names are
     void AddFoldCheck(FoldCheck check) { m_foldChecks.push_back(std::move(check)); }
     [[nodiscard]] const std::vector<FoldCheck>& GetFoldChecks() const { return m_foldChecks; }
+    // Those of the top-level expression being parsed (ExpressionParser::AddFoldCandidate)
+    std::vector<FoldCandidate>& FoldCandidates() { return m_foldCandidates; }
 
 private:
     std::vector<Name> m_names;
     std::vector<FoldCheck> m_foldChecks;
+    std::vector<FoldCandidate> m_foldCandidates;
     // m_names.size(), which every expression reads twice: a load, not a division by sizeof(Name)
     // (docs/tasks/0205)
     std::size_t m_count = 0;
@@ -281,11 +284,11 @@ private:
     // SetOutputExpressions
     bool m_outputExpressions = false;
     // In a top-level expression (Parse, or a statement's ParseFullExpression), which do not
-    // nest: the tuple-slice subscripts it makes start at m_foldRootFrom, and m_foldCandidates
-    // are the expressions in it that may fold them away
+    // nest: the tuple-slice subscripts it makes start at m_foldRootFrom, and the expressions in
+    // it that may fold them away go to UnknownCallables::FoldCandidates, which the parsers of
+    // one template share, so that a parser, made for each tag, owns no list
     bool m_inFoldRoot = false;
     unsigned m_foldRootFrom = 0;
-    std::vector<FoldCandidate> m_foldCandidates;
     // Subscripts by a tuple holding a slice (`[1, 2][1:2, 3]`) made so far: Jinja2 compiles one
     // only where it folds an expression around it, else it writes invalid Python (FoldCheck)
     unsigned m_tupleSliceSubscripts = 0;

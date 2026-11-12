@@ -366,14 +366,22 @@ public:
                 return parseResult.error()[0];
             }
 
-            auto foldErrors = parser.GetFoldCheckErrors();
+            // Rare: only a template with a subscript by a tuple of slices has fold checks
+            std::vector<BasicErrorInfo<CharT>> foldErrors;
+            if (!parser.GetFoldChecks().empty())
+            {
+                foldErrors = parser.GetFoldCheckErrors();
+            }
             parser.ReleaseParseState();
             // Its fields are set once the Load succeeds
             nodes.SetOrigin(&m_origin);
             auto sealed = nodes.Seal(*parseResult);
-            if (auto failed = FailedFold(parser.GetFoldChecks(), sealed.View()); failed < foldErrors.size())
+            if (!foldErrors.empty())
             {
-                return foldErrors[failed];
+                if (auto failed = FailedFold(parser.GetFoldChecks(), sealed.View()); failed < foldErrors.size())
+                {
+                    return foldErrors[failed];
+                }
             }
             auto convertedTexts = parser.TakeConvertedTexts();
             auto metadataInfo = parser.GetMetadataInfo();
