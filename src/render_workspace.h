@@ -101,7 +101,8 @@ public:
     void GlobalsConverted() noexcept { m_globalAttached = false; }
     // The snapshot of the globals a running render reads, linked to the one of the render it
     // runs inside: a render started inside another of the same environment reads that one's
-    // (template_impl.h, docs/tasks/0324)
+    // (template_impl.h, docs/tasks/0324). A suspendable render keeps its own chain (SwapContents):
+    // a render the host runs while it is suspended is not inside it
     struct RunningGlobals
     {
         const GlobalsSnapshot* globals = nullptr;
@@ -197,6 +198,7 @@ private:
         swap(m_maps, other.m_maps);
         swap(m_lentMaps, other.m_lentMaps);
         swap(m_retired, other.m_retired);
+        swap(m_running, other.m_running);
     }
     static std::size_t& RunningRenders() noexcept { return s_renders; }
 
