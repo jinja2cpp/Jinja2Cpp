@@ -497,6 +497,13 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
         const auto* info = GetUndefinedInfo(attrNameVal);
         throw TemplateRuntimeError("attribute name must be string, not '" + (info ? std::string(UndefinedClassName(*info)) : Apply<visitors::PythonTypeNameGetter>(attrNameVal)) + "'");
     }
+    if (const auto* info = GetUndefinedInfo(baseVal); info && !context.GetSandboxPolicy())
+    {
+        if (auto field = UndefinedField(*info, AsString(attrNameVal)))
+        {
+            return std::move(*field);
+        }
+    }
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // A missing attribute is environment.undefined(obj=obj, name=name), which DebugUndefined
     // prints as {{ no such element: str object['f'] }}
@@ -2540,6 +2547,27 @@ InternalValue ValueConverter::ToInt(const InternalValue& baseVal, RenderContext&
             }
         }
     }
+    else if (const auto* host = GetHostObject(baseVal))
+    {
+        // int(x), then int(float(x)); a float that is inf or nan has no int
+        result = host->ToInt();
+        // Only an integer is int(x); any other answer means the host found none, so it is the default
+        const bool answered = result.has_value();
+        if (result && result->Kind() != ValueKind::Int && result->Kind() != ValueKind::BigInt)
+        {
+            result.reset();
+        }
+        if (!answered)
+        {
+            if (auto asFloat = host->ToFloat())
+            {
+                if (const auto* dbl = GetIf<double>(&*asFloat))
+                {
+                    result = FloatToInt(*dbl);
+                }
+            }
+        }
+    }
     if (result)
     {
         return std::move(*result);
@@ -2567,6 +2595,14 @@ InternalValue ValueConverter::ToFloat(const InternalValue& baseVal, RenderContex
         if (auto result = ParsePythonFloat(*str))
         {
             return *result;
+        }
+    }
+    else if (const auto* host = GetHostObject(baseVal))
+    {
+        // Only a float is float(x)
+        if (auto result = host->ToFloat(); result && GetIf<double>(&*result))
+        {
+            return std::move(*result);
         }
     }
     return GetArgumentValue("default", context);

@@ -98,6 +98,7 @@ const PyNames& Names()
         names->reversed = builtins.attr("reversed");
         names->dictType = builtins.attr("dict");
         names->mappingType = nb::module_::import_("collections.abc").attr("Mapping");
+        names->numberType = nb::module_::import_("numbers").attr("Number");
         g_names = names.release();
     }
     return *g_names;

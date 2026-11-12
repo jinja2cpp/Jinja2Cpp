@@ -298,6 +298,18 @@ using TemplateModule = BasicTemplateModule<char>;
 using TemplateModuleW = BasicTemplateModule<wchar_t>;
 
 /*!
+ * \brief The attributes Jinja2's `Macro` has, for a macro a module exports
+ *
+ * Reads a callable of \ref BasicTemplateModule::exports, also one inside an exported list or dict, as Jinja2 reads
+ * `module.foo.arguments`: `name` (a string, or none for the caller of a call block), `arguments` (a \ref ValuesList of
+ * the parameter names), and the booleans `catch_kwargs`, `catch_varargs` and `caller`.
+ *
+ * @param callable A callable of a module's exports
+ * @return The attributes; an empty map for any other callable
+ */
+JINJA2CPP_EXPORT ValuesMap MacroAttributes(const UserCallable& callable);
+
+/*!
  * \brief Template object which is used to render templates
  *
  * The main class for rendering templates, instantiated for `char` (\ref Template) and `wchar_t`

@@ -244,6 +244,21 @@ std::string IHostObject::Html() const
     return Str();
 }
 
+bool IHostObject::IsNumber() const
+{
+    return false;
+}
+
+std::optional<Value> IHostObject::ToInt() const
+{
+    return std::nullopt;
+}
+
+std::optional<Value> IHostObject::ToFloat() const
+{
+    return std::nullopt;
+}
+
 std::vector<std::pair<Value, Value>> IMapItemAccessor::GetItems() const
 {
     std::vector<std::pair<Value, Value>> items;
@@ -462,6 +477,9 @@ public:
     [[nodiscard]] bool IsTuple() const override { return m_object->IsTuple(); }
     [[nodiscard]] bool IsMarkupLike() const override { return m_object->IsMarkupLike(); }
     [[nodiscard]] std::string Html() const override { return m_object->Html(); }
+    [[nodiscard]] bool IsNumber() const override { return m_object->IsNumber(); }
+    [[nodiscard]] std::optional<InternalValue> ToInt() const override { return ToEngine(m_object->ToInt()); }
+    [[nodiscard]] std::optional<InternalValue> ToFloat() const override { return ToEngine(m_object->ToFloat()); }
 
 private:
     [[nodiscard]] ListAdapter ByIndex() const

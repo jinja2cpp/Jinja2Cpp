@@ -2,6 +2,8 @@
 
 import collections
 import dataclasses
+import decimal
+import fractions
 import types
 
 import jinja2
@@ -326,3 +328,106 @@ def test_list_and_tuple_subclasses_iterate_as_python_does(source):
         env = module.Environment()
         results.append(env.from_string(source).render(**_subclass_context()))
     assert results[0] == results[1], f"{source!r}: jinja2cpp {results[0]!r}, Jinja2 {results[1]!r}"
+
+
+class SecretList(list):
+    def __repr__(self):
+        return "<redacted>"
+
+
+# pprint breaks a Python list or tuple as pformat does (0434); a subclass prints as its repr, which may be its own (a
+# namedtuple, one that hides its items). A subclass that keeps list.__repr__ is docs/tasks/0453
+@pytest.mark.parametrize(
+    "value",
+    [
+        list(range(40)),
+        tuple(range(40)),
+        (list(range(40)),),
+        [[1] * 40, {"a": (1,) * 40}],
+        PlainSubList(range(3)),
+        Point(list(range(40)), 1),
+        SecretList(range(40)),
+        [SecretList(["pw"])] * 30,
+        {"k": SecretList(["pw"])},
+        list(range(1000)),
+    ],
+)
+def test_pprint_breaks_python_sequences_as_pformat(value):
+    assert_same("{{ v|pprint }}", {"v": value})
+
+
+# A call that raises StopIteration is undefined, as Jinja2's Context.call makes it (0434)
+def test_stop_iteration_from_a_call_is_undefined():
+    def stop():
+        raise StopIteration
+
+    assert_same("A{{ f() }}B|{{ f() is defined }}", {"f": stop})
+    for module in (jinja2cpp, jinja2):
+        with pytest.raises(module.UndefinedError):
+            module.Environment().from_string("{{ f().x }}").render(f=stop)
+    # A filter is not called through Context.call: the render fails (Jinja2 raises RuntimeError, as its render is a
+    # generator: docs/tasks/0477)
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        env.filters["stop"] = lambda value: stop()
+        with pytest.raises((StopIteration, RuntimeError)):
+            env.from_string("{{ 1|stop }}").render()
+
+
+class IntOnly:
+    def __int__(self):
+        return 42
+
+
+class FloatOnly:
+    def __float__(self):
+        return 3.75
+
+
+class IntAndFloat:
+    def __int__(self):
+        return 7
+
+    def __float__(self):
+        return 2.5
+
+
+class Raises:
+    def __int__(self):
+        raise RuntimeError("no int")
+
+    def __float__(self):
+        raise RuntimeError("no float")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [IntOnly(), FloatOnly(), IntAndFloat(), object(), complex(1, 2), decimal.Decimal("3.9"), decimal.Decimal("NaN"), fractions.Fraction(7, 2), [1], {"a": 1}],
+)
+def test_numbers_of_an_object(value):
+    for source in ("{{ x is number }}", "{{ x|int }}", "{{ x|int(default=7) }}", "{{ x|float }}", "{{ x|float(default=1.5) }}"):
+        assert_same(source, {"x": value})
+
+
+class FloatOverflows:
+    def __int__(self):
+        raise ValueError("no int")
+
+    def __float__(self):
+        raise OverflowError("too large")
+
+
+def test_int_of_an_object_whose_float_overflows():
+    # do_int catches OverflowError around int(float(x)); do_float lets it through
+    for source in ("{{ x|int }}", "{{ x|int(default=7) }}"):
+        assert_same(source, {"x": FloatOverflows()})
+    for module in (jinja2cpp, jinja2):
+        with pytest.raises(OverflowError):
+            module.Environment().from_string("{{ x|float }}").render(x=FloatOverflows())
+
+
+def test_numbers_of_an_object_that_raises():
+    for source in ("{{ x|int }}", "{{ x|float }}"):
+        for module in (jinja2cpp, jinja2):
+            with pytest.raises(RuntimeError, match="no "):
+                module.Environment().from_string(source).render(x=Raises())

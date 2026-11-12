@@ -288,6 +288,18 @@ TEST(ContainersApiTest, GenericListIterator)
         sum += it->As<int64_t>();
     EXPECT_EQ(6, sum);
     EXPECT_EQ(nullptr, GenericList().GetAccessor());
+
+    // An empty list with an accessor starts at its end
+    std::vector<int> none;
+    GenericList empty = MakeGenericList(none.begin(), none.end());
+    EXPECT_TRUE(empty.begin() == empty.end());
+    size_t count = 0;
+    for (const auto& item : empty)
+    {
+        (void)item;
+        ++count;
+    }
+    EXPECT_EQ(0U, count);
 }
 
 TEST(ContainersApiTest, MakeGenericListFromNamedIterators)

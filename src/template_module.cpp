@@ -19,6 +19,8 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
@@ -654,6 +656,49 @@ template<typename CharT>
 Value MakeModuleCall(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& callable, const std::string& name)
 {
     return Value(UserCallable(ModuleCall<CharT>{ state, callable, name }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
+}
+
+namespace
+{
+template<typename CharT>
+const Callable* ModuleMacroOf(const UserCallable& callable)
+{
+    const auto* call = callable.callable.template target<ModuleCall<CharT>>();
+    return call ? GetIf<Callable>(&call->callable) : nullptr;
+}
+} // namespace
+
+ValuesMap MacroAttributes(const UserCallable& callable)
+{
+    const Callable* macro = ModuleMacroOf<char>(callable);
+    if (!macro)
+    {
+        macro = ModuleMacroOf<wchar_t>(callable);
+    }
+    ValuesMap result;
+    if (!macro || !macro->GetAttributes())
+    {
+        return result;
+    }
+    for (const auto& [name, value] : *macro->GetAttributes())
+    {
+        auto converted = IntValue2Value(value);
+        if (name == "arguments")
+        {
+            // A tuple of names, as a list of values
+            ValuesList names;
+            if (const auto* list = converted.GetIf<GenericList>())
+            {
+                for (const auto& item : *list)
+                {
+                    names.emplace_back(item.AsString());
+                }
+                converted = Value(std::move(names));
+            }
+        }
+        result.emplace(name, std::move(converted));
+    }
+    return result;
 }
 
 template<typename CharT>

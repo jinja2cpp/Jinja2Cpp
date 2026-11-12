@@ -39,6 +39,7 @@ class RenderContext;
 // - a dict key: Hash says whether it is hashable; the key is the object's Identity()
 //   (ObjectKey in template_dict.cpp; plan 0248 section 7)
 // - `is sameas`: Identity()
+// - `is number`: IsNumber(); the int filter: ToInt(), then ToFloat(); the float filter: ToFloat()
 //
 // No operation writes an item: template syntax cannot assign one (`set x.attr` takes
 // namespace() only, as in Jinja2), and a write the template asks for reaches the host through
@@ -117,6 +118,10 @@ public:
     // autoescape, and is `escaped`
     [[nodiscard]] virtual bool IsMarkupLike() const { return false; }
     [[nodiscard]] virtual std::string Html() const { return Str(); }
+    // isinstance(x, numbers.Number); int(x) and float(x) (nullopt: the object has no such value)
+    [[nodiscard]] virtual bool IsNumber() const { return false; }
+    [[nodiscard]] virtual std::optional<InternalValue> ToInt() const { return std::nullopt; }
+    [[nodiscard]] virtual std::optional<InternalValue> ToFloat() const { return std::nullopt; }
 };
 
 // The map accessor that carries a host object into the engine's values. Reading it as a map
@@ -164,6 +169,11 @@ inline bool IsMarkupLike(const InternalValue& value)
     const auto* object = GetHostObject(value);
     return object != nullptr && object->IsMarkupLike();
 }
+// An exact host `list` or `tuple` as the engine's list of what iterating it gives (a tuple marked so), for pprint;
+// nullopt for any other value, a subclass among them, whose own __repr__ the engine cannot see (docs/tasks/0453)
+std::optional<ListAdapter> ExactListOrTuple(const InternalValue& value);
+// The same as a value
+std::optional<InternalValue> ExactListOrTupleValue(const InternalValue& value);
 // x(...) of a host object as a callable value of the engine, which keeps the object alive;
 // throws Python's TypeError for an object that is not callable
 Callable MakeCall(const InternalValue& object, const IEngineHostObject& host);

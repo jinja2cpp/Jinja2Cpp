@@ -45,6 +45,11 @@ public:
         {
             m_current = (*m_enumerator)->GetCurrent();
         }
+        else
+        {
+            // An empty list starts at end(), as operator++ leaves an exhausted iterator
+            m_enumerator.reset();
+        }
     }
 
     bool operator==(const GenericListIterator& other) const

@@ -1,9 +1,10 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/850
 priority: low
 area: parity
 depends: [0355]
-touches: [python/src/adapters.cpp, python/src/convert.cpp, python/src/template_module.cpp, src/filters.cpp]
+touches: [python/src/adapters.cpp, python/src/template_module.cpp, src/filters.cpp, src/serialize_filters.cpp, src/undefined.cpp, src/testers.cpp, src/expression_evaluator.cpp, src/template_module.cpp, src/public_host_object.cpp, src/host_object.h, include/jinja2cpp/host_object.h, include/jinja2cpp/template.h, include/jinja2cpp/generic_list_iterator.h]
 shares: [python/tests/upstream/expected-failures.txt]
 ---
 # Values, filters and macros: leftovers the upstream Jinja2 suite found
@@ -32,3 +33,24 @@ module can call `random.choice`; the C++ engine keeps its generator (record as d
 
 **Done when.** The listed upstream tests pass through the module, or their lines become
 `deliberate` with the reason.
+
+**Progress (2026-11-11).** All nine lines are closed: seven tests pass through the module, `random` is
+`deliberate` (the engine keeps its own generator; Python's `random.seed` cannot reach it) and
+`test_volatile_scoping` is `unsupported` (`Environment.compile`), its `__class__` gap filed as 0476.
+- StopIteration from a call is the environment's undefined value (`PyHost::Call`, Jinja2's
+  `Context.call`). A filter's StopIteration still ends the render, but Jinja2 raises RuntimeError
+  there: 0477.
+- A module macro takes an EvalContext first argument (`jinja2cpp.nodes.EvalContext`, a partial
+  `jinja2.nodes`, or Jinja2's), whose `autoescape` decides Markup.
+- `_undefined_name` and `_undefined_hint` are attributes of every undefined value outside the sandbox
+  (`UndefinedField`); a ChainableUndefined keeps the first missing step. Pinned by
+  `undefined.*undefined_name*` cases. An int key comes back as an int; other non-string keys as their repr.
+- `pprint` reads an exact host `list` or `tuple` through its iteration, so it breaks and sorts as
+  `pformat`; a subclass keeps printing as its repr (0453 stays open for subclasses that keep `list.__repr__`) (`filters.pprint_wraps_context_list`
+  through the module's corpus run).
+- Before the 2.0 freeze: `IHostObject::IsNumber`, `ToInt`, `ToFloat` (`is number`, `int`, `float`) and
+  `jinja2::MacroAttributes(UserCallable)` for the module's macro attributes (docs/api-2.0.md, section 7).
+- Found on the way and fixed: an empty `GenericList` with an accessor never reached `end()`.
+- Left as they are: `d['']._undefined_name` is None (an empty name means none); a list
+  that contains itself ends in the size cap or RecursionError, where pformat prints
+  `<Recursion on list ...>`.

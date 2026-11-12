@@ -8,6 +8,7 @@
 #include <exception>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 
@@ -91,6 +92,15 @@ InternalValue MakeUnsafeUndefined(const RenderContext& context, std::string hint
 // The Python class of the undefined value, as a TypeError names it: Undefined, StrictUndefined,
 // ChainableUndefined or DebugUndefined
 const char* UndefinedClassName(const UndefinedInfo& info);
+
+// The attribute `name` of an undefined value that Jinja2's Undefined has as a field, whatever its policy:
+// `_undefined_name` (the first missing step of a chain) and `_undefined_hint`, None when unset; nullopt for any
+// other name
+std::optional<InternalValue> UndefinedField(const UndefinedInfo& info, std::string_view name);
+class RenderContext;
+// x.name (attrName set) or x[key] of an undefined x: outside a sandbox the field UndefinedField gives, else x itself
+// once its policy allows an attribute of it. Out of line, so that the lookup of every value stays small
+InternalValue UndefinedAttribute(const InternalValue& undefined, const UndefinedInfo& info, const std::string* attrName, const RenderContext& context);
 
 // Throws UndefinedError when val is an undefined value with info whose policy refuses use
 inline void CheckUndefinedUse(const InternalValue& val, UndefinedUse use)

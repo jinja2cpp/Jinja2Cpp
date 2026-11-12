@@ -638,6 +638,11 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     case IsNumberMode:
         // Python's numbers.Number, which bool belongs to
         result = valKind == TestKind::Integer || valKind == TestKind::Double || valKind == TestKind::Boolean;
+        // A host's object answers for itself (isinstance(x, numbers.Number))
+        if (const auto* host = valKind == TestKind::Map || valKind == TestKind::Object ? GetHostObject(baseVal) : nullptr)
+        {
+            result = host->IsNumber();
+        }
         break;
     case IsSequenceMode:
         // A dict is a sequence in Python (len and __getitem__), a reflected object is not

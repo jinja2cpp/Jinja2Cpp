@@ -19,21 +19,18 @@ test_api.py::TestExtendedAPI::test_cycler                                       
 test_api.py::TestExtendedAPI::test_expressions                                         unsupported Environment.compile_expression
 test_api.py::TestLowLevel::test_custom_code_generator                                  internals   a custom code generator
 test_api.py::TestLowLevel::test_custom_context                                         unsupported a custom context_class
-test_api.py::TestUndefined::test_chainable_undefined                                   divergence  0434 ChainableUndefined._undefined_name names the first missing step
 test_api.py::TestUndefined::test_logging_undefined                                     unsupported make_logging_undefined
-test_api.py::TestUndefined::test_stopiteration_is_undefined                            divergence  0434 a callable raising StopIteration gives an undefined value
 test_api.py::test_overlay_enable_async                                                 async       Environment.is_async and overlay(enable_async=)
 test_async.py                                                                          async       async rendering (enable_async, render_async)
 test_async_filters.py                                                                  async       async filters (enable_async)
 test_bytecode_cache.py                                                                 unsupported bytecode caches (jinja2cpp accepts bytecode_cache and ignores it)
 test_compile.py                                                                        unsupported Environment.compile_templates (compiled Python modules)
-test_core_tags.py::TestMacros::test_macro_api                                          divergence  0434 a module macro's name, arguments, catch_kwargs, catch_varargs and caller attributes
 test_debug.py::TestDebug::test_get_corresponding_lineno_traceback                      internals   Template.get_corresponding_lineno maps compiled Python lines
 test_debug.py::TestDebug::test_local_extraction                                        internals   jinja2.debug.get_template_locals reads compiled frames
 test_debug.py::TestDebug::test_regular_syntax_error                                    deliberate  0432 the classes are jinja2cpp.exceptions.*, which a traceback names (Jinja2's are jinja2.exceptions.*)
 test_debug.py::TestDebug::test_syntax_error                                            deliberate  0432 the classes are jinja2cpp.exceptions.*, which a traceback names (Jinja2's are jinja2.exceptions.*)
 test_ext.py::TestAutoEscape::test_overlay_scopes                                       extension   a custom Extension
-test_ext.py::TestAutoEscape::test_volatile_scoping                                     divergence  0434 `.__class__` of an output value; Environment.compile
+test_ext.py::TestAutoEscape::test_volatile_scoping                                     unsupported Environment.compile (and `.__class__` of an output value, docs/tasks/0476)
 test_ext.py::TestExtensions                                                            extension   a custom Extension or jinja2.ext.debug
 test_ext.py::TestInternationalization::test_comment_extract                            unsupported babel_extract (message extraction)
 test_ext.py::TestInternationalization::test_complex_plural                             divergence  0415 oldstyle gettext formats the variables after the call
@@ -50,10 +47,8 @@ test_ext.py::TestInternationalization::test_trimmed_vars                        
 test_ext.py::TestNewstyleInternationalization::test_num_called_num                     unsupported Environment.compile
 test_ext.py::TestScope::test_basic_scope_behavior                                      extension   a custom Extension
 test_filters.py::TestFilter::test_filter_calling                                       unsupported Environment.call_filter
-test_filters.py::TestFilter::test_int_special_method                                   divergence  0434 int() of an object with __int__
 test_filters.py::TestFilter::test_json_dump                                            divergence  0435 the json.dumps_function and json.dumps_kwargs policies
-test_filters.py::TestFilter::test_pprint                                               divergence  0434 pprint wraps long output as Python's pprint.pformat
-test_filters.py::TestFilter::test_random                                               divergence  0434 random draws from Python's random module
+test_filters.py::TestFilter::test_random                                               deliberate  0434 random uses the engine's own generator, which Python's random.seed does not reach
 test_filters.py::TestFilter::test_urlize_rel_policy                                    divergence  0435 the urlize.rel policy
 test_idtracking.py                                                                     internals   the compiler's symbol tracking
 test_lexnparse.py::TestLexer::test_lineno_with_strip                                   internals   Environment.lex
@@ -72,9 +67,7 @@ test_regression.py::TestBug::test_custom_context                                
 test_regression.py::TestBug::test_grouper_repr                                         internals   jinja2.filters._GroupTuple
 test_runtime.py                                                                        internals   jinja2.runtime.LoopContext built by hand
 test_security.py::TestSandbox::test_binary_operator_intercepting                       divergence  0412 sandbox operator interception
-test_security.py::TestSandbox::test_template_data                                      divergence  0434 a module macro called with an EvalContext as its first argument
 test_security.py::TestSandbox::test_unary_operator_intercepting                        divergence  0412 sandbox operator interception
-"test_tests.py::TestTestsCase::test_types[complex is number-True]"                     divergence  0434 a complex is a number
 test_tests.py::test_is_filter                                                          unsupported Environment.call_test
 test_tests.py::test_is_test                                                            unsupported Environment.call_test
 test_utils.py::TestEscapeUrlizeTarget                                                  unsupported jinja2.utils.urlize as a Python function
