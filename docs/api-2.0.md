@@ -449,10 +449,17 @@ section 2.1 (0250).
   library's limits (0262), the arena's size cap at Load, and a host budget signalled by throwing
   `jinja2::Exception{ResourceLimitExceeded}` from a callable, a sink or the host's allocator. A
   failed Load keeps the previous template; a failed render leaves `Template`, `TemplateEnv`
-  and the thread caches usable. Until [0256](tasks/0256-survive-allocation-failure.md) lands,
-  some allocation failures crash (arena block bookkeeping, vendored robin_hood; fixed by
-  #597). With the nlohmann JSON binding, OOM inside `nlohmann::json`'s destructor terminates
-  the process (0279).
+  and the thread caches usable. `jinja2cpp_alloc_tests` checks this at every allocation of
+  Load, Render, GetMetadata, module calls and the JSON views, narrow and wide, with the
+  i18n extension, both failing one allocation and failing every one from it on (memory stays
+  spent), with a leak check per test under ASan ([0256](tasks/0256-survive-allocation-failure.md)).
+  Known limit: with the nlohmann JSON binding, a document the library owns (`Reflect` of an
+  rvalue `nlohmann::json`, a `std::shared_ptr` to one) is destroyed by the last `Value` that
+  reads it, and `nlohmann::json`'s destructor allocates (v3.12 flattens a non-empty array or
+  object into a `std::vector`) in a `noexcept` path: OOM there terminates the process. A
+  document the host keeps and reflects by reference, or copies with `ToValue`, is not affected
+  (0279). Also known: a failed `list.sort()` on a module's list handed to the host may leave the
+  list empty when memory stays spent (0485).
 - **Caller-owned output** ([0257](tasks/0257-render-to-string-and-sink.md)):
   - `RenderTo(StringType& out, params)` appends; on any failure `out` is truncated back to its
     size at entry;

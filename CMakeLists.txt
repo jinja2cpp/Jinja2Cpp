@@ -735,12 +735,16 @@ if (JINJA2CPP_BUILD_TESTS)
     if (NOT JINJA2CPP_WITH_SANITIZERS MATCHES "thread|memory")
         add_executable(jinja2cpp_alloc_tests test/allocation_failure_test.cpp)
         target_compile_options(jinja2cpp_alloc_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
-        target_link_libraries(jinja2cpp_alloc_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
+        # nlohmann::json: views of a document the host keeps (docs/tasks/0279)
+        target_link_libraries(jinja2cpp_alloc_tests gtest gtest_main jinja2cpp::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
         set_target_properties(jinja2cpp_alloc_tests PROPERTIES
                 CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
                 CXX_STANDARD_REQUIRED ON)
         # After the parity run, whose output would push this one out of the CI log tail
         add_test(NAME jinja2cpp_alloc_tests COMMAND jinja2cpp_alloc_tests)
+        # Again with every allocation after the failing one failing too: memory stays spent (docs/tasks/0256)
+        add_test(NAME jinja2cpp_alloc_tests_exhausted COMMAND jinja2cpp_alloc_tests)
+        set_tests_properties(jinja2cpp_alloc_tests_exhausted PROPERTIES ENVIRONMENT JINJA2CPP_ALLOC_EXHAUSTED=1)
     endif()
 
     target_compile_definitions(jinja2cpp_tests

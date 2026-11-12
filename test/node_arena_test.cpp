@@ -1,3 +1,5 @@
+#include "../src/engine_errors.h"
+#include "../src/error_boundary.h"
 #include "../src/expression_evaluator.h"
 #include "../src/internal_value.h"
 #include "../src/node_arena.h"
@@ -20,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -141,6 +144,42 @@ TEST(NodeArenaTest, SpanKeepsACopyOfTheItems)
     EXPECT_EQ(1, *GetIf<int64_t>(nodes[view[0]].GetConstant(nodes)));
     EXPECT_EQ(2, *GetIf<int64_t>(nodes[view[1]].GetConstant(nodes)));
     EXPECT_TRUE(nodes.MakeSpan(items).empty());
+}
+
+// A template past the arena's 4 GiB of offsets is a spent limit, not an out-of-memory: ResourceLimitError (a
+// std::length_error), which Load reports as ResourceLimitExceeded naming the arena, with no Settings::Limits field
+// (docs/api-2.0.md 3.9, task 0256). Both checks run before anything is allocated
+TEST(NodeArenaTest, ArenaLimitIsResourceLimitExceeded)
+{
+    using Child = NodeRef<IRendererBase>;
+    const auto error = [](std::size_t count) -> ErrorInfo {
+        NodeArena nodes;
+        // Arena space taken before the list, which then no longer fits
+        nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
+        try
+        {
+            nodes.MakeWithItems<ComposedRenderer, Child, std::uint32_t>(
+                count, [](Child* /*children*/, std::uint32_t* /*offsets*/) { ADD_FAILURE() << "the list was made"; }, true);
+        }
+        catch (const ResourceLimitError& ex)
+        {
+            EXPECT_EQ(nullptr, ex.Field());
+            return jinja2::detail::CurrentExceptionToError<char>("arena.j2");
+        }
+        ADD_FAILURE() << "no limit at " << count << " items";
+        return ErrorInfo();
+    };
+    const std::size_t itemSize = sizeof(Child) + sizeof(std::uint32_t);
+    const std::size_t fits = (std::numeric_limits<std::uint32_t>::max() - sizeof(ComposedRenderer)) / itemSize;
+    for (const std::size_t count : { fits, fits + 1, std::size_t{ std::numeric_limits<std::uint32_t>::max() } })
+    {
+        SCOPED_TRACE(count);
+        const auto info = error(count);
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, info.GetCode());
+        ASSERT_EQ(1u, info.GetExtraParams().size());
+        const auto message = info.ToString();
+        EXPECT_NE(std::string::npos, message.find(count == fits ? "too large for its arena" : "a template list too long")) << message;
+    }
 }
 
 TEST(NodeArenaTest, SealingKeepsTheHandles)
