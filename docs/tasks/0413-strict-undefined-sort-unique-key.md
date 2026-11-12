@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/846
 priority: low
 area: parity
 depends: []
@@ -20,3 +21,11 @@ comparison operators already do (`UndefinedUse::Operator`); add the two rows to 
 **Done when** both templates raise `UndefinedError` under the strict policy in the narrow and wide
 paths, the parity cases pass, and the sandbox sweep in python/tests/test_sandbox.py drops its
 `STRICT_ONLY` entries for `sort` and `unique`.
+
+**Resolution (parity batch 5, group C).** `IsLessKey` (sort, with or without `attribute=`) checks
+both keys with `CheckUndefinedUse(..., UndefinedUse::Operator)` before its `==`, so a strict
+undefined fails only where Python's list comparison reaches it (one item, or keys that differ in an
+earlier part, still sort). `unique` checks every key before its hash pass, so one item fails too.
+Pinned by `filters.sort_attribute_missing_strict*`, `filters.sort_undefined_items_strict`,
+`filters.unique_*_strict*` and `filters.sort_unique_attribute_missing_default`; the sandbox sweep
+drops its two `STRICT_ONLY` entries.

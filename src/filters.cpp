@@ -110,7 +110,8 @@ bool CompareForOrder(const InternalValue& left,
     auto kind = GetOrderKind(left);
     if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
     {
-        throw TemplateRuntimeError("'<' not supported between these values");
+        // Python's max compares item > best, min and sorted item < other (docs/tasks/0420)
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + (oper == BinaryExpression::LogicalGt ? ">" : "<") + "' not supported between instances of '" + Apply<visitors::PythonTypeNameGetter>(left) + "' and '" + Apply<visitors::PythonTypeNameGetter>(right) + "'");
     }
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, oper, compType));
 }
@@ -268,9 +269,25 @@ std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName, bool 
     return paths;
 }
 
-// Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
-bool IsLessKey(const InternalValue& key1, const InternalValue& key2, BinaryExpression::Operation oper, BinaryExpression::CompareType compType, bool& isEqual)
+// A strict undefined refuses the `==` and `<` of a sort at the comparison Python reaches
+// (docs/tasks/0413). Most sorts have none, so the comparator checks only when a key is one
+bool HasStrictUndefined(const InternalValueList& keys)
 {
+    return std::any_of(keys.begin(), keys.end(), [](const InternalValue& key) {
+        const auto* info = GetUndefinedInfo(key);
+        return info && info->policy == UndefinedPolicy::Strict;
+    });
+}
+
+// Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python. The default
+// undefined equals another undefined
+bool IsLessKey(const InternalValue& key1, const InternalValue& key2, BinaryExpression::Operation oper, BinaryExpression::CompareType compType, bool checkStrict, bool& isEqual)
+{
+    if (checkStrict)
+    {
+        CheckUndefinedUse(key1, UndefinedUse::Operator);
+        CheckUndefinedUse(key2, UndefinedUse::Operator);
+    }
     isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
     return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
 }
@@ -291,13 +308,20 @@ std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const st
             keys.push_back(GetAttributeByPath(val, path, InternalValue(), context));
         }
     }
+    const bool checkStrict = HasStrictUndefined(keys);
     std::vector<size_t> order(values.size());
     std::iota(order.begin(), order.end(), size_t{ 0 });
     StableSortValues(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
+        // An item is not compared with itself in Python; a checked sort (_GLIBCXX_DEBUG) asks
+        // comp(x, x), which a strict undefined key would refuse
+        if (checkStrict && idx1 == idx2)
+        {
+            return false;
+        }
         for (size_t n = 0; n != width; ++n)
         {
             bool isEqual = false;
-            auto result = IsLessKey(keys[(idx1 * width) + n], keys[(idx2 * width) + n], oper, compType, isEqual);
+            auto result = IsLessKey(keys[(idx1 * width) + n], keys[(idx2 * width) + n], oper, compType, checkStrict, isEqual);
             if (!isEqual)
             {
                 return result;
@@ -441,13 +465,17 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 
     std::vector<InternalValueList> paths = SortKeyPaths(attrName, IsArgumentSet(attrName, attrGiven));
 
-    auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) { return IsLessKey(key1, key2, oper, compType, isEqual); };
     // Python's sorted() is stable
     if (paths.empty())
     {
-        StableSortValues(values.begin(), values.end(), [&isLess](auto& val1, auto& val2) {
+        const bool checkStrict = HasStrictUndefined(values);
+        StableSortValues(values.begin(), values.end(), [oper, compType, checkStrict](auto& val1, auto& val2) {
+            if (checkStrict && &val1 == &val2)
+            {
+                return false;
+            }
             bool isEqual = false;
-            return isLess(val1, val2, isEqual);
+            return IsLessKey(val1, val2, oper, compType, checkStrict, isEqual);
         });
         return ListAdapter::CreateAdapter(std::move(values));
     }
@@ -1168,9 +1196,10 @@ InternalValue Unique(const ListAdapter& list,
         return true;
     });
 
-    // Jinja2 keeps a set of the keys it saw
+    // Jinja2 keeps a set of the keys it saw: a strict undefined refuses its hash (docs/tasks/0413)
     for (const auto& item : items)
     {
+        CheckUndefinedUse(item.val, UndefinedUse::Operator);
         if (const char* type = UnhashableType(item.val))
         {
             throw TemplateRuntimeError("unhashable type: '"s + type + "'");
@@ -1315,7 +1344,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         InternalValue bestKey;
         list.ForEach([&](InternalValue&& item) {
             InternalValue key = attrPath.empty() ? item : GetAttributeByPath(item, attrPath, InternalValue(), context);
-            if (!best || (isMax ? CompareForOrder(bestKey, key, BinaryExpression::LogicalLt, compType) : CompareForOrder(key, bestKey, BinaryExpression::LogicalLt, compType)))
+            if (!best || (isMax ? CompareForOrder(key, bestKey, BinaryExpression::LogicalGt, compType) : CompareForOrder(key, bestKey, BinaryExpression::LogicalLt, compType)))
             {
                 bestKey = std::move(key);
                 best = std::move(item);

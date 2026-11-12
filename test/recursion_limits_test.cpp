@@ -369,7 +369,7 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
         "{{ range(2**40)|map('abs')|list }}",
         "{{ range(2**40)|map(attribute='x')|list }}",
         "{{ range(2**40)|select('odd')|list }}",
-        "{{ range(2**40)[1:] }}",
+        "{{ range(2**40)[1:]|list }}",
         "{{ ('x',) * 2**40 + (1,) }}",
         "{{ ('x',) * 2**40 * 2 }}",
         "{{ 'ab' * 2**40 }}",
@@ -392,6 +392,22 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
         EXPECT_NE(std::string::npos, result.error().ToString().find("too long")) << result.error().ToString();
         // The engine's own limit: no exception to hand back (docs/api-2.0.md, 2.1)
         EXPECT_FALSE(result.error().GetException()) << source;
+    }
+    // A slice of a range is a range, as lazy as Python's (docs/tasks/0420)
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load("{{ range(2**40)[1:] }}|{{ range(2**40)[::-2]|length }}").has_value());
+        auto result = tpl.RenderAsString({});
+        ASSERT_TRUE(result.has_value()) << result.error().ToString();
+        EXPECT_EQ("range(1, 1099511627776)|549755813888", *result);
+    }
+    // A bound past int64 (Python's stop here is -13835058055282163711) leaves the items as a list
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load("{{ range(-9223372036854775807, 9223372036854775807, 4611686018427387904)[::-1] }}").has_value());
+        auto result = tpl.RenderAsString({});
+        ASSERT_TRUE(result.has_value()) << result.error().ToString();
+        EXPECT_EQ("[4611686018427387905, 1, -4611686018427387903, -9223372036854775807]", *result);
     }
     // An integer literal beyond int64 is a big integer (docs/tasks/0270), which range()
     // refuses before computing a length (OverflowError, docs/design/0178-big-integer-plan.md 5)

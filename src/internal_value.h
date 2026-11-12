@@ -2323,6 +2323,15 @@ std::vector<std::basic_string_view<CharT>> SplitCodePoints(std::basic_string_vie
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values);
 InternalValue Subscript(const InternalValue& val, const std::string& subscript, RenderContext* values);
+// The call operator of an engine object (joiner(), loop) is the engine's slot, which the call path
+// reads with Subscript(fn, "operator()"); x['operator()'] does not see it, as Python's objects
+// have no such item. A namespace's attributes are its own (docs/tasks/0420)
+bool IsEngineCallSlot(const MapRef& map, std::string_view name);
+// The size precheck keeps the call off every other subscript
+inline bool IsHiddenCallSlot(const MapRef& map, std::string_view name)
+{
+    return name.size() == std::string_view("operator()").size() && IsEngineCallSlot(map, name);
+}
 // Python's val[start:stop:step] on lists and strings; an empty start, stop or step is omitted
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);

@@ -174,4 +174,11 @@ CASES = [
     ('range_attributes', "{{ range(1, 9, 2).start }}|{{ range(1, 9, 2).stop }}|{{ range(1, 9, 2)|attr('step') }}"),
     ('sequence_times_range', "{{ [1] * range(3) }}"),
     ('max_of_ranges_message', "{{ [range(3), range(2)]|max }}"),
+    ('min_of_ranges_message', "{{ [range(3), range(2)]|min }}"),
+    ('range_slice_bounds', "{{ range(10)[1:6:2] }}|{{ range(10)[::-1] }}|{{ range(10)[::-3] }}|{{ range(0)[1:] }}|{{ range(3)[5:9] }}|{{ range(1, 9, 2)[1:].start }}|{{ range(3)[1:]|list }}|{{ range(3)[1:]|length }}|{{ range(3)[1:][0] }}|{{ range(3)[::2] == range(0, 3, 2) }}"),
+    ('range_item_attributes', "{{ range(3)['start'] }}|{{ range(2, 5)['stop'] }}|{{ range(3)['nope'] is defined }}|{{ range(3).count(1) }}"),
+    ('range_times_str', "{{ range(3) * 'a' }}"),
+    ('str_times_range', "{{ 'a' * range(3) }}"),
+    ('list_times_float', "{{ [1] * 1.5 }}"),
+    ('format_field_range_attribute_item', "{{ '{0[start]}'.format(range(3)) }}"),
 ]

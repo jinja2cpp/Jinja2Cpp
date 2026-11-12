@@ -458,11 +458,8 @@ SWEEP = [
 
 # Under StrictUndefined, a private name an object of the engine lacks (loop._x, cycler()._priv, a
 # macro's __globals__) is refused by jinja2cpp, with SecurityError, where Jinja2 reports a plain
-# UndefinedError; and sort/unique of an unsafe attribute do not fail as Jinja2's do (the engine
-# does not raise for a strict undefined sort key, with or without the sandbox)
+# UndefinedError
 STRICT_ONLY = {
-    'items|sort(attribute="_secret")|map(attribute="name")|list',
-    'items|unique(attribute="_secret")|list|length',
     "range.__self__",
     'cycler("a")._priv',
     "{% for i in [1] %}{{ loop._x }}{% endfor %}",

@@ -1,9 +1,10 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/846
 priority: low
 area: parity
 depends: [0401]
-touches: [src/internal_value.cpp#SubscriptionVisitor, src/value_visitors.h#BinaryMathOperation]
+touches: [src/internal_value.cpp#SubscriptionVisitor, src/internal_value.cpp#SliceVisitor, src/value_visitors.h#BinaryMathOperation, src/filters.cpp#CompareForOrder]
 shares: [test/parity/divergences/operators.txt, test/parity/divergences/globals.txt]
 ---
 # Range and engine-object leftovers of 0401
@@ -30,3 +31,15 @@ bounds. 2: `start`/`stop`/`step` read from `RangeInfo` in the list's attribute l
 Python's messages in `max`/`min` and `RepeatList`.
 
 **Done when** the three 0420 lines are gone from `test/parity/divergences/`.
+
+**Resolution (parity batch 5, group C).** 1: `SliceVisitor` makes a slice of a range the range
+`range(start + i*step, start + j*step, step*k)` from the clipped slice indices, as CPython does;
+bounds that leave int64 fall back to the list of items (ranges are int64, 0178). 2:
+`SubscriptionVisitor::SubscriptField` answers `start`, `stop` and `step` of a range, so `.start`,
+`['start']` and `|attr('start')` agree. 3: `x['operator()']` (and `|attr('operator()')`) of an
+engine object other than a namespace is undefined; the call path still reads the slot through
+`Subscript(fn, "operator()")`. 4: a failed `seq * x` names the operand as CPython's sequence
+repeat does, and `max` compares `item > best`, naming `'>'` and both types. Pinned by
+`operators.range_slice_bounds`, `operators.range_item_attributes`, `globals.engine_call_slot_hidden`,
+`globals.namespace_call_key_item`, and the messages by `ExpressionsTest.RepeatAndOrderingMessages`.
+5 is filed as 0474; the int64-edge and message leftovers the verifier found are 0475.
