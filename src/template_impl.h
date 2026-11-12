@@ -76,8 +76,8 @@ struct GlobalsSnapshot
 class RunningGlobalsScope
 {
 public:
-    explicit RunningGlobalsScope(const std::shared_ptr<const GlobalsSnapshot>& globals) noexcept
-        : m_workspace(RenderWorkspace::ForThisThread())
+    RunningGlobalsScope(RenderWorkspace& workspace, const std::shared_ptr<const GlobalsSnapshot>& globals) noexcept
+        : m_workspace(workspace)
         , m_running{ globals.get(), &globals, m_workspace.Running() }
     {
         m_workspace.SetRunning(&m_running);
@@ -124,6 +124,7 @@ public:
 
     [[nodiscard]] InternalValueMap& Params() const { return m_maps.params; }
     [[nodiscard]] InternalValueMap& TopScope() const { return m_maps.topScope; }
+    [[nodiscard]] RenderWorkspace& Workspace() const { return m_workspace; }
 
 private:
     RenderWorkspace& m_workspace;
@@ -558,7 +559,12 @@ public:
 
             static const InternalValueMap noGlobals;
             const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
-            const RunningGlobalsScope runningGlobals(globals);
+            // Only a render with globals has a snapshot to share, and the scope costs the others nothing
+            std::optional<RunningGlobalsScope> runningGlobals;
+            if (globals)
+            {
+                runningGlobals.emplace(maps.Workspace(), globals);
+            }
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
