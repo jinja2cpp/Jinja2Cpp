@@ -24,3 +24,5 @@ reloaded; pass the template globals of the loading call to the templates it load
 `Environment._load_template` does. Check with 0405 (globals replaced under the cache) and 0427.
 
 **Done when.** The listed upstream tests pass through the module.
+
+**PR.** [#859](https://github.com/jinja2cpp/Jinja2Cpp/pull/859)

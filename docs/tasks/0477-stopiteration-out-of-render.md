@@ -20,3 +20,5 @@ error, raise a StopIteration that escapes as `RuntimeError("generator raised Sto
 as Python does. Coordinate with 0457 (lazy generate), which owns `generate`.
 
 **Done when.** Both engines raise RuntimeError for `{{ 1|stop }}` and the test asserts that class only.
+
+**PR.** [#859](https://github.com/jinja2cpp/Jinja2Cpp/pull/859)
