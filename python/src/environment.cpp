@@ -779,7 +779,7 @@ nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::
         where.environment = nb::find(this);
         RaiseError(error, where);
     }
-    if (cached.is_valid() && nb::isinstance<PyTemplate>(cached) && nb::inst_ptr<PyTemplate>(cached)->Engine() == result.value())
+    if (cached.is_valid() && nb::isinstance<PyTemplate>(cached) && nb::inst_ready(cached) && nb::inst_ptr<PyTemplate>(cached)->Engine() == result.value())
     {
         return nb::borrow(cached);
     }
