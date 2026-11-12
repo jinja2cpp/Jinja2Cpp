@@ -89,6 +89,7 @@ CASES = [
     ("tuple_of_slices_print", "[{% print ()[:, :] %}]"),
     ("tuple_of_slices_strict_concat", "[{{ ()[:, :] ~ 'a' }}]", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_of_folded_undefined", "[{{ ()[0][:, :] }}]"),
+    ("tuple_of_slices_failing_part", "[{{ [1 / 0][:, :] }}|{{ ()[:, 1 / 0] }}]"),
     ("subscript_slice_trailing_comma", "{{ [1][1:2,] }}"),
     ("tuple_of_slices_folded_branch", "[{{ ()[:, :] if true else x }}|{{ ()[:, :] if false else 5 }}|{% autoescape x %}{{ ()[:, :] }}{% endautoescape %}]"),
     # Jinja2 folds a conditional whose test folds by the branch it picks; the engine decides that

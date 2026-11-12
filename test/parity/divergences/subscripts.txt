@@ -7,3 +7,4 @@ subscripts.tuple_of_slices_set_by_choice rejects 0471 Jinja2's optimizer folds a
 subscripts.tuple_of_slices_print rejects 0471 Jinja2's print builds an Output it folds; the engine folds a tuple of slices only in {{ }}
 subscripts.tuple_of_slices_strict_concat accepts 0471 with StrictUndefined, Jinja2's fold fails wherever the undefined is stringified or compared; the engine refuses only a bare output of it
 subscripts.tuple_of_slices_of_folded_undefined accepts 0471 a literal subscript that folds to an undefined cannot be subscripted by a tuple of slices in Jinja2's fold; the engine folds it again
+subscripts.tuple_of_slices_failing_part accepts 0471 Jinja2's fold fails when a part raises (1 / 0), so its code is invalid Python; the engine checks only that the parts are foldable

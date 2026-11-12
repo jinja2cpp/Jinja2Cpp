@@ -34,6 +34,9 @@ The verifier of 0445 found more places where Jinja2's folding and the engine's l
   are load errors; the engine refuses only a bare output of it (`tuple_of_slices_strict_concat`);
 - `()[0][:, :]`: `()[0]` folds to an undefined, whose subscript does not fold, so Jinja2 writes
   invalid Python; the engine folds it again (`tuple_of_slices_of_folded_undefined`).
+- a part whose evaluation raises (`[1 / 0][:, :]`, `()[:, 1 / 0]`): Jinja2's fold fails, so it
+  rejects at load; the engine checks only that the parts are foldable and renders empty
+  (`tuple_of_slices_failing_part`, Codex on #845).
 
 **Proposal.** Low value. At load, when an output holding such a subscript folds only by a
 choice, evaluate the choice there (the tests that decide it are literals and pure filters, so

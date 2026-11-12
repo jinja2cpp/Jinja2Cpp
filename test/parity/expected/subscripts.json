@@ -2408,6 +2408,42 @@
    }
   },
   {
+   "id": "subscripts.tuple_of_slices_failing_part",
+   "template": "[{{ [1 / 0][:, :] }}|{{ ()[:, 1 / 0] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 12)"
+   }
+  },
+  {
    "id": "subscripts.subscript_slice_trailing_comma",
    "template": "{{ [1][1:2,] }}",
    "context": {
