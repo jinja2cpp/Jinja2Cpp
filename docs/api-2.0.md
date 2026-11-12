@@ -330,6 +330,20 @@ Considered: a separate sink callback per piece (a second sink interface for one 
 splitting in the module (the module cannot see node boundaries). Like `generationSpans`, the growth
 of `RenderOptions` must land before G1.
 
+**Suspendable renders (task 0457, Ruslan 2026-11-11 D1, before G1).** `RenderOptions` grows by
+`const RenderSuspension* suspension` (`struct RenderSuspension { const void* stackLow; size_t stackSize; }`).
+A render to a sink with it set may be suspended inside `Write`: its host runs it on a stack of its own (a
+fiber) and switches back to its own code there, to resume the render later on the same thread. The engine
+then keeps the render's per-thread state (workspace contents, limits, stack bounds, poll, render depth, cycle
+collector) in a bundle of its own, swapped with the thread's at entry, around each `Write` and at exit, so
+other renders, plain or suspendable, run and interleave on the thread while one is suspended; and it checks
+the stack against the given bounds. Null costs nothing (the code is in the hooks instantiation and a cold
+translation unit); a render to a string ignores it. The Python module's lazy `Template.generate()` is the
+user. Considered: an additive `RenderTo(sink, params, options, const RenderSuspension&)` overload after G1
+(a fourth `RenderTo` overload for one pointer), and a public resumable render class owning the fiber (the
+core would gain platform assembly and stack management, docs/design/0457-lazy-generate-plan.md option b).
+Like `generationSpans`, the growth of `RenderOptions` must land before G1.
+
 **Prompt escaping and token budgets (tasks 0358, 0359, decided by Ruslan 2026-11-05).** A new,
 always installed header `jinja2cpp/prompt.h` (core, included by `template_env.h`, not behind
 `JINJA2CPP_WITH_CHAT_TEMPLATES`, whose switch must not change the core ABI) adds:
@@ -565,7 +579,11 @@ render is running (the C++ rule for a member call). Both are undefined behaviour
    is a view of the host's data (item 1 applies), also while the render runs; Python shows the
    render's later writes there, a deliberate divergence. A global's data is handed out as the
    global's original. A module call's container keeps that call's final state: a later call's
-   write copies it first. Reading a kept value on another thread while its render runs is not
+   write copies it first; so do the items of a dictsort pair, a namespace's members and the
+   items a generator (`select`, `map`) made when the host got it, which it walks then
+   ([0347](tasks/0347-module-cells-in-lazy-and-namespace-exports.md)). A module macro the host
+   calls with a render's container writes a copy of its own: the render does not see the write
+   ([0407](tasks/0407-module-call-leaks-through-exports-and-closures.md)). Reading a kept value on another thread while its render runs is not
    supported, as for any value of a running render.
 10. **Copies of a generic container are one container** ([0348](tasks/0348-generic-list-shared-accessor.md)).
    A `GenericList` or `GenericMap` shares its accessor with every copy, including the copies the

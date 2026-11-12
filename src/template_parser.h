@@ -985,9 +985,10 @@ private:
         {
             ++word;
         }
-        while (word < tpl.size() && IsSpace(tpl[word]))
+        // Jinja2's \s, Unicode included (docs/tasks/0447)
+        while (const auto len = SpaceLengthAt(word))
         {
-            ++word;
+            word += len;
         }
         const auto first = word < tpl.size() ? tpl[word] : CharT();
         // `endif`, `endfor`, `else` and the like: only `endraw` and `endmeta` go on
@@ -1265,9 +1266,9 @@ private:
         {
             ++cur;
         }
-        while (cur < tpl.size() && IsSpace(tpl[cur]))
+        while (const auto len = SpaceLengthAt(cur))
         {
-            ++cur;
+            cur += len;
         }
         for (; *name != '\0'; ++name, ++cur)
         {
@@ -1276,9 +1277,9 @@ private:
                 return 0;
             }
         }
-        while (cur < tpl.size() && IsSpace(tpl[cur]))
+        while (const auto len = SpaceLengthAt(cur))
         {
-            ++cur;
+            cur += len;
         }
         if (withModifiers && cur < tpl.size() && (tpl[cur] == '-' || (plusAtEnd && tpl[cur] == '+')))
         {

@@ -2,6 +2,7 @@
 
 #include "error_boundary.h"
 #include "node_arena.h"
+#include "render_suspension.h"
 
 #include <jinja2cpp/error_info.h>
 
@@ -153,6 +154,11 @@ namespace
 // The failure of the innermost body, between its handler and its throw; one at a time per thread
 thread_local std::exception_ptr t_failure;
 } // namespace
+
+bool HasPendingRenderFailure() noexcept
+{
+    return static_cast<bool>(t_failure);
+}
 
 void KeepRenderFailure() noexcept
 {

@@ -82,6 +82,11 @@ struct ThreadStack
 inline thread_local ThreadStack t_threadStack JINJA2CPP_HOT_TLS;
 
 bool StackNearlyExhaustedSlow(std::uintptr_t frame);
+// The checks of a stack [low, high) that a render runs on: a thread's, or a fiber's its host switched
+// it to (RenderOptions::suspension, docs/tasks/0457). `renderLimit` is `limit`
+ThreadStack StackOf(std::uintptr_t low, std::uintptr_t high) noexcept;
+
+struct RenderThreadState;
 
 // The parser's limits and dialect for the template being loaded (ParseLimitsScope), in a
 // thread-local rather than in each parser, which lives for one tag
@@ -558,6 +563,8 @@ public:
     }
 
 private:
+    // A suspendable render keeps a count of its own (detail::RenderThreadState, docs/tasks/0457)
+    friend struct detail::RenderThreadState;
     static unsigned& Depth()
     {
         thread_local unsigned depth = 0;

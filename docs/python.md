@@ -203,7 +203,7 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 | `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
 | `compile_expression`, `lex`, `preprocess`, `compile` | called on a Jinja2 environment of the same configuration |
 | `Template.blocks`, `new_context`, `root_render_func` | read from the template loaded by Jinja2 from the same source or name |
-| A template the engine cannot parse (for example a subscript of a literal by a tuple of slices, `[1, 2][1:2, 3]`) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
+| A template the engine cannot parse (for example a subscript of a literal by a tuple of slices in a conditional Jinja2 folds by its test, `(()[:, :] if 1 > 0) is undefined`) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
 
 **Tier C: never.** Bytecode-level internals of the engine: `jinja2.compiler` and
 `jinja2.nodes` as engine objects (`env.parse` of a native environment is opaque, for
@@ -379,8 +379,9 @@ inside the adapters that let the engine read Python objects, not in generated co
   missing, after it finds one of its methods, and at `str.format`. A private name (`__class__`,
   `__init__`, `_x`) on one is asked of `is_safe_attribute` with a stand-in object of the Python
   type and is refused with the same undefined; so is a public name when the subclass's
-  `is_safe_attribute` is not Jinja2's. `format_map` of a string, which the engine lacks, and
-  `str.format` are Python's, run through `SandboxedFormatter`. `ImmutableSandboxedEnvironment`
+  `is_safe_attribute` is not Jinja2's. `format_map` of a string (which the module
+  answers from `NativeAttribute`, ahead of the engine's own, 0466) and `str.format` are
+  Python's, run through `SandboxedFormatter`. `ImmutableSandboxedEnvironment`
   also refuses the methods of the engine's lists and dicts that change them (`append`, `update`,
   ...) with Jinja2's message and `ErrorCode::SecurityError` (`Dialect::ImmutableSandbox`, the read-only containers of the
   transformers preset).
@@ -423,9 +424,11 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - `tojson` writes any mapping and any list or tuple; Python's `json.dumps` takes only `dict`.
 - A dict literal of the template keyed by a Python object that defines its own `__hash__`
   (a tuple from Python, a frozen dataclass) keys it by identity (0248 plan, section 7).
-- Methods of the engine's own values are the engine's: `x.hex()` on a float (and other
-  Python methods Jinja2 lets a template call on an `int`, `float` or `str` the engine has no
-  method for) raises `TemplateRuntimeError`, for values from Python as for literals (0403).
+- Methods of the engine's own values are the engine's. It has every public method of Python's
+  `str`, `int` and `float` except those of `bytes` and one alternate constructor:
+  `str.encode`, `int.to_bytes` and `int.from_bytes` (the engine has no `bytes` type), and
+  `float.fromhex`. Calling one raises `TemplateRuntimeError`, for values from Python as for
+  literals (0403).
 - `urlencode` reads any mapping as a dict; Jinja2 does so only for a `dict` and iterates
   another `Mapping`, which gives its keys (0404).
 - A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, but

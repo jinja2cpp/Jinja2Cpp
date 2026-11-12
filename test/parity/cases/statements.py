@@ -661,4 +661,8 @@ CASES = [
     ("name_nfkc_context", "[{{ ﬁ }}]", {"ctx": {"fi": 5}}),
     # parse_condexpr loops on `if`: `a if b if c` is `(a if b) if c` (0447)
     ("if_expr_chained_if", "[{{ 1 if false if false }}|{{ 1 if true if true }}]"),
+    ("if_expr_chained_if_else", "[{{ 1 if true if false else 2 }}|{{ 1 if false if true else 2 }}|{{ 1 if true if true if false }}]"),
+    ("if_expr_chained_if_line", "{{ (1 if true\n\n if false).x }}"),
+    ("if_expr_chained_if_inner_line", "{{ (1 if false\n\n if true).x }}"),
+    ("if_expr_chained_if_in_for", "{% for i in [1, 2] if i if true %}{{ i }}{% endfor %}"),
 ]

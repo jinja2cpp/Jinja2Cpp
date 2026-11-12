@@ -32,6 +32,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <optional>
@@ -943,6 +944,223 @@ struct StrOps
         return Result(Str(self.begin(), self.end()));
     }
 
+    // Python's expandtabs: a tab pads to the next multiple of tabsize columns, \n and \r start
+    // column 0 again, a tabsize of 0 or less drops tabs; columns count code points. The size is
+    // checked against the sequence cap before the string is built (docs/tasks/0452)
+    static InternalValue Expandtabs(View self, const CallParams& params, RenderContext&)
+    {
+        CheckArgs(params, "expandtabs", 0, 1, { "tabsize" });
+        int64_t tabsize = 8;
+        if (const auto* arg = Arg(params, 0, "tabsize"))
+        {
+            tabsize = IntArg(*arg, "expandtabs");
+            // Python's tabsize is a C int
+            if (tabsize < std::numeric_limits<int>::min() || tabsize > std::numeric_limits<int>::max())
+            {
+                Raise("OverflowError: Python int too large to convert to C int"s);
+            }
+        }
+        uint64_t size = 0;
+        auto forEachPiece = [&self, tabsize](const auto& fn) {
+            int64_t column = 0;
+            for (auto ch : self)
+            {
+                if (ch == '\t')
+                {
+                    if (tabsize > 0)
+                    {
+                        const auto pad = tabsize - (column % tabsize);
+                        column += pad;
+                        fn(ch, pad);
+                    }
+                    continue;
+                }
+                fn(ch, 0);
+                if (ch == '\n' || ch == '\r')
+                {
+                    column = 0;
+                }
+                else if (!IsCodePointTail(ch))
+                {
+                    ++column;
+                }
+            }
+        };
+        // Each step stays within the cap, so neither the size nor the column overflows
+        forEachPiece([&size](CharT, int64_t pad) {
+            size += pad > 0 ? static_cast<uint64_t>(pad) : 1;
+            CheckSequenceSize(size, "an expanded string");
+        });
+        Str result;
+        result.reserve(static_cast<size_t>(size));
+        forEachPiece([&result](CharT ch, int64_t pad) {
+            if (pad > 0)
+            {
+                result.append(static_cast<size_t>(pad), static_cast<CharT>(' '));
+            }
+            else
+            {
+                result.push_back(ch);
+            }
+        });
+        return Result(std::move(result));
+    }
+
+    // table[cp] as str.translate looks it up: nullopt where the table has no such item (Python's
+    // LookupError, which keeps the character)
+    static std::optional<InternalValue> TranslateLookup(const InternalValue& table, uint32_t cp, RenderContext& context)
+    {
+        const InternalValue key(static_cast<int64_t>(cp));
+        if (table.IsUndefined())
+        {
+            CheckUndefinedUse(table, UndefinedUse::Attribute);
+            return std::nullopt;
+        }
+        if (const auto* host = GetHostObject(table))
+        {
+            return host->GetItem(key);
+        }
+        if (const auto map = AsMap(table); map && map->GetAttrPolicy() != MapAttrPolicy::KeysOnly)
+        {
+            return map->FindItem(key);
+        }
+        const auto list = AsList(table);
+        if (list && table.Kind() == ValueKind::List && list->GetIteratorKind() == IteratorKind::None)
+        {
+            const auto size = list->GetSize();
+            return size && cp < *size ? std::optional<InternalValue>(Subscript(table, key, &context)) : std::nullopt;
+        }
+        Raise("'" + TypeName(table) + "' object is not subscriptable");
+    }
+
+    // Python's str.translate(table): each character's table item is None (dropped), an int (a code
+    // point) or a str; a character the table lacks stays
+    static InternalValue Translate(View self, const CallParams& params, RenderContext& context)
+    {
+        CheckArgs(params, "translate", 1, 1);
+        const auto& table = params.posParams[0];
+        Str result;
+        // Each piece is checked against the sequence cap before it is appended, so a large
+        // replacement never builds an oversized result first
+        auto append = [&result](View piece) {
+            CheckSequenceSize(static_cast<uint64_t>(result.size()) + piece.size(), "a translated string");
+            result.append(piece);
+        };
+        // A str table is split once: indexing it per character would rescan it each time
+        if (IsStringValue(table))
+        {
+            const auto tableStr = StrArg(self, table, "translate");
+            const auto tableChars = SplitCodePoints(View(tableStr));
+            ForEachCodePoint(self, [&append, &tableChars](View ch) {
+                const auto cp = CodePointValue(ch);
+                append(cp < tableChars.size() ? tableChars[cp] : ch);
+            });
+            return Result(std::move(result));
+        }
+        ForEachCodePoint(self, [&result, &append, &table, &self, &context](View ch) {
+            const auto mapped = TranslateLookup(table, CodePointValue(ch), context);
+            if (!mapped)
+            {
+                append(ch);
+            }
+            else if (IsStringValue(*mapped))
+            {
+                append(StrArg(self, *mapped, "translate"));
+            }
+            else if (mapped->Kind() == ValueKind::Int || mapped->Kind() == ValueKind::Bool || mapped->Kind() == ValueKind::BigInt)
+            {
+                const auto* value = GetIf<int64_t>(&*mapped);
+                const auto cp = value ? *value : (mapped->Kind() == ValueKind::Bool ? int64_t{ *GetIf<bool>(&*mapped) } : -1);
+                if (cp < 0 || cp > 0x10FFFF)
+                {
+                    Raise("character mapping must be in range(0x110000)"s);
+                }
+                CheckSequenceSize(static_cast<uint64_t>(result.size()) + EncodedUnits<CharT>(static_cast<uint32_t>(cp)), "a translated string");
+                AppendCodePoint(result, static_cast<uint32_t>(cp));
+            }
+            else if (!mapped->IsNone())
+            {
+                Raise("character mapping must return integer, None or str"s);
+            }
+        });
+        return Result(std::move(result));
+    }
+
+    // The one code point of a str key of maketrans's dict, or of a character of its arguments
+    static uint32_t SingleCodePoint(View str) { return CodePointValue(str); }
+
+    static Str MaketransStr(View self, const CallParams& params, size_t idx)
+    {
+        const auto& val = params.posParams[idx];
+        auto str = GetAsSameString(self, val);
+        if (!str || !IsStringValue(val))
+        {
+            Raise(fmt::format("maketrans() argument {} must be str, not {}", idx + 1, TypeName(val)));
+        }
+        return std::move(*str);
+    }
+
+    // Python's str.maketrans: a dict of code points to what translate puts in their place, from
+    // one dict (its str keys of one character become code points) or from two strings of the
+    // same length and a third whose characters are dropped
+    static InternalValue Maketrans(View self, const CallParams& params, RenderContext&)
+    {
+        CheckArgs(params, "maketrans", 1, 3);
+        TemplateDict result;
+        const auto& first = params.posParams[0];
+        if (params.posParams.size() == 1)
+        {
+            const auto map = AsMap(first);
+            if (!map || first.Kind() != ValueKind::Map || map->GetAttrPolicy() == MapAttrPolicy::KeysOnly)
+            {
+                Raise("if you give only one argument to maketrans it must be a dict"s);
+            }
+            for (auto& entry : map->GetEntries())
+            {
+                if (IsStringValue(entry.key))
+                {
+                    const auto key = StrArg(self, entry.key, "maketrans");
+                    if (CodePointCount(View(key)) != 1)
+                    {
+                        Raise("string keys in translate table must be of length 1"s);
+                    }
+                    result.Set(InternalValue(static_cast<int64_t>(SingleCodePoint(key))), std::move(entry.value));
+                }
+                else if (const auto kind = entry.key.Kind(); kind == ValueKind::Int || kind == ValueKind::Bool || kind == ValueKind::BigInt)
+                {
+                    result.Set(entry.key, std::move(entry.value));
+                }
+                else
+                {
+                    Raise("keys in translate table must be strings or integers"s);
+                }
+            }
+            return CreateMapAdapter(std::move(result));
+        }
+        if (!IsStringValue(first))
+        {
+            Raise("first maketrans argument must be a string if there is a second argument"s);
+        }
+        const auto from = MaketransStr(self, params, 0);
+        const auto to = MaketransStr(self, params, 1);
+        const auto fromChars = SplitCodePoints(View(from));
+        const auto toChars = SplitCodePoints(View(to));
+        if (fromChars.size() != toChars.size())
+        {
+            Raise("the first two maketrans arguments must have equal length"s);
+        }
+        for (size_t n = 0; n < fromChars.size(); ++n)
+        {
+            result.Set(InternalValue(static_cast<int64_t>(SingleCodePoint(fromChars[n]))), InternalValue(static_cast<int64_t>(SingleCodePoint(toChars[n]))));
+        }
+        if (params.posParams.size() == 3)
+        {
+            const auto dropped = MaketransStr(self, params, 2);
+            ForEachCodePoint(View(dropped), [&result](View ch) { result.Set(InternalValue(static_cast<int64_t>(SingleCodePoint(ch))), InternalValue(NoneValue())); });
+        }
+        return CreateMapAdapter(std::move(result));
+    }
+
     static Str ToStr(const InternalValue& val, bool asRepr)
     {
         Str result;
@@ -1426,19 +1644,26 @@ struct StrOps
         return result;
     }
 
-    // Python forbids mixing {} with {0} in one format string
+    // Python forbids mixing {} with {0} in one format string. mapping: format_map's argument,
+    // the only source of named fields, which leaves no positional ones
     struct FieldNumbering
     {
         size_t autoIdx = 0;
         bool usedAuto = false;
         bool usedManual = false;
+        const InternalValue* mapping = nullptr;
     };
 
-    // The argument a field's first name refers to: a position ({} or {0}) or a keyword
-    static InternalValue LookupArg(View first, const CallParams& params, FieldNumbering& numbering)
+    // The argument a field's first name refers to: a position ({} or {0}) or a keyword, or for
+    // format_map the mapping's item (CPython's get_field_object)
+    static InternalValue LookupArg(View first, const CallParams& params, FieldNumbering& numbering, RenderContext& context)
     {
         if (!first.empty() && !IsDigits(first))
         {
+            if (numbering.mapping)
+            {
+                return FormatItem(*numbering.mapping, InternalValue(Narrow(first)), context);
+            }
             auto p = params.kwParams.find(Narrow(first));
             if (p == params.kwParams.end())
             {
@@ -1464,6 +1689,10 @@ struct StrOps
             }
             numbering.usedManual = true;
             idx = static_cast<size_t>(ParseFieldNumber(first));
+        }
+        if (numbering.mapping)
+        {
+            Raise("Format string contains positional fields");
         }
         if (idx >= params.posParams.size())
         {
@@ -1561,6 +1790,11 @@ struct StrOps
                                                  || (!context.GetSandboxPolicy() && (kind == ValueKind::Int || kind == ValueKind::BigInt || kind == ValueKind::Double || kind == ValueKind::Bool)))
         {
             Raise("'" + TypeName(value) + "' object is not subscriptable");
+        }
+        // A dict's items only: GetItem would fall back to its methods ('{0[items]}' is a KeyError)
+        else if (map && value.Kind() == ValueKind::Map)
+        {
+            result = map->FindItem(key);
         }
         else
         {
@@ -1723,7 +1957,7 @@ struct StrOps
         auto nameEnd = field.name.find_first_of(Ascii(".["));
         auto first = field.name.substr(0, nameEnd == View::npos ? field.name.size() : nameEnd);
         auto rest = nameEnd == View::npos ? View() : field.name.substr(nameEnd);
-        auto value = ApplyAccessors(LookupArg(first, params, numbering), rest, context);
+        auto value = ApplyAccessors(LookupArg(first, params, numbering, context), rest, context);
         if (field.conversion == 'a')
         {
             value = TargetString(AsciiRepr(value));
@@ -1805,6 +2039,16 @@ struct StrOps
         FieldNumbering numbering;
         return Result(Build(self, params, numbering, context, escape, 2));
     }
+
+    // str.format_map(mapping): str.format with the mapping's items as the named fields and no
+    // positional ones (docs/tasks/0443)
+    static InternalValue FormatMap(View self, const CallParams& params, RenderContext& context, bool escape = false)
+    {
+        CheckArgs(params, "format_map", 1, 1);
+        FieldNumbering numbering;
+        numbering.mapping = params.posParams.data();
+        return Result(Build(self, params, numbering, context, escape, 2));
+    }
 };
 
 #define JINJA2CPP_STR_METHOD(Fn) \
@@ -1837,19 +2081,29 @@ JINJA2CPP_STR_METHOD(Rfind)
 JINJA2CPP_STR_METHOD(Index)
 JINJA2CPP_STR_METHOD(Rindex)
 JINJA2CPP_STR_METHOD(Count)
-InternalValue StrFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
+// str.format and, with formatMap, str.format_map; Markup's escape each field (escape). A sandbox
+// policy may format the string itself (ISandboxPolicy::Format)
+InternalValue FormatString(const InternalValue& self, const CallParams& params, RenderContext& context, bool formatMap, bool escape)
 {
     if (const auto* policy = context.GetSandboxPolicy())
     {
-        if (auto formatted = policy->Format(self, false, params, context))
+        if (auto formatted = policy->Format(self, formatMap, params, context))
         {
             return std::move(*formatted);
         }
     }
-    return ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
+    return ApplyStringConverter(self, [&params, &context, formatMap, escape](auto sv) -> InternalValue {
         using CharT = typename decltype(sv)::value_type;
-        return StrOps<CharT>::Format(sv, params, context);
+        return formatMap ? StrOps<CharT>::FormatMap(sv, params, context, escape) : StrOps<CharT>::Format(sv, params, context, escape);
     });
+}
+InternalValue StrFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    return FormatString(self, params, context, false, false);
+}
+InternalValue StrFormatMap(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    return FormatString(self, params, context, true, false);
 }
 JINJA2CPP_STR_METHOD(Isdigit)
 JINJA2CPP_STR_METHOD(Isdecimal)
@@ -1871,6 +2125,9 @@ JINJA2CPP_STR_METHOD(Partition)
 JINJA2CPP_STR_METHOD(Rpartition)
 JINJA2CPP_STR_METHOD(Removeprefix)
 JINJA2CPP_STR_METHOD(Removesuffix)
+JINJA2CPP_STR_METHOD(Expandtabs)
+JINJA2CPP_STR_METHOD(Translate)
+JINJA2CPP_STR_METHOD(Maketrans)
 
 #undef JINJA2CPP_STR_METHOD
 
@@ -1917,6 +2174,10 @@ const MethodInfo StrMethods[] = {
     { "rpartition", StrRpartition, false },
     { "removeprefix", StrRemoveprefix, false },
     { "removesuffix", StrRemovesuffix, false },
+    { "format_map", StrFormatMap, false },
+    { "expandtabs", StrExpandtabs, false },
+    { "translate", StrTranslate, false },
+    { "maketrans", StrMaketrans, false },
 };
 
 // ---------------------------------------------------------------------------------------
@@ -1985,19 +2246,28 @@ InternalValue MarkupJoin(const InternalValue& self, const CallParams& params, Re
     return MarkupResult(StrJoinMethod(self, escaped, context));
 }
 
-InternalValue MarkupFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
+// markupsafe's EscapeFormatter: a policy's result is taken as it is, the engine's is Markup
+InternalValue MarkupFormatString(const InternalValue& self, const CallParams& params, RenderContext& context, bool formatMap)
 {
     if (const auto* policy = context.GetSandboxPolicy())
     {
-        if (auto formatted = policy->Format(self, false, params, context))
+        if (auto formatted = policy->Format(self, formatMap, params, context))
         {
             return std::move(*formatted);
         }
     }
-    return MarkupResult(ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
+    return MarkupResult(ApplyStringConverter(self, [&params, &context, formatMap](auto sv) -> InternalValue {
         using CharT = typename decltype(sv)::value_type;
-        return StrOps<CharT>::Format(sv, params, context, true);
+        return formatMap ? StrOps<CharT>::FormatMap(sv, params, context, true) : StrOps<CharT>::Format(sv, params, context, true);
     }));
+}
+InternalValue MarkupFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    return MarkupFormatString(self, params, context, false);
+}
+InternalValue MarkupFormatMap(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    return MarkupFormatString(self, params, context, true);
 }
 
 const MethodInfo MarkupMethods[] = {
@@ -2043,6 +2313,11 @@ const MethodInfo MarkupMethods[] = {
     { "rpartition", MarkupMethod<StrRpartition>, false },
     { "removeprefix", MarkupMethod<StrRemoveprefix>, false },
     { "removesuffix", MarkupMethod<StrRemovesuffix>, false },
+    { "format_map", MarkupFormatMap, false },
+    { "expandtabs", MarkupMethod<StrExpandtabs>, false },
+    // markupsafe wraps translate without escaping the table's strings; maketrans is str's
+    { "translate", MarkupMethod<StrTranslate>, false },
+    { "maketrans", StrMaketrans, false },
 };
 static_assert(std::size(MarkupMethods) == std::size(StrMethods), "Markup has every str method");
 
@@ -2621,12 +2896,156 @@ InternalValue FloatIsInteger(const InternalValue& self, const CallParams& params
     return InternalValue(std::isfinite(value) && std::floor(value) == value);
 }
 
+// An int, or a bool as the int it is (True.conjugate() is 1)
+InternalValue AsIntValue(const InternalValue& self)
+{
+    if (const auto* b = GetIf<bool>(&self))
+    {
+        return static_cast<int64_t>(*b ? 1 : 0);
+    }
+    return self;
+}
+
+InternalValue IntBitCount(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "bit_count", 0, 0);
+    if (const auto big = AsBigInt(self))
+    {
+        const auto bits = MagnitudeInBase(*big, 2);
+        return static_cast<int64_t>(std::count(bits.begin(), bits.end(), '1'));
+    }
+    auto value = IntArg(self, "bit_count");
+    uint64_t magnitude = value < 0 ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
+    int64_t bits = 0;
+    for (; magnitude != 0; magnitude &= magnitude - 1)
+    {
+        ++bits;
+    }
+    return bits;
+}
+
+InternalValue IntConjugate(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "conjugate", 0, 0);
+    return AsIntValue(self);
+}
+
+InternalValue IntAsIntegerRatio(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "as_integer_ratio", 0, 0);
+    return MakeTuple({ AsIntValue(self), InternalValue(int64_t{ 1 }) });
+}
+
+// int.is_integer (Python 3.12): always true
+InternalValue IntIsInteger(const InternalValue&, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "is_integer", 0, 0);
+    return InternalValue(true);
+}
+
+InternalValue FloatConjugate(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "conjugate", 0, 0);
+    return self;
+}
+
+// 2**exponent as an int, a big one past int64
+InternalValue PowerOfTwo(int exponent)
+{
+    if (exponent < 63)
+    {
+        return static_cast<int64_t>(uint64_t{ 1 } << exponent);
+    }
+    return IntegerFromDigits("1" + std::string(static_cast<size_t>(exponent), '0'), 2, false);
+}
+
+// CPython's float_as_integer_ratio: the fraction in lowest terms, whose denominator is a power of two
+InternalValue FloatAsIntegerRatio(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "as_integer_ratio", 0, 0);
+    const auto value = *GetIf<double>(&self);
+    if (std::isinf(value))
+    {
+        Raise("OverflowError: cannot convert Infinity to integer ratio"s);
+    }
+    if (std::isnan(value))
+    {
+        Raise("ValueError: cannot convert NaN to integer ratio"s);
+    }
+    if (std::floor(value) == value)
+    {
+        return MakeTuple({ IntegerFromDouble(value), InternalValue(int64_t{ 1 }) });
+    }
+    int exponent = 0;
+    const double fraction = std::frexp(std::fabs(value), &exponent);
+    // fraction * 2**53 is the 53-bit significand; value = significand * 2**(exponent - 53)
+    auto significand = static_cast<uint64_t>(std::ldexp(fraction, std::numeric_limits<double>::digits));
+    exponent -= std::numeric_limits<double>::digits;
+    // Not an integer, so the exponent stays negative while the trailing zeros go
+    while ((significand & 1) == 0)
+    {
+        significand >>= 1;
+        ++exponent;
+    }
+    const auto numerator = static_cast<int64_t>(significand);
+    return MakeTuple({ InternalValue(value < 0 ? -numerator : numerator), PowerOfTwo(-exponent) });
+}
+
+// CPython's float_hex: [-]0x<digit>.<13 hex digits>p<exponent>, subnormals as 0x0.<digits>p-1022
+InternalValue FloatHex(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "hex", 0, 0);
+    const auto value = *GetIf<double>(&self);
+    if (std::isnan(value))
+    {
+        return InternalValue("nan"s);
+    }
+    if (std::isinf(value))
+    {
+        return InternalValue(value < 0 ? "-inf"s : "inf"s);
+    }
+    const std::string sign = std::signbit(value) ? "-" : "";
+    if (value == 0)
+    {
+        return InternalValue(sign + "0x0.0p+0");
+    }
+    int exponent = 0;
+    double fraction = std::frexp(std::fabs(value), &exponent);
+    const int shift = 1 - std::max(std::numeric_limits<double>::min_exponent - exponent, 0);
+    fraction = std::ldexp(fraction, shift);
+    exponent -= shift;
+    constexpr char digits[] = "0123456789abcdef";
+    std::string result = sign + "0x";
+    auto digit = static_cast<int>(fraction);
+    result.push_back(digits[digit]);
+    fraction -= digit;
+    result.push_back('.');
+    constexpr int fractionDigits = (std::numeric_limits<double>::digits - 1) / 4;
+    for (int n = 0; n < fractionDigits; ++n)
+    {
+        fraction *= 16.0;
+        digit = static_cast<int>(fraction);
+        result.push_back(digits[digit]);
+        fraction -= digit;
+    }
+    return InternalValue(result + fmt::format("p{:+d}", exponent));
+}
+
+// The methods of int, bool and float the engine has; bytes ones (to_bytes, from_bytes) and the
+// alternate constructor float.fromhex are not (docs/python.md, docs/tasks/0403)
 const MethodInfo IntMethods[] = {
     { "bit_length", IntBitLength, false },
+    { "bit_count", IntBitCount, false },
+    { "conjugate", IntConjugate, false },
+    { "as_integer_ratio", IntAsIntegerRatio, false },
+    { "is_integer", IntIsInteger, false },
 };
 
 const MethodInfo FloatMethods[] = {
     { "is_integer", FloatIsInteger, false },
+    { "conjugate", FloatConjugate, false },
+    { "as_integer_ratio", FloatAsIntegerRatio, false },
+    { "hex", FloatHex, false },
 };
 
 // The data attributes of int, bool and float (docs/tasks/0374): x.real, x.imag, and for an int

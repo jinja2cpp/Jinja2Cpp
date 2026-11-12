@@ -220,8 +220,17 @@ private:
     InternalValue m_finalize;
     // Parse's isVolatile
     bool m_volatile = false;
+    // In Parse, the `{{ }}` whose value Jinja2 folds at compile time when it can
+    bool m_inOutput = false;
+    // Subscripts by a tuple holding a slice (`[1, 2][1:2, 3]`) made so far: Jinja2 compiles one
+    // only when it folds an output's whole value, else it writes invalid Python (docs/tasks/0445)
+    unsigned m_tupleSliceSubscripts = 0;
+    // The undefined the last of them folds to
+    NodeRef<Expression> m_tupleSliceValue;
     // AutoescapeMode::Prompt: the template's string literals are prompt-safe, Markup (docs/tasks/0358)
     bool m_trustedLiterals = false;
+    // Settings::undefinedPolicy is Strict: printing the folded undefined fails, so Jinja2 does not fold it
+    bool m_strictUndefined = false;
     // Nesting level of the expression being parsed, bounded by Settings::Limits::maxExpressionDepth
     unsigned m_depth = 0;
     // Operators chained on the current path (a + b + c, x|f|g, a.b.c, - - x), bounded by
