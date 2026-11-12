@@ -1398,7 +1398,12 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaVie
         }
 
         auto var = parsedParams["iterable"];
-        if (IsEmpty(var))
+        // Python iterates an undefined as empty, and None not at all
+        if (var.IsNone())
+        {
+            throw TemplateRuntimeError("'NoneType' object is not iterable");
+        }
+        if (var.IsUndefined())
         {
             InternalValue empty(RenderToString(context.GetRendererCallback(), [](OutStream&) {}));
             empty.SetMarkup(isVolatile ? context.IsAutoescape() : autoescape);

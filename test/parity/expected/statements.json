@@ -7686,6 +7686,90 @@
    }
   },
   {
+   "id": "statements.loop_call_none_undefined",
+   "template": "{% for i in [1] recursive %}[{{ loop(nope) }}]{{ loop('') }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "statements.loop_call_none",
+   "template": "{% for i in [1] recursive %}[{{ loop(none) }}]{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not iterable"
+   }
+  },
+  {
    "id": "statements.loop_not_mapping",
    "template": "{% for i in [1] %}{{ 'T' if loop is mapping else 'F' }}{% endfor %}",
    "context": {

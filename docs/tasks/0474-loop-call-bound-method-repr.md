@@ -23,3 +23,5 @@ receiver's repr is the loop's own, with no address, so the corpus holds the exac
 made by `MakeLoopDunderCall`: the call slot's callable, bound to the loop's cycle cell under the name
 `__call__`, so its repr follows the loop after it ends, as `loop.cycle`'s does. The call slot itself
 stays unbound, so a recursive loop makes no cell unless the template reads `loop.__call__`.
+Found on the way (verifier): `loop(none)` rendered empty where Python raises `'NoneType' object is not
+iterable`; it raises now, and `loop(undefined)` stays empty as in Python (`statements.loop_call_none*`).
