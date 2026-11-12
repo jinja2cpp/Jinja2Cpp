@@ -361,6 +361,7 @@ TEST(ExpressionTest, CyclesThroughObjects)
 {
     TemplateEnv env;
     env.GetSettings().extensions.doStatement = true;
+    env.GetSettings().extensions.loopControls = true;
     auto render = [&env](const std::string& source) {
         Template tpl(&env);
         EXPECT_TRUE(tpl.Load(source).has_value()) << source;
@@ -379,6 +380,10 @@ TEST(ExpressionTest, CyclesThroughObjects)
     // An undefined attribute of `loop` keeps the loop's frame, which holds the items (docs/tasks/0444)
     EXPECT_EQ("False", render("{% set ns = namespace(c=none) %}{% for x in [ns] %}{% set ns.c = loop.nope %}{% endfor %}{{ ns.c is defined }}"));
     EXPECT_EQ("1", render("{% set l = [] %}{% for x in [l] %}{% do l.append(loop.nope) %}{% endfor %}{{ l|length }}"));
+    // A loop over `loop` holds the outer loop where the collector sees it (docs/tasks/0400)
+    EXPECT_EQ("ok", render("{% set ns = namespace(k=none) %}{% for x in [ns, ns, ns] %}{% for a in loop %}{% set ns.k = loop %}{% break %}{% endfor %}{% endfor %}ok"));
+    EXPECT_EQ("2", render("{% set ns = namespace(k=none) %}{% for x in [ns, ns, ns] %}{% for a in loop %}{% set ns.k = loop %}{% endfor %}{% endfor %}{{ ns.k.index }}"));
+    EXPECT_EQ("True", render("{% set ns = namespace(k=none) %}{% for x in [ns, ns] %}{% for a in loop %}{% set ns.k = a %}{% endfor %}{% endfor %}{{ ns.k[0] is sameas ns }}"));
     // A cycler keeps its position through the collector's view of it
     EXPECT_EQ("a,b,a|1|b", render("{% set c = cycler('a', 'b') %}{{ c.next() }},{{ c.next() }},{{ c.next() }}|{{ c.pos }}|{{ c.current }}"));
 }

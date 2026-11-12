@@ -713,9 +713,9 @@ TEST_F(AllocationFailureTest, ModuleSortKeepsItsItemsWhenTheCopyFails)
     EXPECT_LT(n, maxAllocations);
 }
 
-// A render nested in one that wrote a global through an alias converts its own globals; when that
-// conversion fails, the next render it makes still does, rather than read the outer render's cell
-// (Codex review, docs/tasks/0331)
+// A render nested in one that wrote a global through an alias reads that render's snapshot of the
+// globals, and so its cell (docs/tasks/0324); when the nested render fails on an allocation, the
+// next one it makes still reads that cell (Codex review, docs/tasks/0331)
 TEST_F(AllocationFailureTest, NestedRenderAfterAFailedGlobalsConversion)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
@@ -746,7 +746,7 @@ TEST_F(AllocationFailureTest, NestedRenderAfterAFailedGlobalsConversion)
         });
         std::string result;
         OnFreshThread([&] { result = outer.RenderAsString(params).value(); });
-        ASSERT_EQ("[0]|[0, 1]", result) << "allocation " << n;
+        ASSERT_EQ("[0, 1]|[0, 1]", result) << "allocation " << n;
         if (!fired)
         {
             break;

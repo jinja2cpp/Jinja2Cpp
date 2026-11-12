@@ -128,13 +128,21 @@ Skip ==
     /\ Next1(TRUE)
     /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
 
+\* A render started inside another one on the same thread, before or after it made its own
+\* registry, which is then the newer one: it reads the outer render's snapshot of the globals,
+\* whose adapters stay attached to the outer render's cells (docs/tasks/0324)
+Enclosing(r, cur) ==
+    /\ r \in DOMAIN rg /\ rg[r].alive /\ ~rg[r].module /\ rg[r].thr = E.t
+    /\ \/ cur = 0
+       \/ cur \in DOMAIN rg /\ rg[cur].alive /\ ~rg[cur].module /\ rg[cur].thr = E.t /\ cur > r
+
 \* A read through an attached adapter: its cell, without a lookup. Unless frozen, the cell is of
-\* the registry running (CellProtocol's NoForeignCell)
+\* the registry running, or of a render the running one is nested in (CellProtocol's NoForeignCell)
 Hit ==
     /\ E.ev = "hit" /\ Known(E.c)
     /\ Check([LinksAgree |-> L(E.a).cell # E.c,
               NoUseAfterFree |-> ~cl[E.c].alive,
-              NoForeignCell |-> ~cl[E.c].frozen /\ cl[E.c].reg # E.cur])
+              NoForeignCell |-> ~cl[E.c].frozen /\ cl[E.c].reg # E.cur /\ ~Enclosing(cl[E.c].reg, E.cur)])
     /\ Next1(TRUE)
     /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
 
