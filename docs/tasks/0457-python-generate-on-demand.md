@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: parity
 depends: [0436]
 touches: [include/jinja2cpp/template.h, src/render_suspension.h, src/render_suspension.cpp, src/render_workspace.h, src/recursion_guard.h, src/recursion_guard.cpp, src/template_impl.h, src/template.cpp, src/template_render_options.cpp, src/cycle_collector.h, src/internal_value.cpp, src/render_failure.cpp, CMakeLists.txt, REVIEW.md, docs/api-2.0.md, python/src/fiber/, thirdparty/boost_context/, test/suspendable_render_test.cpp, python/src/environment.cpp, python/jinja2cpp/environment.py]
 shares: [python/tests/test_generate.py, python/tests/upstream/expected-failures.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/852
 ---
 # `Template.generate` renders on demand, on the caller's thread
 
