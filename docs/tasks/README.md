@@ -393,7 +393,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0321](0321-load-copies-on-write.md) | Load replaces the template for its own object only | robustness | high | done |
 | [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | done |
 | [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | done |
-| [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | open |
+| [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | done |
 | [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | open |
 | [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | done |
 | [0327](0327-change-globals-use-count-race.md) | Changing a global can race with a render that just dropped the globals map | robustness | medium | done |
@@ -467,7 +467,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0397](0397-conancenter-recipe-license-at-2-0.md) | Correct the ConanCenter recipe license with the 2.0 version bump | release | medium | open |
 | [0398](0398-lean-proof-pilot-neutralize.md) | Lean 4 proof pilot: the `neutralize` edge rule | robustness | low | open |
 | [0399](0399-select-map-fetch-per-step.md) | select and map fetch one item per step | parity | low | done |
-| [0400](0400-loop-iteration-cycle-leak.md) | A kept loop over `loop` leaks through a cycle the collector cannot see | robustness | low | open |
+| [0400](0400-loop-iteration-cycle-leak.md) | A kept loop over `loop` leaks through a cycle the collector cannot see | robustness | low | done |
 | [0401](0401-callable-and-generator-leftovers.md) | Callables, generators and ranges: leftovers of 0387 and 0368 | parity | low | done |
 | [0402](0402-json-identity-across-module-calls.md) | JSON values across the calls of a template module | parity | low | open |
 | [0403](0403-python-methods-on-native-values.md) | Python methods of int, float and str the engine does not implement | parity | low | done |
@@ -480,14 +480,14 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0410](0410-python-include-join-path.md) | `include`, `import` and `extends` do not call `env.join_path` | parity | low | open |
 | [0411](0411-python-module-export-types.md) | `make_module` exports lose the type of a namespace, a cycler, a range and an undefined | parity | low | open |
 | [0412](0412-python-sandbox-operator-interception.md) | Sandbox: `intercepted_binops`, `intercepted_unops`, `call_binop` and `call_unop` | api | low | open |
-| [0413](0413-strict-undefined-sort-unique-key.md) | `sort` and `unique` with `attribute=` do not fail on a StrictUndefined key | parity | low | open |
+| [0413](0413-strict-undefined-sort-unique-key.md) | `sort` and `unique` with `attribute=` do not fail on a StrictUndefined key | parity | low | done |
 | [0414](0414-python-sandbox-policy-on-engine-values.md) | Sandbox policy on the engine's own values | api | low | open |
 | [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | open |
 | [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | open |
 | [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | open |
 | [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | done |
 | [0419](0419-print-statement.md) | `{% print expr %}` is a parse error in the engine | parity | low | done |
-| [0420](0420-range-and-engine-object-leftovers.md) | Range and engine-object leftovers of 0401 | parity | low | open |
+| [0420](0420-range-and-engine-object-leftovers.md) | Range and engine-object leftovers of 0401 | parity | low | done |
 | [0421](0421-host-tuple-inbound.md) | A tuple a host returns stays a tuple | api | low | open |
 | [0422](0422-module-call-exports-views.md) | Exports of a running module call keep tuples, keys and lent members | api | low | open |
 | [0423](0423-lent-members-nested.md) | Template callables nested two levels deep in a host call's argument | api | low | open |
@@ -501,7 +501,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0431](0431-upstream-suite-syntax-gaps.md) | Syntax gaps the upstream Jinja2 suite found | parity | medium | done |
 | [0432](0432-upstream-suite-error-types-and-messages.md) | Error classes, messages and tracebacks the upstream Jinja2 suite checks | parity | medium | done |
 | [0433](0433-python-template-cache-identity.md) | `get_template` returns a new Template object each time, and template globals of includes | parity | medium | open |
-| [0434](0434-python-values-leftovers-upstream-suite.md) | Values, filters and macros: leftovers the upstream Jinja2 suite found | parity | low | open |
+| [0434](0434-python-values-leftovers-upstream-suite.md) | Values, filters and macros: leftovers the upstream Jinja2 suite found | parity | low | done |
 | [0435](0435-python-environment-policies.md) | `Environment.policies` | parity | low | open |
 | [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | done |
 | [0437](0437-python-gil-released-render.md) | Render with the GIL released when the data is JSON-like (0248 plan D5, phase 3) | perf | low | open |
@@ -513,7 +513,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | done |
 | [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | done |
 | [0445](0445-subscript-tuple-of-slices.md) | A subscript of a literal by a tuple of slices is a parse error in the engine | parity | low | done |
-| [0446](0446-nfkc-template-names.md) | Names a template sets are not NFKC-normalised | parity | low | open |
+| [0446](0446-nfkc-template-names.md) | Names a template sets are not NFKC-normalised | parity | low | done |
 | [0447](0447-chained-if-unicode-space.md) | Chained else-less conditionals and Unicode spaces inside tags | parity | low | done |
 | [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | open |
 | [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | open |
@@ -530,8 +530,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | open |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
 | [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
+| [0463](0463-outer-render-sees-nested-global-write.md) | The outer render does not see a global a nested render changed first | robustness | low | open |
 | [0464](0464-lower-upper-tests-cased-letters.md) | `lower` and `upper` tests: a string with no cased letter is neither | parity | medium | open |
 | [0465](0465-dotted-filter-test-names.md) | Dotted filter and test names (`x|ns.f`, `x is ns.t`) | parity | low | open |
 | [0466](0466-python-format-map-native-attribute.md) | The Python module answers format_map from NativeAttribute, which the engine now has | python | low | open |
 | [0471](0471-tuple-of-slices-fold-by-choice.md) | Tuple-of-slices subscripts: folds the engine decides differently from Jinja2 | parity | low | open |
+| [0474](0474-loop-call-bound-method-repr.md) | `loop.__call__` prints nothing | parity | low | open |
+| [0475](0475-undefined-identity-and-range-extremes.md) | Leftovers of 0413 and 0420: undefined identity, range extremes, repeat messages | parity | low | open |
+| [0476](0476-class-attribute-of-values.md) | `x.__class__` of the engine's values | parity | low | open |
+| [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | open |
 | [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | open |

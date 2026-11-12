@@ -1,8 +1,9 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: robustness
 touches: [src/template_impl.h, src/render_workspace.h, test/embedding_lifecycle_values_test.cpp, test/borrowed_cells_test.cpp, test/allocation_failure_test.cpp, tla/CellProtocol.tla, tla/CellTrace.tla, tla/check.py, tla/README.md]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/844
 ---
 # A nested render does not see a global the outer render changed in place
 

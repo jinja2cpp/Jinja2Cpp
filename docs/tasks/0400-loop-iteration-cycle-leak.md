@@ -1,9 +1,10 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: robustness
 depends: [0251, 0390]
 touches: [src/statements.cpp#LoopAccessor]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/844
 ---
 # A kept loop over `loop` leaks through a cycle the collector cannot see
 
