@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0434]
 touches: [python/jinja2cpp/environment.py]
 shares: [python/tests/test_values.py]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/859
 ---
 # A StopIteration out of a render is Jinja2's RuntimeError
 

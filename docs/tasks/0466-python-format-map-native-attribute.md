@@ -1,9 +1,10 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: python
 depends: [0443]
 touches: [python/src/adapters.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/859
 ---
 # The Python module answers format_map from NativeAttribute, which the engine now has
 

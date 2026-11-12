@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: parity
 depends: [0355]
 touches: [python/jinja2cpp/environment.py, python/src/environment.cpp]
 shares: [python/tests/upstream/expected-failures.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/859
 ---
 # `get_template` returns a new Template object each time, and template globals of includes
 
