@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0095]
-touches: [src/testers.cpp#HasNoUpperLetter, src/testers.cpp#HasNoLowerLetter, test/parity/divergences/fuzz.txt]
+touches: [src/testers.cpp#IsCaseOnlyString, src/case_mapping.h#IsCaseOnly, src/value_methods.cpp#CaseCheck, test/parity/divergences/fuzz.txt]
 ---
 # `lower` and `upper` tests: a string with no cased letter is neither
 
@@ -24,3 +24,8 @@ methods already go through it.
 **Done when.** `fuzz.lower_test_no_cased_letter` and `fuzz.upper_test_titlecase` match and
 their lines in `test/parity/divergences/fuzz.txt` are deleted (the cases move to
 `cases/tests.py` if the parity steward prefers it), in narrow and wide runs.
+
+**Resolution.** `IsCaseOnly` (src/case_mapping.h) is CPython's `unicode_islower`/`unicode_isupper`
+over code points; `str.islower()`/`isupper()` and the `lower`/`upper` tests both call it, in narrow and
+wide strings. The two fuzz cases moved to `cases/tests.py` with `lower_upper_non_ascii` (Latin, Greek,
+`ß`, an astral uppercase letter) and `lower_upper_markup`.

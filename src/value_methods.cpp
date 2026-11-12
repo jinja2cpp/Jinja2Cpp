@@ -792,22 +792,11 @@ struct StrOps
     }
     static InternalValue Isspace(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isspace", unicode::IsSpace); }
 
-    // CPython's unicode_isupper and unicode_islower: no character of the other case or
-    // titlecase, and at least one of the asked case
+    // CPython's unicode_isupper and unicode_islower (IsCaseOnly)
     static InternalValue CaseCheck(View self, const CallParams& params, const char* name, bool upper)
     {
         CheckArgs(params, name, 0, 0);
-        bool hasCased = false;
-        for (auto ch : SplitCodePoints(self))
-        {
-            auto cp = CodePointValue(ch);
-            if ((upper ? unicode::IsLowercase(cp) : unicode::IsUppercase(cp)) || unicode::IsTitlecase(cp))
-            {
-                return InternalValue(false);
-            }
-            hasCased = hasCased || (upper ? unicode::IsUppercase(cp) : unicode::IsLowercase(cp));
-        }
-        return InternalValue(hasCased);
+        return InternalValue(IsCaseOnly(self, upper));
     }
     static InternalValue Isupper(View self, const CallParams& params, RenderContext&) { return CaseCheck(self, params, "isupper", true); }
     static InternalValue Islower(View self, const CallParams& params, RenderContext&) { return CaseCheck(self, params, "islower", false); }

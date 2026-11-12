@@ -46,6 +46,22 @@ inline uint32_t CodePointValue(std::wstring_view ch)
     return unit;
 }
 
+// CPython's unicode_isupper (upper) or unicode_islower: no character of the other case or
+// titlecase, and at least one of the asked case. str.isupper()/islower() and the `upper` and
+// `lower` tests (docs/tasks/0464)
+template<typename CharT>
+bool IsCaseOnly(std::basic_string_view<CharT> str, bool upper)
+{
+    bool hasCased = false;
+    bool isOther = false;
+    ForEachCodePoint(str, [&](std::basic_string_view<CharT> ch) {
+        const auto cp = CodePointValue(ch);
+        isOther = isOther || (upper ? unicode::IsLowercase(cp) : unicode::IsUppercase(cp)) || unicode::IsTitlecase(cp);
+        hasCased = hasCased || (upper ? unicode::IsUppercase(cp) : unicode::IsLowercase(cp));
+    });
+    return hasCased && !isOther;
+}
+
 template<typename CharT>
 void AppendCodePoint(std::basic_string<CharT>& out, uint32_t cp)
 {

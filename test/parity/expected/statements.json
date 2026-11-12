@@ -7482,6 +7482,210 @@
    }
   },
   {
+   "id": "statements.loop_dunder_call_prints",
+   "template": "{% for i in [1, 2] recursive %}{{ loop.__call__ }}|{% endfor %}{% for i in [1] %}{{ loop.__call__ }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<bound method LoopContext.__call__ of <LoopContext 1/2>>|<bound method LoopContext.__call__ of <LoopContext 2/2>>|<bound method LoopContext.__call__ of <LoopContext 1/1>>"
+  },
+  {
+   "id": "statements.loop_dunder_call_recursion",
+   "template": "{% for i in [1, [2, 3]] recursive %}{% if i is sequence %}({{ loop.__call__(i) }}){% else %}{{ i }}{% endif %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1(23)"
+  },
+  {
+   "id": "statements.loop_dunder_call_attribute",
+   "template": "{% for i in [1] %}{{ loop['__call__'] is defined }}|{{ loop.__call__ == loop.__call__ }}|{{ loop.__call__ is callable }}|{{ loop|attr('__call__') is defined }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True|True|True"
+  },
+  {
+   "id": "statements.loop_dunder_call_kept",
+   "template": "{% set ns = namespace() %}{% for i in [1, 2] %}{% set ns.c = loop.__call__ %}{% endfor %}{{ ns.c }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<bound method LoopContext.__call__ of <LoopContext 2/2>>"
+  },
+  {
+   "id": "statements.loop_dunder_call_not_recursive",
+   "template": "{% for i in [1] %}{{ loop.__call__([2]) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "The loop must have the 'recursive' marker to be called recursively."
+   }
+  },
+  {
    "id": "statements.loop_not_mapping",
    "template": "{% for i in [1] %}{{ 'T' if loop is mapping else 'F' }}{% endfor %}",
    "context": {

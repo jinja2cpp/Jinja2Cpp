@@ -2,6 +2,7 @@
 
 #include "engine_errors.h"
 #include "big_int.h"
+#include "case_mapping.h"
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
@@ -353,37 +354,12 @@ bool IsEvenOrOdd(const InternalValue& val, TestKind valKind, bool even)
     return result;
 }
 
-// The string `val` has no uppercase letter
-bool HasNoUpperLetter(const InternalValue& val)
+// str.islower() (upper false) or str.isupper() of the string `val`
+bool IsCaseOnlyString(const InternalValue& val, bool upper)
 {
-    return ApplyStringConverter(val, [](const auto& str) {
-        bool result = true;
-        for (auto& ch : str)
-        {
-            if (std::isalpha(ch, std::locale()) && std::isupper(ch, std::locale()))
-            {
-                result = false;
-                break;
-            }
-        }
-        return result;
-    });
-}
-
-// The string `val` has no lowercase letter
-bool HasNoLowerLetter(const InternalValue& val)
-{
-    return ApplyStringConverter(val, [](const auto& str) {
-        bool result = true;
-        for (auto& ch : str)
-        {
-            if (std::isalpha(ch, std::locale()) && std::islower(ch, std::locale()))
-            {
-                result = false;
-                break;
-            }
-        }
-        return result;
+    return ApplyStringConverter(val, [upper](const auto& str) {
+        using CharT = typename std::decay_t<decltype(str)>::value_type;
+        return IsCaseOnly(std::basic_string_view<CharT>(str), upper);
     });
 }
 
@@ -686,10 +662,10 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = IsEvenOrOdd(baseVal, valKind, false);
         break;
     case IsLowerMode:
-        result = valKind == TestKind::String && HasNoUpperLetter(baseVal);
+        result = valKind == TestKind::String && IsCaseOnlyString(baseVal, false);
         break;
     case IsUpperMode:
-        result = valKind == TestKind::String && HasNoLowerLetter(baseVal);
+        result = valKind == TestKind::String && IsCaseOnlyString(baseVal, true);
         break;
     }
     return result;

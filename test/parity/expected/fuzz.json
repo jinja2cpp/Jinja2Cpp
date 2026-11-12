@@ -649,40 +649,6 @@
    }
   },
   {
-   "id": "fuzz.lower_test_no_cased_letter",
-   "template": "{{ '3' is lower }}|{{ '' is lower }}|{{ '-7' is upper }}|{{ '3a' is lower }}",
-   "context": {
-    "x": 3,
-    "t": true,
-    "d": {
-     "C": 3,
-     "a": 1,
-     "b": 2
-    },
-    "s": "abc def"
-   },
-   "env": {},
-   "templates": {},
-   "output": "False|False|False|True"
-  },
-  {
-   "id": "fuzz.upper_test_titlecase",
-   "template": "{{ 'ǅ' is upper }}|{{ 'ǅ' is lower }}",
-   "context": {
-    "x": 3,
-    "t": true,
-    "d": {
-     "C": 3,
-     "a": 1,
-     "b": 2
-    },
-    "s": "abc def"
-   },
-   "env": {},
-   "templates": {},
-   "output": "False|False"
-  },
-  {
    "id": "fuzz.dotted_filter_name_not_run",
    "template": "{% if false %}{{ x|first.upper() }}{% endif %}ok",
    "context": {

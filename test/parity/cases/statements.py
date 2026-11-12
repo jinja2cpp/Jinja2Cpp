@@ -195,6 +195,12 @@ CASES = [
     ("loop_recursive_callable", "{% for i in [1] recursive %}{{ 'T' if loop is callable else 'F' }}{% endfor %}"),
     ("loop_callable", "{% for i in [1] %}{{ 'T' if loop is callable else 'F' }}{% endfor %}"),
     ("loop_call_not_recursive", "{% for i in [1] %}{{ loop([2]) }}{% endfor %}"),
+    # loop.__call__ is the bound method LoopContext.__call__ (0474)
+    ("loop_dunder_call_prints", "{% for i in [1, 2] recursive %}{{ loop.__call__ }}|{% endfor %}{% for i in [1] %}{{ loop.__call__ }}{% endfor %}"),
+    ("loop_dunder_call_recursion", "{% for i in [1, [2, 3]] recursive %}{% if i is sequence %}({{ loop.__call__(i) }}){% else %}{{ i }}{% endif %}{% endfor %}"),
+    ("loop_dunder_call_attribute", "{% for i in [1] %}{{ loop['__call__'] is defined }}|{{ loop.__call__ == loop.__call__ }}|{{ loop.__call__ is callable }}|{{ loop|attr('__call__') is defined }}{% endfor %}"),
+    ("loop_dunder_call_kept", "{% set ns = namespace() %}{% for i in [1, 2] %}{% set ns.c = loop.__call__ %}{% endfor %}{{ ns.c }}"),
+    ("loop_dunder_call_not_recursive", "{% for i in [1] %}{{ loop.__call__([2]) }}{% endfor %}"),
     ("loop_not_mapping", "{% for i in [1] %}{{ 'T' if loop is mapping else 'F' }}{% endfor %}"),
     ("set_unpack_dict_keys", "{% set a, b = {'x': 1, 'y': 2} %}{{ a }}{{ b }}"),
     ("loop_len", "{% for i in [1, 2] %}{{ loop|length }}{% endfor %}"),

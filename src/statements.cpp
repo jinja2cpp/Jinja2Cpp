@@ -814,6 +814,30 @@ JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCycle(LoopState& state)
     return result;
 }
 
+// loop(...): the recursion of a recursive loop; a loop without the recursive marker is
+// callable in Jinja2, which then refuses
+JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCall(const LoopState& state)
+{
+    if (!state.recursiveStatement)
+    {
+        return Callable(Callable::GlobalFunc, [](const CallParams&, RenderContext&) -> InternalValue {
+            throw TemplateRuntimeError("The loop must have the 'recursive' marker to be called recursively.");
+        });
+    }
+    return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape, state.recursiveVolatile);
+}
+
+// loop.__call__: loop(...) as the bound method it is in Jinja2, which prints
+// <bound method LoopContext.__call__ of <LoopContext 1/2>> (docs/tasks/0474). The call slot
+// stays a plain callable, so that a recursive loop shares no cell it does not need
+JINJA2CPP_NOINLINE_INLINE Callable MakeLoopDunderCall(LoopState& state)
+{
+    auto result = MakeLoopCall(state);
+    const auto& cell = state.CycleCell();
+    result.SetBoundMethod(cell.get(), "__call__", cell);
+    return result;
+}
+
 // The `loop` object. As in Jinja2's LoopContext, its attributes are computed from the
 // loop state when they are looked up, so an iteration only advances the state
 class LoopAccessor : public MapAccessorImpl<LoopAccessor>
@@ -902,6 +926,7 @@ public:
         case LoopAttr::NextItem:
         case LoopAttr::Changed:
         case LoopAttr::Call:
+        case LoopAttr::DunderCall:
             return false;
         case LoopAttr::Index:
             value.SetImmediate(static_cast<int64_t>(state.index0 + 1));
@@ -966,6 +991,10 @@ private:
         {
             return Property::Call;
         }
+        if (name == "__call__")
+        {
+            return Property::DunderCall;
+        }
         const auto attr = FindLoopAttr(name);
         return attr != LoopAttr::None ? std::optional<Property>(attr) : std::nullopt;
     }
@@ -1019,14 +1048,9 @@ private:
         case Property::Changed:
             return MakeLoopChanged(state);
         case Property::Call:
-            if (!state.recursiveStatement)
-            {
-                // A loop without the recursive marker is callable in Jinja2, which then refuses
-                return Callable(Callable::GlobalFunc, [](const CallParams&, RenderContext&) -> InternalValue {
-                    throw TemplateRuntimeError("The loop must have the 'recursive' marker to be called recursively.");
-                });
-            }
-            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape, state.recursiveVolatile);
+            return MakeLoopCall(state);
+        case Property::DunderCall:
+            return MakeLoopDunderCall(state);
         case Property::None:
             break;
         }

@@ -28,7 +28,10 @@ enum class LoopAttr : std::uint8_t
     Cycle,
     Changed,
     // `loop(...)` of a recursive loop: not an attribute name
-    Call
+    Call,
+    // `loop.__call__`, the bound method LoopContext.__call__ (docs/tasks/0474): looked up
+    // by name, not resolved at Load
+    DunderCall
 };
 
 // The attribute `name` of `loop`, None when it is not one

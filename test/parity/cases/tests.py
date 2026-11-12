@@ -23,6 +23,11 @@ CASES = [
     ("in", "{{ 'T' if 1 is in l else 'F' }}{{ 'T' if 5 is in l else 'F' }}"),
     ("iterable", "{{ 'T' if l is iterable else 'F' }}{{ 'T' if s is iterable else 'F' }}{{ 'T' if x is iterable else 'F' }}"),
     ("lower_upper", "{{ 'T' if s is lower else 'F' }}{{ 'T' if S is upper else 'F' }}{{ 'T' if s is upper else 'F' }}"),
+    # `lower` and `upper` are str.islower and str.isupper: at least one cased letter, no titlecase (0464)
+    ("lower_test_no_cased_letter", "{{ '3' is lower }}|{{ '' is lower }}|{{ '-7' is upper }}|{{ '3a' is lower }}"),
+    ("upper_test_titlecase", "{{ '\u01c5' is upper }}|{{ '\u01c5' is lower }}"),
+    ("lower_upper_non_ascii", "{{ '\u00e9' is lower }}|{{ '\u00c9A' is upper }}|{{ 'Stra\u00dfe' is lower }}|{{ '\u00df' is upper }}|{{ 'abc1-' is lower }}|{{ '\u0391\u0392' is upper }}|{{ '\U0001d400' is upper }}"),
+    ("lower_upper_markup", "{{ 'abc'|safe is lower }}|{{ 'ABC'|safe is upper }}|{{ ''|safe is lower }}"),
     ("mapping", "{{ 'T' if d is mapping else 'F' }}{{ 'T' if l is mapping else 'F' }}"),
     ("none", "{{ 'T' if n is none else 'F' }}{{ 'T' if x is none else 'F' }}"),
     ("not_none", "{{ 'T' if x is not none else 'F' }}"),
