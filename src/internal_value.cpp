@@ -1679,7 +1679,7 @@ private:
     // Calls `read` with it: a view of its items made for the read, or its own list; null for
     // the template's list
     template<typename Read>
-    auto ReadHost(const Read& read) const
+    std::invoke_result_t<const Read&, const IListItemAccessor*> ReadHost(const Read& read) const
     {
         if (m_identity && m_hostItems)
         {
@@ -1794,7 +1794,7 @@ private:
     }
     // As CallListView's
     template<typename Read>
-    auto ReadHost(const Read& read) const
+    std::invoke_result_t<const Read&, const IMapItemAccessor*> ReadHost(const Read& read) const
     {
         if (m_identity && m_hostItems)
         {
