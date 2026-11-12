@@ -269,12 +269,28 @@ std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName, bool 
     return paths;
 }
 
-// Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python. A strict
-// undefined refuses the `==` (docs/tasks/0413); the default one equals another undefined
+// A strict undefined refuses the `==` and `<` of a sort (docs/tasks/0413). With two or more
+// items every key of the first column reaches a comparison, so the sort checks that column once
+// up front, item 1 before item 0 as CPython's first comparison does. A later column is reached on
+// a tie only, so its keys are checked in the comparison
+void CheckSortKeys(size_t count, size_t stride, const InternalValue* keys)
+{
+    if (count < 2)
+    {
+        return;
+    }
+    CheckUndefinedUse(keys[stride], UndefinedUse::Operator);
+    CheckUndefinedUse(keys[0], UndefinedUse::Operator);
+    for (size_t idx = 2; idx < count; ++idx)
+    {
+        CheckUndefinedUse(keys[idx * stride], UndefinedUse::Operator);
+    }
+}
+
+// Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python. The default
+// undefined equals another undefined
 bool IsLessKey(const InternalValue& key1, const InternalValue& key2, BinaryExpression::Operation oper, BinaryExpression::CompareType compType, bool& isEqual)
 {
-    CheckUndefinedUse(key1, UndefinedUse::Operator);
-    CheckUndefinedUse(key2, UndefinedUse::Operator);
     isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
     return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
 }
@@ -295,19 +311,25 @@ std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const st
             keys.push_back(GetAttributeByPath(val, path, InternalValue(), context));
         }
     }
+    CheckSortKeys(values.size(), width, keys.data());
     std::vector<size_t> order(values.size());
     std::iota(order.begin(), order.end(), size_t{ 0 });
     StableSortValues(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
+        const InternalValue* keys1 = &keys[idx1 * width];
+        const InternalValue* keys2 = &keys[idx2 * width];
+        bool isEqual = false;
+        auto result = IsLessKey(keys1[0], keys2[0], oper, compType, isEqual);
         // An item is not compared with itself in Python; a checked sort (_GLIBCXX_DEBUG) asks
-        // comp(x, x), which a strict undefined key would refuse (docs/tasks/0413)
-        if (idx1 == idx2)
+        // comp(x, x), which a strict undefined key of a later column would refuse (docs/tasks/0413)
+        if (!isEqual || idx1 == idx2)
         {
-            return false;
+            return result;
         }
-        for (size_t n = 0; n != width; ++n)
+        for (size_t n = 1; n != width; ++n)
         {
-            bool isEqual = false;
-            auto result = IsLessKey(keys[(idx1 * width) + n], keys[(idx2 * width) + n], oper, compType, isEqual);
+            CheckUndefinedUse(keys1[n], UndefinedUse::Operator);
+            CheckUndefinedUse(keys2[n], UndefinedUse::Operator);
+            result = IsLessKey(keys1[n], keys2[n], oper, compType, isEqual);
             if (!isEqual)
             {
                 return result;
@@ -455,6 +477,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     // Python's sorted() is stable
     if (paths.empty())
     {
+        CheckSortKeys(values.size(), 1, values.data());
         StableSortValues(values.begin(), values.end(), [&isLess](auto& val1, auto& val2) {
             if (&val1 == &val2)
             {

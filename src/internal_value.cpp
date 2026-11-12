@@ -465,7 +465,7 @@ bool InternalValue::IsEqual(const InternalValue& other) const
 InternalValue Value2IntValue(const Value& val);
 InternalValue Value2IntValue(Value&& val);
 
-bool IsHiddenCallSlot(const MapRef& map, std::string_view name)
+bool IsEngineCallSlot(const MapRef& map, std::string_view name)
 {
     if (name != "operator()")
     {
