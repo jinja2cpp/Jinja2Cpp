@@ -32,7 +32,7 @@ borrowed cells (P2), which change how the in-place copy is made.
 `test/embedding_lifecycle_test.cpp`.
 
 **Resolution.** A render records the snapshot it reads in the thread's workspace
-(`RunningGlobalsScope`); a render started inside it with the same environment and globals
+(its renderer callback); a render started inside it with the same environment and globals
 generation reads that snapshot instead of converting the globals again. Its adapters of the
 globals stay attached to the outer render's cells, so the nested render sees the outer render's
 in-place changes and the outer render sees what the nested one then writes to them. This

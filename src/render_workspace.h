@@ -105,7 +105,6 @@ public:
     // a render the host runs while it is suspended is not inside it
     struct RunningGlobals
     {
-        const GlobalsSnapshot* globals = nullptr;
         const std::shared_ptr<const GlobalsSnapshot>* owner = nullptr;
         const RunningGlobals* outer = nullptr;
     };

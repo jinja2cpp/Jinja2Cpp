@@ -72,27 +72,6 @@ struct GlobalsSnapshot
     InternalValueMap values;
 };
 
-// Names the snapshot of the globals a render reads for the renders started inside it (GetGlobalsSnapshot)
-class RunningGlobalsScope
-{
-public:
-    RunningGlobalsScope(RenderWorkspace& workspace, const std::shared_ptr<const GlobalsSnapshot>& globals) noexcept
-        : m_workspace(workspace)
-        , m_running{ globals.get(), &globals, m_workspace.Running() }
-    {
-        m_workspace.SetRunning(&m_running);
-    }
-    ~RunningGlobalsScope() { m_workspace.SetRunning(m_running.outer); }
-    RunningGlobalsScope(const RunningGlobalsScope&) = delete;
-    RunningGlobalsScope(RunningGlobalsScope&&) = delete;
-    RunningGlobalsScope& operator=(const RunningGlobalsScope&) = delete;
-    RunningGlobalsScope& operator=(RunningGlobalsScope&&) = delete;
-
-private:
-    RenderWorkspace& m_workspace;
-    RenderWorkspace::RunningGlobals m_running;
-};
-
 // Marks a render running on the thread for its whole scope: a Load meanwhile keeps the template
 // it replaces in the thread's workspace (RenderWorkspace::Retire, docs/tasks/0321)
 class RenderScope
@@ -155,9 +134,10 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
         // stay attached to its cells while this one runs (docs/tasks/0211, 0324)
         for (const auto* running = workspace.Running(); running; running = running->outer)
         {
-            if (running->globals && running->globals->generation == generation)
+            const auto& globals = *running->owner;
+            if (globals && globals->generation == generation)
             {
-                return *running->owner;
+                return globals;
             }
         }
         auto snapshot = std::make_shared<GlobalsSnapshot>();
@@ -548,6 +528,8 @@ public:
             // Under the limits and in the error boundary, as the params are: a host global may be a big integer past the cap
             std::conditional_t<hasHooks, InternalValueMap, NoGlobals> convertedGlobals;
             const InternalValueMap* hostGlobals = GlobalsOf(convertedGlobals, hooks);
+            static const InternalValueMap noGlobals;
+            const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
@@ -556,15 +538,6 @@ public:
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
                 intParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
-
-            static const InternalValueMap noGlobals;
-            const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
-            // Only a render with globals has a snapshot to share, and the scope costs the others nothing
-            std::optional<RunningGlobalsScope> runningGlobals;
-            if (globals)
-            {
-                runningGlobals.emplace(maps.Workspace(), globals);
-            }
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
@@ -583,7 +556,7 @@ public:
                 }
             }
             RendererCallback callback(this);
-            callback.SetGlobals(globals.get());
+            callback.SetGlobals(maps.Workspace(), globals);
             const InternalValueMap& renderGlobals = hostGlobals ? *hostGlobals : globals ? globals->values
                                                                                          : noGlobals;
             RenderContext context(intParams,
@@ -1005,7 +978,29 @@ private:
                 cached.reset();
             }
         }
-        void SetGlobals(const GlobalsSnapshot* globals) { m_globals = globals; }
+        // The render reads `globals` (null without an environment); the renders started inside it
+        // find them here (GetGlobalsSnapshot, docs/tasks/0324). The callback is the render's own
+        // object whose address the render hands out anyway, so naming them costs it no reloads
+        void SetGlobals(RenderWorkspace& workspace, const std::shared_ptr<const GlobalsSnapshot>& globals) noexcept
+        {
+            m_globals = globals.get();
+            m_workspace = &workspace;
+            m_running = { &globals, workspace.Running() };
+            workspace.SetRunning(&m_running);
+        }
+        // A module's callback outlives the call that made it, so it names its globals to no render
+        void SetGlobals(const GlobalsSnapshot* globals) noexcept { m_globals = globals; }
+        RendererCallback(const RendererCallback&) = delete;
+        RendererCallback(RendererCallback&&) = delete;
+        RendererCallback& operator=(const RendererCallback&) = delete;
+        RendererCallback& operator=(RendererCallback&&) = delete;
+        ~RendererCallback() override
+        {
+            if (m_workspace)
+            {
+                m_workspace->SetRunning(m_running.outer);
+            }
+        }
 
         OutStream GetStreamOnString(TargetString& str) override
         {
@@ -1254,6 +1249,8 @@ private:
         std::minstd_rand m_random;
         // The globals this render uses, which it keeps alive; only compared
         const GlobalsSnapshot* m_globals = nullptr;
+        RenderWorkspace* m_workspace = nullptr;
+        RenderWorkspace::RunningGlobals m_running;
     };
 
     // Keeps the environment's state alive for as long as the template lives
