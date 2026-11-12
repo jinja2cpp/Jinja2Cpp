@@ -1779,16 +1779,30 @@ FoldOutcome FoldOf(const FoldCandidate& candidate, RenderContext& context, bool 
 
 bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
 {
-    std::vector<FoldOutcome> outcomes;
-    outcomes.reserve(check.candidates.size());
-    for (const auto& candidate : check.candidates)
+    // The candidates were recorded as their parse ended, so an expression comes after the ones
+    // inside it, which start where it starts or later. Walked outermost first, the candidates
+    // inside one that folds need no evaluation of their own: their subscripts are covered, and
+    // nested brackets do not evaluate the inner levels again and again
+    std::vector<FoldOutcome> outcomes(check.candidates.size(), FoldOutcome::DoesNotFold);
+    unsigned foldedFrom = check.to;
+    for (std::size_t index = check.candidates.size(); index-- != 0;)
     {
-        outcomes.push_back(FoldOf(candidate, context, check.strictUndefined));
+        const auto& candidate = check.candidates[index];
         // Jinja2's optimizer folds every expression of the tree, and a strict undefined that
-        // fails a fold fails the compile (UndefinedError) where an Impossible would not
-        if (check.strictUndefined && outcomes.back() == FoldOutcome::Fails)
+        // fails a fold fails the compile (UndefinedError) where an Impossible would not: under
+        // StrictUndefined each candidate is evaluated
+        if (!check.strictUndefined && candidate.from >= foldedFrom)
+        {
+            continue;
+        }
+        outcomes[index] = FoldOf(candidate, context, check.strictUndefined);
+        if (check.strictUndefined && outcomes[index] == FoldOutcome::Fails)
         {
             return false;
+        }
+        if (outcomes[index] == FoldOutcome::Folds)
+        {
+            foldedFrom = candidate.from;
         }
     }
     return CoversEverySubscript(check, [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds; });

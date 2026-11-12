@@ -30,7 +30,19 @@ The verifier of 0471 found more, pinned in `test/parity/cases/subscripts.py`:
   filters return generators, and fail in the engine, which evaluates them eagerly (no case: the
   output is a generator's repr with its address);
 - the candidates of a filter chain are the whole chain, so a chain whose last filter does not
-  fold loses a fold of an earlier step (`[1][:, :] is undefined|host_filter`).
+  fold, or folds to an undefined, loses a fold of an earlier step (`[1][:, :] is undefined|host_filter`,
+  `{% if [1][:, :]|sort|first %}`);
+- binary operators, `~` and comparisons are no candidates: `{{ x or 'ab'[1:, 1] ~ ()[:, :] }}` and
+  `{{ x == [1][:, :] ~ ()[:, :] }}` load in Jinja2; under ChainableUndefined so does
+  `{{ [1][:, :][:, :] is undefined }}`;
+- under StrictUndefined every candidate is evaluated and any failure fails the Load, but Jinja2's
+  Filter and Test `as_const` turn an exception into Impossible: `{{ true if 1 else ()[:, :]|sum }}`
+  and `{{ 1 or ()[:, :]|trim }}` load in Jinja2 and not in the engine; `{{ true in [none, ()[:, :]] }}`
+  is the other way round;
+- cost: under StrictUndefined nested brackets evaluate each level's candidate, so a chain nested
+  to the depth limit is evaluated up to about 35 times (the default policy skips the candidates
+  inside one that folds); a host filter in a candidate is called once per candidate it is in, where
+  Jinja2 calls it once.
 
 **Proposal.** Low value. Make the item or attribute of such a subscript a node whose evaluation
 fails (as Jinja2's fold of it does), and let the Load's fold check (`FoldCheckPasses`) decide, as it

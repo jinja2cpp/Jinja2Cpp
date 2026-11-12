@@ -280,6 +280,35 @@ TEST_F(LimitsEnvTest, LongChainsWithUnlimitedOperators)
     }
 }
 
+// The Load evaluates the folds Jinja2 makes when it compiles a subscript by a tuple of slices
+// (docs/tasks/0471) under the template's limits: a limit fails the Load as itself, and a failed
+// Load keeps the template loaded before
+TEST_F(LimitsEnvTest, FoldsAtLoad)
+{
+    Settings settings;
+    settings.limits = UntrustedLimits();
+    m_env.SetSettings(settings);
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{{ ()[:, :] ~ 'a' }}").has_value());
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+
+    auto loaded = tpl.Load("{{ ()[:, :] ~ ('a' * 99999999) }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << ErrorToString(loaded.error());
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+
+    // A fold that fails leaves the subscript unfolded: invalid Python, a Load error
+    loaded = tpl.Load("{{ ()[0][:, :] }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ExpectedSquareBracket, loaded.error().GetCode());
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+
+    TemplateW wide(&m_env);
+    ASSERT_TRUE(wide.Load(L"{{ [1][:, :] is undefined }}").has_value());
+    EXPECT_FALSE(wide.Load(L"{{ ()[:, :] ~ ('a' * 99999999) }}").has_value());
+    EXPECT_EQ(L"True", wide.RenderAsString({}).value());
+}
+
 TEST_F(LimitsEnvTest, ErrorMessage)
 {
     Settings settings;

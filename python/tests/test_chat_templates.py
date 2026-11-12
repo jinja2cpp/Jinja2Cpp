@@ -144,7 +144,7 @@ def test_patch_assistant_mask_uses_transformers(patched):
 
 
 def test_patch_hands_unloadable_templates_to_transformers(patched):
-    # A syntax jinja2cpp lacks (an item of a tuple of slices an `or` folds away, task 0479) compiles in
+    # A syntax jinja2cpp lacks (an item of a tuple of slices an `or` folds away, task 0484) compiles in
     # transformers' environment
     compiled = patched._compile_jinja_template('{{ 1 }}{{ (true or [1][:, :][0]) and "" }}{{ 2 }}')
     assert not isinstance(compiled, integration.ChatTemplate)
