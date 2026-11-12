@@ -172,18 +172,11 @@ public:
     // callables, generators, anchors and undefined values a template keeps take more than the slot that holds them.
     // The size is the object's own, without what it allocates apart; StringObject and BigIntObject count their
     // characters themselves. An allocation function throws nothing but std::bad_alloc, so a render past its budget
-    // fails at its next step
-    static void* operator new(std::size_t size)
-    {
-        void* ptr = ::operator new(size);
-        ChargeObjectMemory(size);
-        return ptr;
-    }
-    static void operator delete(void* ptr, std::size_t size) noexcept
-    {
-        ReleaseRenderMemory(size);
-        ::operator delete(ptr);
-    }
+    // fails at its next step. Never inlined: GCC's -Wmismatched-new-delete takes ::operator new inlined into a
+    // new-expression for a mismatch with this operator delete.
+    // Exported, as code outside a shared library makes and frees objects
+    JINJA2CPP_EXPORT JINJA2CPP_NOINLINE static void* operator new(std::size_t size);
+    JINJA2CPP_EXPORT JINJA2CPP_NOINLINE static void operator delete(void* ptr, std::size_t size) noexcept;
 
     // NOLINTNEXTLINE(readability-identifier-naming): the name boost::intrusive_ref_counter uses
     [[nodiscard]] unsigned use_count() const noexcept { return m_refCount.load(std::memory_order_acquire); }
