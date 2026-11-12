@@ -22,6 +22,7 @@
 #include "slot_frame.h"
 #include "small_vector.h"
 #include "span.h"
+#include "template_dict.h"
 #include "template_impl.h"
 #include "template_slots.h"
 #include "undefined.h"
@@ -152,7 +153,16 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
         }
         // The store may close a reference cycle, which the render frees when it ends
         methods::NoteContainerStore(*found, value);
-        ns->SetValue(std::string(nodes.Text(root.attr)), value);
+        std::string attr(nodes.Text(root.attr));
+        // ... and what it replaces may be one that a template module's earlier call made
+        if (auto* items = CycleCollector::InModuleCall() ? ns->GetMutableItems() : nullptr)
+        {
+            if (auto old = items->FindString(attr); old != items->end())
+            {
+                CycleCollector::NoteDropped(old->second);
+            }
+        }
+        ns->SetValue(std::move(attr), value);
         return;
     }
     if (!root.isTuple)

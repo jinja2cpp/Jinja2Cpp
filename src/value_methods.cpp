@@ -2435,6 +2435,7 @@ InternalValue ListPop(const InternalValue& self, const CallParams& params, Rende
     {
         Raise("pop index out of range");
     }
+    CycleCollector::NoteDropped(items[static_cast<size_t>(idx)]);
     auto result = std::move(items[static_cast<size_t>(idx)]);
     items.erase(items.begin() + idx);
     return result;
@@ -2449,6 +2450,7 @@ InternalValue ListRemove(const InternalValue& self, const CallParams& params, Re
     {
         Raise("list.remove(x): x not in list");
     }
+    CycleCollector::NoteDropped(*p);
     items.erase(p);
     return InternalValue(NoneValue());
 }
@@ -2567,10 +2569,24 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     return InternalValue(NoneValue());
 }
 
+// The items a list lets go of (CycleCollector::NoteDropped)
+void NoteDroppedItems(const InternalValueList& items)
+{
+    if (CycleCollector::InModuleCall())
+    {
+        for (const auto& item : items)
+        {
+            CycleCollector::NoteDropped(item);
+        }
+    }
+}
+
 InternalValue ListClear(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "clear", 0, 0);
-    MutableItems(self).clear();
+    auto& items = MutableItems(self);
+    NoteDroppedItems(items);
+    items.clear();
     return InternalValue(NoneValue());
 }
 
@@ -2778,6 +2794,13 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
     {
         NoteContainerStore(self, key);
         NoteContainerStore(self, value);
+        if (CycleCollector::InModuleCall())
+        {
+            if (auto old = items.Find(key); old != items.end())
+            {
+                CycleCollector::NoteDropped(old->second);
+            }
+        }
     }
     for (auto& [key, value] : updates)
     {
@@ -2803,6 +2826,7 @@ InternalValue DictPop(const InternalValue& self, const CallParams& params, Rende
         Apply<visitors::ValueRenderer<char>>(key, spelling, true);
         Raise("KeyError: " + spelling);
     }
+    CycleCollector::NoteDropped(p->second);
     auto result = p->second;
     items.Erase(p);
     return result;
@@ -2817,6 +2841,7 @@ InternalValue DictPopitem(const InternalValue& self, const CallParams& params, R
         Raise("popitem(): dictionary is empty");
     }
     auto last = std::prev(items.end());
+    CycleCollector::NoteDropped(last->second);
     auto result = MakeTuple({ items.KeyOf(last->first), last->second });
     items.Erase(last);
     return result;
@@ -2841,7 +2866,15 @@ InternalValue DictCopy(const InternalValue& self, const CallParams& params, Rend
 InternalValue DictClear(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "clear", 0, 0);
-    MutableDict(self).Clear();
+    auto& items = MutableDict(self);
+    if (CycleCollector::InModuleCall())
+    {
+        for (const auto& [key, value] : items)
+        {
+            CycleCollector::NoteDropped(value);
+        }
+    }
+    items.Clear();
     return InternalValue(NoneValue());
 }
 

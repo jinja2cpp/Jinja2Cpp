@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: robustness
 depends: []
@@ -21,3 +21,11 @@ the cycle unheld. Check the same for a dict item a call replaces (`d.update`, `d
 
 **Done when** a `TemplateModuleTest` row with two calls of `n` (and the dict variant) passes
 under LSan, and `Module/keep_written` does not move in `bench/count.py`.
+
+**Resolution.** In a template module's call, a change that lets go of a value a container held
+notes that value to the call's collector before the change (`CycleCollector::NoteDropped`): a
+`set ns.attr` or `d.update` that replaces it, `pop`, `remove`, `clear` and `popitem` on lists and
+dicts. The walk at the call's end then starts from it, and a cycle an earlier call stored in the
+module's values is freed once the call that drops it ends. Only module calls note: a render's
+notes last as long as its values. `TemplateModuleTest.SelfHoldingListALaterCallDrops` covers the
+namespace, dict and list variants, through a value the call reaches through another one too.

@@ -18,6 +18,7 @@ namespace jinja2
 {
 inline namespace v2
 {
+class CycleCollector;
 struct GlobalsSnapshot;
 
 namespace detail
@@ -107,6 +108,9 @@ public:
     {
         const std::shared_ptr<const GlobalsSnapshot>* owner = nullptr;
         const RunningGlobals* outer = nullptr;
+        // The render's collector, whose registry holds the cells of the globals it writes: also
+        // those that a render sharing its snapshot writes first (CycleCollector::GlobalCells, 0463)
+        CycleCollector* collector = nullptr;
     };
     [[nodiscard]] const RunningGlobals* Running() const noexcept { return m_running; }
     void SetRunning(const RunningGlobals* running) noexcept { m_running = running; }

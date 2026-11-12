@@ -2201,3 +2201,91 @@ TEST(PublicHostObjectTest, IncludeTriesTheNamesOfAHostSequence)
     ASSERT_FALSE(notIterable.has_value());
     EXPECT_EQ(ErrorCode::InvalidTemplateName, notIterable.error().GetCode());
 }
+
+// 0424: a container that holds itself, which a host callable keeps past the render, goes when
+// the host lets go of it (LSan); while the host keeps it, it reads what the render left
+TEST(PublicHostObjectTest, KeptSelfHoldingContainerGoesWithTheHostsValue)
+{
+    struct Row
+    {
+        const char* source;
+        size_t size;
+    };
+    // clang-format off
+    const Row rows[] = {
+        {"{% set xs = [1] %}{% do xs.append(xs) %}{% set _ = keep(xs) %}", 2},
+        {"{% set d = {'a': 1} %}{% do d.update(self=d) %}{% set _ = keep(d) %}", 2},
+        {"{% set xs = [1] %}{% set d = {'l': xs} %}{% do xs.append(d) %}{% set _ = keep(xs) %}", 2},
+        {"{% set xs = [1] %}{% set d = {'l': xs} %}{% do xs.append(d) %}{% set _ = keep(d) %}", 1},
+        // Kept twice: the second copy keeps it after the first goes
+        {"{% set xs = [1] %}{% do xs.append(xs) %}{% set _ = keep(xs) %}{% set _ = keep(xs) %}", 2},
+        // A namespace that holds itself
+        {"{% set ns = namespace(a=1) %}{% set ns.self = ns %}{% set _ = keep(ns) %}", 2},
+    };
+    // clang-format on
+    for (const auto& row : rows)
+    {
+        SCOPED_TRACE(row.source);
+        std::vector<Value> kept;
+        auto keep = Probe([&kept](const UserCallableParams& params) {
+            kept.push_back(params["x"]);
+            return Value();
+        });
+        EXPECT_EQ("", Render(row.source, { { "keep", std::move(keep) } }));
+        ASSERT_FALSE(kept.empty());
+        const auto* list = kept.front().GetIf<GenericList>();
+        const auto* map = kept.front().GetIf<GenericMap>();
+        ASSERT_TRUE(list || map);
+        EXPECT_EQ(row.size, list ? list->GetSize().value_or(0) : map->GetSize());
+        kept.erase(kept.begin());
+        if (!kept.empty())
+        {
+            EXPECT_TRUE(kept.front().GetIf<GenericList>() || kept.front().GetIf<GenericMap>());
+            kept.clear();
+        }
+    }
+}
+
+// The host hands a container it kept back to a template, and the render's own walk frees the
+// host's copy: that copy's walk runs after the render's on the same thread rather than waiting
+// for it, which hung (docs/tasks/0424)
+TEST(PublicHostObjectTest, KeptContainerHandedBackGoesInsideTheRendersWalk)
+{
+    // clang-format off
+    const char* const sources[] = {
+        "{% set b = [{}] %}{% set _ = keep(b) %}{% set d = {} %}{% set _ = d.update(h=take()) %}",
+        "{% set b = [{}] %}{% set _ = keep(b) %}{% set d = {} %}{% set _ = d.update(h=take(), self=d) %}",
+        "{% set b = [[1]] %}{% do b.append(b) %}{% set _ = keep(b) %}{% set d = {} %}{% set _ = d.update(h=take(), self=d) %}",
+    };
+    // clang-format on
+    for (const auto* source : sources)
+    {
+        SCOPED_TRACE(source);
+        std::vector<Value> kept;
+        auto keep = Probe([&kept](const UserCallableParams& params) {
+            kept.push_back(params["x"]);
+            return Value();
+        });
+        auto take = Probe([&kept](const UserCallableParams&) {
+            Value value = std::move(kept.front());
+            kept.erase(kept.begin());
+            return value;
+        });
+        EXPECT_EQ("", Render(source, { { "keep", std::move(keep) }, { "take", std::move(take) } }));
+        EXPECT_TRUE(kept.empty());
+    }
+    // Kept by another render, handed to this one
+    std::vector<Value> kept;
+    auto keep = Probe([&kept](const UserCallableParams& params) {
+        kept.push_back(params["x"]);
+        return Value();
+    });
+    auto take = Probe([&kept](const UserCallableParams&) {
+        Value value = std::move(kept.front());
+        kept.erase(kept.begin());
+        return value;
+    });
+    EXPECT_EQ("", Render("{% set a = [{}] %}{% set _ = keep(a) %}", { { "keep", keep } }));
+    EXPECT_EQ("", Render("{% set b = [1] %}{% set _ = keep(b) %}{% set d = {} %}{% set _ = d.update(h=take(), self=d) %}", { { "keep", keep }, { "take", take } }));
+    EXPECT_EQ(1u, kept.size());
+}

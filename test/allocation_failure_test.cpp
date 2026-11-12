@@ -1064,9 +1064,9 @@ TEST_F(AllocationFailureTest, AliasAttachesAfterAFailedLink)
 
 // The end of a module call records what the values it handed out read, then marks the recorded
 // cells shared: an allocation failure in between records nothing. A kept value then shows the
-// call's final state or, when the call failed, data nothing writes (no items for a module cell
-// it reads at the top, task 0361), never the outer list's new items over the host's nested list;
-// and later calls do not change it (docs/tasks/0338, step D)
+// call's final state or, when the call failed, the host's data, which nothing writes (task 0361),
+// never the outer list's new items over the host's nested list; and later calls do not change it
+// (docs/tasks/0338, step D)
 TEST_F(AllocationFailureTest, FailedCallsPinIsAllOrNothing)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
@@ -1114,7 +1114,8 @@ TEST_F(AllocationFailureTest, FailedCallsPinIsAllOrNothing)
             const auto first = show(kept[0]);
             if (threw)
             {
-                ASSERT_TRUE(first == "[[0, 1], 2]" || first == "[]") << first << " at allocation " << n;
+                // A failed pin leaves the view reading the host's data (docs/tasks/0361)
+                ASSERT_TRUE(first == "[[0, 1], 2]" || first == "[[0]]") << first << " at allocation " << n;
             }
             else
             {

@@ -1,10 +1,13 @@
 #include "cycle_collector.h"
 
 #include "internal_value.h"
+#include "render_workspace.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <mutex>
+#include <new>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -25,6 +28,62 @@ struct Node
 };
 } // namespace
 
+namespace
+{
+// The walks of CollectExport and of a render that handed the host a container: one at a time,
+// since the host's copies may go on any thread
+std::mutex& ExportWalks()
+{
+    static std::mutex walks;
+    return walks;
+}
+
+// The scope of a walk that ExportWalks orders. The outermost one on a thread takes the lock and,
+// before it lets go, walks from the roots of the host's copies that went during its walk: a walk
+// frees values, a host's copy among them, whose CollectExport then queues its roots here rather
+// than taking the lock again. A render a host's destructor starts during the walk walks inside it,
+// without the lock
+class ExportWalk
+{
+public:
+    ExportWalk()
+    {
+        if (!s_held)
+        {
+            m_lock = std::unique_lock<std::mutex>(ExportWalks());
+            s_held = this;
+        }
+    }
+    ExportWalk(const ExportWalk&) = delete;
+    ExportWalk(ExportWalk&&) = delete;
+    ExportWalk& operator=(const ExportWalk&) = delete;
+    ExportWalk& operator=(ExportWalk&&) = delete;
+    ~ExportWalk()
+    {
+        if (s_held != this)
+        {
+            return;
+        }
+        while (!m_pending.empty())
+        {
+            auto roots = std::move(m_pending.back());
+            m_pending.pop_back();
+            CycleCollector::CollectFrom(std::move(roots));
+        }
+        s_held = nullptr;
+    }
+
+    // The walk this thread holds the lock for, or null. A plain pointer, so that a host's copy
+    // freed by another thread_local's destructor at thread exit finds no destroyed state
+    static thread_local ExportWalk* s_held;
+    std::vector<std::vector<ValueObjectPtr>> m_pending;
+
+private:
+    std::unique_lock<std::mutex> m_lock;
+};
+thread_local ExportWalk* ExportWalk::s_held = nullptr;
+} // namespace
+
 void CycleCollector::Finish() noexcept
 {
     // First: what only these held is gone before the walk counts the references
@@ -32,6 +91,14 @@ void CycleCollector::Finish() noexcept
     m_notes->cells.Release(this);
     if (!m_outer)
     {
+        if (m_notes->exportToken)
+        {
+            // A host's copy that goes from now on walks after this walk, not beside it
+            const ExportWalk walk;
+            m_notes->exportToken.reset();
+            Collect();
+            return;
+        }
         Collect();
         return;
     }
@@ -51,6 +118,57 @@ void CycleCollector::Finish() noexcept
         // What the outer one did not take is collected here: the render that made it ended
         Collect();
     }
+}
+
+std::weak_ptr<const void> CycleCollector::ExportToken()
+{
+    auto* collector = s_current;
+    if (!collector)
+    {
+        return {};
+    }
+    // The outermost render's: a nested one hands what it noted to it
+    for (;; collector = collector->m_outer)
+    {
+        if (collector->m_module)
+        {
+            return {};
+        }
+        if (!collector->m_outer)
+        {
+            break;
+        }
+    }
+    if (!collector->m_notes)
+    {
+        collector->m_notes = std::make_unique<Notes>();
+    }
+    if (!collector->m_notes->exportToken)
+    {
+        collector->m_notes->exportToken = std::make_shared<int>(0);
+    }
+    return collector->m_notes->exportToken;
+}
+
+void CycleCollector::CollectExport(std::vector<ValueObjectPtr> roots) noexcept
+{
+    if (roots.empty())
+    {
+        return;
+    }
+    if (auto* walk = ExportWalk::s_held)
+    {
+        try
+        {
+            walk->m_pending.push_back(std::move(roots));
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a cycle these roots close leaks
+        {
+        }
+        return;
+    }
+    const ExportWalk walk;
+    CollectFrom(std::move(roots));
 }
 
 bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names)
@@ -116,6 +234,53 @@ BorrowedCells* CycleCollector::CellsForWrite()
     return &collector->m_notes->cells;
 }
 
+CycleCollector* CycleCollector::SnapshotOwner() noexcept
+{
+    auto* collector = s_current;
+    if (!collector || collector->m_module)
+    {
+        return nullptr;
+    }
+    // The chain starts at the running render's own entry: none for code of a module's call, or of
+    // a render called back from inside another one (Reentry)
+    const auto* running = RenderWorkspace::ForThisThread().Running();
+    if (!running || running->collector != collector || !running->owner || !*running->owner)
+    {
+        return nullptr;
+    }
+    const auto* snapshot = running->owner->get();
+    const auto* owner = running;
+    for (const auto* outer = running->outer; outer && outer->owner && outer->owner->get() == snapshot; outer = outer->outer)
+    {
+        owner = outer;
+    }
+    return owner != running && owner->collector && !owner->collector->m_module ? owner->collector : nullptr;
+}
+
+BorrowedCells* CycleCollector::GlobalCells() noexcept
+{
+    auto* owner = SnapshotOwner();
+    if (!owner)
+    {
+        return CurrentCells();
+    }
+    return owner->m_notes ? &owner->m_notes->cells : nullptr;
+}
+
+BorrowedCells* CycleCollector::GlobalCellsForWrite()
+{
+    auto* owner = SnapshotOwner();
+    if (!owner)
+    {
+        return CellsForWrite();
+    }
+    if (!owner->m_notes)
+    {
+        owner->m_notes = std::make_unique<Notes>();
+    }
+    return &owner->m_notes->cells;
+}
+
 void CycleCollector::NoteStore(const InternalValue& container)
 {
     auto* collector = s_current;
@@ -126,6 +291,15 @@ void CycleCollector::NoteStore(const InternalValue& container)
     if (auto object = OwnObjectOf(container))
     {
         collector->Add(std::move(object));
+    }
+}
+
+void CycleCollector::NoteDroppedInCall(const InternalValue& value)
+{
+    // Strings, numbers and host adapters hold no template value
+    if (auto object = OwnObjectOf(value); object && object->IsTraversable())
+    {
+        Add(std::move(object));
     }
 }
 

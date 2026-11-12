@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: lifetime
 touches: [src/internal_value.cpp]
@@ -25,3 +25,10 @@ the module thread keeps writing.
 
 **Done when.** A failed pin leaves every view reading the host's data, the sweep case asserts
 the host's value, and Module/keep stays within its gate.
+
+**Resolution.** A view of a module cell (`CallListView`, `CallMapView` with an identity) gets the
+host's data the cell copies when it is made: the adapter that found the cell passes itself to
+`BorrowedCell::ExportList`/`ExportMap`, which takes its `CreateHostGenericList()`/`Map()` (one
+allocation per export of a cell in a call). A view whose call recorded no storage for the cell
+reads that, never the cell. `AllocationFailureTest.FailedCallsPinIsAllOrNothing` now accepts only
+the call's final state or the host's `[[0]]`.

@@ -124,6 +124,31 @@ TEST(BorrowedCellsSingle, NestedRenderOfAGlobalWrittenThroughAnAlias)
     EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
 }
 
+TEST(BorrowedCellsSingle, OuterRenderSeesAGlobalANestedRenderWritesFirst)
+{
+    // 0463: a render nested in this one shares its snapshot of the globals; a global it writes
+    // first gets its cell in this render's registry, so this render sees the write once the nested
+    // one has ended, also through an alias made before and in a loop over the global, as Python's
+    // renders share the one list. The next render reads the environment's list
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 0 });
+    env.AddGlobal("e", ValuesList{});
+    Template inner(&env);
+    ASSERT_TRUE(!!inner.Load("{% set _ = g.append(5) %}{{ g }}"));
+    Template innerE(&env);
+    ASSERT_TRUE(!!innerE.Load("{% set _ = e.append(4) %}"));
+    ValuesMap params;
+    params["nested"] = MakeCallable([&inner]() { return inner.RenderAsString({}).value(); });
+    params["nestedE"] = MakeCallable([&innerE]() { return innerE.RenderAsString({}).value(); });
+    EXPECT_EQ("[0][0, 5]|[0, 5]", Render("{{ g }}{{ nested() }}|{{ g }}", params, &env));
+    EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
+    EXPECT_EQ("[4, 1]|[4, 1]", Render("{% set y = e %}{{ nestedE() }}{% set _ = y.append(1) %}{{ y }}|{{ e }}", params, &env));
+    EXPECT_EQ("[]", Render("{{ e }}", {}, &env));
+    EXPECT_EQ("0;[0, 5]5;[0, 5, 5]5;[0, 5, 5, 5]5;|[0, 5, 5, 5]",
+              Render("{% for x in g %}{{ x }};{% if loop.index < 4 %}{{ nested() }}{% endif %}{% endfor %}|{{ g }}", params, &env));
+    EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
+}
+
 TEST(BorrowedCellsSingle, AdapterFindsACellPromotedAcrossThe32BitWrap)
 {
     // 0342: `a` and `b` are two adapters of one host list (the same accessor). `a` stores the
@@ -1272,6 +1297,33 @@ TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfAGenericArgumentOnceTheHostLet
     }
     module = TemplateModule();
     EXPECT_EQ(1, token.use_count());
+}
+
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfAGenericItemOfAnArgument)
+{
+    // 0365: a fresh generic list nested in a ValuesList argument, which the macro writes. The
+    // template's copy of the argument lends it with the argument's owner, so the module drops its
+    // cell once the host let go, as for a generic argument (above), not when the module goes
+    auto token = std::make_shared<int>(0);
+    auto mapToken = std::make_shared<TestInnerStruct>();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(a, m) %}{% set _ = a[0].append(1) %}{% set _ = m.d.update(k=1) %}{{ a[0]|length }}{{ m.d.k }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 3; ++i)
+    {
+        {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ ValuesList{ FreshGenericList(token) }, ValuesMap{ { "d", FreshGenericMap(mapToken) } } };
+            EXPECT_EQ("41", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+        }
+        // This call's list and map, and none of the earlier calls': the map's cell copies the
+        // struct's field, which holds the token too
+        EXPECT_EQ(2, token.use_count());
+        EXPECT_EQ(3, mapToken.use_count());
+    }
+    module = TemplateModule();
+    EXPECT_EQ(1, token.use_count());
+    EXPECT_EQ(1, mapToken.use_count());
 }
 
 TEST(BorrowedCellsSingle, ModuleKeepsTheCellOfAGenericListTheHostLendsAgain)

@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0336]
@@ -26,3 +26,13 @@ else owns the accessor (the nested pass of `DropUnheld` already loops).
 **Done when.** A test like `BorrowedCellsSingle.ModuleCallFreesTheCellsOfFreshGenericData` with the
 fresh list nested in a `ValuesList` argument frees the generator after each call, under ASan/LSan,
 and `Module/keep` does not move in `bench/count.py`.
+
+**Resolution.** The proposal's cause was not the one at work: the convertor already copies a
+generic item by value into a `BySharedVal` adapter. What kept the cell was the anchor of the read:
+`a[0]` carries its parent (`SetParentData`), the cell kept that value as its source, and the parent
+`ValuesList` holds the `GenericList` that shares the item's accessor, so `MayBeLentAgain` stayed
+true for as long as the cell lived. A generic adapter that owns its copy (`BySharedVal`) keeps
+the accessor alive itself, so its cell now keeps the value without the anchor (`CellSource`,
+`InternalValue::WithoutParentData`). `BorrowedCellsSingle.ModuleCallFreesTheCellOfAGenericItemOfAnArgument`
+passes a fresh list in a `ValuesList` and a reflected struct in a `ValuesMap`: each call's cells go
+at the next call's end, and all of them with the module.

@@ -100,11 +100,11 @@ BorrowedCells* BorrowedCell::ExportingCall() const noexcept
     return cells == m_registry && cells->InCall() ? cells : nullptr;
 }
 
-GenericList BorrowedCell::ExportList() const
+GenericList BorrowedCell::ExportList(const IListAccessor& host) const
 {
     if (auto* call = ExportingCall())
     {
-        auto list = ExportCallList(*call, m_identity, InternalValue());
+        auto list = ExportCallList(*call, m_identity, InternalValue(), MakeCellHost(host));
 #ifdef JINJA2CPP_CELL_TRACE
         TraceExport(true);
 #endif
@@ -116,11 +116,11 @@ GenericList BorrowedCell::ExportList() const
     return m_list->CreateGenericList();
 }
 
-GenericMap BorrowedCell::ExportMap() const
+GenericMap BorrowedCell::ExportMap(const IMapAccessor& host) const
 {
     if (auto* call = ExportingCall())
     {
-        auto map = ExportCallMap(*call, m_identity, InternalValue());
+        auto map = ExportCallMap(*call, m_identity, InternalValue(), MakeCellHost(host));
 #ifdef JINJA2CPP_CELL_TRACE
         TraceExport(true);
 #endif
@@ -240,18 +240,20 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held,
     // Read first: a promotion after this read moves the epoch again. Kept only once the lookup
     // is done: a Link that cannot allocate leaves the adapter as it was (docs/tasks/0338, step D)
     const auto epoch = detail::CellEpoch();
-    const auto* cells = CycleCollector::CurrentCells();
+    const auto* cells = held ? CycleCollector::GlobalCells() : CycleCollector::CurrentCells();
     if (!cells || !cells->m_cells)
     {
         JINJA2CPP_CELL_TRACE_EVENT("find", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("idn", Trace::Space::Idn, identity), Trace::Num("list", isList ? 1 : 0),
-                                   Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Num("hit", 0));
+                                   Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Num("hit", 0), Trace::Ptr("reg", Trace::Space::Reg, cells),
+                                   Trace::Num("held", held ? 1 : 0));
         m_state = epoch;
         return nullptr;
     }
     const auto found = cells->m_cells->find(identity);
     const BorrowedCell* hit = found != cells->m_cells->end() && found->second->IsList() == isList ? found->second.get() : nullptr;
     JINJA2CPP_CELL_TRACE_EVENT("find", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("idn", Trace::Space::Idn, identity), Trace::Num("list", isList ? 1 : 0),
-                               Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Ptr("hit", Trace::Space::Cell, hit));
+                               Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Ptr("hit", Trace::Space::Cell, hit), Trace::Ptr("reg", Trace::Space::Reg, cells),
+                               Trace::Num("held", held ? 1 : 0));
     if (!hit)
     {
         m_state = epoch;
@@ -407,7 +409,11 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
         JINJA2CPP_CELL_TRACE_EVENT("adoptno", Trace::Ptr("a", Trace::Space::Link, this), Trace::Num("why", 1), Trace::Ptr("c", Trace::Space::Cell, m_cell));
         return false;
     }
-    auto* cells = identity ? CycleCollector::CellsForWrite() : nullptr;
+    BorrowedCells* cells = nullptr;
+    if (identity)
+    {
+        cells = held ? CycleCollector::GlobalCellsForWrite() : CycleCollector::CellsForWrite();
+    }
     if (!cells)
     {
         JINJA2CPP_CELL_TRACE_EVENT("adoptno", Trace::Ptr("a", Trace::Space::Link, this), Trace::Num("why", 2), Trace::Num("c", 0));
