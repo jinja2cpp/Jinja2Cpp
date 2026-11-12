@@ -140,6 +140,9 @@ public:
     // output in order, Jinja2's items (RenderOptions::writeEachPiece); an error comes after the items
     // written before it
     void RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const;
+    // The same to an engine sink that may suspend the render in its Write: a lazy generate() on a fiber
+    // (lazy_render.cpp, docs/tasks/0457)
+    void RenderSuspended(jinja2::OutputSink& sink, nb::args args, nb::kwargs kwargs, const jinja2::RenderSuspension& suspension) const;
     // The environment, checked to be alive
     PyEnvironment& LiveEnvironment() const;
     // Template.make_module of the Python layer (template_module.cpp): (body, exports) for the
@@ -162,7 +165,7 @@ public:
 
 private:
     template<typename Target>
-    void RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bool eachPiece = false) const;
+    void RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bool eachPiece = false, const jinja2::RenderSuspension* suspension = nullptr) const;
     jinja2::Template m_template;
     nb::object m_environment;
     nb::object m_globals;

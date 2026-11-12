@@ -1820,7 +1820,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 
         auto keys = val.GetKeyValues();
         auto numKeys = keys.size();
-        return ListAdapter::CreateAdapter(numKeys, [values = std::move(keys)](size_t idx) { return values[idx]; });
+        return ListAdapter::CreateAdapter(numKeys, [values = CountedItems(std::move(keys))](size_t idx) { return values[idx]; });
     }
 
     template<typename T>

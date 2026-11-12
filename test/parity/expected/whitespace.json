@@ -518,6 +518,48 @@
    "env": {},
    "templates": {},
    "output": "[3|3]"
+  },
+  {
+   "id": "whitespace.tag_unicode_space_more",
+   "template": "[{%　if x%}y{%\u001cendif %}|{{ x + 1 }}]",
+   "context": {
+    "x": 3
+   },
+   "env": {},
+   "templates": {},
+   "output": "[y|4]"
+  },
+  {
+   "id": "whitespace.tag_zero_width_space_is_no_space",
+   "template": "{{ x​ }}",
+   "context": {
+    "x": 3
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected char '\\u200b' at 4"
+   }
+  },
+  {
+   "id": "whitespace.raw_tag_unicode_space",
+   "template": "[{% raw　%}{{ x }}{% endraw-%} |{%- raw -%} y {% endraw %}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[{{ x }}|y ]"
+  },
+  {
+   "id": "whitespace.tag_unicode_space_minus",
+   "template": "[{{ x -}} |{{- x }}]",
+   "context": {
+    "x": 3
+   },
+   "env": {},
+   "templates": {},
+   "output": "[3|3]"
   }
  ]
 }

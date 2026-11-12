@@ -45,6 +45,17 @@ void InitRenderState(RenderState& state, nb::handle environment);
 // PyGILState_Ensure, which the stable ABI has instead of PyGILState_Check
 bool HoldsGil() noexcept;
 
+class LeaseScope;
+// The module's per-render thread-locals (the render, the innermost call's lease, the conversion depth), which a lazy
+// render keeps its own copy of and swaps with the thread's around each resume (lazy_render.cpp, docs/tasks/0457)
+struct ModuleThreadState
+{
+    RenderState* render = nullptr;
+    LeaseScope* lease = nullptr;
+    int depth = 0;
+};
+void ExchangeModuleThreadState(ModuleThreadState& state) noexcept;
+
 class RenderScope
 {
 public:

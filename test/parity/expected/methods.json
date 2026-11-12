@@ -4348,6 +4348,769 @@
    "env": {},
    "templates": {},
    "output": "False|False|False"
+  },
+  {
+   "id": "methods.str_format_map_fields",
+   "template": "{{ '{a[b]}-{c.real}-{a!r:>12}'.format_map({'a': {'b': 2}, 'c': 3}) }}|{{ 'x'.format_map(5) }}|{{ '{{}}'.format_map({}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "2-3-    {'b': 2}|x|{}"
+  },
+  {
+   "id": "methods.str_format_map_positional",
+   "template": "{{ '{}'.format_map({}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "Format string contains positional fields"
+   }
+  },
+  {
+   "id": "methods.str_format_map_index",
+   "template": "{{ '{0}'.format_map({0: 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "Format string contains positional fields"
+   }
+  },
+  {
+   "id": "methods.str_format_map_missing",
+   "template": "{{ '{a}'.format_map({}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'a'"
+   }
+  },
+  {
+   "id": "methods.str_format_map_method_name",
+   "template": "{{ '{items}'.format_map({}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'items'"
+   }
+  },
+  {
+   "id": "methods.str_format_item_method_name",
+   "template": "{{ '{0[items]}'.format({}) }}|{{ '{0[keys]}'.format({'keys': 3}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'items'"
+   }
+  },
+  {
+   "id": "methods.str_format_map_not_subscriptable",
+   "template": "{{ '{a}'.format_map(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.str_format_map_no_args",
+   "template": "{{ '{a}'.format_map() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "str.format_map() takes exactly one argument (0 given)"
+   }
+  },
+  {
+   "id": "methods.str_format_map_kwargs",
+   "template": "{{ '{a}'.format_map(m={'a': 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "str.format_map() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "methods.markup_format_map",
+   "template": "{{ ('<i>{a}</i>'|safe).format_map({'a': '<b>'}) }}|{{ ('{a}'|safe).format_map({'a': '<b>'|safe}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "<i>&lt;b&gt;</i>|<b>"
+  },
+  {
+   "id": "methods.str_expandtabs_edges",
+   "template": "[{{ 'a\\tbc\\td'.expandtabs(tabsize=3) }}|{{ 'a\\tb'.expandtabs(0) }}|{{ 'a\\tb'.expandtabs(-1) }}|{{ 'ab\\n\\tc\\r\\td'.expandtabs(4)|replace('\\n', 'N')|replace('\\r', 'R') }}|{{ 'é\\tx\\t'.expandtabs(4) }}|{{ '😀\\t|'.expandtabs(3) }}|{{ ''.expandtabs() }}|{{ ('<\\t'|safe).expandtabs(2) }}]",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "[a  bc d|ab|ab|abN    cR    d|é   x   |😀  |||< ]"
+  },
+  {
+   "id": "methods.str_expandtabs_bad_size",
+   "template": "{{ 'a'.expandtabs('2') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'str' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "methods.str_expandtabs_too_many_args",
+   "template": "{{ 'a'.expandtabs(1, 2) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "expandtabs() takes at most 1 argument (2 given)"
+   }
+  },
+  {
+   "id": "methods.str_expandtabs_c_int",
+   "template": "{{ 'a\\tb'.expandtabs(-2**63) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "OverflowError",
+    "message": "Python int too large to convert to C int"
+   }
+  },
+  {
+   "id": "methods.str_translate_str_table",
+   "template": "{{ ('xy' * 3000).translate('z' * 3000 + 'é')|length }}|{{ 'yxé'.translate('ab' * 61) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "6000|baé"
+  },
+  {
+   "id": "methods.str_translate",
+   "template": "{{ 'abc'.translate('abc'.maketrans('ab', 'xy')) }}|{{ 'abc'.translate({97: none, 98: 'BB', 99: 100}) }}|{{ 'héé'.translate({233: 'e'}) }}|{{ 'ab'.translate(['x'] * 98) }}|{{ 'ab'.translate('z' * 98) }}|{{ ('<a>'|safe).translate({97: '<'}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "xyc|BBd|hee|xb|zb|<<>"
+  },
+  {
+   "id": "methods.str_maketrans",
+   "template": "{{ 'abc'.maketrans('ab', 'xy') }}|{{ ''.maketrans({'a': 'z', 98: none}) }}|{{ ''.maketrans('a', 'b', 'cé') }}|{{ ''.maketrans('aa', 'bc') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "{97: 120, 98: 121}|{97: 'z', 98: None}|{97: 98, 99: None, 233: None}|{97: 99}"
+  },
+  {
+   "id": "methods.str_maketrans_unequal",
+   "template": "{{ ''.maketrans('ab', 'x') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "the first two maketrans arguments must have equal length"
+   }
+  },
+  {
+   "id": "methods.str_maketrans_long_key",
+   "template": "{{ ''.maketrans({'ab': 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "string keys in translate table must be of length 1"
+   }
+  },
+  {
+   "id": "methods.str_maketrans_not_dict",
+   "template": "{{ ''.maketrans(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "if you give only one argument to maketrans it must be a dict"
+   }
+  },
+  {
+   "id": "methods.str_translate_bad_value",
+   "template": "{{ 'a'.translate({97: 1.5}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "character mapping must return integer, None or str"
+   }
+  },
+  {
+   "id": "methods.str_translate_out_of_range",
+   "template": "{{ 'a'.translate({97: 1114112}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "character mapping must be in range(0x110000)"
+   }
+  },
+  {
+   "id": "methods.str_translate_not_subscriptable",
+   "template": "{{ 'a'.translate(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.int_methods",
+   "template": "{{ (5).as_integer_ratio() }}|{{ true.as_integer_ratio() }}|{{ (7).bit_count() }}|{{ (-7).bit_count() }}|{{ (0).bit_count() }}|{{ true.conjugate() }}|{{ (-3).conjugate() }}|{{ (5).is_integer() }}|{{ false.bit_count() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "(5, 1)|(1, 1)|3|3|0|1|-3|True|0"
+  },
+  {
+   "id": "methods.int_methods_big",
+   "template": "{{ (2**70 + 3).bit_count() }}|{{ (2**70).as_integer_ratio() }}|{{ (-2**70).conjugate() }}|{{ (2**70).is_integer() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "3|(1180591620717411303424, 1)|1180591620717411303424|True"
+  },
+  {
+   "id": "methods.float_methods",
+   "template": "{{ (0.75).as_integer_ratio() }}|{{ (-2.5).as_integer_ratio() }}|{{ (0.0).as_integer_ratio() }}|{{ (3.0).as_integer_ratio() }}|{{ (0.1).as_integer_ratio() }}|{{ (1.5).conjugate() }}|{{ (-0.0).conjugate() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "(3, 4)|(-5, 2)|(0, 1)|(3, 1)|(3602879701896397, 36028797018963968)|1.5|-0.0"
+  },
+  {
+   "id": "methods.float_as_integer_ratio_extremes",
+   "template": "{{ (1e300).as_integer_ratio() }}|{{ (5e-324).as_integer_ratio() }}|{{ (2.0**-60).as_integer_ratio() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "(1000000000000000052504760255204420248704468581108159154915854115511802457988908195786371375080447864043704443832883878176942523235360430575644792184786706982848387200926575803737830233794788090059368953234970799945081119038967640880074652742780142494579258788820056842838115669472196386865459400540160, 1)|(1, 202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784)|(1, 1152921504606846976)"
+  },
+  {
+   "id": "methods.float_as_integer_ratio_inf",
+   "template": "{{ (inf|float).as_integer_ratio() }}",
+   "context": {
+    "inf": "inf"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "OverflowError",
+    "message": "cannot convert Infinity to integer ratio"
+   }
+  },
+  {
+   "id": "methods.float_as_integer_ratio_nan",
+   "template": "{{ (nan|float).as_integer_ratio() }}",
+   "context": {
+    "nan": "nan"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "cannot convert NaN to integer ratio"
+   }
+  },
+  {
+   "id": "methods.float_hex",
+   "template": "{{ (1.0).hex() }}|{{ (-0.0).hex() }}|{{ (0.0).hex() }}|{{ (0.1).hex() }}|{{ (5e-324).hex() }}|{{ (2.2250738585072014e-308).hex() }}|{{ (1e308).hex() }}|{{ (-1.5).hex() }}|{{ (inf|float).hex() }}|{{ (ninf|float).hex() }}|{{ (nan|float).hex() }}",
+   "context": {
+    "inf": "inf",
+    "ninf": "-inf",
+    "nan": "nan"
+   },
+   "env": {},
+   "templates": {},
+   "output": "0x1.0000000000000p+0|-0x0.0p+0|0x0.0p+0|0x1.999999999999ap-4|0x0.0000000000001p-1022|0x1.0000000000000p-1022|0x1.1ccf385ebc8a0p+1023|-0x1.8000000000000p+0|inf|-inf|nan"
+  },
+  {
+   "id": "methods.int_has_no_hex",
+   "template": "{{ (5).hex() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'int object' has no attribute 'hex'"
+   }
+  },
+  {
+   "id": "methods.str_encode_bytes",
+   "template": "{{ 'abc'.encode() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "b'abc'"
+  },
+  {
+   "id": "methods.float_fromhex",
+   "template": "{{ (1.5).fromhex('0x1.8p1') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "3.0"
+  },
+  {
+   "id": "methods.int_to_bytes",
+   "template": "{{ (5).to_bytes(2, 'big') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "b'\\x00\\x05'"
   }
  ]
 }

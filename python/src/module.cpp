@@ -3,6 +3,7 @@
 #include "convert.h"
 #include "environment.h"
 #include "errors.h"
+#include "lazy_render.h"
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -184,6 +185,7 @@ NB_MODULE(_jinja2cpp, module) // NOLINT: nanobind's entry point
     BindEnvironment(module);
     BindTemplateModule(module);
     BindContext(module);
+    BindLazyRender(module);
     nb::class_<TemplateValue>(module, "TemplateValue", nb::type_slots(g_templateValueSlots))
         .def("__call__", &TemplateValue::Call)
         .def("__getattr__", &TemplateValue::GetAttr)

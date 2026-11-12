@@ -49,6 +49,7 @@ everything in the table that is compiled into the library is compiled in whateve
 | {fmt} | MIT | no (fetched or found) | linked; a shared library contains it | internal mode installs fmt's headers, library and package | NOTICES |
 | expected-lite | BSL-1.0 | no (fetched or found) | header-only | internal mode installs `include/nonstd/expected.hpp` | NOTICES |
 | Boost.Multiprecision, Boost.Config | BSL-1.0 | no | only with `-DJINJA2CPP_WITH_BIGINT=boost` | no (the `boost_multiprecision` component asks the consumer for Boost) | NOTICES |
+| boostorg/context fcontext assembly (`thirdparty/boost_context/`, vendored) | BSL-1.0 | yes | never; the Python module and the tests link it (`python/src/fiber`, 0457) | no | in the files, NOTICES |
 
 "NOTICES" is `THIRD-PARTY-NOTICES.txt`. Redistributed means the row's artifact contains the
 component's code or data; externally supplied means the consumer provides it (external and

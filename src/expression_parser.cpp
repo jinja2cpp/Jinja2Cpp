@@ -116,6 +116,7 @@ ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env, N
     , m_names(names)
     , m_unknown(unknown)
     , m_trustedLiterals(settings.autoescapeMode == AutoescapeMode::Prompt)
+    , m_strictUndefined(settings.undefinedPolicy == UndefinedPolicy::Strict)
 {
     if (settings.finalize.callable)
     {
@@ -139,10 +140,19 @@ InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) co
 ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(LexScanner& lexer, bool isVolatile)
 {
     m_volatile = isVolatile;
+    const auto startTok = lexer.PeekNextToken();
+    const unsigned tupleSlices = m_tupleSliceSubscripts;
+    m_inOutput = true;
     auto evaluator = ParseTupleOrExpression(lexer);
+    m_inOutput = false;
     if (!evaluator)
     {
         return MakeUnexpected(evaluator.error());
+    }
+    // A subscript by a tuple of slices compiles only inside an output Jinja2 folds whole
+    if (m_tupleSliceSubscripts != tupleSlices && (!m_nodes[*evaluator].IsFoldable(m_nodes) || (m_strictUndefined && &m_nodes[*evaluator] == &m_nodes[m_tupleSliceValue])))
+    {
+        return MakeParseError(ErrorCode::ExpectedSquareBracket, startTok);
     }
 
     const auto& tok = lexer.NextToken();
@@ -183,12 +193,28 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
         return MakeUnexpected(value.error());
     }
 
-    // Only an inline `if` needs the wrapper: every compound node checks the stack itself
-    if (includeIfPart && lexer.EatIfEqual(Keyword::If))
+    // Only an inline `if` needs the wrapper: every compound node checks the stack itself.
+    // Python's parse_condexpr loops: `a if b if c` is `(a if b) if c` (docs/tasks/0447); an
+    // `else` takes the rest of the chain, so only else-less conditionals reach the next round
+    NodeRef<Expression> result = *value;
+    // The line Jinja2 reports is the one the conditional's value starts on: its first token,
+    // which ParseBinary took; for a later round, the `if` that starts it
+    size_t valueOffset = saver.m_state.m_cur->range.startOffset;
+    bool chained = false;
+    while (includeIfPart && lexer.PeekNextToken().keyword == Keyword::If)
     {
-        // The line Jinja2 reports is the one the conditional's value starts on: its first token,
-        // which ParseBinary took
-        auto ifExpr = ParseIfExpression(lexer, saver.m_state.m_cur->range.startOffset);
+        const size_t ifOffset = lexer.PeekNextToken().range.startOffset;
+        lexer.EatToken();
+        if (chained)
+        {
+            if (!AddOperator())
+            {
+                m_unknown.DeferSince(unknownMark);
+                return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
+            }
+            valueOffset = ifOffset;
+        }
+        auto ifExpr = ParseIfExpression(lexer, valueOffset);
         // Jinja2 checks the filters and tests of an inline if, its value among them, when they run
         m_unknown.DeferSince(unknownMark);
         if (!ifExpr)
@@ -196,15 +222,14 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
             return MakeUnexpected(ifExpr.error());
         }
         auto evaluator = m_nodes.Make<FullExpressionEvaluator>();
-        m_nodes[evaluator].SetExpression(*value);
+        m_nodes[evaluator].SetExpression(result);
         m_nodes[evaluator].SetTester(*ifExpr);
-        saver.Commit();
-        return NodeRef<Expression>(evaluator);
+        result = NodeRef<Expression>(evaluator);
+        chained = true;
     }
 
     saver.Commit();
-
-    return std::move(*value);
+    return result;
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart)
@@ -1128,6 +1153,10 @@ struct BracketSubscript
 {
     NodeRef<Expression> parts[3];
     bool isSlice = false;
+    // A tuple with a slice among its items, as `l[1:2, 3]` (docs/tasks/0445): whether every part
+    // is foldable; the parts themselves are not kept
+    bool isTupleOfSlices = false;
+    bool foldable = true;
 };
 
 bool EndsSlicePart(LexScanner& lexer)
@@ -1146,29 +1175,6 @@ SubscriptParseResult<NodeRef<Expression>> ParseSubscriptPart(ExpressionParser& p
         return MakeUnexpected(expr.error());
     }
     return NodeRef<Expression>(*expr);
-}
-
-// l[a, b] and l[] index with a tuple, as in Jinja2; first is the already parsed a, if any
-SubscriptParseResult<NodeRef<Expression>> ParseSubscriptTuple(ExpressionParser& parser,
-                                                              LexScanner& lexer,
-                                                              SiblingOperators& siblings,
-                                                              const NodeRef<Expression>& first)
-{
-    std::vector<NodeRef<Expression>> items;
-    if (first)
-    {
-        items.push_back(first);
-    }
-    while (lexer.EatIfEqual(',') && lexer.PeekNextToken() != ']')
-    {
-        auto expr = ParseSubscriptPart(parser, lexer, siblings);
-        if (!expr)
-        {
-            return MakeUnexpected(expr.error());
-        }
-        items.push_back(*expr);
-    }
-    return NodeRef<Expression>(parser.Nodes().Make<TupleCreator>(parser.Nodes().MakeSpan(items), true));
 }
 
 // The ':stop:step' tail of a slice, after its first ':'
@@ -1196,11 +1202,10 @@ nonstd::expected<void, ParseError> ParseSliceTail(ExpressionParser& parser, LexS
     return {};
 }
 
-// Jinja2's parse_subscribed: an index, or a slice [start:stop:step] with any part omitted
-SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& parser, LexScanner& lexer, SiblingOperators& siblings)
+// Jinja2's parse_subscribed: one item, an expression or a slice [start:stop:step] with any part omitted
+SubscriptParseResult<BracketSubscript> ParseSubscribed(ExpressionParser& parser, LexScanner& lexer, SiblingOperators& siblings)
 {
     BracketSubscript result;
-    auto& start = result.parts[0];
     if (!EndsSlicePart(lexer))
     {
         auto expr = ParseSubscriptPart(parser, lexer, siblings);
@@ -1208,17 +1213,7 @@ SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& p
         {
             return MakeUnexpected(expr.error());
         }
-        start = *expr;
-    }
-    // l[a, b] and l[] index with a tuple, as in Jinja2
-    if (lexer.PeekNextToken() != ':' && (lexer.PeekNextToken() == ',' || (!start && lexer.PeekNextToken() == ']')))
-    {
-        auto tuple = ParseSubscriptTuple(parser, lexer, siblings, start);
-        if (!tuple)
-        {
-            return MakeUnexpected(tuple.error());
-        }
-        start = *tuple;
+        result.parts[0] = *expr;
     }
     if (lexer.EatIfEqual(':'))
     {
@@ -1228,9 +1223,83 @@ SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& p
             return MakeUnexpected(tail.error());
         }
     }
-    else if (!start)
+    else if (!result.parts[0])
     {
         return MakeParseError(ErrorCode::ExpectedExpression, lexer.PeekNextToken());
+    }
+    return result;
+}
+
+// The rest of a subscript by a tuple after its first item, if any: `l[a, b]`, `l[]`, `l[1:2, 3]`
+SubscriptParseResult<BracketSubscript> ParseSubscriptTuple(ExpressionParser& parser, LexScanner& lexer, SiblingOperators& siblings, const BracketSubscript& first)
+{
+    auto& nodes = parser.Nodes();
+    std::vector<NodeRef<Expression>> items;
+    bool hasSlice = first.isSlice;
+    bool foldable = true;
+    const auto addItem = [&nodes, &foldable, &items](const BracketSubscript& item) {
+        for (const auto& part : item.parts)
+        {
+            foldable = foldable && (!part || nodes[part].IsFoldable(nodes));
+        }
+        items.push_back(item.parts[0]);
+    };
+    if (first.parts[0] || first.isSlice)
+    {
+        addItem(first);
+    }
+    while (lexer.EatIfEqual(','))
+    {
+        // Jinja2 has no trailing comma in a subscript: `l[1,]` is a syntax error
+        if (lexer.PeekNextToken() == ']')
+        {
+            return MakeParseError(ErrorCode::ExpectedExpression, lexer.PeekNextToken());
+        }
+        auto item = ParseSubscribed(parser, lexer, siblings);
+        if (!item)
+        {
+            return MakeUnexpected(item.error());
+        }
+        hasSlice = hasSlice || item->isSlice;
+        addItem(*item);
+    }
+    BracketSubscript result;
+    if (hasSlice)
+    {
+        result.isTupleOfSlices = true;
+        result.foldable = foldable;
+    }
+    else
+    {
+        result.parts[0] = nodes.Make<TupleCreator>(nodes.MakeSpan(items), true);
+    }
+    return result;
+}
+
+// Jinja2's parse_subscript: an index, a slice, or a tuple of them. l[a, b] and l[] index with a
+// tuple; a tuple with a slice among its items (`l[1:2, 3]`, Python's extended slice) is only
+// told apart, as the caller folds or rejects it (docs/tasks/0445)
+SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& parser, LexScanner& lexer, SiblingOperators& siblings)
+{
+    BracketSubscript result;
+    if (lexer.PeekNextToken() != ']')
+    {
+        auto first = ParseSubscribed(parser, lexer, siblings);
+        if (!first)
+        {
+            return MakeUnexpected(first.error());
+        }
+        result = *first;
+    }
+    // l[a, b] and l[] index with a tuple, as in Jinja2
+    if (lexer.PeekNextToken() == ',' || (!result.parts[0] && !result.isSlice && lexer.PeekNextToken() == ']'))
+    {
+        auto tuple = ParseSubscriptTuple(parser, lexer, siblings, result);
+        if (!tuple)
+        {
+            return MakeUnexpected(tuple.error());
+        }
+        result = *tuple;
     }
 
     if (!lexer.EatIfEqual(']'))
@@ -1244,6 +1313,12 @@ SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& p
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscript(LexScanner& lexer, NodeRef<Expression> valueRef)
 {
+    // An attribute or item of the undefined a tuple of slices folds to fails as Jinja2 folds it,
+    // so it is not folded: invalid Python (docs/tasks/0445)
+    if (m_tupleSliceValue && &m_nodes[valueRef] == &m_nodes[m_tupleSliceValue])
+    {
+        return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
+    }
     NodeRef<Expression> indexExpr;
     std::string attrName;
     if (lexer.NextToken() == '.')
@@ -1265,6 +1340,20 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
             return MakeUnexpected(bracket.error());
         }
         auto& parts = bracket->parts;
+        if (bracket->isTupleOfSlices)
+        {
+            // Jinja2 folds a subscript of a literal by constants through Environment.getitem,
+            // which gives an undefined for the TypeError of a list, tuple or string and the
+            // KeyError of a dict. Unfolded, the slice inside the tuple is invalid Python
+            if (!m_inOutput || !bracket->foldable || !m_nodes[valueRef].IsFoldable(m_nodes))
+            {
+                return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
+            }
+            ++m_tupleSliceSubscripts;
+            const NodeRef<Expression> undefined = m_nodes.Make<ConstantExpression>(InternalValue());
+            m_tupleSliceValue = undefined;
+            return undefined;
+        }
         if (bracket->isSlice)
         {
             // Whether Jinja2 folds it decides what a slice of a value without items gives

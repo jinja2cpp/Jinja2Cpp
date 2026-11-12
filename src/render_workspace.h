@@ -23,6 +23,7 @@ struct GlobalsSnapshot;
 namespace detail
 {
 struct LoopFrame;
+struct RenderThreadState;
 // A frame is a refcounted ValueObject, as the `loop` value it backs shares it (statements.cpp)
 void intrusive_ptr_add_ref(const LoopFrame* frame) noexcept; // NOLINT(readability-identifier-naming): IntrusivePtr's hook
 void intrusive_ptr_release(const LoopFrame* frame) noexcept; // NOLINT(readability-identifier-naming): IntrusivePtr's hook
@@ -179,6 +180,26 @@ public:
     static bool ReleaseThisThread() noexcept;
 
 private:
+    // A suspendable render swaps what it took from here with a workspace of its own whenever it
+    // lets the thread go (detail::RenderThreadState, docs/tasks/0457)
+    friend struct detail::RenderThreadState;
+    // Exchanges everything but the generation of the frames, which counts on for the thread, so
+    // that a handle of one render's frame never resolves in another's
+    void SwapContents(RenderWorkspace& other) noexcept
+    {
+        using std::swap;
+        swap(m_chunks, other.m_chunks);
+        swap(m_current, other.m_current);
+        swap(m_frames, other.m_frames);
+        swap(m_loopFrames, other.m_loopFrames);
+        swap(m_globals, other.m_globals);
+        swap(m_globalAttached, other.m_globalAttached);
+        swap(m_maps, other.m_maps);
+        swap(m_lentMaps, other.m_lentMaps);
+        swap(m_retired, other.m_retired);
+    }
+    static std::size_t& RunningRenders() noexcept { return s_renders; }
+
     struct Chunk
     {
         std::unique_ptr<Slot[]> slots;

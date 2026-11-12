@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:8638c972-c9b9-533f-9866-d6fffbd3e6cc",
+  "serialNumber": "urn:uuid:81230f0f-3ef7-558d-8d60-ef3b8f0bac3d",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -548,6 +548,107 @@
               "value": "Goes with boost-multiprecision"
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "boost-context-fcontext",
+      "name": "boost-context-fcontext",
+      "version": "1.92.0",
+      "supplier": {
+        "name": "Boost.org (Oliver Kowalke)"
+      },
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSL-1.0"
+          }
+        }
+      ],
+      "purl": "pkg:github/boostorg/context@boost-1.92.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/boostorg/context"
+        }
+      ],
+      "pedigree": {
+        "notes": "Unmodified copies of libs/context/src/asm from the Boost 1.92.0 release (the one thirdparty/thirdparty-internal.cmake pins); thirdparty/boost_context/README.md"
+      },
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "optional"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build,test"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "internal"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "vendored"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "JINJA2CPP_BUILD_PYTHON (the module's lazy Template.generate()) and JINJA2CPP_BUILD_TESTS (the suspendable render tests), on x86-64 and AArch64 outside Windows (python/src/fiber/fiber.cmake)"
+        },
+        {
+          "name": "jinja2cpp:also-roles",
+          "value": "test"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "make_fcontext and jump_fcontext, the stack switch of python/src/fiber (docs/tasks/0457): the module runs a lazy generate() on a fiber and suspends it at each item. No Boost C++ interface; the symbols are hidden"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "A switch that has run on every major ABI for a decade (AArch64 callee-saved FP registers, ELF and Mach-O names), reviewed once rather than written anew (0457 plan D3, Ruslan 2026-11-11)"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Eight small assembly files; the library never links them"
+        },
+        {
+          "name": "jinja2cpp:modified",
+          "value": "Unmodified copies of libs/context/src/asm from the Boost 1.92.0 release (the one thirdparty/thirdparty-internal.cmake pins); thirdparty/boost_context/README.md"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "thirdparty/boost_context/make_x86_64_sysv_elf_gas.S sha256:822eb4db4451d54af7c1bf4f66c193c166d01264e12c3d67f8a89beaf7839738"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "thirdparty/boost_context/jump_x86_64_sysv_elf_gas.S sha256:560c7fa5b5c4476999e50e54a6b14efaddb7c7f42a8de8165cd1336c71c93ef0"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "thirdparty/boost_context/make_x86_64_sysv_macho_gas.S sha256:b47ab015d1159173effdbc59dfc6ddac81304b2f80678523419ea87eebddecb2"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "thirdparty/boost_context/jump_x86_64_sysv_macho_gas.S sha256:9b7f0901d3516fbd123fc6637992ee80515ecdfaa21b400e274431917e48f7d4"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "thirdparty/boost_context/make_arm64_aapcs_elf_gas.S sha256:4391a1bf8033a984128baddd1aa3cdbe269d038349fa93d038a7fd409816de84"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "thirdparty/boost_context/jump_arm64_aapcs_elf_gas.S sha256:8757cfbfdcc7cbc43ac10ddee7c7f461ea3109704c2710a50a1dae7ae9bb8a04"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "thirdparty/boost_context/make_arm64_aapcs_macho_gas.S sha256:70f07951a0bd02415f8c36b0fec2007f6cd33f1e121e569396d313a637d399dd"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "thirdparty/boost_context/jump_arm64_aapcs_macho_gas.S sha256:948981fc56f53c319e709f17212d1b9c7a202c59ed3767a5b361cb5fa2b81f12"
         }
       ]
     },
@@ -2837,6 +2938,7 @@
         "fmt",
         "fast-float",
         "boost",
+        "boost-context-fcontext",
         "nlohmann-json",
         "robin-hood-hashing",
         "lexertk",

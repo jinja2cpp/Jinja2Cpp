@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: robustness
 depends: [0262, 0263]
@@ -31,3 +31,15 @@ copy). `UntrustedLimits()` then sets one and drops its memory caveat, and `FuzzL
 and sequence cap under the nightly RSS limit.
 
 **Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).
+
+**Design (2026-11-11).** The budget counts what a render holds at once, not what it allocates in
+total: a cumulative count would stop a template that builds and drops a list per row, and one
+that builds a string by `~` in a loop, long before anything is kept. Each `StringObject` is
+charged when made and given back in its destructor; a list's storage (`BySharedMutable`) by its
+capacity, growing through `ReserveCounted` in `append`, `extend` and `insert`; a `TemplateDict`
+by its entries (key included) as they are added, erased, copied or freed. A free gives the bytes
+back to whatever budget runs on the thread, capped at that budget, so memory freed that the
+render did not make (host data, an outer render's values) never lets it pass the bound by more
+than it freed. Without a budget each point costs one thread-local compare. `UntrustedLimits()`
+sets 256 MiB, and `FuzzLimits()` keeps `UntrustedLimits()`' steps and sequence cap. Objects not
+counted: [0478](0478-render-memory-uncounted-objects.md).

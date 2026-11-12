@@ -153,6 +153,26 @@
       "evidence": [{"file": "thirdparty/CMakeLists.txt", "contains": ["b4171037f13373203ba79cbc141d612982052283e696a315185ab5bea46102a0"]}]
     },
     {
+      "id": "boost-context-fcontext",
+      "name": "boost-context-fcontext",
+      "version": "1.92.0",
+      "license": "BSL-1.0",
+      "supplier": "Boost.org (Oliver Kowalke)",
+      "url": "https://github.com/boostorg/context",
+      "purl": "pkg:github/boostorg/context@boost-1.92.0",
+      "delivery": "vendored",
+      "files": ["thirdparty/boost_context/make_x86_64_sysv_elf_gas.S", "thirdparty/boost_context/jump_x86_64_sysv_elf_gas.S", "thirdparty/boost_context/make_x86_64_sysv_macho_gas.S", "thirdparty/boost_context/jump_x86_64_sysv_macho_gas.S", "thirdparty/boost_context/make_arm64_aapcs_elf_gas.S", "thirdparty/boost_context/jump_arm64_aapcs_elf_gas.S", "thirdparty/boost_context/make_arm64_aapcs_macho_gas.S", "thirdparty/boost_context/jump_arm64_aapcs_macho_gas.S"],
+      "modified": "Unmodified copies of libs/context/src/asm from the Boost 1.92.0 release (the one thirdparty/thirdparty-internal.cmake pins); thirdparty/boost_context/README.md",
+      "role": "optional",
+      "also_roles": ["test"],
+      "phases": ["build", "test"],
+      "exposure": "internal",
+      "selected_by": "JINJA2CPP_BUILD_PYTHON (the module's lazy Template.generate()) and JINJA2CPP_BUILD_TESTS (the suspendable render tests), on x86-64 and AArch64 outside Windows (python/src/fiber/fiber.cmake)",
+      "used_for": "make_fcontext and jump_fcontext, the stack switch of python/src/fiber (docs/tasks/0457): the module runs a lazy generate() on a fiber and suspends it at each item. No Boost C++ interface; the symbols are hidden",
+      "why": "A switch that has run on every major ABI for a decade (AArch64 callee-saved FP registers, ELF and Mach-O names), reviewed once rather than written anew (0457 plan D3, Ruslan 2026-11-11)",
+      "lighten": "Eight small assembly files; the library never links them"
+    },
+    {
       "id": "nlohmann-json",
       "name": "nlohmann_json",
       "version": "3.12.0",

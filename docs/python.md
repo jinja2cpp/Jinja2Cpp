@@ -114,8 +114,11 @@ engines on a Release build of the module.
 - `template.generate()` and `template.stream()` with `TemplateStream` (`dump`,
   `enable_buffering`, `disable_buffering`). They yield Jinja2's items (a run of text, the value of
   a `{{ }}`, a macro or call block's output; the engine's `RenderOptions::writeEachPiece`, 0436),
-  and an error after the items written before it, as Jinja2 does; but the whole render runs at the
-  first item, on the caller's thread (lazy rendering is docs/tasks/0457).
+  and an error after the items written before it, as Jinja2 does. The template runs as far as the
+  items asked for, on the caller's thread (0457): the engine's render runs on a fiber of its own (an
+  8 MiB stack reserve, committed as used) and switches back at each item, so callables, `threading.local`
+  state, locks and `contextvars` are the consumer's, and `close()` (or collecting the generator) ends
+  the render where it stopped.
 - `template.make_module(vars=None, shared=False, locals=None)` and `template.module`, from the
   engine's `Template::MakeModule`: the exports are attributes of a `TemplateModule`, `str()` is
   the rendered body, `__html__` is the same as Markup. An exported macro (also inside an exported
@@ -203,7 +206,7 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 | `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
 | `compile_expression`, `lex`, `preprocess`, `compile` | called on a Jinja2 environment of the same configuration |
 | `Template.blocks`, `new_context`, `root_render_func` | read from the template loaded by Jinja2 from the same source or name |
-| A template the engine cannot parse (for example a subscript of a literal by a tuple of slices, `[1, 2][1:2, 3]`) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
+| A template the engine cannot parse (for example a subscript of a literal by a tuple of slices in a conditional Jinja2 folds by its test, `(()[:, :] if 1 > 0) is undefined`) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
 
 **Tier C: never.** Bytecode-level internals of the engine: `jinja2.compiler` and
 `jinja2.nodes` as engine objects (`env.parse` of a native environment is opaque, for
@@ -379,8 +382,9 @@ inside the adapters that let the engine read Python objects, not in generated co
   missing, after it finds one of its methods, and at `str.format`. A private name (`__class__`,
   `__init__`, `_x`) on one is asked of `is_safe_attribute` with a stand-in object of the Python
   type and is refused with the same undefined; so is a public name when the subclass's
-  `is_safe_attribute` is not Jinja2's. `format_map` of a string, which the engine lacks, and
-  `str.format` are Python's, run through `SandboxedFormatter`. `ImmutableSandboxedEnvironment`
+  `is_safe_attribute` is not Jinja2's. `format_map` of a string (which the module
+  answers from `NativeAttribute`, ahead of the engine's own, 0466) and `str.format` are
+  Python's, run through `SandboxedFormatter`. `ImmutableSandboxedEnvironment`
   also refuses the methods of the engine's lists and dicts that change them (`append`, `update`,
   ...) with Jinja2's message and `ErrorCode::SecurityError` (`Dialect::ImmutableSandbox`, the read-only containers of the
   transformers preset).
@@ -423,9 +427,11 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - `tojson` writes any mapping and any list or tuple; Python's `json.dumps` takes only `dict`.
 - A dict literal of the template keyed by a Python object that defines its own `__hash__`
   (a tuple from Python, a frozen dataclass) keys it by identity (0248 plan, section 7).
-- Methods of the engine's own values are the engine's: `x.hex()` on a float (and other
-  Python methods Jinja2 lets a template call on an `int`, `float` or `str` the engine has no
-  method for) raises `TemplateRuntimeError`, for values from Python as for literals (0403).
+- Methods of the engine's own values are the engine's. It has every public method of Python's
+  `str`, `int` and `float` except those of `bytes` and one alternate constructor:
+  `str.encode`, `int.to_bytes` and `int.from_bytes` (the engine has no `bytes` type), and
+  `float.fromhex`. Calling one raises `TemplateRuntimeError`, for values from Python as for
+  literals (0403).
 - `urlencode` reads any mapping as a dict; Jinja2 does so only for a `dict` and iterates
   another `Mapping`, which gives its keys (0404).
 - A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, but
@@ -449,8 +455,20 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   raises `TemplateAssertionError`), and returns an opaque object that only `jinja2cpp.meta`
   takes, not Jinja2's node tree. `find_referenced_templates` gives the names of the tags in
   source order, `None` for a name that is not a literal.
-- `generate()` runs the whole template at the first item, where Jinja2 runs it item by item (0457).
-  Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here three), and
+- A `generate()` generator renders on the thread of its first `next()`: `next()` on another thread
+  raises `RuntimeError`, which ends the generator, where Jinja2 goes on there (0457 D2). To hand a
+  render to another thread (Starlette's or FastAPI's `StreamingResponse` over a sync iterator calls
+  `next()` in a thread pool), `render()` the template or pass `list(t.generate())`; a lazy async iterator
+  is task 0461. A generator closed or collected on another thread, or after the interpreter began to
+  exit, is not resumed: its render stops where it was, and what it held is not released.
+- A reference cycle through a suspended generator (a param that refers back to the generator) is not
+  collected until the generator is closed; Jinja2's is (0462).
+- `generate()` runs the whole template at the first item, as before 0457, where lazy rendering is not
+  available: when `greenlet` is imported (gevent, eventlet: its stack switching and a fiber cannot share
+  a thread), on CPython 3.14.0 and versions after 3.15 (not yet checked), on platforms other than
+  Windows and x86-64 or AArch64 Linux, macOS and the BSDs, under a CET or GCS shadow stack, past 8
+  generators nested in each other's callables on a thread, or when no stack can be reserved.
+- Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here three), and
   yields `super()`, `self.block()` and a recursive loop's call as one item, a macro's output of
   more than 512 characters as one item, and an empty `{{ }}` as `''` (0456).
 - A Python loader's `get_source` runs again when a template it gave fails to compile, to show

@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0095]
-touches: [src/expression_parser.cpp, test/parity/divergences/fuzz.txt]
+touches: [src/expression_parser.cpp, test/parity/divergences/fuzz.txt, python/tests/parity/module-divergences.txt]
 ---
 # Dotted filter and test names (`x|ns.f`, `x is ns.t`)
 
@@ -23,5 +23,6 @@ unknown name outside a conditional branch is a load error), and check that `x|f.
 become `(x|f).g`: Python rejects that as the unknown filter `f.g`.
 
 **Done when.** `fuzz.dotted_filter_name_not_run` and `fuzz.dotted_test_name_not_run` match
-and their lines in `test/parity/divergences/fuzz.txt` are deleted, and a unit test renders
+and their lines in `test/parity/divergences/fuzz.txt` and
+`python/tests/parity/module-divergences.txt` are deleted, and a unit test renders
 a dotted host filter and test.
