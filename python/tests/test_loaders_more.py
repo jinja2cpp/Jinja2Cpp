@@ -1,5 +1,6 @@
 """ChoiceLoader, PrefixLoader, FunctionLoader, PackageLoader, ModuleLoader and BaseLoader.load."""
 
+import gc
 import sys
 import weakref
 import zipfile
@@ -358,3 +359,16 @@ def test_a_replaced_cache_alone_decides_later_loads(replacement):
         return out
 
     assert trace(jinja2cpp) == trace(jinja2)
+
+
+def test_a_replaced_cache_keeps_no_dropped_template_alive():
+    # Codex on #859: the freshness of a replacement cache's entry went with the environment, not with the entry
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({f"t{i}": str(i) for i in range(50)}))
+    env.cache = {}
+    refs = []
+    for i in range(50):
+        refs.append(weakref.ref(env.get_template(f"t{i}")))
+        env.cache.clear()
+    gc.collect()
+    assert not any(ref() for ref in refs)
+    assert len(env.__dict__.get("_foreign_uptodate", {})) == 0

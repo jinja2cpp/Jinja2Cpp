@@ -753,7 +753,7 @@ class Environment(_jinja2cpp.Environment):
         uptodate = self.__dict__.setdefault("_foreign_uptodate", {})
         if cached is not None:
             check = uptodate.get(key, (None, None))
-            if check[0] is cached and (not self.auto_reload or check[1] is None or check[1]()):
+            if check[0] is not None and check[0]() is cached and (not self.auto_reload or check[1] is None or check[1]()):
                 if globals:
                     cached.globals.update(globals)
                 return cached  # type: ignore[no-any-return]
@@ -764,7 +764,12 @@ class Environment(_jinja2cpp.Environment):
             return fallback.load_fallback(self, error, lambda j: j.get_template(name, None, globals))  # type: ignore[no-any-return]
         if cache is not None:
             cache[key] = template
-            uptodate[key] = (template, is_up_to_date)
+            # The template weakly: the entry goes with it, once the caller's cache drops it (Codex on #859)
+            def forget(ref: t.Any, key: t.Any = key, uptodate: t.Dict[t.Any, t.Any] = uptodate) -> None:
+                if uptodate.get(key, (None,))[0] is ref:
+                    del uptodate[key]
+
+            uptodate[key] = (weakref.ref(template, forget), is_up_to_date)
         fallback._count("loads_native")
         fallback.remember(template, name=name)
         return template  # type: ignore[no-any-return]
