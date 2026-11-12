@@ -128,6 +128,8 @@ struct RenderLimits
     // they come from; UINT64_MAX in both without one
     std::uint64_t memoryLeft = UINT64_MAX;
     std::uint64_t memoryBudget = UINT64_MAX;
+    // Bytes an object took past the budget where nothing may throw (ChargeObjectMemory): the next step fails the render
+    std::uint64_t memoryOverdraft = 0;
     unsigned maxRenderDepth = 256;
     // The render's output string (std::string, or std::wstring when `wideOutput`), or the count
     // of the characters its sink received (`sinkOutput`), and the size it may reach
@@ -319,6 +321,9 @@ private:
 namespace detail
 {
 [[noreturn]] void ThrowRenderMemory(std::uint64_t bytes);
+// ChargeObjectMemory past the budget: notes the overdraft and makes the next step take the slow path, which fails it
+// Exported: ValueObject's allocation function calls it from code outside a shared library
+JINJA2CPP_EXPORT void OverdrawRenderMemory(std::uint64_t bytes) noexcept;
 } // namespace detail
 
 // Counts `bytes` of a string, list or dict the running render makes or grows against its memory budget
@@ -331,6 +336,22 @@ inline void ChargeRenderMemory(std::uint64_t bytes)
         if (bytes > limits.memoryLeft)
         {
             detail::ThrowRenderMemory(bytes);
+        }
+        limits.memoryLeft -= bytes;
+    }
+}
+// Counts `bytes` of an object the running render makes (ValueObject's allocation function, docs/tasks/0478), where
+// nothing but std::bad_alloc may be thrown: past the budget the render fails with maxRenderMemory at its next step.
+// Without a budget one compare
+inline void ChargeObjectMemory(std::uint64_t bytes) noexcept
+{
+    auto& limits = detail::t_renderLimits;
+    if (limits.memoryLeft != UINT64_MAX)
+    {
+        if (bytes > limits.memoryLeft)
+        {
+            detail::OverdrawRenderMemory(bytes);
+            return;
         }
         limits.memoryLeft -= bytes;
     }

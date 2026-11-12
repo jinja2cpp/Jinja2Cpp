@@ -163,11 +163,13 @@ exact unit): `maxRange`, `maxSequenceSize`, `maxOutputSize`, `maxTemplateSize`,
 `maxTemplateLoads`, `maxRenderSteps`, `maxRenderTime`, `maxRenderMemory`. `UntrustedLimits()`
 sets values anchored on Python's `SandboxedEnvironment`: `range()` of at most 100000 items,
 sequences of at most 2^20 items, 16 MiB of output, 10^7 steps, no time limit, and 256 MiB of
-strings, lists and dicts held at once (Python's sandbox has no memory bound to copy). The values
+values held at once (Python's sandbox has no memory bound to copy). The values
 may change between releases. `maxRenderMemory` counts what a render holds, not what it
 allocates in total: each string, list and dict is counted when it is built or grows and given
-back when it is freed ([0459](tasks/0459-render-memory-budget.md)). It is an estimate of the
-engine's own storage; loop and macro state, the host's data and allocator overhead are not
+back when it is freed ([0459](tasks/0459-render-memory-budget.md)), and every other object the
+render makes (loop state, macros, generators, undefined values, big integers) by its own size
+([0478](tasks/0478-render-memory-uncounted-objects.md)). It is an estimate of the engine's own
+storage; what such an object allocates apart, the host's data and allocator overhead are not
 counted, so give the host process room beyond it. A step is an approximate unit that can change between releases too; set
 `maxRenderSteps` with a wide margin over what the host's real templates take.
 
@@ -184,9 +186,7 @@ These apply to both tiers. The claims above stop here until these tasks land:
 
 - One step, such as a filter over a long string, can overrun `maxRenderTime`:
   [0282](tasks/0282-settings-limits-followups.md).
-- `maxRenderMemory` counts strings, lists and dicts, not every object a render makes: a template
-  that keeps many loop objects, macros or other engine objects in a list is counted only for their
-  slots ([0478](tasks/0478-render-memory-uncounted-objects.md)). The fuzz targets for untrusted
+- The fuzz targets for untrusted
   templates ([0267](tasks/0267-untrusted-mode-fuzzing.md)) run under `UntrustedLimits()` with a
   shorter time limit; the structure-aware mutator and the continuous service they are meant to
   feed are [0095](tasks/0095-structure-aware-fuzzing.md) and

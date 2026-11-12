@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0459]
@@ -27,3 +27,14 @@ fixed charge per `ValueObject` the render makes) and give it back in their destr
 same with a big integer (`2 ** 1000`), each failing with `maxRenderMemory`.
 
 **Trust model.** When this lands, drop its entry under Known gaps in [docs/security.md](../security.md).
+
+**Resolution.** `ValueObject` has class-specific `operator new`/`operator delete` that charge and give back the
+object's own size (the size the deleting destructor passes), which covers every engine object at once: loop state,
+callables, bound methods, undefined info, generators, anchors. An allocation function may throw only
+`std::bad_alloc`, so past the budget `ChargeObjectMemory` notes an overdraft and makes the next step take the slow
+path, which fails the render with `maxRenderMemory`. `BigIntObject` charges its digits in `Make`; `StringObject`
+keeps its own count. Rows in `Cases()`: kept nested-loop objects, macros, undefined values and big integers fail,
+the dropped and plain-int controls pass; each kept row passes without the change.
+
+**Next.** What an object allocates apart (a loop's vectors, an undefined value's name strings) is still not
+counted; the per-object size is a lower bound.

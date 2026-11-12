@@ -155,6 +155,14 @@ std::vector<LimitCase> Cases()
         { "MemoryHugeListUpFront", "{{ range(2**26)|list|length }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         { "MemorySortAfterClear", "{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.clear() %}{% set _ = x.sort() %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         { "MemorySortKeepsCount", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.sort() %}{% set _ = ns.l.append(x) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        // Every object counts, not only the slot that holds it (docs/tasks/0478): the lists below alone take at most
+        // 16384 slots of 32 bytes, half the budget
+        { "MemoryKeptLoops", "{% set l = [] %}{% for i in range(10000) %}{% for j in [i] %}{% set _ = l.append(loop) %}{% endfor %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryDroppedLoops", "{% for i in range(10000) %}{% for j in [i] %}{% set x = loop %}{% endfor %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
+        { "MemoryKeptMacros", "{% set l = [] %}{% for i in range(10000) %}{% macro m() %}{% endmacro %}{% set _ = l.append(m) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryKeptUndefined", "{% set l = [] %}{% for i in range(10000) %}{% set _ = l.append(missing) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryKeptBigInts", "{% set l = [] %}{% for i in range(5000) %}{% set _ = l.append(('1' * 300)|int) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemoryKeptInts", "{% set l = [] %}{% for i in range(10000) %}{% set _ = l.append(i) %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         // UINT64_MAX bytes is no limit
         { "MemoryMax", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = UINT64_MAX; }, "" },
     };
