@@ -65,13 +65,33 @@ class _MissingBase:
         raise MissingName(f"jinja2cpp has no base class for {type(self).__name__}")
 
 
+# Modules jinja2cpp has only a part of (jinja2cpp.nodes: EvalContext, not the AST): a name they lack is Missing
+_PARTIAL = {"jinja2.nodes"}
+
+
+def _partial(target, name):
+    proxy = types.ModuleType(name)
+
+    def lookup(attr):
+        try:
+            return getattr(target, attr)
+        except AttributeError:
+            if attr.startswith("__") and attr.endswith("__"):
+                raise
+            return Missing(f"{name}.{attr}")
+
+    proxy.__getattr__ = lookup  # type: ignore[attr-defined]
+    return proxy
+
+
 def _target(name):
     """jinja2cpp's module for Jinja2's module `name`, or None."""
     mapped = "jinja2cpp" + name[len("jinja2"):]
     try:
-        return importlib.import_module(mapped)
+        target = importlib.import_module(mapped)
     except ImportError:
         return None
+    return _partial(target, name) if name in _PARTIAL else target
 
 
 def module(name):

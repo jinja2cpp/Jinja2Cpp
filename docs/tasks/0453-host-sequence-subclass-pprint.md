@@ -21,3 +21,9 @@ Python, and have `pprint` of a host sequence follow it (through `Iterate` where 
 **Done when.** The example matches Jinja2, with a row next to the 0441 subclass rows in
 `python/tests/test_values.py` (built afresh per engine: a deep copy of a list subclass is
 rebuilt from its `__iter__`).
+
+**Progress (2026-11-11).** 0434 (#850) prints an exact host `list` or `tuple` through its iteration (it
+breaks and sorts as `pformat`). A subclass still prints as its `Repr`: the engine cannot tell whether
+the subclass keeps `list.__repr__` (which pformat iterates) or has its own (a namedtuple, or one that
+hides its items, which pformat prints as is; the 0434 security review). Needs the host to say so, e.g.
+an `IHostObject` answer "repr is the base type's", which is a public API addition.

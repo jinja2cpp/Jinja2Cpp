@@ -69,6 +69,9 @@ public:
     [[nodiscard]] bool IsTuple() const override;
     [[nodiscard]] bool IsMarkupLike() const override;
     [[nodiscard]] std::string Html() const override;
+    [[nodiscard]] bool IsNumber() const override;
+    [[nodiscard]] std::optional<jinja2::Value> ToInt() const override;
+    [[nodiscard]] std::optional<jinja2::Value> ToFloat() const override;
 
 private:
     // The attribute `name`, checked by the sandbox of the render when there is one; null when there is none

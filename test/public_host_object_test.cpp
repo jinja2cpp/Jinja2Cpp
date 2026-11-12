@@ -63,6 +63,10 @@ struct ToySpec
     bool mapping = false;
     bool listOrTuple = false;
     bool tuple = false;
+    bool number = false;
+    const char* typeName = "Toy";
+    std::optional<Value> toInt;
+    std::optional<Value> toFloat;
     // A call keeps the template callable it was handed as `caller`, for a later call to try
     mutable std::optional<UserCallable> kept;
     mutable std::string keptResult;
@@ -131,7 +135,7 @@ public:
     {
     }
 
-    [[nodiscard]] const char* TypeName() const override { return "Toy"; }
+    [[nodiscard]] const char* TypeName() const override { return m_spec->typeName; }
     [[nodiscard]] std::string Str() const override { return m_spec->str; }
     [[nodiscard]] std::string Repr() const override { return m_spec->repr; }
     [[nodiscard]] std::optional<Value> GetAttr(std::string_view name) const override { return Find(m_spec->attrs, std::string(name)); }
@@ -273,6 +277,9 @@ public:
     [[nodiscard]] bool IsTuple() const override { return m_spec->tuple; }
     [[nodiscard]] bool IsMarkupLike() const override { return m_spec->html.has_value(); }
     [[nodiscard]] std::string Html() const override { return m_spec->html.value_or(""); }
+    [[nodiscard]] bool IsNumber() const override { return m_spec->number; }
+    [[nodiscard]] std::optional<Value> ToInt() const override { return m_spec->toInt; }
+    [[nodiscard]] std::optional<Value> ToFloat() const override { return m_spec->toFloat; }
 
 private:
     template<typename Map, typename Key>
@@ -454,6 +461,33 @@ TEST(PublicHostObjectTest, MarkupLikeObjectUnderAutoescape)
     // xmlattr takes escape() of each value, which is __html__() of one that has it (docs/tasks/0367)
     EXPECT_EQ(R"( a="<b>Тоу</b>" b="&lt;plain&gt;")", Render("{{ dict(a=m, b=p)|xmlattr }}", params));
     EXPECT_EQ(LR"( a="<b>Тоу</b>" b="&lt;plain&gt;")", RenderW(L"{% autoescape true %}{{ dict(a=m, b=p)|xmlattr }}{% endautoescape %}", params));
+}
+
+TEST(PublicHostObjectTest, NumbersOfAnObject)
+{
+    ToySpec intOnly;
+    intOnly.number = true;
+    intOnly.toInt = Value(static_cast<int64_t>(42));
+    ToySpec floatOnly;
+    floatOnly.toFloat = Value(3.75);
+    ToySpec both;
+    both.number = true;
+    both.toInt = Value(static_cast<int64_t>(7));
+    both.toFloat = Value(2.5);
+    ToySpec neither;
+    const ValuesMap params{ { "i", MakeToy(intOnly) }, { "f", MakeToy(floatOnly) }, { "b", MakeToy(both) }, { "n", MakeToy(neither) } };
+    EXPECT_EQ("True False True False", Render("{{ i is number }} {{ f is number }} {{ b is number }} {{ n is number }}", params));
+    // int(x), then int(float(x)), then the default
+    EXPECT_EQ("42 3 7 0 7", Render("{{ i|int }} {{ f|int }} {{ b|int }} {{ n|int }} {{ n|int(default=7) }}", params));
+    // float(x), then the default
+    EXPECT_EQ("0.0 3.75 2.5 0.0 1.5", Render("{{ i|float }} {{ f|float }} {{ b|float }} {{ n|float }} {{ n|float(default=1.5) }}", params));
+    EXPECT_EQ(L"42 3 7 0 7", RenderW(L"{{ i|int }} {{ f|int }} {{ b|int }} {{ n|int }} {{ n|int(default=7) }}", params));
+    EXPECT_EQ(L"True False", RenderW(L"{{ i is number }} {{ n is number }}", params));
+    // An answer from ToInt that is not an integer is no int, and ToFloat is not asked
+    ToySpec noInt;
+    noInt.toInt = Value();
+    noInt.toFloat = Value(2.5);
+    EXPECT_EQ("0 7 2.5", Render("{{ x|int }} {{ x|int(default=7) }} {{ x|float }}", { { "x", MakeToy(noInt) } }));
 }
 
 TEST(PublicHostObjectTest, IdentityHoldsAcrossCalls)
@@ -2044,6 +2078,49 @@ TEST(PublicHostObjectTest, ListOrTupleIsAJsonArrayAndASequence)
     EXPECT_EQ("[1, \"b\"] True False", Render("{{ l|tojson }} {{ l is sequence }} {{ s is sequence }}", params));
     EXPECT_EQ(L"[1, \"b\"]", RenderW(L"{{ l|tojson }}", params));
     EXPECT_NE(std::string::npos, Render("{{ s|tojson }}", params).find("Object of type Toy is not JSON serializable"));
+}
+
+// pprint reads an exact list or tuple through its iteration and breaks it as pformat does (0434); a tuple of one item
+// keeps its comma when its iteration has no size
+TEST(PublicHostObjectTest, ListOrTuplePrettyPrints)
+{
+    auto items = [](std::vector<Value> values, bool tuple, bool indexable) {
+        ToySpec spec;
+        spec.listOrTuple = true;
+        spec.tuple = tuple;
+        spec.len = values.size();
+        spec.iteration = std::move(values);
+        spec.indexable = indexable;
+        spec.typeName = tuple ? "tuple" : "list";
+        return MakeToy(spec);
+    };
+    std::vector<Value> numbers;
+    std::string broken = "[";
+    for (int64_t n = 0; n != 30; ++n)
+    {
+        numbers.emplace_back(n);
+        broken += (n != 0 ? ",\n " : "") + std::to_string(n);
+    }
+    broken += "]";
+    const ValuesMap params{ { "l", items(numbers, false, true) },
+                            { "g", items(numbers, false, false) },
+                            { "t", items({ items(numbers, false, true) }, true, false) },
+                            { "e", items({}, true, false) },
+                            { "d", items({ Value(ValuesMap{ { "b", Value(1) }, { "a", Value(2) } }) }, false, true) } };
+    EXPECT_EQ(broken, Render("{{ l|pprint }}", params));
+    EXPECT_EQ(broken, Render("{{ g|pprint }}", params));
+    const auto tuple = Render("{{ t|pprint }}", params);
+    EXPECT_EQ("([0,", tuple.substr(0, 4));
+    EXPECT_EQ("29],)", tuple.substr(tuple.size() - 5));
+    EXPECT_EQ("() [{'a': 2, 'b': 1}]", Render("{{ e|pprint }} {{ d|pprint }}", params));
+    EXPECT_EQ(L"[{'a': 2, 'b': 1}]", RenderW(L"{{ d|pprint }}", params));
+    // Another class (a subclass) prints as its repr
+    ToySpec other;
+    other.listOrTuple = true;
+    other.len = numbers.size();
+    other.iteration = numbers;
+    other.indexable = true;
+    EXPECT_EQ("<Toy>", Render("{{ o|pprint }}", { { "o", MakeToy(other) } }));
 }
 
 // A method that may change its receiver (append) is the host's own attribute: the engine never

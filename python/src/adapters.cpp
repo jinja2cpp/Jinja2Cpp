@@ -405,7 +405,21 @@ jinja2::Value PyHost::Call(const jinja2::UserCallableParams& params) const
         const auto safe = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_check_call", "O", m_object));
         (void)safe;
     }
-    return CallPython(m_object, params);
+    try
+    {
+        return CallPython(m_object, params);
+    }
+    catch (nb::python_error& error)
+    {
+        if (!error.matches(PyExc_StopIteration))
+        {
+            throw;
+        }
+    }
+    // Jinja2's Context.call: a call that raises StopIteration gives the environment's undefined value
+    const auto* render = CurrentRender();
+    const nb::handle type = render && render->undefinedClass ? nb::handle(render->undefinedClass) : nb::handle(Names().undefinedType);
+    return ToEngine(Steal(PyObject_CallFunction(type.ptr(), "s", "value was undefined because a callable raised a StopIteration exception")));
 }
 
 bool PyHost::IsIterable() const
@@ -571,6 +585,77 @@ bool PyHost::IsMarkupLike() const
 std::string PyHost::Html() const
 {
     return Utf8(Steal(PyObject_CallMethod(m_object, "__html__", nullptr)));
+}
+
+bool PyHost::IsNumber() const
+{
+    if (m_kind != Kind::Other)
+    {
+        return false;
+    }
+    const int number = PyObject_IsInstance(m_object, Names().numberType.ptr());
+    if (number < 0)
+    {
+        ThrowPending();
+    }
+    return number != 0;
+}
+
+// int(x) and float(x) as Jinja2's do_int and do_float call them: a TypeError or ValueError is no value, any other
+// exception is the template's. ToInt is the whole of do_int: int(x), then int(float(x)), where an OverflowError is
+// also no value; an empty value tells the engine there is none, so it does not ask ToFloat again
+std::optional<jinja2::Value> PyHost::ToInt() const
+{
+    if (m_kind != Kind::Other)
+    {
+        return std::nullopt;
+    }
+    const auto clearIf = [](bool overflowToo) {
+        if (PyErr_ExceptionMatches(PyExc_TypeError) || PyErr_ExceptionMatches(PyExc_ValueError) || (overflowToo && PyErr_ExceptionMatches(PyExc_OverflowError)))
+        {
+            PyErr_Clear();
+            return;
+        }
+        ThrowPending();
+    };
+    if (PyObject* const number = PyNumber_Long(m_object))
+    {
+        return ToEngine(nb::steal(number));
+    }
+    clearIf(false);
+    PyObject* const asFloat = PyNumber_Float(m_object);
+    if (!asFloat)
+    {
+        clearIf(true);
+        return jinja2::Value();
+    }
+    PyObject* const number = PyNumber_Long(asFloat);
+    Py_DECREF(asFloat);
+    if (!number)
+    {
+        clearIf(true);
+        return jinja2::Value();
+    }
+    return ToEngine(nb::steal(number));
+}
+
+std::optional<jinja2::Value> PyHost::ToFloat() const
+{
+    if (m_kind != Kind::Other)
+    {
+        return std::nullopt;
+    }
+    PyObject* const number = PyNumber_Float(m_object);
+    if (!number)
+    {
+        if (PyErr_ExceptionMatches(PyExc_TypeError) || PyErr_ExceptionMatches(PyExc_ValueError))
+        {
+            PyErr_Clear();
+            return std::nullopt;
+        }
+        ThrowPending();
+    }
+    return ToEngine(nb::steal(number));
 }
 
 const PyHost* AsPyHost(const jinja2::Value& value)

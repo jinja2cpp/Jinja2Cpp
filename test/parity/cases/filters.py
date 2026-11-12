@@ -485,4 +485,6 @@ CASES = [
     ("lazy_result_dict_key", "{% set g = [1]|map('string') %}{{ {g: 1}[g] }}|{{ [g, [1]|select]|unique|list|length }}"),
     ("lazy_result_truncate_list", "{{ [1, 2, 3]|select|list|truncate(5) }}"),
     ("range_truncate_killwords", "{{ range(300)|truncate(255, True) }}"),
+    # task 0434: lists and tuples of the context (host objects through the Python module) wrap as pformat does
+    ("pprint_wraps_context_list", "{{ xs|pprint }}|{{ t|pprint }}", {"ctx": {"xs": list(range(30)), "t": [list(range(25)), {"a": "w" * 80}]}}),
 ]

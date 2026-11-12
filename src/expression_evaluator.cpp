@@ -397,10 +397,10 @@ InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const In
 // an undefined that knows where it came from
 InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values)
 {
-    if (GetUndefinedInfo(cur))
+    if (const auto* info = GetUndefinedInfo(cur))
     {
-        CheckUndefinedUse(cur, UndefinedUse::Attribute);
-        return cur;
+        // Jinja2's Undefined has fields, which getattr finds before __getattr__
+        return UndefinedAttribute(cur, *info, idx.isAttr ? &idx.attrName : nullptr, values);
     }
     return LookupDefinedIndex(cur, idx, key, values);
 }

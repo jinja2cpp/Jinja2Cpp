@@ -96,4 +96,6 @@ CASES = [
     ("unicode_15_1_named_stored", r"{{ '\N{IDEOGRAPHIC DESCRIPTION CHARACTER SUBTRACTION}'|length }}"),
     ("unicode_16_0_named", r"{{ '\N{GARAY CAPITAL LETTER A}' == '\U00010d50' }}"),
     ("unicode_16_0_named_any_case", r"{{ '\N{latin capital letter rams horn}'|length }}"),
+    # task 0476: the engine's values have no __class__ (Jinja2's `x.__class__.__name__` names the Python type)
+    ("class_name_of_str", "{{ 'a'.__class__.__name__ }}|{{ ('a'|safe).__class__.__name__ }}"),
 ]

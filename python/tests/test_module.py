@@ -5,6 +5,7 @@ import weakref
 
 import jinja2
 import jinja2cpp
+import jinja2cpp.nodes
 import markupsafe
 import pytest
 from jinja2 import meta as jmeta
@@ -393,3 +394,36 @@ def test_python_object_params_keep_attributes_lists_and_methods():
     # an exported host list is not readable by the export copy yet (docs/tasks/0411)
     assert mods[0].called == "called"
     assert mods[0].g(User()) == mods[1].g(User()) == "a,bcalled"
+
+
+# Jinja2's Macro.__call__: an EvalContext first argument is not the macro's, and its autoescape decides whether the
+# result is Markup (0434)
+@pytest.mark.parametrize("autoescape", [True, False])
+def test_macro_takes_an_eval_context_first(autoescape):
+    source = "{% macro hello(name) %}<p>{{ name }}</p>{% endmacro %}"
+    results = []
+    for module, eval_context in ((jinja2cpp, jinja2cpp.nodes.EvalContext), (jinja2, jinja2.nodes.EvalContext)):
+        env = module.Environment(autoescape=True)
+        macro = env.from_string(source).module.hello
+        context = eval_context(env)
+        context.autoescape = autoescape
+        result = macro(context, "<b>")
+        results.append((type(result).__name__, str(result), type(macro("<b>")).__name__))
+    assert results[0] == results[1]
+    # Jinja2's own EvalContext is taken too
+    assert jinja2cpp.Environment().from_string(source).module.hello(jinja2.nodes.EvalContext(jinja2.Environment()), "x") == "<p>x</p>"
+
+
+MACRO_SOURCE = (
+    "{% macro foo(a, b) %}{% endmacro %}{% macro bar() %}{{ varargs }}{{ kwargs }}{% endmacro %}"
+    "{% macro baz() %}{{ caller() }}{% endmacro %}{% set alias = foo %}"
+)
+
+
+def test_module_macro_attributes():
+    ours, theirs = both(MACRO_SOURCE)
+    for name in ("foo", "bar", "baz", "alias"):
+        mine, expected = getattr(ours, name), getattr(theirs, name)
+        for attribute in ("name", "arguments", "catch_kwargs", "catch_varargs", "caller"):
+            assert getattr(mine, attribute) == getattr(expected, attribute), (name, attribute)
+    assert ours.foo.arguments == ("a", "b")
