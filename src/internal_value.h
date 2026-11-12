@@ -673,27 +673,6 @@ private:
     Thunk m_call;
 };
 
-// The host's items an adapter of them lends and the owner they need (empty for data the host
-// keeps alive), for a view to read with no allocation of its own (CallListView); null items for
-// an adapter whose host data is not a ValuesList or ValuesMap
-template<typename Items>
-struct HostItems
-{
-    const Items* items = nullptr;
-    std::shared_ptr<const void> owner;
-};
-
-// The host's data a view of a module cell reads when its call recorded no storage for the cell:
-// its items, or, for an adapter with none, the host's list (MakeCellHost)
-template<typename Container, typename Items>
-struct CellHost
-{
-    HostItems<Items> items;
-    Container container;
-};
-using CellHostList = CellHost<GenericList, ValuesList>;
-using CellHostMap = CellHost<GenericMap, ValuesMap>;
-
 struct IListAccessor : ValueObject
 {
 
@@ -741,8 +720,6 @@ struct IListAccessor : ValueObject
     // (a value a template module's call handed out, CallExports); CreateGenericList for the
     // other lists
     [[nodiscard]] virtual GenericList CreateHostGenericList() const { return CreateGenericList(); }
-    // The items CreateHostGenericList shows, when they are a ValuesList (HostItems)
-    [[nodiscard]] virtual HostItems<ValuesList> GetHostItems() const { return {}; }
     // What the items of a copy of the list keep alive when the list says ShouldExtendLifetime:
     // `self`, or, for an adapter of the host's data, another adapter of the same data, as the
     // copy may become this adapter's cell, which the items would then hold in a cycle
@@ -811,8 +788,6 @@ struct IMapAccessor : ValueObject
     [[nodiscard]] virtual bool MayBeLentAgain() const noexcept { return false; }
     // See IListAccessor::CreateHostGenericList
     [[nodiscard]] virtual GenericMap CreateHostGenericMap() const { return CreateGenericMap(); }
-    // See IListAccessor::GetHostItems
-    [[nodiscard]] virtual HostItems<ValuesMap> GetHostItems() const { return {}; }
     // See IListAccessor::LifetimeAnchor
     [[nodiscard]] virtual InternalValue LifetimeAnchor(const InternalValue& self) const;
     // How x.name resolves against Python's dict methods (items, get, ...)
@@ -839,27 +814,6 @@ struct IMapAccessor : ValueObject
     // The object of a host language this map stands for (host_object.h); null for the others
     [[nodiscard]] virtual const IEngineHostObject* GetHostObject() const { return nullptr; }
 };
-
-// The host's data of an adapter for a view of its cell: no allocation when it has HostItems
-template<typename Accessor>
-auto MakeCellHost(const Accessor& accessor)
-{
-    using Host = std::conditional_t<std::is_base_of_v<IListAccessor, Accessor>, CellHostList, CellHostMap>;
-    Host host;
-    host.items = accessor.GetHostItems();
-    if (!host.items.items)
-    {
-        if constexpr (std::is_base_of_v<IListAccessor, Accessor>)
-        {
-            host.container = accessor.CreateHostGenericList();
-        }
-        else
-        {
-            host.container = accessor.CreateHostGenericMap();
-        }
-    }
-    return host;
-}
 
 // A non-owning view of a list: code outside internal_value.* reads list values through it,
 // whatever stores them (docs/tasks/0140). It lives no longer than the value or adapter it was

@@ -300,10 +300,9 @@ public:
     }
     // The list or dict a value handed to the host reads (docs/tasks/0331): in a call of a template
     // module, a view that reads the cell until the call ends and what the cell held then after
-    // (CallExports). `host` is the adapter of the host's data that the cell copies: such a view
-    // reads that data, never the cell, if the call fails before it records the cell (docs/tasks/0361)
-    [[nodiscard]] GenericList ExportList(const IListAccessor& host) const;
-    [[nodiscard]] GenericMap ExportMap(const IMapAccessor& host) const;
+    // (CallExports)
+    [[nodiscard]] GenericList ExportList() const;
+    [[nodiscard]] GenericMap ExportMap() const;
     // Whether the render that made the cell ended: the values that outlived it read the cell, and
     // nothing writes it (docs/tasks/0331)
     [[nodiscard]] bool IsFrozen() const noexcept { return m_frozen; }
@@ -410,6 +409,10 @@ public:
     // the storage recorded at its end after; null for data with no cell, which reads the host's
     // data
     [[nodiscard]] const InternalValue* Storage(const void* identity, bool isList) const noexcept;
+    // For a call that failed at its end, which recorded no storage: the value whose host data the
+    // cell of `identity` copied, which a view then reads (docs/tasks/0361); null otherwise, and
+    // when even keeping the sources failed
+    [[nodiscard]] const InternalValue* HostSource(const void* identity, bool isList) const noexcept;
 
 private:
     friend class BorrowedCell;
@@ -432,8 +435,11 @@ private:
     void Record(const CellTable& table);
     // Once Record succeeded: marks the recorded cells shared, allocating nothing
     void Commit() noexcept;
+    // Instead, once Record failed: keeps the source of each of the module's cells, for HostSource
+    void KeepHostSources(const CellTable* table) noexcept;
     // Then, whatever Record did: from now on a read goes to the recorded storages only
     void Seal() noexcept;
+    [[nodiscard]] const Pinned* Find(const void* identity, bool isList) const noexcept;
     // Records the storage of a cell the values reach
     void PinCell(const BorrowedCell& cell);
     // The cells of nested data the recorded storages reach
@@ -447,6 +453,8 @@ private:
     // Whether a value reads a list or dict the template owns, whose items may be any of the
     // module's data: the pin then takes every cell of the module, which only copies more
     bool m_containers = false;
+    // Set by KeepHostSources: m_pins then holds the cells' sources rather than their storages
+    bool m_failed = false;
     // Recorded by Pin, sorted by identity
     SmallVector<Pinned, 1> m_pins;
     // Set by BorrowedCells::AdoptExports. Weak: the views keep the exports alive, and the first
@@ -455,17 +463,15 @@ private:
 };
 
 // The views a value handed to the host reads in a template module's call (internal_value.cpp): of
-// the cell of `identity` (a null container), or of the template's container `container`. A view of
-// a cell reads `host`, the host's data the cell copies, when the call recorded no storage for it:
-// a call that failed at its end (CallExports::Seal, docs/tasks/0361)
+// the cell of `identity` (a null container), or of the template's container `container`
 //
 // The first export of a call makes its CallExports in one allocation with the view returned; a
 // null `identity` notes that the call handed out a list or dict the template owns
-GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container, CellHostList host = {});
-GenericMap ExportCallMap(BorrowedCells& call, const void* identity, InternalValue container, CellHostMap host = {});
+GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container);
+GenericMap ExportCallMap(BorrowedCells& call, const void* identity, InternalValue container);
 // A later view, or one of nested data, of the same call's exports
-GenericList ExportCallList(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container, CellHostList host = {});
-GenericMap ExportCallMap(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container, CellHostMap host = {});
+GenericList ExportCallList(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container);
+GenericMap ExportCallMap(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container);
 // The registry of the template module's call running on this thread; null outside a module call
 BorrowedCells* RunningModuleCall();
 

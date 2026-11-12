@@ -1616,15 +1616,11 @@ public:
 
     // The cell of `identity`, or, for a null identity, the template's list `container`
     // `keep` holds the exports when they are not in the allocation of this view
-    // `host`: the host's list the cell copies, read when the call recorded no storage for the cell
-    CallListView(const CallExports& exports, std::shared_ptr<const CallExports> keep, const void* identity, InternalValue container, CellHostList host)
+    CallListView(const CallExports& exports, std::shared_ptr<const CallExports> keep, const void* identity, InternalValue container)
         : m_exports(exports)
         , m_keep(std::move(keep))
         , m_identity(identity)
         , m_container(std::move(container))
-        , m_hostOwner(host.items.items ? std::move(host.items.owner) : std::shared_ptr<const void>(detail::GenericAccessorAccess::Get(host.container)))
-        , m_hostItems(host.items.items)
-        , m_hostList(host.items.items ? nullptr : host.container.GetAccessor())
     {
     }
 
@@ -1675,43 +1671,37 @@ private:
         auto list = storage ? AsList(*storage) : std::nullopt;
         return list ? list->GetMutableItems() : nullptr;
     }
-    // The host's list, which a view of a cell reads when Items finds no storage
-    // Calls `read` with it: a view of its items made for the read, or its own list; null for
-    // the template's list
+    // Calls `read` with the host's list a view of a cell reads when Items finds no storage: the
+    // list the cell copied, made for the read from the source the exports kept when the call
+    // failed at its end (CallExports::HostSource, docs/tasks/0361); null when there is none
     template<typename Read>
-    std::invoke_result_t<const Read&, const IListItemAccessor*> ReadHost(const Read& read) const
+    [[nodiscard]] std::invoke_result_t<const Read&, const IListItemAccessor*> ReadHost(const Read& read) const
     {
-        if (m_identity && m_hostItems)
+        const auto* source = m_identity ? m_exports.HostSource(m_identity, true) : nullptr;
+        const auto list = source ? AsList(*source) : std::nullopt;
+        const auto* accessor = list ? list->GetAccessor() : nullptr;
+        if (!accessor)
         {
-            const ExportListView view(*m_hostItems, m_hostOwner);
-            return read(&view);
+            return read(nullptr);
         }
-        return read(m_identity ? m_hostList : nullptr);
+        const auto host = accessor->CreateHostGenericList();
+        return read(host.GetAccessor());
     }
 
     const CallExports& m_exports;
     std::shared_ptr<const CallExports> m_keep;
     const void* m_identity;
     InternalValue m_container;
-    // The host's items when the adapter gave them (GetHostItems), else its list; the owner keeps
-    // either
-    std::shared_ptr<const void> m_hostOwner;
-    const ValuesList* m_hostItems;
-    const IListItemAccessor* m_hostList;
 };
 
 class CallMapView final : public IMapItemAccessor
 {
 public:
-    // As CallListView's
-    CallMapView(const CallExports& exports, std::shared_ptr<const CallExports> keep, const void* identity, InternalValue container, CellHostMap host)
+    CallMapView(const CallExports& exports, std::shared_ptr<const CallExports> keep, const void* identity, InternalValue container)
         : m_exports(exports)
         , m_keep(std::move(keep))
         , m_identity(identity)
         , m_container(std::move(container))
-        , m_hostOwner(host.items.items ? std::move(host.items.owner) : std::shared_ptr<const void>(detail::GenericAccessorAccess::Get(host.container)))
-        , m_hostItems(host.items.items)
-        , m_hostMap(host.items.items ? nullptr : host.container.GetAccessor())
     {
     }
 
@@ -1794,14 +1784,17 @@ private:
     }
     // As CallListView's
     template<typename Read>
-    std::invoke_result_t<const Read&, const IMapItemAccessor*> ReadHost(const Read& read) const
+    [[nodiscard]] std::invoke_result_t<const Read&, const IMapItemAccessor*> ReadHost(const Read& read) const
     {
-        if (m_identity && m_hostItems)
+        const auto* source = m_identity ? m_exports.HostSource(m_identity, false) : nullptr;
+        const auto map = source ? AsMap(*source) : std::nullopt;
+        const auto* accessor = map ? map->GetAccessor() : nullptr;
+        if (!accessor)
         {
-            const ExportMapView view(*m_hostItems, m_hostOwner);
-            return read(&view);
+            return read(nullptr);
         }
-        return read(m_identity ? m_hostMap : nullptr);
+        const auto host = accessor->CreateHostGenericMap();
+        return read(host.GetAccessor());
     }
     // A dict with a key that is not a string, spelled as SharedDictAdapter::CreateSnapshot does
     [[nodiscard]] ValuesMap Snapshot(const TemplateDict& dict) const
@@ -1818,10 +1811,6 @@ private:
     std::shared_ptr<const CallExports> m_keep;
     const void* m_identity;
     InternalValue m_container;
-    // As CallListView's
-    std::shared_ptr<const void> m_hostOwner;
-    const ValuesMap* m_hostItems;
-    const IMapItemAccessor* m_hostMap;
 };
 
 // The module's data, or the host's when the module has no cell of it; null for plain data
@@ -1832,7 +1821,7 @@ std::optional<Value> CallExportList(const CallExports& exports, const Accessor* 
     {
         if (!accessor->IsGlobalData() && exports.Storage(accessor->GetIdentity(), true))
         {
-            return Value(ExportCallList(exports.Share(), accessor->GetIdentity(), InternalValue(), MakeCellHost(*accessor)));
+            return Value(ExportCallList(exports.Share(), accessor->GetIdentity(), InternalValue()));
         }
         return Value(accessor->CreateHostGenericList());
     }
@@ -1850,7 +1839,7 @@ std::optional<Value> CallExportMap(const CallExports& exports, const Accessor* a
     {
         if (!accessor->IsGlobalData() && exports.Storage(accessor->GetIdentity(), false))
         {
-            return Value(ExportCallMap(exports.Share(), accessor->GetIdentity(), InternalValue(), MakeCellHost(*accessor)));
+            return Value(ExportCallMap(exports.Share(), accessor->GetIdentity(), InternalValue()));
         }
         return Value(accessor->CreateHostGenericMap());
     }
@@ -1965,11 +1954,11 @@ bool AccessorHasOtherOwners(const Container& container) noexcept
 
 namespace
 {
-template<typename View, typename Container, typename Host>
-Container ExportCallView(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue&& container, Host host)
+template<typename View, typename Container>
+Container ExportCallView(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue&& container)
 {
     const CallExports& ref = *exports;
-    return Container(std::make_shared<const View>(ref, std::move(exports), identity, std::move(container), std::move(host)));
+    return Container(std::make_shared<const View>(ref, std::move(exports), identity, std::move(container)));
 }
 
 // The exports of a call and the first view of them, in one allocation: the view reads the
@@ -1977,10 +1966,9 @@ Container ExportCallView(std::shared_ptr<const CallExports> exports, const void*
 template<typename View>
 struct CallExportsWith
 {
-    template<typename Host>
-    CallExportsWith(const BorrowedCells& registry, const void* identity, InternalValue container, Host host)
+    CallExportsWith(const BorrowedCells& registry, const void* identity, InternalValue container)
         : exports(registry)
-        , view(exports, nullptr, identity, std::move(container), std::move(host))
+        , view(exports, nullptr, identity, std::move(container))
     {
     }
 
@@ -1988,19 +1976,19 @@ struct CallExportsWith
     View view;
 };
 
-template<typename View, typename Container, typename Accessor, typename Host>
-Container ExportCallFirst(BorrowedCells& call, const void* identity, InternalValue&& container, Host host, bool isList)
+template<typename View, typename Container, typename Accessor>
+Container ExportCallFirst(BorrowedCells& call, const void* identity, InternalValue&& container, bool isList)
 {
     // The value first, then the note, then the commit: a step that cannot allocate changes
     // nothing (docs/tasks/0338, step D)
     if (const auto& exports = call.Exports())
     {
         std::shared_ptr<const CallExports> keep = exports;
-        auto value = ExportCallView<View, Container>(std::move(keep), identity, std::move(container), std::move(host));
+        auto value = ExportCallView<View, Container>(std::move(keep), identity, std::move(container));
         BorrowedCells::NoteExport(*exports, identity, isList);
         return value;
     }
-    auto block = std::make_shared<CallExportsWith<View>>(call, identity, std::move(container), std::move(host));
+    auto block = std::make_shared<CallExportsWith<View>>(call, identity, std::move(container));
     const Accessor* view = &block->view;
     BorrowedCells::NoteExport(block->exports, identity, isList);
     call.AdoptExports(std::shared_ptr<CallExports>(block, &block->exports));
@@ -2077,24 +2065,24 @@ bool HasNodeIdentity(const IJsonNode* node) noexcept
 }
 } // namespace
 
-GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container, CellHostList host)
+GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container)
 {
-    return ExportCallFirst<CallListView, GenericList, IListItemAccessor>(call, identity, std::move(container), std::move(host), true);
+    return ExportCallFirst<CallListView, GenericList, IListItemAccessor>(call, identity, std::move(container), true);
 }
 
-GenericMap ExportCallMap(BorrowedCells& call, const void* identity, InternalValue container, CellHostMap host)
+GenericMap ExportCallMap(BorrowedCells& call, const void* identity, InternalValue container)
 {
-    return ExportCallFirst<CallMapView, GenericMap, IMapItemAccessor>(call, identity, std::move(container), std::move(host), false);
+    return ExportCallFirst<CallMapView, GenericMap, IMapItemAccessor>(call, identity, std::move(container), false);
 }
 
-GenericList ExportCallList(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container, CellHostList host)
+GenericList ExportCallList(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container)
 {
-    return ExportCallView<CallListView, GenericList>(std::move(exports), identity, std::move(container), std::move(host));
+    return ExportCallView<CallListView, GenericList>(std::move(exports), identity, std::move(container));
 }
 
-GenericMap ExportCallMap(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container, CellHostMap host)
+GenericMap ExportCallMap(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container)
 {
-    return ExportCallView<CallMapView, GenericMap>(std::move(exports), identity, std::move(container), std::move(host));
+    return ExportCallView<CallMapView, GenericMap>(std::move(exports), identity, std::move(container));
 }
 
 template<template<typename> class Holder>
@@ -2379,7 +2367,7 @@ public:
         // look at its link, which the next render on the thread changes
         if (const auto* cell = this->IsGlobalData() ? nullptr : m_link.Current())
         {
-            return cell->ExportList(*this);
+            return cell->ExportList();
         }
         return CreateHostGenericList();
     }
@@ -2746,13 +2734,12 @@ public:
         {
             if (const auto* cell = m_link.Current())
             {
-                return cell->ExportList(*this);
+                return cell->ExportList();
             }
         }
         return CreateHostGenericList();
     }
     [[nodiscard]] GenericList CreateHostGenericList() const override { return ExportListView::Make(m_values.Get(), ExportOwner(m_values)); }
-    [[nodiscard]] HostItems<ValuesList> GetHostItems() const override { return { &m_values.Get(), ExportOwner(m_values) }; }
 
 private:
     JINJA2CPP_CELL_NOINLINE size_t CellOrHostCount() const
@@ -4025,7 +4012,7 @@ public:
         // As GenericListAdapter's
         if (const auto* cell = this->IsGlobalData() ? nullptr : m_link.Current())
         {
-            return cell->ExportMap(*this);
+            return cell->ExportMap();
         }
         return CreateHostGenericMap();
     }
@@ -4218,13 +4205,12 @@ public:
         {
             if (const auto* cell = m_link.Current())
             {
-                return cell->ExportMap(*this);
+                return cell->ExportMap();
             }
         }
         return CreateHostGenericMap();
     }
     [[nodiscard]] GenericMap CreateHostGenericMap() const override { return ExportMapView::Make(m_values.Get(), ExportOwner(m_values)); }
-    [[nodiscard]] HostItems<ValuesMap> GetHostItems() const override { return { &m_values.Get(), ExportOwner(m_values) }; }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ValuesMapAdapter*>(&other);
