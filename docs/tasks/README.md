@@ -526,7 +526,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | open |
 | [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | done |
 | [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
-| [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | open |
+| [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | in-progress |
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | open |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
 | [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
@@ -534,3 +534,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0465](0465-dotted-filter-test-names.md) | Dotted filter and test names (`x|ns.f`, `x is ns.t`) | parity | low | open |
 | [0466](0466-python-format-map-native-attribute.md) | The Python module answers format_map from NativeAttribute, which the engine now has | python | low | open |
 | [0471](0471-tuple-of-slices-fold-by-choice.md) | Tuple-of-slices subscripts: folds the engine decides differently from Jinja2 | parity | low | open |
+| [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | open |

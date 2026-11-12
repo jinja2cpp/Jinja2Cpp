@@ -5,6 +5,7 @@ area: robustness
 depends: [0262, 0263]
 touches: [include/jinja2cpp/template_env.h, src/render_context.h]
 shares: [docs/security.md, fuzz/fuzz_common.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/849
 ---
 # A memory budget for one render
 
