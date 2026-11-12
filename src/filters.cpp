@@ -298,6 +298,12 @@ std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const st
     std::vector<size_t> order(values.size());
     std::iota(order.begin(), order.end(), size_t{ 0 });
     StableSortValues(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
+        // An item is not compared with itself in Python; a checked sort (_GLIBCXX_DEBUG) asks
+        // comp(x, x), which a strict undefined key would refuse (docs/tasks/0413)
+        if (idx1 == idx2)
+        {
+            return false;
+        }
         for (size_t n = 0; n != width; ++n)
         {
             bool isEqual = false;
@@ -450,6 +456,10 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     if (paths.empty())
     {
         StableSortValues(values.begin(), values.end(), [&isLess](auto& val1, auto& val2) {
+            if (&val1 == &val2)
+            {
+                return false;
+            }
             bool isEqual = false;
             return isLess(val1, val2, isEqual);
         });
