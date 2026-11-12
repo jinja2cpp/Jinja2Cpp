@@ -283,6 +283,22 @@ TEST(AutoescapeSelectorTest, SelectorTakesPartInEquality)
     EXPECT_TRUE(other != selecting);
 }
 
+// With EveryUse and no cache each include loads again; a reload whose source did not change is dropped (0313), but
+// not when a stateful selector chose differently for it
+TEST(AutoescapeSelectorTest, ReloadKeepsTheSelectorsNewChoice)
+{
+    TemplateEnv env;
+    env.GetSettings().templateLookup = TemplateLookup::EveryUse;
+    env.GetSettings().cacheSize = 0;
+    int loads = 0;
+    env.GetSettings().autoescapeSelector = [&loads](const std::string& name) { return name == "a.txt" && ++loads % 2 == 0; };
+    auto fs = SelectorFiles();
+    fs->AddFile("loop.txt", R"({% for i in [1, 2, 3] %}[{% include "a.txt" %}]{% endfor %})");
+    env.AddFilesystemHandler({}, fs);
+    EXPECT_EQ("[<b>][&lt;b&gt;][<b>]", RenderNamed(env, "loop.txt"));
+    EXPECT_EQ(3, loads);
+}
+
 TEST(AutoescapeSelectorTest, ThrowingSelectorFailsLoad)
 {
     TemplateEnv env;

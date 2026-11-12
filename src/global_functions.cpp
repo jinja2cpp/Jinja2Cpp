@@ -635,11 +635,15 @@ const InternalValueMap& GetBuiltinGlobals(bool withI18n)
     // the stateful globals (cycler, joiner, lipsum's generator) lives in their results or in
     // the render
     static const auto globals = [] {
+        // Made once, maybe in a render with a memory budget, for every render after it
+        const UncountedMemoryScope uncounted;
         InternalValueMap result;
         SetupGlobals(result);
         return result;
     }();
     static const auto globalsWithI18n = [] {
+        // Made once, maybe in a render with a memory budget, for every render after it
+        const UncountedMemoryScope uncounted;
         InternalValueMap result;
         SetupGlobals(result);
         SetupI18nGlobals(result);

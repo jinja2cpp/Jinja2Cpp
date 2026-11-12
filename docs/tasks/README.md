@@ -384,7 +384,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | done |
 | [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | done |
 | [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
-| [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | open |
+| [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | in-progress |
 | [0314](0314-method-sort-format-unicode-case.md) | Methods 0020 left out: list.sort, nested format fields, Unicode case | parity | low | done |
 | [0317](0317-str-numeric-classes-and-missing-methods.md) | str methods: Unicode digit and numeric classes, casefold, isascii, isidentifier, isprintable, format leftovers | parity | low | done |
 | [0318](0318-kept-globals-keep-their-snapshot.md) | A list or map from the globals keeps the globals it was read from | robustness | high | done |
@@ -394,7 +394,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | done |
 | [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | done |
 | [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | done |
-| [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | open |
+| [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | done |
 | [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | done |
 | [0327](0327-change-globals-use-count-race.md) | Changing a global can race with a render that just dropped the globals map | robustness | medium | done |
 | [0328](0328-bench-meta-block.md) | A benchmark for `{% meta %}` and the internal JSON reader | perf | low | open |
@@ -476,7 +476,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0406](0406-python-environment-keep-bounded.md) | Bound the callables an Environment keeps alive | robustness | low | open |
 | [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | done |
 | [0408](0408-bench-gate-driver-capabilities.md) | Detect the base bench driver's features by a capability marker | ci | low | open |
-| [0409](0409-truncate-tokens-shrink-bound.md) | Bound the host calls of truncate_tokens' shrink loop | robustness | low | open |
+| [0409](0409-truncate-tokens-shrink-bound.md) | Bound the host calls of truncate_tokens' shrink loop | robustness | low | done |
 | [0410](0410-python-include-join-path.md) | `include`, `import` and `extends` do not call `env.join_path` | parity | low | open |
 | [0411](0411-python-module-export-types.md) | `make_module` exports lose the type of a namespace, a cycler, a range and an undefined | parity | low | open |
 | [0412](0412-python-sandbox-operator-interception.md) | Sandbox: `intercepted_binops`, `intercepted_unops`, `call_binop` and `call_unop` | api | low | open |
@@ -539,7 +539,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0475](0475-undefined-identity-and-range-extremes.md) | Leftovers of 0413 and 0420: undefined identity, range extremes, repeat messages | parity | low | open |
 | [0476](0476-class-attribute-of-values.md) | `x.__class__` of the engine's values | parity | low | open |
 | [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | done |
-| [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | open |
+| [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | done |
 | [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | open |
+| [0482](0482-module-tree-keep-alives.md) | End the trees a module replaced on a source change | robustness | low | open |
+| [0483](0483-render-memory-uncharged-release.md) | Give the render memory budget back only what it was charged | robustness | low | open |
 | [0485](0485-list-sort-restore-needs-memory.md) | A failed list.sort() loses the list's items when memory stays spent | robustness | low | open |
 | [0486](0486-cycle-walk-needs-memory.md) | Reference cycles leak when memory stays spent at the end of a render | robustness | low | open |
+| [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | open |
+| [0488](0488-upstream-reports-and-recipes.md) | Report our fixes upstream and update the package recipes | release | low | open |

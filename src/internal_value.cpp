@@ -69,6 +69,18 @@ void ThrowSequenceTooLong(uint64_t size, const char* what)
                              std::string(what) + " of length " + std::to_string(size) + " is longer than " + std::to_string(detail::t_renderLimits.maxSequenceSize));
 }
 
+void* ValueObject::operator new(std::size_t size)
+{
+    void* ptr = ::operator new(size);
+    ChargeObjectMemory(size);
+    return ptr;
+}
+
+void ValueObject::operator delete(void* ptr, std::size_t size) noexcept
+{
+    ReleaseRenderMemory(size);
+    ::operator delete(ptr);
+}
 
 namespace detail
 {
