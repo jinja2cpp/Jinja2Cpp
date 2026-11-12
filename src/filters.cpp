@@ -2536,12 +2536,13 @@ InternalValue ValueConverter::ToInt(const InternalValue& baseVal, RenderContext&
     {
         // int(x), then int(float(x)); a float that is inf or nan has no int
         result = host->ToInt();
-        // Only an integer is int(x)
+        // Only an integer is int(x); any other answer means the host found none, so it is the default
+        const bool answered = result.has_value();
         if (result && result->Kind() != ValueKind::Int && result->Kind() != ValueKind::BigInt)
         {
             result.reset();
         }
-        if (!result)
+        if (!answered)
         {
             if (auto asFloat = host->ToFloat())
             {

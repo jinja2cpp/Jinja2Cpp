@@ -483,6 +483,11 @@ TEST(PublicHostObjectTest, NumbersOfAnObject)
     EXPECT_EQ("0.0 3.75 2.5 0.0 1.5", Render("{{ i|float }} {{ f|float }} {{ b|float }} {{ n|float }} {{ n|float(default=1.5) }}", params));
     EXPECT_EQ(L"42 3 7 0 7", RenderW(L"{{ i|int }} {{ f|int }} {{ b|int }} {{ n|int }} {{ n|int(default=7) }}", params));
     EXPECT_EQ(L"True False", RenderW(L"{{ i is number }} {{ n is number }}", params));
+    // An answer from ToInt that is not an integer is no int, and ToFloat is not asked
+    ToySpec noInt;
+    noInt.toInt = Value();
+    noInt.toFloat = Value(2.5);
+    EXPECT_EQ("0 7 2.5", Render("{{ x|int }} {{ x|int(default=7) }} {{ x|float }}", { { "x", MakeToy(noInt) } }));
 }
 
 TEST(PublicHostObjectTest, IdentityHoldsAcrossCalls)

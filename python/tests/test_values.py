@@ -409,6 +409,23 @@ def test_numbers_of_an_object(value):
         assert_same(source, {"x": value})
 
 
+class FloatOverflows:
+    def __int__(self):
+        raise ValueError("no int")
+
+    def __float__(self):
+        raise OverflowError("too large")
+
+
+def test_int_of_an_object_whose_float_overflows():
+    # do_int catches OverflowError around int(float(x)); do_float lets it through
+    for source in ("{{ x|int }}", "{{ x|int(default=7) }}"):
+        assert_same(source, {"x": FloatOverflows()})
+    for module in (jinja2cpp, jinja2):
+        with pytest.raises(OverflowError):
+            module.Environment().from_string("{{ x|float }}").render(x=FloatOverflows())
+
+
 def test_numbers_of_an_object_that_raises():
     for source in ("{{ x|int }}", "{{ x|float }}"):
         for module in (jinja2cpp, jinja2):

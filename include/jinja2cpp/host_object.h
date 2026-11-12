@@ -124,7 +124,7 @@ private:
  * - a dict key: \ref Hash tells whether it is hashable; the key is the object's \ref Identity
  * - `is sameas`: \ref Identity
  * - `is number`: \ref IsNumber
- * - `int`: \ref ToInt, then \ref ToFloat truncated, then the default; `float`: \ref ToFloat, then the default
+ * - `int`: \ref ToInt, then (when it gives nullopt) \ref ToFloat truncated, then the default; `float`: \ref ToFloat, then the default
  * - `is mapping`, `dictsort`, `items`, `tojson`, `xmlattr`: a \ref IsMapping object is read as a map whose keys
  *   \ref Iterate gives and whose values \ref GetItem gives
  * - `+ * < <= > >=`, `str % x`, tojson arrays: a \ref IsSequence object is read as the list \ref Iterate gives,
@@ -257,7 +257,8 @@ public:
      * \brief `int(x)`, for the `int` filter
      *
      * @return An integer value (int64 or big int); nullopt when the object has no integer value (Python's TypeError
-     * or ValueError), which is the default
+     * or ValueError), which is the default, and the filter then asks \ref ToFloat. Any other value means the
+     * object has no integer value and the filter takes its default without asking \ref ToFloat
      */
     [[nodiscard]] virtual std::optional<Value> ToInt() const;
     //! `float(x)`, for the `int` and `float` filters; nullopt when the object has no float value, which is the default

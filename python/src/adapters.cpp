@@ -602,22 +602,39 @@ bool PyHost::IsNumber() const
 }
 
 // int(x) and float(x) as Jinja2's do_int and do_float call them: a TypeError or ValueError is no value, any other
-// exception is the template's
+// exception is the template's. ToInt is the whole of do_int: int(x), then int(float(x)), where an OverflowError is
+// also no value; an empty value tells the engine there is none, so it does not ask ToFloat again
 std::optional<jinja2::Value> PyHost::ToInt() const
 {
     if (m_kind != Kind::Other)
     {
         return std::nullopt;
     }
-    PyObject* const number = PyNumber_Long(m_object);
-    if (!number)
-    {
-        if (PyErr_ExceptionMatches(PyExc_TypeError) || PyErr_ExceptionMatches(PyExc_ValueError))
+    const auto clearIf = [](bool overflowToo) {
+        if (PyErr_ExceptionMatches(PyExc_TypeError) || PyErr_ExceptionMatches(PyExc_ValueError) || (overflowToo && PyErr_ExceptionMatches(PyExc_OverflowError)))
         {
             PyErr_Clear();
-            return std::nullopt;
+            return;
         }
         ThrowPending();
+    };
+    if (PyObject* const number = PyNumber_Long(m_object))
+    {
+        return ToEngine(nb::steal(number));
+    }
+    clearIf(false);
+    PyObject* const asFloat = PyNumber_Float(m_object);
+    if (!asFloat)
+    {
+        clearIf(true);
+        return jinja2::Value();
+    }
+    PyObject* const number = PyNumber_Long(asFloat);
+    Py_DECREF(asFloat);
+    if (!number)
+    {
+        clearIf(true);
+        return jinja2::Value();
     }
     return ToEngine(nb::steal(number));
 }
