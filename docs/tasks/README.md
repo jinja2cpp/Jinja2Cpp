@@ -512,9 +512,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
 | [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | done |
 | [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | done |
-| [0445](0445-subscript-tuple-of-slices.md) | A subscript of a literal by a tuple of slices is a parse error in the engine | parity | low | open |
+| [0445](0445-subscript-tuple-of-slices.md) | A subscript of a literal by a tuple of slices is a parse error in the engine | parity | low | done |
 | [0446](0446-nfkc-template-names.md) | Names a template sets are not NFKC-normalised | parity | low | open |
-| [0447](0447-chained-if-unicode-space.md) | Chained else-less conditionals and Unicode spaces inside tags | parity | low | open |
+| [0447](0447-chained-if-unicode-space.md) | Chained else-less conditionals and Unicode spaces inside tags | parity | low | done |
 | [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | open |
 | [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | open |
 | [0450](0450-module-call-collector-quadratic.md) | A module whose calls grow a module-level container walks all of it on every call | robustness | medium | done |
@@ -533,3 +533,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0464](0464-lower-upper-tests-cased-letters.md) | `lower` and `upper` tests: a string with no cased letter is neither | parity | medium | open |
 | [0465](0465-dotted-filter-test-names.md) | Dotted filter and test names (`x|ns.f`, `x is ns.t`) | parity | low | open |
 | [0466](0466-python-format-map-native-attribute.md) | The Python module answers format_map from NativeAttribute, which the engine now has | python | low | open |
+| [0471](0471-tuple-of-slices-fold-by-choice.md) | Tuple-of-slices subscripts: folds the engine decides differently from Jinja2 | parity | low | open |
