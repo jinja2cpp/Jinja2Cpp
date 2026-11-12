@@ -5,6 +5,7 @@
 #include "dialect.h"
 #include "error_boundary.h"
 #include "expression_evaluator.h"
+#include "expression_parser.h"
 #include "generation_tracker.h"
 #include "internal_value.h"
 #include "json_reader.h"

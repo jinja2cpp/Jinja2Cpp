@@ -25,6 +25,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -1690,7 +1692,7 @@ bool HasSafeRepr(const InternalValue& value)
             return false;
         }
         bool safe = true;
-        list->ForEach([&safe](InternalValue&& item) {
+        list->ForEach([&safe](const InternalValue& item) {
             safe = HasSafeRepr(item);
             return safe;
         });
