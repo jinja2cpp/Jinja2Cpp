@@ -12,6 +12,8 @@ layer) unless ``module-divergences.txt`` lists it, with its owning task.
 import importlib.util
 import json
 import pathlib
+import re
+import unicodedata
 
 import jinja2cpp
 import pytest
@@ -19,6 +21,10 @@ import pytest
 REPO = pathlib.Path(__file__).resolve().parents[2]
 PARITY = REPO / "test" / "parity"
 MODULE_DIVERGENCES = pathlib.Path(__file__).resolve().parent / "parity" / "module-divergences.txt"
+# The Unicode data of the oracle's Python (the engine's name table is generated from it). On another
+# interpreter, a \N{...} escape the engine rejects goes to the fallback, whose Jinja2 decodes it with
+# that interpreter's data: the outcome of those cases follows the interpreter, not the corpus.
+ORACLE_UNIDATA = re.search(r"\(Unicode ([0-9.]+)\)", (REPO / "src" / "unicode_names.h").read_text(encoding="utf-8")).group(1)
 
 
 def _generate():
@@ -110,6 +116,8 @@ def test_corpus_through_module():
         cpp_matches += cpp_kind in ("match", "platform")
         if cpp_kind == "crash":
             continue  # never run: the C++ suite skips it too
+        if unicodedata.unidata_version != ORACLE_UNIDATA and "\\N{" in case.get("template", ""):
+            continue  # decoded with this interpreter's Unicode data (ORACLE_UNIDATA)
         outcome = _outcome(gen, case)
         matches += outcome == "match"
         want = _expected(module, case_id) if case_id in module else cpp_kind
