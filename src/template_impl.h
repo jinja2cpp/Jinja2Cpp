@@ -849,6 +849,13 @@ public:
         return names;
     }
 
+    // Whether `other` was parsed from the same source, under the same name and load settings, so that its tree is
+    // this one's: a lookup that reloaded an unchanged template keeps the tree it has (docs/tasks/0313)
+    [[nodiscard]] bool SameParseAs(const TemplateImpl<CharT>& other) const
+    {
+        return m_settings == other.m_settings && m_templateName == other.m_templateName && m_isNamed == other.m_isNamed && *this == other;
+    }
+
     bool operator==(const TemplateImpl<CharT>& other) const
     {
         if (m_env && other.m_env)
@@ -1025,7 +1032,9 @@ private:
             {
                 CountTemplateLoad();
                 auto result = m_host->LoadTemplate(fileName);
-                // A reloaded template is kept as a new result: a render may still be running the one it replaces
+                // A reloaded template is kept as a new result: a render may still be running the one it replaces. One
+                // whose source did not change is dropped, so that a module or a loop over an include does not keep a
+                // tree per use when nothing caches the template (docs/tasks/0313)
                 if (!IsSameTemplate(result, *entry.latest))
                 {
                     entry.latest = &Loaded().replaced.emplace_back(std::move(result));
@@ -1204,7 +1213,7 @@ private:
                     else
                     {
                         const auto& r = std::get<T>(rhs);
-                        return l.has_value() == r.has_value() && (!l || l.value() == r.value());
+                        return l.has_value() == r.has_value() && (!l || l.value() == r.value() || (l.value() && r.value() && l.value()->SameParseAs(*r.value())));
                     }
                 },
                 lhs);

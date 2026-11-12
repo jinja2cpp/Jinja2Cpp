@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 touches: [src/template_env.cpp]
@@ -17,3 +17,7 @@ the next lookup reload. A handler without dates is unaffected.
 
 **Done when.** The C6 row can assert that every change is eventually seen without the final
 extra change, and still passes 50 runs under TSan.
+
+**Resolution.** `LoadTemplate` asks the handler for the date before it opens the stream (only when the cache is
+on), so a cached date is never newer than the cached text. The C6 row now asserts that the last change of the loop
+is seen without an extra change.

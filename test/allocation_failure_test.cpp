@@ -489,6 +489,37 @@ TEST_F(ModuleCallTest, CallsStayFlat)
     }
 }
 
+// With TemplateLookup::EveryUse and no cache every use parses the template again: a reload whose source did not
+// change is dropped, so the module keeps no tree per call (docs/tasks/0313)
+TEST_F(ModuleCallTest, EveryUseReloadsStayFlat)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
+    m_env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+    m_env.GetSettings().cacheSize = 0;
+    // A template takes the environment's settings when it is made
+    m_tpl = Template(&m_env);
+    for (const char* body : { "{% include 'lib' %}{{ 1 }}", "{% import 'lib' as l with context %}{{ l.x() }}", "{% import 'lib' as l %}{{ l.x() }}",
+                              "{% from 'lib' import x %}{{ x() }}", "{% for i in range(3) %}{% include 'lib' %}{% endfor %}" })
+    {
+        auto module = MakeModule(body);
+        const auto& m = module.exports["m"];
+        const auto callMany = [&m](int count) {
+            for (int i = 0; i != count; ++i)
+            {
+                Call(m);
+            }
+        };
+        callMany(100);
+        const long before = g_live.load(std::memory_order_relaxed);
+        callMany(1000);
+        // Each call kept a tree, about 11 allocations, before
+        EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
+    }
+}
+
 // A call that fails at any allocation ends what it imported, and the module goes on working
 TEST_F(ModuleCallTest, CallSucceedsOrThrowsBadAlloc)
 {
