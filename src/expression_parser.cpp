@@ -694,6 +694,29 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParsePostfi
     return result;
 }
 
+namespace
+{
+// Jinja2's parse_filter and parse_test read a dotted name, `x|ns.f`, as one name (docs/tasks/0465):
+// appends each `.name` that follows to `name`. A name after the dot may be any of Jinja2's names,
+// `true` and `none` among them. `nameTok` is widened to the whole name, which an unknown name's
+// error quotes
+nonstd::expected<void, ParseError> ReadDottedName(LexScanner& lexer, std::string& name, Token& nameTok)
+{
+    while (lexer.EatIfEqual('.'))
+    {
+        const auto& tok = lexer.NextToken();
+        if (tok != Token::Identifier && tok != Token::True && tok != Token::False && tok != Token::None)
+        {
+            return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+        }
+        name += '.';
+        name += lexer.GetAsString(tok);
+        nameTok.range.endOffset = tok.range.endOffset;
+    }
+    return {};
+}
+} // namespace
+
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFiltersAndTests(LexScanner& lexer,
                                                                                           NodeRef<Expression> valueRef)
 {
@@ -757,6 +780,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     else
     {
         return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
+    }
+    if (auto dotted = ReadDottedName(lexer, name, nameTok); !dotted)
+    {
+        return MakeUnexpected(dotted.error());
     }
 
     CallArgsInfo params;
@@ -1399,13 +1426,17 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
     {
         do
         {
-            const auto& tok = lexer.NextToken();
+            Token tok = lexer.NextToken();
             if (tok != Token::Identifier)
             {
                 return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
             }
 
             std::string name = lexer.GetAsString(tok);
+            if (auto dotted = ReadDottedName(lexer, name, tok); !dotted)
+            {
+                return MakeUnexpected(dotted.error());
+            }
             const bool hasArgs = lexer.NextToken() == '(';
             if (!hasArgs)
             {
