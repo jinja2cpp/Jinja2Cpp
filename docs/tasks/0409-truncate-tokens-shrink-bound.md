@@ -5,6 +5,7 @@ area: robustness
 depends: [0359]
 touches: [src/token_budget.cpp#TruncateText]
 shares: [test/filters_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/863
 ---
 # Bound the host calls of truncate_tokens' shrink loop
 

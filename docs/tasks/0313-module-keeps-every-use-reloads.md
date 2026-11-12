@@ -4,6 +4,7 @@ priority: low
 area: robustness
 touches: [src/template_impl.h]
 shares: [src/template_module.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/863
 ---
 # A module keeps every tree `TemplateLookup::EveryUse` reloads
 

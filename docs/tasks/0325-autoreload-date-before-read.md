@@ -3,6 +3,7 @@ status: in-progress
 priority: low
 area: robustness
 touches: [src/template_env.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/863
 ---
 # A reload can cache the new date with the old text
 

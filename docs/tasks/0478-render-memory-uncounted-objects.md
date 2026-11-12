@@ -5,6 +5,7 @@ area: robustness
 depends: [0459]
 touches: [src/internal_value.h, src/internal_value.cpp]
 shares: [docs/security.md]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/863
 ---
 # Count the objects the render memory budget leaves out
 
