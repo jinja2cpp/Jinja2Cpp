@@ -210,7 +210,8 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
         {
             size_t index = 0;
             hostItems.ForEach([&](InternalValue&& item) {
-                CollectDictPair(item, index++, result);
+                const InternalValue pairItem = std::move(item);
+                CollectDictPair(pairItem, index++, result);
                 return true;
             });
         }

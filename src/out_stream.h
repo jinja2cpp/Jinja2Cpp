@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -254,8 +255,20 @@ private:
     size_t m_charSize = 1;
     // The piece a render that writes each piece has gathered so far (GatherPiece), and the bytes of it
     // charged to the render's memory budget
-    std::string m_held;
-    std::uint64_t m_heldCharged = 0;
+    struct HeldPiece
+    {
+        HeldPiece() = default;
+        HeldPiece(const HeldPiece&) = delete;
+        HeldPiece(HeldPiece&&) = delete;
+        HeldPiece& operator=(const HeldPiece&) = delete;
+        HeldPiece& operator=(HeldPiece&&) = delete;
+        // Gives the budget back what a render that failed left gathered
+        ~HeldPiece();
+        std::string bytes;
+        std::uint64_t charged = 0;
+    };
+    // Made by the first piece gathered: a stream that writes no piece pays one pointer
+    std::unique_ptr<HeldPiece> m_held;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer
