@@ -42,4 +42,4 @@ included, the arity too), takes a host sequence (a Python list) and raises Undef
 argument; `xmlattr` of a non-mapping (a host object too) is AttributeError
 (`TemplateRuntimeError::PythonClass::AttributeError`, new). A Python loader's own TemplateNotFound is
 kept by the module's SourceHandler and raised as is for that name (include and get_template). Left: an
-undefined name inside the list (0492), and names Jinja2 rejects with other classes (0494).
+undefined name inside the list (0498), and names Jinja2 rejects with other classes (0494).
