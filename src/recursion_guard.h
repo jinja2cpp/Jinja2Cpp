@@ -159,9 +159,6 @@ struct RenderLimits
 static_assert(RenderLimits{}.maxRenderDepth == Settings::Limits{}.maxRenderDepth);
 // Constant-initialised, so that reading it needs no guard
 inline thread_local RenderLimits t_renderLimits JINJA2CPP_HOT_TLS;
-// The object whose destructor ran last if a budget counted it, else null: ~ValueObject sets it and ValueObject's
-// operator delete, which has no object left to ask, reads it and clears it (docs/tasks/0483). Constant-initialised
-inline thread_local const void* t_freedCharged JINJA2CPP_HOT_TLS = nullptr;
 
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
@@ -374,12 +371,15 @@ inline bool RenderMemoryCounted() noexcept
 {
     return detail::t_renderLimits.memoryLeft != UINT64_MAX;
 }
-// Gives back the bytes of a string, list, dict or object that is freed. Only for one that was counted against a
-// budget when it was made (docs/tasks/0483): the callers check that first (ValueObject::IsCharged, a dict's own
-// flag), as one made before the render, by a render without a budget or under UncountedMemoryScope took nothing and
-// gives nothing back. One that an earlier render counted and this render frees gives its bytes to this render, up to
-// the whole budget; that is bounded by what the earlier render made. A container that was not counted and that a
-// render grows counts the growth and never gets it back: charging too much is safe, crediting too much is a bypass
+// Gives back the bytes of a string, list or dict that is freed, and of an object by its size. The callers of a string,
+// big integer, list storage or dict check that it was counted when it was made (ValueObject::IsCharged, the dict's
+// own flag): one made before the render, without a budget or under UncountedMemoryScope took nothing and gives
+// nothing back (docs/tasks/0483). One that an earlier render counted and this render frees gives its bytes to this
+// render, up to the whole budget; that is bounded by what the earlier render made. A container that was not counted
+// and that a render grows counts the growth and never gets it back: charging too much is safe, crediting too much is
+// a bypass. The other objects (loop state, callables, adapters, generated lists) are credited by their size when
+// freed whoever made them: one made uncounted that a counted render frees credits its own size once, and no template
+// repeats that (the caches free under UncountedMemoryScope)
 inline void ReleaseRenderMemory(std::uint64_t bytes) noexcept
 {
     auto& limits = detail::t_renderLimits;

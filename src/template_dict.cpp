@@ -524,7 +524,7 @@ TemplateDict::TemplateDict(InternalDict&& items)
 
 TemplateDict::TemplateDict(const TemplateDict& other)
     : m_items(other.m_items)
-    , m_keys(other.m_keys ? std::make_unique<KeyTable>(*other.m_keys) : nullptr)
+    , m_keys(other.m_keys ? std::make_unique<KeyTable>(*other.m_keys) : std::unique_ptr<KeyTable>())
 {
     ChargeEntries();
 }
@@ -546,11 +546,9 @@ TemplateDict& TemplateDict::operator=(TemplateDict&& other) noexcept(std::is_not
         // Moved out first: where the move may throw (MSVC), the entries stay counted while they live
         auto items = std::move(other.m_items);
         auto keys = std::move(other.m_keys);
-        const bool counted = other.m_counted;
         ReleaseEntries();
         m_items.swap(items);
         m_keys.swap(keys);
-        m_counted = counted;
     }
     return *this;
 }
@@ -621,10 +619,23 @@ TemplateDict::iterator TemplateDict::Set(const InternalValue& key, InternalValue
     }
     // A new entry is counted before it is added
     std::uint64_t bytes = 0;
-    if (RenderMemoryCounted() && m_items.find(*token) == m_items.end())
+    if (RenderMemoryCounted())
     {
-        bytes = EntryBytes(*token);
-        ChargeRenderMemory(bytes);
+        if (m_items.find(*token) == m_items.end())
+        {
+            bytes = EntryBytes(*token);
+            ChargeRenderMemory(bytes);
+            // Every entry is counted only if the dict had none before; else it stays as it was (docs/tasks/0483)
+            if (m_items.empty())
+            {
+                m_keys.SetCounted(true);
+            }
+        }
+    }
+    else if (m_keys.Counted())
+    {
+        // An entry made while no budget is active is never credited, nor are those counted before it
+        m_keys.SetCounted(false);
     }
     try
     {
@@ -635,7 +646,7 @@ TemplateDict::iterator TemplateDict::Set(const InternalValue& key, InternalValue
             {
                 if (!m_keys)
                 {
-                    m_keys = std::make_unique<KeyTable>();
+                    m_keys.Assign(std::make_unique<KeyTable>());
                 }
                 m_keys->emplace(pos->first, key);
             }
@@ -662,10 +673,21 @@ TemplateDict::iterator TemplateDict::SetString(std::string name, InternalValue v
     }
     // A new entry is counted before it is added
     std::uint64_t bytes = 0;
-    if (RenderMemoryCounted() && m_items.find(name) == m_items.end())
+    if (RenderMemoryCounted())
     {
-        bytes = EntryBytes(name);
-        ChargeRenderMemory(bytes);
+        if (m_items.find(name) == m_items.end())
+        {
+            bytes = EntryBytes(name);
+            ChargeRenderMemory(bytes);
+            if (m_items.empty())
+            {
+                m_keys.SetCounted(true);
+            }
+        }
+    }
+    else if (m_keys.Counted())
+    {
+        m_keys.SetCounted(false);
     }
     try
     {
@@ -695,7 +717,7 @@ std::pair<TemplateDict::iterator, bool> TemplateDict::TryEmplace(const InternalV
 
 TemplateDict::iterator TemplateDict::Erase(const_iterator pos)
 {
-    if (m_counted && RenderMemoryCounted())
+    if (m_keys.Counted() && RenderMemoryCounted())
     {
         ReleaseRenderMemory(EntryBytes(pos->first));
     }
@@ -710,7 +732,7 @@ void TemplateDict::Clear()
 {
     ReleaseEntries();
     m_items.clear();
-    m_keys.reset();
+    m_keys.Reset();
 }
 
 InternalValue TemplateDict::KeyOf(const std::string& stored) const

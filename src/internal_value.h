@@ -143,16 +143,15 @@ class ValueObject
 {
 public:
     ValueObject() = default;
-    // A copy is a new object: its count starts at zero, and it is charged if a budget is active now, whatever the
-    // original was
+    // A copy is a new object: its count starts at zero, and it is not charged, whatever the original was
     ValueObject(const ValueObject& other) noexcept
         : m_flags(other.m_flags)
-        , m_bits(static_cast<uint8_t>((other.m_bits & BorrowedBit) | InitialBits()))
+        , m_bits(static_cast<uint8_t>(other.m_bits & BorrowedBit))
     {
     }
     ValueObject(ValueObject&& other) noexcept
         : m_flags(other.m_flags)
-        , m_bits(static_cast<uint8_t>((other.m_bits & BorrowedBit) | InitialBits()))
+        , m_bits(static_cast<uint8_t>(other.m_bits & BorrowedBit))
     {
     }
     ValueObject& operator=(const ValueObject& other) noexcept
@@ -167,15 +166,7 @@ public:
         SetBorrowedBit(static_cast<uint8_t>(other.m_bits & BorrowedBit));
         return *this;
     }
-    // Tells operator delete, which has no object to read, whether the render's budget counted this one. Without a
-    // budget the delete gives nothing back and reads no mark, so the mark is left as it is
-    virtual ~ValueObject()
-    {
-        if (RenderMemoryCounted())
-        {
-            detail::t_freedCharged = IsCharged() ? this : nullptr;
-        }
-    }
+    virtual ~ValueObject() = default;
 
     // Every object a render makes counts against its memory budget (maxRenderMemory, docs/tasks/0478): the loops,
     // callables, generators, anchors and undefined values a template keeps take more than the slot that holds them.
@@ -213,9 +204,10 @@ public:
     // Whether the object is a list adapter of the host's data (IListAccessor::IsBorrowed), so that a host's call tells
     // the host's list from the template's own without a virtual call
     [[nodiscard]] bool IsBorrowedList() const noexcept { return (m_bits & BorrowedBit) != 0; }
-    // Whether a render's memory budget was active when the object was made, so that its allocation was counted and
-    // freeing it gives the bytes back (docs/tasks/0483). An object made without a budget, or under
-    // UncountedMemoryScope, gives nothing back. Never copied: each object has its own
+    // Whether the maker counted the object's variable part against a render's memory budget, so that freeing it gives
+    // the bytes back (docs/tasks/0483): a string, a big integer or a list's storage made while a budget was active
+    // (MarkCharged), not one made without a budget or under UncountedMemoryScope. Never copied, and no constructor
+    // reads the budget: the maker marks the object where it charges
     [[nodiscard]] bool IsCharged() const noexcept { return (m_bits & ChargedBit) != 0; }
     // The thread's snapshot of the globals reaches the object: a global's own adapter, or an item
     // in the block of item adapters such an adapter reads now, whose link to a cell is listed in
@@ -259,6 +251,8 @@ protected:
     void SetRange() noexcept { m_bits |= RangeBit; }
     // Set by the constructor of a list adapter of the host's data
     void SetBorrowed() noexcept { m_bits |= BorrowedBit; }
+    // Set by the maker, in the branch that charged the object's memory (docs/tasks/0483)
+    void MarkCharged() noexcept { m_bits |= ChargedBit; }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
@@ -270,15 +264,13 @@ private:
     static constexpr uint8_t RangeBit = 1;
     static constexpr uint8_t BorrowedBit = 2;
     static constexpr uint8_t ChargedBit = 4;
-    // ChargedBit while a budget is active: the object's allocation function runs just before its constructor
-    static uint8_t InitialBits() noexcept { return RenderMemoryCounted() ? ChargedBit : uint8_t{ 0 }; }
     void SetBorrowedBit(uint8_t bit) noexcept { m_bits = static_cast<uint8_t>((m_bits & ~BorrowedBit) | bit); }
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
     // In the padding after m_flags, so that the object keeps its size
     mutable bool m_inSnapshot = false;
     // RangeBit, BorrowedBit and ChargedBit
-    uint8_t m_bits = InitialBits();
+    uint8_t m_bits = 0;
 };
 // The flags and bits share the padding after the count: every value's object stays this size
 static_assert(sizeof(ValueObject) <= sizeof(void*) + sizeof(unsigned) + 4, "ValueObject grew");
@@ -1139,9 +1131,18 @@ struct StringObject final : ValueObject
     // The caller writes them before it shares the object
     static IntrusivePtr<StringObject> Make(size_t size)
     {
-        ChargeRenderMemory(Bytes(size));
+        const bool counted = RenderMemoryCounted();
+        if (counted)
+        {
+            ChargeRenderMemory(Bytes(size));
+        }
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-        return IntrusivePtr<StringObject>(new (CharCount{ size }) StringObject(size));
+        IntrusivePtr<StringObject> obj(new (CharCount{ size }) StringObject(size));
+        if (counted)
+        {
+            obj->MarkCharged();
+        }
+        return obj;
     }
 
     // The room the characters take after the object
@@ -1168,7 +1169,7 @@ struct StringObject final : ValueObject
     StringObject(StringObject&&) = delete;
     StringObject& operator=(const StringObject&) = delete;
     StringObject& operator=(StringObject&&) = delete;
-    // Counted by Make when a budget was active, which is when the base class marked the object charged
+    // Counted by Make when a budget was active, which marked the object charged
     ~StringObject() override
     {
         if (IsCharged())
@@ -1619,19 +1620,18 @@ static_assert(sizeof(InternalValue) == 32, "docs/tasks/0140");
 
 // The items a generated list reads (a lambda's capture, ListAdapter::CreateAdapter(size, fn)), counted against the
 // render's memory budget as a list's storage is (docs/tasks/0459): each copy is counted, and a move leaves none behind.
-// Gives back only what a budget counted (docs/tasks/0483): the flag is set where a copy was made with one active
+// Carries no flag, to keep its size (docs/tasks/0483): a generated list is made and freed by renders, and one made
+// without a budget that a counted render frees credits its items once
 class CountedItems
 {
 public:
     explicit CountedItems(InternalValueList&& items)
         : m_items(std::move(items))
-        , m_charged(RenderMemoryCounted())
     {
         ChargeRenderMemory(Bytes());
     }
     CountedItems(const CountedItems& other)
         : m_items(other.m_items)
-        , m_charged(RenderMemoryCounted())
     {
         ChargeRenderMemory(Bytes());
     }
@@ -1639,13 +1639,7 @@ public:
     CountedItems(CountedItems&& other) noexcept = default;
     CountedItems& operator=(const CountedItems&) = delete;
     CountedItems& operator=(CountedItems&&) = delete;
-    ~CountedItems()
-    {
-        if (m_charged)
-        {
-            ReleaseRenderMemory(Bytes());
-        }
-    }
+    ~CountedItems() { ReleaseRenderMemory(Bytes()); }
 
     [[nodiscard]] const InternalValue& operator[](size_t idx) const { return m_items[idx]; }
 
@@ -1653,7 +1647,6 @@ private:
     [[nodiscard]] std::uint64_t Bytes() const noexcept { return std::uint64_t{ m_items.capacity() } * sizeof(InternalValue); }
 
     InternalValueList m_items;
-    bool m_charged = false;
 };
 
 namespace detail

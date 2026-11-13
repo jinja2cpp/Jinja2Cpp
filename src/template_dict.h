@@ -128,20 +128,80 @@ public:
 private:
     using KeyTable = std::unordered_map<std::string, InternalValue>;
 
+    // Owns the table of first spellings, as std::unique_ptr<KeyTable> does, and keeps the dict's "counted" flag in the
+    // low bit of the pointer, so that the flag costs no byte (docs/tasks/0483): set when the dict's entries were all
+    // counted against a render's memory budget, and only then does it give them back
+    class KeyTableHolder
+    {
+    public:
+        KeyTableHolder() noexcept = default;
+        KeyTableHolder(std::unique_ptr<KeyTable> table) noexcept        // NOLINT(google-explicit-constructor): as a unique_ptr
+            : m_bits(reinterpret_cast<std::uintptr_t>(table.release())) // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        {
+        }
+        KeyTableHolder(const KeyTableHolder&) = delete;
+        KeyTableHolder& operator=(const KeyTableHolder&) = delete;
+        KeyTableHolder(KeyTableHolder&& other) noexcept
+            : m_bits(std::exchange(other.m_bits, 0))
+        {
+        }
+        KeyTableHolder& operator=(KeyTableHolder&& other) noexcept
+        {
+            if (this != &other)
+            {
+                Destroy();
+                m_bits = std::exchange(other.m_bits, 0);
+            }
+            return *this;
+        }
+        ~KeyTableHolder() { Destroy(); }
+
+        void swap(KeyTableHolder& other) noexcept { std::swap(m_bits, other.m_bits); }
+        [[nodiscard]] KeyTable* get() const noexcept { return reinterpret_cast<KeyTable*>(m_bits & ~CountedBit); } // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,performance-no-int-to-ptr)
+        explicit operator bool() const noexcept { return get() != nullptr; }
+        KeyTable& operator*() const noexcept { return *get(); }
+        KeyTable* operator->() const noexcept { return get(); }
+        // Takes a table in place of the current one, keeping the flag
+        void Assign(std::unique_ptr<KeyTable> table) noexcept
+        {
+            Destroy();
+            m_bits = (m_bits & CountedBit) | reinterpret_cast<std::uintptr_t>(table.release()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        }
+        // Drops the table and the flag
+        void Reset() noexcept
+        {
+            Destroy();
+            m_bits = 0;
+        }
+        [[nodiscard]] bool Counted() const noexcept { return (m_bits & CountedBit) != 0; }
+        void SetCounted(bool counted) noexcept { m_bits = counted ? (m_bits | CountedBit) : (m_bits & ~CountedBit); }
+
+    private:
+        static constexpr std::uintptr_t CountedBit = 1;
+        static_assert(alignof(KeyTable) >= 2, "the low bit of a table's address is free");
+        void Destroy() const noexcept { delete get(); } // NOLINT(cppcoreguidelines-owning-memory)
+
+        std::uintptr_t m_bits = 0;
+    };
+
     // The render's memory budget (docs/tasks/0459) counts each entry from when it is added until it is erased or
     // the dict is freed, by its stored key alone, so that adding and freeing count the same
     static std::uint64_t EntryBytes(const std::string& stored) noexcept;
-    void ChargeEntries() const
+    // Counts the entries of a dict just made (every one of them) and, when a budget is active, marks the dict counted
+    void ChargeEntries()
     {
         if (RenderMemoryCounted())
         {
             ChargeEntriesSlow();
+            m_keys.SetCounted(true);
         }
     }
     void ChargeEntriesSlow() const;
+    // Gives the entries back if every one of them was counted: those of a dict that held entries when a render first
+    // counted it, or that a render added while no budget was active, stay uncounted and are never credited
     void ReleaseEntries() const noexcept
     {
-        if (m_counted && RenderMemoryCounted())
+        if (m_keys.Counted() && RenderMemoryCounted())
         {
             ReleaseEntriesSlow();
         }
@@ -149,12 +209,12 @@ private:
     void ReleaseEntriesSlow() const noexcept;
 
     InternalDict m_items;
-    // Whether a budget was active when the dict was made: only then are its entries given back, those a render
-    // adds to a dict made without one stay counted (docs/tasks/0483). Moves take the entries and the flag together
-    bool m_counted = RenderMemoryCounted();
-    // Token to first spelling, for the entries that are not stored under their own string
-    std::unique_ptr<KeyTable> m_keys;
+    // Token to first spelling, for the entries that are not stored under their own string; also the dict's counted
+    // flag (docs/tasks/0483), which a move takes along with the entries
+    KeyTableHolder m_keys;
 };
+// The flag adds no member
+static_assert(sizeof(TemplateDict) == sizeof(InternalDict) + sizeof(void*), "TemplateDict grew");
 
 } // namespace v2
 } // namespace jinja2

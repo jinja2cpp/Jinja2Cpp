@@ -78,17 +78,7 @@ void* ValueObject::operator new(std::size_t size)
 
 void ValueObject::operator delete(void* ptr, std::size_t size) noexcept
 {
-    // No object is left to ask: its destructor ran just before and, with a budget active, left a mark if the budget
-    // counted it (docs/tasks/0483)
-    if (RenderMemoryCounted())
-    {
-        const auto freed = reinterpret_cast<std::uintptr_t>(std::exchange(detail::t_freedCharged, nullptr)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        const auto start = reinterpret_cast<std::uintptr_t>(ptr);                                            // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        if (freed >= start && freed - start < size)
-        {
-            ReleaseRenderMemory(size);
-        }
-    }
+    ReleaseRenderMemory(size);
     ::operator delete(ptr);
 }
 
@@ -1361,10 +1351,20 @@ public:
 private:
     struct Storage final : ValueObject
     {
+        // Counted once, by the constructor (Bytes includes the object), and given back by the destructor only if it
+        // was: not through ValueObject's own functions, which would credit the size of one that was never counted
+        // (docs/tasks/0483)
+        static void* operator new(std::size_t size) { return ::operator new(size); }
+        static void operator delete(void* ptr, std::size_t /*size*/) noexcept { ::operator delete(ptr); }
+
         explicit Storage(T&& val)
             : items(std::move(val))
         {
-            ChargeRenderMemory(Bytes());
+            if (RenderMemoryCounted())
+            {
+                ChargeRenderMemory(Bytes());
+                MarkCharged();
+            }
         }
         Storage(const Storage&) = delete;
         Storage(Storage&&) = delete;

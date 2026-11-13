@@ -166,7 +166,7 @@ sequences of at most 2^20 items, 16 MiB of output, 10^7 steps, no time limit, an
 values held at once (Python's sandbox has no memory bound to copy). The values
 may change between releases. `maxRenderMemory` counts what a render holds, not what it
 allocates in total: each string, list and dict is counted when it is built or grows and given
-back when it is freed, if it was counted ([0459](tasks/0459-render-memory-budget.md); an object made
+back when it is freed, if it was counted ([0459](tasks/0459-render-memory-budget.md); a string, list or dict made
 before the render, without a budget or by a cache gives nothing back, and what a render adds to
 such a container stays counted, [0483](tasks/0483-render-memory-uncharged-release.md)), and the other objects the
 render makes (loop state, macros, generators, undefined values, big integers) by its own size
