@@ -1116,9 +1116,11 @@ private:
             if (p == loaded.end())
             {
                 CountTemplateLoad();
-                auto& entry = loaded.emplace(fileName, LoadedTemplate{ m_host->LoadTemplate(fileName), nullptr }).first->second;
+                // Kept first: a keep that fails to allocate leaves nothing the next lookup finds unkept
+                auto result = m_host->LoadTemplate(fileName);
+                KeepLoaded(result);
+                auto& entry = loaded.emplace(fileName, LoadedTemplate{ std::move(result), nullptr }).first->second;
                 entry.latest = &entry.first;
-                KeepLoaded(entry.first);
                 return entry.first;
             }
             auto& entry = p->second;
@@ -1131,8 +1133,8 @@ private:
                 // tree per use when nothing caches the template (docs/tasks/0313)
                 if (!IsSameTemplate(result, *entry.latest))
                 {
+                    KeepLoaded(result);
                     entry.latest = &Loaded().replaced.emplace_back(std::move(result));
-                    KeepLoaded(*entry.latest);
                 }
                 else
                 {
