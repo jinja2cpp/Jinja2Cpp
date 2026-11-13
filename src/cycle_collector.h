@@ -176,12 +176,17 @@ public:
     // a param it views. The host may destroy the nested template once its render has returned,
     // so this render keeps it (docs/tasks/0481). A tree is kept once. Throws std::bad_alloc
     void KeepTree(std::shared_ptr<const void> tree);
-    // This collector's render runs inside the one of `keeper`, which keeps its trees from now on
-    // (KeepTree). When this render ends they go again unless a write promoted a cell in the keeper's
-    // registry. Without one no global was changed in place, so no value of this render can be stored
-    // where the outer render reads it, and a loop of nested renders of new templates keeps none of
-    // them (docs/tasks/0481). Throws std::bad_alloc
-    void KeepTreesIn(CycleCollector& keeper);
+    // How many trees this render keeps (KeepTree)
+    [[nodiscard]] std::size_t KeptTrees() const noexcept { return m_notes ? m_notes->trees.size() : 0; }
+    // This collector's render runs inside the one of `keeper`, which keeps its trees past `mark`
+    // (KeptTrees, KeepTree); both read the snapshot of the globals `snapshot`. When this render ends
+    // they go again unless a write promoted a cell in the registry of a render running on this
+    // thread that reads that snapshot: the keeper's, or one between it and this render, where a
+    // render of another environment in between makes the writes go (SnapshotOwner). Without one no
+    // global was changed in place, so no value of this render can be stored where a render that
+    // outlives it reads it, and a loop of nested renders of new templates keeps none of them
+    // (docs/tasks/0481). Throws std::bad_alloc
+    void KeepTreesIn(CycleCollector& keeper, std::size_t mark, const void* snapshot);
     // What a container the render running on this thread hands the host keeps, so that the host's
     // copy can tell when it goes whether that render has ended: then nothing walks the container
     // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
@@ -274,6 +279,7 @@ private:
         // KeepTreesIn's: the keeper and how many trees it kept before
         CycleCollector* treeKeeper = nullptr;
         std::size_t treeMark = 0;
+        const void* treeSnapshot = nullptr;
         // The receiving containers, held until the render ends
         std::vector<ValueObjectPtr> candidates;
         std::unordered_set<const void*> noted;

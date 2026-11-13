@@ -154,22 +154,32 @@ void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
     }
 }
 
-void CycleCollector::KeepTreesIn(CycleCollector& keeper)
+void CycleCollector::KeepTreesIn(CycleCollector& keeper, std::size_t mark, const void* snapshot)
 {
     if (!m_notes)
     {
         m_notes = std::make_unique<Notes>();
     }
     m_notes->treeKeeper = &keeper;
-    m_notes->treeMark = keeper.m_notes ? keeper.m_notes->trees.size() : 0;
+    m_notes->treeMark = mark;
+    m_notes->treeSnapshot = snapshot;
 }
 
 void CycleCollector::DropTreesUnlessWritten() noexcept
 {
     auto* keeper = m_notes->treeKeeper;
-    if (!keeper || !keeper->m_notes || keeper->m_notes->cells.HasCells())
+    if (!keeper || !keeper->m_notes)
     {
         return;
+    }
+    // This render's entry is gone: the chain is of the renders it ran inside, the keeper's last
+    for (const auto* running = RenderWorkspace::ForThisThread().Running(); running; running = running->outer)
+    {
+        const auto* collector = running->collector;
+        if (collector && running->owner && running->owner->get() == m_notes->treeSnapshot && collector->m_notes && collector->m_notes->cells.HasCells())
+        {
+            return;
+        }
     }
     auto& notes = *keeper->m_notes;
     while (notes.trees.size() > m_notes->treeMark)

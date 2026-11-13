@@ -31,6 +31,12 @@ for the closures that escaped into the outer render's cells, as 0326 copies a ma
 (`CycleCollector::KeepUntilEnd` of that render's collector). `self` needs its handles made valid
 for the outer render (`TemplateSlots`) or a keep-alive of the nested render's slots.
 
+Also (0481 verifier round 2): with a render of another environment between two renders of the
+same one, `A -> B -> A`, the innermost render's first write of a global goes to its own registry
+(`SnapshotOwner` stops at B) and is lost when it ends: the outer render reads `g` as `[0]` where
+Python gives `[1]`. `SharedSnapshotKeeper` (outermost anywhere) and `SnapshotOwner` (contiguous)
+should agree on the outermost render.
+
 A macro calling a sibling macro of its template is the common case (found by the 0481 verifier).
 
 **Done when.** The rows print Python's output, ASan clean.

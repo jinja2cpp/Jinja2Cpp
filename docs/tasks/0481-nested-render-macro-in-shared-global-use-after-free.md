@@ -56,12 +56,15 @@ Jinja2 where Python can express it.
 snapshot of the globals of a render it runs inside (`SharedSnapshotKeeper`: the outermost such
 render on the thread) hands that render what its values need, so that a value it stores in a
 global stays valid there until the outer render ends:
-- its template (`TemplateImpl` is `enable_shared_from_this`) and each template it loads
+- its template (`TemplateImpl` is `enable_shared_from_this`; the keeper's registry is made first, as the cell trace expects an enclosing registry to be the older one) and each template it loads
   (`RendererCallback::KeepLoaded`), held by the outer render's collector (`CycleCollector::KeepTree`,
   `Notes::trees`, declared first so that it goes after the cells and the walk; a nested collector
   that has some hands them to its outer one, as it hands its notes). A tree is kept once
-  (`Notes::treeSet`). When the nested render ends, what it kept goes again unless the keeper's
-  registry holds a cell (`DropTreesUnlessWritten`): with none, no global was changed in place, so
+  (`Notes::treeSet`). When the nested render's collector ends, what it kept goes again unless the
+  registry of a running render that reads the same snapshot holds a cell (`DropTreesUnlessWritten`;
+  with a render of another environment in between, the writes go to the render below it, not to the
+  keeper: `SnapshotOwner`, test `NestedRenderValueOutlivesItsTemplateAcrossAnotherEnvironment`, found
+  by verifier round 2). With none, no global was changed in place, so
   no value of the nested render can be where the outer render reads it, and a loop of nested
   renders of new templates stays flat (20000 renders of a 2 KB template: 43 to 47 MB);
 - its params as owned copies (`OwnedArgument`, as a template module converts them) rather than
@@ -74,6 +77,6 @@ global was written in place, the outer render holds every distinct template a ne
 or rendered until it ends, outside `maxRenderMemory` (the same loop: 47 to 122 MB); filed as 0492. Host data that a param only points to (a reflected pointer, a
 `GenericList` accessor) stays the host's to keep alive, as for any value a render hands out.
 `BorrowedCellsSingle.NestedRenderValueOutlivesItsTemplate`, `NestedRenderSelfOutsideItsRender`,
-`NestedRenderValueOutlivesItsTemplateInsideAnotherEnvironment` and `WideNestedRenderMacroOutlivesItsTemplate` destroy the nested template and params before the
+`NestedRenderValueOutlivesItsTemplateInsideAnotherEnvironment`, `...AcrossAnotherEnvironment` and `WideNestedRenderMacroOutlivesItsTemplate` destroy the nested template and params before the
 outer render reads the value; under ASan they report nothing. Python agrees but for closures of
 the nested render's frames and its `self`, memory-safe, filed as 0491.

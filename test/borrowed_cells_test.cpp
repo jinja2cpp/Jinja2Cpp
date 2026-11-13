@@ -1730,6 +1730,37 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplateInsideAnotherEnvir
     EXPECT_EQ("hihi", Render("{{ middle() }}", outerParams, &otherEnv));
 }
 
+TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplateAcrossAnotherEnvironment)
+{
+    // 0481: a render of another environment, or of no environment, runs between two renders that
+    // read the outermost render's globals. The innermost one stores a macro in the middle render's
+    // cell (SnapshotOwner stops at the other environment) and its template goes before the middle
+    // render calls it: the outermost render keeps it, as a cell holds a value of it
+    for (const bool withEnv : { true, false })
+    {
+        TemplateEnv env;
+        env.AddGlobal("g", ValuesList{});
+        TemplateEnv otherEnv;
+        // Each level renders the next one in a template it destroys before it returns
+        std::vector<std::string> sources{ "{{ h0() }}", "{{ h1() }}", "{{ h2() }}[{{ g[-1]() }}]", "{% macro m() %}hi{% endmacro %}{% set _ = g.append(m) %}" };
+        std::vector<TemplateEnv*> envs{ &env, withEnv ? &otherEnv : nullptr, &env, &env };
+        ValuesMap params;
+        for (std::size_t level = 0; level + 1 < sources.size(); ++level)
+        {
+            params["h" + std::to_string(level)] = UserCallable(
+                [&, next = level + 1](const UserCallableParams&) {
+                    auto tpl = std::make_unique<Template>(envs[next]);
+                    EXPECT_TRUE(!!tpl->Load(sources[next]));
+                    auto result = tpl->RenderAsString(params);
+                    EXPECT_TRUE(!!result) << (result ? std::string() : result.error().ToString());
+                    return Value(result ? result.value() : std::string());
+                },
+                {});
+        }
+        EXPECT_EQ("[hi]", Render(sources[0], params, &env)) << withEnv;
+    }
+}
+
 TEST(BorrowedCellsSingle, WideNestedRenderMacroOutlivesItsTemplate)
 {
     // 0481 for wide templates

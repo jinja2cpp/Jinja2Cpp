@@ -20,6 +20,9 @@ template text; the template per call is the host's pattern. Also: a nested rende
 snapshot copies its params (`OwnedArgument`) each time, O(size) per render, even when it stores
 nothing in a global.
 
+A keeper nested in a template module's call hands its trees to the module's collector, which
+lives as long as the module (0481 verifier round 2, L1).
+
 **Proposal.** Charge a kept tree (its arena and source bytes) to the keeper's budget when it is
 kept and release it when it goes, under the outer render's limits rather than the nested one's;
 a keep past the budget fails with `ResourceLimitExceeded` like any other allocation. Find where

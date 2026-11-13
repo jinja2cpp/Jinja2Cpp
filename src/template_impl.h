@@ -575,8 +575,10 @@ public:
         {
             return nullptr;
         }
-        own.KeepTreesIn(*keeper);
+        // The keeper's registry first: an enclosing render's is the older one (tla/CellTrace.tla, Enclosing)
+        const auto mark = keeper->KeptTrees();
         keeper->KeepTree(this->weak_from_this().lock());
+        own.KeepTreesIn(*keeper, mark, &globals);
         if constexpr (std::is_same_v<ParamsMap, GenericMap>)
         {
             for (auto& name : params.GetKeys())
