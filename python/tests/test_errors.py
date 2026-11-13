@@ -1,6 +1,7 @@
 """Exceptions: Jinja2's hierarchy and attributes, and a callable's own exception raised as itself."""
 
 import os
+import sys
 
 import jinja2
 import jinja2cpp
@@ -138,6 +139,9 @@ def test_include_of_several_missing_templates_is_templates_not_found():
         assert str(info.value) == "none of the templates given were found: missing, missing2"
 
 
+_PY312_TEXT = {"{{ dict([[1, 2], 3]) }}": "cannot convert dictionary update sequence element #1 to a sequence"}
+
+
 @pytest.mark.parametrize(
     "source",
     [
@@ -170,7 +174,9 @@ def test_include_and_constructor_errors_have_jinja2s_class(source):
 
     ours, theirs = fails(jinja2cpp), fails(jinja2)
     assert type(ours).__name__ == type(theirs).__name__, source
-    assert str(ours) == str(theirs), source
+    # The oracle is Python 3.12 (.python-version); CPython 3.14 shortened this one message.
+    oracle_text = _PY312_TEXT.get(source) if sys.version_info >= (3, 14) else None
+    assert str(ours) == (oracle_text or str(theirs)), source
     if isinstance(theirs, jinja2.TemplatesNotFound):
         assert ours.templates == theirs.templates
 
