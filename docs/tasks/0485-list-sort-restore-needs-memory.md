@@ -4,6 +4,7 @@ priority: low
 area: robustness
 depends: [0256]
 touches: [src/value_methods.cpp, src/borrowed_cells.h, src/borrowed_cells.cpp, test/allocation_failure_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/882
 ---
 # A failed list.sort() loses the list's items when memory stays spent
 

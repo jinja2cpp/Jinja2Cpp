@@ -5,6 +5,7 @@ area: robustness
 depends: [0478]
 touches: [src/recursion_guard.h, src/internal_value.h, src/internal_value.cpp, src/template_dict.h, src/template_dict.cpp, src/value_methods.cpp]
 shares: [test/limits_test.cpp, docs/security.md]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/882
 ---
 # Give the render memory budget back only what it was charged
 
