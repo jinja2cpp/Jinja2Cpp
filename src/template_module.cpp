@@ -408,7 +408,6 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         // What only the copies the closures kept held is freed rather than counted as held; a
         // cycle among it is noted first (docs/tasks/0407)
         CycleCollector cycles;
-        NoteDropped();
         try
         {
             kept.NoteNames();
@@ -445,17 +444,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     // cannot allocate, a cycle through it and the rest leaks
     void NoteDropped() noexcept
     {
-        auto values = dropped->Take();
-        try
-        {
-            for (const auto& value : values)
-            {
-                CycleCollector::NoteStore(value);
-            }
-        }
-        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
-        {
-        }
+        NoteDroppedExports(dropped->Take());
     }
 
 

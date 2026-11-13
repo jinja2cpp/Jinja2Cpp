@@ -398,7 +398,8 @@ public:
     CallExports(CallExports&&) = delete;
     CallExports& operator=(const CallExports&) = delete;
     CallExports& operator=(CallExports&&) = delete;
-    ~CallExports() = default;
+    // Hands the storages it pinned to the module, as a view does its container (docs/tasks/0480)
+    ~CallExports();
 
     // A shared pointer to these exports, for a view made later; null only while they are being
     // destroyed
@@ -475,6 +476,9 @@ private:
 // them any more (the module has gone): a walk from their items frees a cycle among them, as a
 // render's host copy does (docs/tasks/0424, 0480)
 void CollectDroppedExports(std::vector<InternalValue> containers) noexcept;
+// The same while the module lives, on the thread of its call: notes their items to the collector
+// running on this thread, whose walk frees a cycle among them
+void NoteDroppedExports(std::vector<InternalValue> containers) noexcept;
 GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container);
 GenericMap ExportCallMap(BorrowedCells& call, const void* identity, InternalValue container);
 // A later view, or one of nested data, of the same call's exports

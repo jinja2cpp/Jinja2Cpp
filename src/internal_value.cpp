@@ -2880,6 +2880,36 @@ void AddTraversableItems(const TemplateDict& items, std::vector<ValueObjectPtr>&
     items.ForEachKeyValue([&roots](const InternalValue& key) { AddTraversable(key, roots); });
 }
 
+// Calls `fn` with each item of `container`, a list or dict the template owns, its keys too;
+// false when it is no such container
+template<typename Fn>
+bool ForEachContainerItem(const InternalValue& container, const Fn& fn)
+{
+    if (const auto list = AsList(container))
+    {
+        const auto* items = list->GetMutableItems();
+        if (items)
+        {
+            std::for_each(items->begin(), items->end(), fn);
+        }
+        return items != nullptr;
+    }
+    if (const auto map = AsMap(container))
+    {
+        const auto* items = map->GetMutableItems();
+        if (items)
+        {
+            for (const auto& entry : *items)
+            {
+                fn(entry.second);
+            }
+            items->ForEachKeyValue(fn);
+        }
+        return items != nullptr;
+    }
+    return false;
+}
+
 // The traversable objects among the items of `container`, a list or dict the template owns, or
 // false when it is no such container
 bool AddContainerItems(const InternalValue& container, std::vector<ValueObjectPtr>& roots)
@@ -2963,6 +2993,54 @@ void LetGoOfExport(const CallExports& exports, InternalValue&& container) noexce
     CycleCollector::CollectExport(std::move(roots));
 }
 } // namespace
+
+CallExports::~CallExports()
+{
+    // The module's cell may hold itself through the storage the host's views read last; the
+    // sources a failed call kept are the host's data (docs/tasks/0480)
+    if (m_failed)
+    {
+        return;
+    }
+    for (auto& pin : m_pins)
+    {
+        LetGoOfExport(*this, std::move(pin.storage));
+    }
+}
+
+void NoteDroppedExports(std::vector<InternalValue> containers) noexcept
+{
+    // The items, not the containers: a view's container is a copy of the template's adapter that
+    // shares its items, whose walk (Traverse) shows nothing while another adapter shares them.
+    // Once the copy goes, the template's own adapter among the items owns them alone
+    std::vector<InternalValue> items;
+    try
+    {
+        for (const auto& container : containers)
+        {
+            ForEachContainerItem(container, [&items](const InternalValue& item) {
+                if (const auto* object = detail::InternalValueAccess::Object(item); object && object->IsTraversable())
+                {
+                    items.push_back(item);
+                }
+            });
+        }
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the walk starts from the items found; a cycle through the others leaks
+    {
+    }
+    containers.clear();
+    try
+    {
+        for (const auto& item : items)
+        {
+            CycleCollector::NoteStore(item);
+        }
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a cycle through the items not noted leaks
+    {
+    }
+}
 
 void CollectDroppedExports(std::vector<InternalValue> containers) noexcept
 {
