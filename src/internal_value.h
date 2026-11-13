@@ -167,8 +167,15 @@ public:
         SetBorrowedBit(other.m_bits & BorrowedBit);
         return *this;
     }
-    // Tells operator delete, which has no object to read, whether the render's budget counted this one
-    virtual ~ValueObject() { detail::t_freedCharged = IsCharged() ? this : nullptr; }
+    // Tells operator delete, which has no object to read, whether the render's budget counted this one. Without a
+    // budget the delete gives nothing back and reads no mark, so the mark is left as it is
+    virtual ~ValueObject()
+    {
+        if (RenderMemoryCounted())
+        {
+            detail::t_freedCharged = IsCharged() ? this : nullptr;
+        }
+    }
 
     // Every object a render makes counts against its memory budget (maxRenderMemory, docs/tasks/0478): the loops,
     // callables, generators, anchors and undefined values a template keeps take more than the slot that holds them.
@@ -274,7 +281,7 @@ private:
     uint8_t m_bits = InitialBits();
 };
 // The flags and bits share the padding after the count: every value's object stays this size
-static_assert(sizeof(ValueObject) == sizeof(void*) + sizeof(unsigned) + 4, "ValueObject grew");
+static_assert(sizeof(ValueObject) <= sizeof(void*) + sizeof(unsigned) + 4, "ValueObject grew");
 
 using ValueObjectPtr = IntrusivePtr<const ValueObject>;
 

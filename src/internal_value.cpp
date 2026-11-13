@@ -78,12 +78,16 @@ void* ValueObject::operator new(std::size_t size)
 
 void ValueObject::operator delete(void* ptr, std::size_t size) noexcept
 {
-    // No object is left to ask: its destructor ran just before and left a mark if a budget counted it (docs/tasks/0483)
-    const auto freed = reinterpret_cast<std::uintptr_t>(std::exchange(detail::t_freedCharged, nullptr)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    const auto start = reinterpret_cast<std::uintptr_t>(ptr);                                            // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    if (freed >= start && freed - start < size)
+    // No object is left to ask: its destructor ran just before and, with a budget active, left a mark if the budget
+    // counted it (docs/tasks/0483)
+    if (RenderMemoryCounted())
     {
-        ReleaseRenderMemory(size);
+        const auto freed = reinterpret_cast<std::uintptr_t>(std::exchange(detail::t_freedCharged, nullptr)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        const auto start = reinterpret_cast<std::uintptr_t>(ptr);                                            // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        if (freed >= start && freed - start < size)
+        {
+            ReleaseRenderMemory(size);
+        }
     }
     ::operator delete(ptr);
 }
