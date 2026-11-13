@@ -159,6 +159,9 @@ struct RenderLimits
 static_assert(RenderLimits{}.maxRenderDepth == Settings::Limits{}.maxRenderDepth);
 // Constant-initialised, so that reading it needs no guard
 inline thread_local RenderLimits t_renderLimits JINJA2CPP_HOT_TLS;
+// The object whose destructor ran last if a budget counted it, else null: ~ValueObject sets it and ValueObject's
+// operator delete, which has no object left to ask, reads it and clears it (docs/tasks/0483). Constant-initialised
+inline thread_local const void* t_freedCharged JINJA2CPP_HOT_TLS = nullptr;
 
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
@@ -371,8 +374,12 @@ inline bool RenderMemoryCounted() noexcept
 {
     return detail::t_renderLimits.memoryLeft != UINT64_MAX;
 }
-// Gives back the bytes of one that is freed. Whichever render made it, the budget gains them (one made before the
-// render or by another render frees memory too), up to the whole budget
+// Gives back the bytes of a string, list, dict or object that is freed. Only for one that was counted against a
+// budget when it was made (docs/tasks/0483): the callers check that first (ValueObject::IsCharged, a dict's own
+// flag), as one made before the render, by a render without a budget or under UncountedMemoryScope took nothing and
+// gives nothing back. One that an earlier render counted and this render frees gives its bytes to this render, up to
+// the whole budget; that is bounded by what the earlier render made. A container that was not counted and that a
+// render grows counts the growth and never gets it back: charging too much is safe, crediting too much is a bypass
 inline void ReleaseRenderMemory(std::uint64_t bytes) noexcept
 {
     auto& limits = detail::t_renderLimits;

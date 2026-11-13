@@ -141,7 +141,7 @@ private:
     void ChargeEntriesSlow() const;
     void ReleaseEntries() const noexcept
     {
-        if (RenderMemoryCounted())
+        if (m_counted && RenderMemoryCounted())
         {
             ReleaseEntriesSlow();
         }
@@ -149,6 +149,9 @@ private:
     void ReleaseEntriesSlow() const noexcept;
 
     InternalDict m_items;
+    // Whether a budget was active when the dict was made: only then are its entries given back, those a render
+    // adds to a dict made without one stay counted (docs/tasks/0483). Moves take the entries and the flag together
+    bool m_counted = RenderMemoryCounted();
     // Token to first spelling, for the entries that are not stored under their own string
     std::unique_ptr<KeyTable> m_keys;
 };

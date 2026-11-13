@@ -2543,8 +2543,10 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
         spare = InternalValue(ListAdapter::CreateAdapter(InternalValueList{}));
     }
     values.swap(taken);
-    // The render's memory budget counted the buffer taken here (docs/tasks/0459)
+    // The render's memory budget counted the buffer taken here (docs/tasks/0459) if the list's storage was counted
+    // (docs/tasks/0483)
     const std::uint64_t takenCapacity = values.capacity();
+    const bool takenCharged = ListOf(self).ItemsCharged();
     // The items are found again after the key calls: a module call a key function makes can hand
     // the list's items to the host and give the list new ones (docs/tasks/0331, D8), and the
     // items the host was handed are never written again
@@ -2619,10 +2621,13 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     }
     values.clear();
     // The taken buffer, and any a key call grew meanwhile, are freed for one that fits the items: the budget gives
-    // back the difference
-    const std::uint64_t replacedCapacity = takenCapacity + items.capacity();
+    // back the difference, of the buffers that were counted. The new buffer is not counted, and a counted storage
+    // gives it back with the rest when it is freed, so it is taken off here
+    const bool itemsCharged = ListOf(self).ItemsCharged();
+    const std::uint64_t replacedCapacity = (takenCharged ? takenCapacity : 0) + (itemsCharged ? items.capacity() : 0);
     items = std::move(sorted);
-    ReleaseRenderMemory((replacedCapacity - items.capacity()) * sizeof(InternalValue));
+    const std::uint64_t keptCapacity = itemsCharged ? items.capacity() : 0;
+    ReleaseRenderMemory((replacedCapacity > keptCapacity ? replacedCapacity - keptCapacity : 0) * sizeof(InternalValue));
     if (modified)
     {
         Raise("list modified during sort");

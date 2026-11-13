@@ -143,30 +143,32 @@ class ValueObject
 {
 public:
     ValueObject() = default;
-    // A copy is a new object: its count starts at zero
+    // A copy is a new object: its count starts at zero, and it is charged if a budget is active now, whatever the
+    // original was
     ValueObject(const ValueObject& other) noexcept
         : m_flags(other.m_flags)
-        , m_isBorrowed(other.m_isBorrowed)
+        , m_bits(static_cast<uint8_t>((other.m_bits & BorrowedBit) | InitialBits()))
     {
     }
     ValueObject(ValueObject&& other) noexcept
         : m_flags(other.m_flags)
-        , m_isBorrowed(other.m_isBorrowed)
+        , m_bits(static_cast<uint8_t>((other.m_bits & BorrowedBit) | InitialBits()))
     {
     }
     ValueObject& operator=(const ValueObject& other) noexcept
     {
         m_flags = other.m_flags;
-        m_isBorrowed = other.m_isBorrowed;
+        SetBorrowedBit(other.m_bits & BorrowedBit);
         return *this;
     }
     ValueObject& operator=(ValueObject&& other) noexcept
     {
         m_flags = other.m_flags;
-        m_isBorrowed = other.m_isBorrowed;
+        SetBorrowedBit(other.m_bits & BorrowedBit);
         return *this;
     }
-    virtual ~ValueObject() = default;
+    // Tells operator delete, which has no object to read, whether the render's budget counted this one
+    virtual ~ValueObject() { detail::t_freedCharged = IsCharged() ? this : nullptr; }
 
     // Every object a render makes counts against its memory budget (maxRenderMemory, docs/tasks/0478): the loops,
     // callables, generators, anchors and undefined values a template keeps take more than the slot that holds them.
@@ -200,10 +202,14 @@ public:
     [[nodiscard]] IteratorKind GetIteratorKind() const noexcept { return static_cast<IteratorKind>((m_flags & IteratorMask) >> IteratorShift); }
     // Whether the object is the list accessor of a range() (IListAccessor::GetRangeInfo), so that
     // an operator on two lists tells a range without a virtual call (docs/tasks/0401)
-    [[nodiscard]] bool IsRange() const noexcept { return m_isRange; }
+    [[nodiscard]] bool IsRange() const noexcept { return (m_bits & RangeBit) != 0; }
     // Whether the object is a list adapter of the host's data (IListAccessor::IsBorrowed), so that a host's call tells
     // the host's list from the template's own without a virtual call
-    [[nodiscard]] bool IsBorrowedList() const noexcept { return m_isBorrowed; }
+    [[nodiscard]] bool IsBorrowedList() const noexcept { return (m_bits & BorrowedBit) != 0; }
+    // Whether a render's memory budget was active when the object was made, so that its allocation was counted and
+    // freeing it gives the bytes back (docs/tasks/0483). An object made without a budget, or under
+    // UncountedMemoryScope, gives nothing back. Never copied: each object has its own
+    [[nodiscard]] bool IsCharged() const noexcept { return (m_bits & ChargedBit) != 0; }
     // The thread's snapshot of the globals reaches the object: a global's own adapter, or an item
     // in the block of item adapters such an adapter reads now, whose link to a cell is listed in
     // the cell (CellLink, docs/tasks/0346). Set before the object is shared; cleared on the
@@ -243,9 +249,9 @@ protected:
     // Set by the constructor, before anything shares the object
     void SetIteratorKind(IteratorKind kind) noexcept { m_flags = static_cast<uint8_t>((m_flags & ~IteratorMask) | (static_cast<uint8_t>(kind) << IteratorShift)); }
     // Set by the constructor of a range()'s accessor
-    void SetRange() noexcept { m_isRange = true; }
+    void SetRange() noexcept { m_bits |= RangeBit; }
     // Set by the constructor of a list adapter of the host's data
-    void SetBorrowed() noexcept { m_isBorrowed = true; }
+    void SetBorrowed() noexcept { m_bits |= BorrowedBit; }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
@@ -254,15 +260,21 @@ private:
     static constexpr uint8_t GlobalFlag = 8;
     static constexpr uint8_t IteratorShift = 4;
     static constexpr uint8_t IteratorMask = 0xF0;
+    static constexpr uint8_t RangeBit = 1;
+    static constexpr uint8_t BorrowedBit = 2;
+    static constexpr uint8_t ChargedBit = 4;
+    // ChargedBit while a budget is active: the object's allocation function runs just before its constructor
+    static uint8_t InitialBits() noexcept { return RenderMemoryCounted() ? ChargedBit : uint8_t{ 0 }; }
+    void SetBorrowedBit(uint8_t bit) noexcept { m_bits = static_cast<uint8_t>((m_bits & ~BorrowedBit) | bit); }
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
     // In the padding after m_flags, so that the object keeps its size
     mutable bool m_inSnapshot = false;
-    bool m_isRange = false;
-    bool m_isBorrowed = false;
+    // RangeBit, BorrowedBit and ChargedBit
+    uint8_t m_bits = InitialBits();
 };
-// The flags and m_isRange share the padding after the count: every value's object stays this size
-static_assert(sizeof(ValueObject) <= sizeof(void*) + sizeof(unsigned) + 4, "ValueObject grew");
+// The flags and bits share the padding after the count: every value's object stays this size
+static_assert(sizeof(ValueObject) == sizeof(void*) + sizeof(unsigned) + 4, "ValueObject grew");
 
 using ValueObjectPtr = IntrusivePtr<const ValueObject>;
 
@@ -694,6 +706,9 @@ struct IListAccessor : ValueObject
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)
     [[nodiscard]] virtual InternalValueList* GetMutableItems() const { return nullptr; }
+    // Whether a budget counted the storage GetMutableItems returns when it was made, so that its buffer is given back
+    // when it is replaced (docs/tasks/0483)
+    [[nodiscard]] virtual bool ItemsCharged() const { return false; }
     // Whether len() can change while the render runs: a list the template owns (GetMutableItems),
     // or a host's list that the template changes through the host's own methods (a Python
     // list's append). Then loop.length is len() at its first read, as Jinja2's (docs/tasks/0390)
@@ -847,6 +862,7 @@ public:
     [[nodiscard]] bool IsRange() const noexcept { return m_accessor != nullptr && m_accessor->IsRange(); }
     [[nodiscard]] IteratorKind GetIteratorKind() const { return m_accessor ? m_accessor->GetIteratorKind() : IteratorKind::None; }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
+    [[nodiscard]] bool ItemsCharged() const { return m_accessor != nullptr && m_accessor->ItemsCharged(); }
     [[nodiscard]] bool HasLiveSize() const { return m_accessor != nullptr && m_accessor->HasLiveSize(); }
     [[nodiscard]] GenericList CreateGenericList() const { return m_accessor ? m_accessor->CreateGenericList() : GenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
@@ -966,6 +982,7 @@ public:
     [[nodiscard]] bool IsRange() const noexcept { return Ref().IsRange(); }
     [[nodiscard]] IteratorKind GetIteratorKind() const { return Ref().GetIteratorKind(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return Ref().GetMutableItems(); }
+    [[nodiscard]] bool ItemsCharged() const { return Ref().ItemsCharged(); }
     [[nodiscard]] GenericList CreateGenericList() const { return Ref().CreateGenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const { return Ref().GetEnumerator(); }
     void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const { Ref().RebindEnumerator(enumerator); }
@@ -1144,7 +1161,14 @@ struct StringObject final : ValueObject
     StringObject(StringObject&&) = delete;
     StringObject& operator=(const StringObject&) = delete;
     StringObject& operator=(StringObject&&) = delete;
-    ~StringObject() override { ReleaseRenderMemory(Bytes(m_size)); }
+    // Counted by Make when a budget was active, which is when the base class marked the object charged
+    ~StringObject() override
+    {
+        if (IsCharged())
+        {
+            ReleaseRenderMemory(Bytes(m_size));
+        }
+    }
 
 private:
     explicit StringObject(size_t size) noexcept
@@ -1182,7 +1206,13 @@ struct BigIntObject final : ValueObject
     BigIntObject& operator=(const BigIntObject&) = delete;
     BigIntObject& operator=(BigIntObject&&) = delete;
     // Make counted the object and its digits against the render's memory budget (docs/tasks/0478)
-    ~BigIntObject() override { ReleaseRenderMemory(Bytes(m_size)); }
+    ~BigIntObject() override
+    {
+        if (IsCharged())
+        {
+            ReleaseRenderMemory(Bytes(m_size));
+        }
+    }
 
     [[nodiscard]] static constexpr std::uint64_t Bytes(size_t digits) noexcept { return std::uint64_t{ sizeof(BigIntObject) } + digits; }
 
@@ -1581,17 +1611,20 @@ private:
 static_assert(sizeof(InternalValue) == 32, "docs/tasks/0140");
 
 // The items a generated list reads (a lambda's capture, ListAdapter::CreateAdapter(size, fn)), counted against the
-// render's memory budget as a list's storage is (docs/tasks/0459): each copy is counted, and a move leaves none behind
+// render's memory budget as a list's storage is (docs/tasks/0459): each copy is counted, and a move leaves none behind.
+// Gives back only what a budget counted (docs/tasks/0483): the flag is set where a copy was made with one active
 class CountedItems
 {
 public:
     explicit CountedItems(InternalValueList&& items)
         : m_items(std::move(items))
+        , m_charged(RenderMemoryCounted())
     {
         ChargeRenderMemory(Bytes());
     }
     CountedItems(const CountedItems& other)
         : m_items(other.m_items)
+        , m_charged(RenderMemoryCounted())
     {
         ChargeRenderMemory(Bytes());
     }
@@ -1599,7 +1632,13 @@ public:
     CountedItems(CountedItems&& other) noexcept = default;
     CountedItems& operator=(const CountedItems&) = delete;
     CountedItems& operator=(CountedItems&&) = delete;
-    ~CountedItems() { ReleaseRenderMemory(Bytes()); }
+    ~CountedItems()
+    {
+        if (m_charged)
+        {
+            ReleaseRenderMemory(Bytes());
+        }
+    }
 
     [[nodiscard]] const InternalValue& operator[](size_t idx) const { return m_items[idx]; }
 
@@ -1607,6 +1646,7 @@ private:
     [[nodiscard]] std::uint64_t Bytes() const noexcept { return std::uint64_t{ m_items.capacity() } * sizeof(InternalValue); }
 
     InternalValueList m_items;
+    bool m_charged = false;
 };
 
 namespace detail

@@ -546,9 +546,11 @@ TemplateDict& TemplateDict::operator=(TemplateDict&& other) noexcept(std::is_not
         // Moved out first: where the move may throw (MSVC), the entries stay counted while they live
         auto items = std::move(other.m_items);
         auto keys = std::move(other.m_keys);
+        const bool counted = other.m_counted;
         ReleaseEntries();
         m_items.swap(items);
         m_keys.swap(keys);
+        m_counted = counted;
     }
     return *this;
 }
@@ -693,7 +695,7 @@ std::pair<TemplateDict::iterator, bool> TemplateDict::TryEmplace(const InternalV
 
 TemplateDict::iterator TemplateDict::Erase(const_iterator pos)
 {
-    if (RenderMemoryCounted())
+    if (m_counted && RenderMemoryCounted())
     {
         ReleaseRenderMemory(EntryBytes(pos->first));
     }
