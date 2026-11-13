@@ -322,8 +322,9 @@ the task was done by 0357 S2c; only the docs changed.
 **Jinja2's error classes and generate items (tasks 0432, 0436, before G1).** `ErrorCode` gains
 `TemplateSyntaxError = 1023` and `TemplateAssertionError = 1024` (additive; `ExtraParams[0]` is
 Jinja2's message). `UnexpectedStatement` keeps the tag in `ExtraParams[0]` and adds Jinja2's sentence
-as `ExtraParams[1]`; `TemplateRuntimeError` adds the Python class (`"TypeError"`, `"ValueError"`) as
-`ExtraParams[1]` where the engine knows it. `RenderOptions` grows by `bool writeEachPiece`: a sink
+as `ExtraParams[1]`; `TemplateRuntimeError` adds the Python class (`"TypeError"`, `"ValueError"`, and since 0458
+`"AttributeError"`) as `ExtraParams[1]` where the engine knows it; an include's `TemplateNotFound`
+adds `"list"` as `ExtraParams[1]` when it selected from a list (0458). `RenderOptions` grows by `bool writeEachPiece`: a sink
 gets one `Write` per piece Jinja2's `generate()` yields (text run, `{{ }}` value, macro or call
 output up to the 512-character buffer), so the Python module's `generate()` yields Jinja2's items.
 Considered: a separate sink callback per piece (a second sink interface for one flag) and

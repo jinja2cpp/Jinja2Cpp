@@ -3123,12 +3123,24 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
 {
     auto* callback = values.GetRendererCallback();
     auto templateNames = values.Nodes()[m_expr].Evaluate(values);
+    // Python's get_or_select_template: an undefined name fails as it is used, whatever its policy
+    CheckUndefinedUse(templateNames, UndefinedUse::Call);
     bool isConverted = false;
     ListAdapter list = ConvertToList(templateNames, isConverted);
     // A host sequence is stored as a map and iterates: Python's select_template takes any iterable
     if (!isConverted && AsMap(templateNames))
     {
         list = ConvertToList(templateNames, isConverted, false);
+    }
+    // None selects from an empty list; what is neither a name nor iterable fails, `ignore missing` or not
+    if (!isConverted && templateNames.IsNone())
+    {
+        list = ListAdapter::CreateAdapter(InternalValueList{});
+        isConverted = true;
+    }
+    else if (!isConverted && !templateNames.IsUndefined() && !GetAsSameString(std::string(), templateNames))
+    {
+        CheckIterable(templateNames);
     }
 
     bool rendered = false;
@@ -3165,7 +3177,9 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
         ValuesList extraParams;
         if (isConverted)
         {
+            // A list of names is Python's select_template, which raises TemplatesNotFound
             extraParams.push_back(IntValue2Value(ListAdapter::CreateAdapter(std::move(tried))));
+            extraParams.emplace_back(std::string("list"));
         }
         else
         {

@@ -157,8 +157,8 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     return ListAdapter::CreateRange(start, stop, step);
 }
 
-// One item of dict(pairs) into `result`
-void CollectDictPair(const InternalValue& item, TemplateDict& result)
+// Item `index` of dict(pairs) into `result`
+void CollectDictPair(const InternalValue& item, size_t index, TemplateDict& result)
 {
     if (const auto* pair = GetIf<KeyValuePair>(&item))
     {
@@ -168,14 +168,15 @@ void CollectDictPair(const InternalValue& item, TemplateDict& result)
     // Any iterable of two items is a pair, a two-character string included
     bool isConverted = false;
     auto itemList = ConvertToList(item, isConverted, false);
+    const auto element = "dictionary update sequence element #" + std::to_string(index);
     if (!isConverted)
     {
-        throw TemplateRuntimeError("cannot convert dictionary update sequence element to a sequence");
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "cannot convert " + element + " to a sequence");
     }
     auto pair = itemList.ToValueList();
     if (pair.size() != 2)
     {
-        throw TemplateRuntimeError("dictionary update sequence element has wrong length; 2 is required");
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::ValueError, element + " has length " + std::to_string(pair.size()) + "; 2 is required");
     }
     result.Set(pair[0], pair[1]);
 }
@@ -191,6 +192,8 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
     if (!params.posParams.empty())
     {
         const auto& source = params.posParams.front();
+        // Python's dict() asks an undefined value for its keys(), which fails whatever its policy
+        CheckUndefinedUse(source, UndefinedUse::Call);
         auto map = AsMap(source);
         // None and an object such as namespace() are not iterable
         if (source.IsNone() || (map && map->GetObjectClass()))
@@ -206,14 +209,24 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
         }
         else if (auto list = AsList(source))
         {
+            size_t index = 0;
             for (const auto& item : *list)
             {
-                CollectDictPair(item, result);
+                CollectDictPair(item, index++, result);
+            }
+        }
+        else if (const auto text = GetAsSameString(std::string(), source))
+        {
+            // Python iterates a string: each item is one character, no pair
+            if (!text->empty())
+            {
+                throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::ValueError, "dictionary update sequence element #0 has length 1; 2 is required");
             }
         }
         else if (!IsEmpty(source))
         {
-            throw TemplateRuntimeError("dict() argument is not a mapping or a sequence of pairs");
+            // A number or a bool: Python iterates what is not a mapping
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + Apply<visitors::PythonTypeNameGetter>(source) + "' object is not iterable");
         }
     }
 

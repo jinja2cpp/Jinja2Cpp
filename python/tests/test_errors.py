@@ -138,6 +138,75 @@ def test_include_of_several_missing_templates_is_templates_not_found():
         assert str(info.value) == "none of the templates given were found: missing, missing2"
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{% include ['missing'] %}",
+        "{% include ('missing',) %}",
+        "{% include [] %}",
+        "{% include none %}",
+        "{% include 'missing' %}",
+        "{% include 5 %}",
+        "{% include 5 ignore missing %}",
+        "{% include 1.5 %}",
+        "{% include nope %}",
+        "{{ dict(5) }}",
+        "{{ dict('ab') }}",
+        "{{ dict([[1, 2], 3]) }}",
+        "{{ dict(nope) }}",
+        "{{ [1]|xmlattr }}",
+        "{{ none|xmlattr }}",
+        "{{ namespace()|xmlattr }}",
+        "{{ nope|xmlattr }}",
+    ],
+)
+def test_include_and_constructor_errors_have_jinja2s_class(source):
+    # docs/tasks/0458: a list of names is select_template's TemplatesNotFound, even of one name
+    def fails(module):
+        env = module.Environment(loader=module.DictLoader({"header": "H"}))
+        with pytest.raises(Exception) as info:
+            env.from_string(source).render()
+        return info.value
+
+    ours, theirs = fails(jinja2cpp), fails(jinja2)
+    assert type(ours).__name__ == type(theirs).__name__, source
+    assert str(ours) == str(theirs), source
+    if isinstance(theirs, jinja2.TemplatesNotFound):
+        assert ours.templates == theirs.templates
+
+
+def test_include_of_none_or_an_empty_list_ignores_missing():
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({}))
+        assert env.from_string("{% include none ignore missing %}|{% include [] ignore missing %}").render() == "|", module
+
+
+def test_a_loaders_own_template_not_found_is_raised():
+    # Jinja2 lets the loader's exception through, with its message (docs/tasks/0458)
+    for module in (jinja2cpp, jinja2):
+
+        class Loader(module.BaseLoader):
+            def get_source(self, environment, template):
+                raise module.TemplateNotFound(template, "custom message")
+
+        class Sub(module.FileSystemLoader):
+            pass
+
+        env = module.Environment(loader=Loader())
+        for render in (lambda: env.from_string("{% include 'x' %}").render(), lambda: env.get_template("x")):
+            with pytest.raises(module.TemplateNotFound) as info:
+                render()
+            assert (str(info.value), info.value.name) == ("custom message", "x"), module
+        # A list selects: the loader's message is not used
+        with pytest.raises(module.TemplatesNotFound) as info:
+            env.from_string("{% include ['x'] %}").render()
+        assert str(info.value) == "none of the templates given were found: x", module
+        env = module.Environment(loader=Sub("nowhere"))
+        with pytest.raises(module.TemplateNotFound) as info:
+            env.from_string("{% include 'x' %}").render()
+        assert str(info.value) == "'x' not found in search path: 'nowhere'", module
+
+
 def test_include_of_an_iterator_stops_at_the_first_template_found():
     def names_then_fail():
         yield "missing"

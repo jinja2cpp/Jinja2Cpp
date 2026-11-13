@@ -691,6 +691,20 @@ ErrorSource PyEnvironment::SourceOf(const std::string& name, bool withSource) co
     return source;
 }
 
+nb::object PyEnvironment::LoaderNotFound(const std::string& name) const
+{
+    return m_loaderHandler ? m_loaderHandler->NotFound(name) : nb::none();
+}
+
+nb::object LoaderNotFoundOf(nb::handle environment, const std::string& name)
+{
+    if (environment.is_none() || !nb::isinstance<PyEnvironment>(environment))
+    {
+        return nb::none();
+    }
+    return nb::cast<const PyEnvironment&>(environment).LoaderNotFound(name);
+}
+
 nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass)
 {
     auto self = nb::find(this);
