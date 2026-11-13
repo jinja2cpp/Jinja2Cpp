@@ -47,4 +47,5 @@ Limit: a container the host lets go of while the module lives, and that held oth
 freed at the module's next call or when it goes, not at once (a host that drops many such
 containers between calls holds them until then). A view of the module's cell needs nothing: the
 module's own walk reaches the cell while it lives, and the last view's `~CallExports` walks the
-pinned storages once it has gone. `Module/keep` costs one predictable branch per call more.
+pinned storages once it has gone. `Module/keep`: +0.98% instructions (+70, mostly the weak reference each call's exports
+take to the module and drop) and +16 bytes per call (that reference in `CallExports`).
