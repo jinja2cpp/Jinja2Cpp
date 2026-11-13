@@ -1570,7 +1570,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     const auto target = values.Nodes()[m_target];
     // The scopes of the loop's end, which a call that stops closes over as the end does
     const size_t endScopes = values.GetScopesCount() - 1;
-    std::exception_ptr failure;
+    bool failed = false;
     try
     {
         for (size_t itemIdx = 0; hasItem; ++itemIdx)
@@ -1606,10 +1606,13 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     }
     catch (...)
     {
-        failure = std::current_exception();
+        failed = true;
+        detail::KeepFailure();
     }
-    if (failure)
+    if (failed)
     {
+        // Taken: the collecting below may run calls that are guarded in turn
+        auto failure = detail::TakeKept();
         if (detail::IsStop(failure))
         {
             values.CaptureClosures(FrameEnd::Soft(endScopes));
@@ -1618,7 +1621,8 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         std::rethrow_exception(std::move(failure));
     }
     // A closure defined in the body and kept past the loop sees the frame below it (0373)
-    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount() - 1));
+    JINJA2CPP_ASSERT(values.GetScopesCount() - 1 == endScopes);
+    values.CaptureClosures(FrameEnd::Soft(endScopes));
     values.ExitScope(state->bodyScope);
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
@@ -1730,7 +1734,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     const auto rootHash = root.hash;
     // The scopes of the loop's end, which a call that stops closes over as the end does
     const size_t endScopes = values.GetScopesCount();
-    std::exception_ptr failure;
+    bool failed = false;
     try
     {
         for (size_t itemIdx = 0; hasItem; ++itemIdx)
@@ -1788,10 +1792,13 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     }
     catch (...)
     {
-        failure = std::current_exception();
+        failed = true;
+        detail::KeepFailure();
     }
-    if (failure)
+    if (failed)
     {
+        // Taken: the collecting below may run calls that are guarded in turn
+        auto failure = detail::TakeKept();
         if (detail::IsStop(failure))
         {
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
@@ -1819,7 +1826,8 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     state->lazyFilter = nullptr;
 
     guard.Unbind();
-    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount()));
+    JINJA2CPP_ASSERT(values.GetScopesCount() == endScopes);
+    values.CaptureClosures(FrameEnd::Soft(endScopes));
     values.PopFrameView();
     values.ExitScope(state->bodyScope);
     if (!loopRendered && m_elseBody)
@@ -1859,8 +1867,10 @@ namespace
 {
 // The filter of a loop (`for x in xs if cond`) as Jinja2 runs it, in a generator: a StopIteration out of the
 // condition is a RuntimeError, not a stopped call (call_stop.h). A call the condition makes is guarded on its own
+// Always inlined: the handler is a call to KeepFailure and the try region costs nothing on the success path, which
+// stays the code of the unguarded loop (a call per item showed in Render/for_filter_if)
 template<typename Node>
-bool EvaluateLoopFilter(Node& filter, RenderContext& values)
+JINJA2CPP_ALWAYS_INLINE bool EvaluateLoopFilter(Node& filter, RenderContext& values)
 {
     try
     {
@@ -3988,11 +3998,20 @@ namespace
 // Renders the body of a macro. A stop out of it (docs/tasks/0479) ends the frame as the end of the body does, before
 // the guards of the call let go of what the frame held: a closure made in it that something outside holds keeps the
 // names the frame had. The rethrow is outside the handler, as in the body loops (renderer.h)
-template<typename Body>
-void RenderMacroBody(RenderContext& context, size_t link, const Body& body)
+// The end of a body that failed: a stop is closed over as the end of the body is
+[[noreturn]] JINJA2CPP_NOINLINE void EndFailedMacroBody(RenderContext& context, size_t link, size_t endScopes)
 {
-    const size_t endScopes = context.GetScopesCount();
-    std::exception_ptr failure;
+    auto failure = detail::TakeKept();
+    if (detail::IsStop(failure))
+    {
+        context.CaptureClosures(FrameEnd::Call(endScopes, link));
+    }
+    std::rethrow_exception(std::move(failure));
+}
+
+template<typename Body>
+void RenderMacroBody(RenderContext& context, size_t link, size_t endScopes, const Body& body)
+{
     try
     {
         body();
@@ -4000,13 +4019,9 @@ void RenderMacroBody(RenderContext& context, size_t link, const Body& body)
     }
     catch (...)
     {
-        failure = std::current_exception();
+        detail::KeepFailure();
     }
-    if (detail::IsStop(failure))
-    {
-        context.CaptureClosures(FrameEnd::Call(endScopes, link));
-    }
-    std::rethrow_exception(std::move(failure));
+    EndFailedMacroBody(context, link, endScopes);
 }
 } // namespace
 
@@ -4030,6 +4045,8 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     // view left by an exception is dropped by the HomeCall. A link that hides no scope is
     // harmless on the view of the arguments, which is pushed anyway
     auto scope = context.EnterScope();
+    // The scopes of the body's end, which the call closes over, also when a stop leaves the body
+    const size_t endScopes = context.GetScopesCount();
     const UnitCall unitCall(context, m_unitLayout);
     if (m_slotNames.empty())
     {
@@ -4042,9 +4059,10 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
         BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
             scope.ForName(name) = std::forward<decltype(value)>(value);
         });
-        RenderMacroBody(context, link, [&] { context.Nodes()[m_mainBody].Render(stream, context); });
+        RenderMacroBody(context, link, endScopes, [&] { context.Nodes()[m_mainBody].Render(stream, context); });
         // A macro defined in the body and kept past the call sees what the call had (0326)
-        context.CaptureClosures(FrameEnd::Call(context.GetScopesCount(), link));
+        JINJA2CPP_ASSERT(context.GetScopesCount() == endScopes);
+        context.CaptureClosures(FrameEnd::Call(endScopes, link));
         if (isLinked)
         {
             context.PopFrameView();
@@ -4062,8 +4080,9 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
         context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });
-    RenderMacroBody(context, link, [&] { context.Nodes()[m_mainBody].Render(stream, context); });
-    context.CaptureClosures(FrameEnd::Call(context.GetScopesCount(), link));
+    RenderMacroBody(context, link, endScopes, [&] { context.Nodes()[m_mainBody].Render(stream, context); });
+    JINJA2CPP_ASSERT(context.GetScopesCount() == endScopes);
+    context.CaptureClosures(FrameEnd::Call(endScopes, link));
 
     guard.Unbind();
     context.PopFrameView();

@@ -191,7 +191,8 @@ public:
         // The end of the buffered part
         unsigned char* cur = nullptr;
     };
-    [[nodiscard]] Mark GetMark() const { return { m_sink ? m_sinkWritten : TargetSize(), m_cur }; }
+    // A stream with a target string has no sink, as WriteLong relies on
+    [[nodiscard]] Mark GetMark() const { return { m_target ? TargetSize() : m_sinkWritten, m_cur }; }
     // Drops what was written since `mark`; false when it cannot be: a writer stream, or a sink that has been
     // given output since. A string target takes it back in full. A sink fails whenever the buffer reached the sink
     // since the call began, which depends on where the 512-character buffer boundary falls, not only on how much
@@ -255,13 +256,9 @@ private:
         WriteBuffer(str.data(), str.size());
     }
     void FlushBuffer();
-    // The characters in the target string: 0 for a writer stream
+    // The characters in the target string, which the stream must have
     [[nodiscard]] size_t TargetSize() const
     {
-        if (!m_target)
-        {
-            return 0;
-        }
         return m_charSize == 1 ? static_cast<const std::string*>(m_target)->size() : static_cast<const std::wstring*>(m_target)->size();
     }
     void AppendToTarget(const void* ptr, size_t bytes);

@@ -1211,40 +1211,42 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     return ListAdapter::CreateIterator(std::move(resultList), kind);
 }
 
+// The attribute of an item of sum, or nothing with `isStopped` set where it raises a StopIteration. Out of line, and
+// the item of the common sum of plain values does not pass through it
+JINJA2CPP_NOINLINE_INLINE InternalValue SumAttribute(const InternalValue& val, const InternalValueList& path, RenderContext& context, bool& isStopped)
+{
+    bool failed = false;
+    try
+    {
+        return GetAttributeByPath(val, path, InternalValue(), context);
+    }
+    catch (...)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed && !detail::KeptIsStop())
+    {
+        detail::RethrowKept();
+    }
+    detail::DropKept();
+    isStopped = true;
+    return InternalValue();
+}
+
 // start: what the call passes, or nothing for Python's 0
 InternalValue Sum(const ListAdapter& list, const InternalValueList& path, std::optional<InternalValue> start, RenderContext& context)
 {
     // Python's sum starts from 0, so a string item raises like `0 + 'h'`
     InternalValue resultVal = start ? std::move(*start) : InternalValue(static_cast<int64_t>(0));
+    bool isStopped = false;
     list.ForEach([&](InternalValue&& val) {
-        InternalValue item;
-        if (path.empty())
+        // `sum(map(attrgetter, iterable))` of Python's builtin ends where the attribute raises StopIteration: the items
+        // before it are added
+        auto item = path.empty() ? std::move(val) : SumAttribute(val, path, context, isStopped);
+        if (isStopped)
         {
-            item = std::move(val);
-        }
-        else
-        {
-            // `sum(map(attrgetter, iterable))` of Python's builtin ends where the attribute raises StopIteration:
-            // the items before it are added
-            bool failed = false;
-            try
-            {
-                item = GetAttributeByPath(val, path, InternalValue(), context);
-            }
-            catch (...)
-            {
-                failed = true;
-                detail::KeepFailure();
-            }
-            if (failed)
-            {
-                if (!detail::KeptIsStop())
-                {
-                    detail::RethrowKept();
-                }
-                detail::DropKept();
-                return false;
-            }
+            return false;
         }
         // An undefined item fails the addition as Python's __radd__ does (the sandbox's unsafe attribute among them)
         CheckUndefinedUse(item, UndefinedUse::Arithmetic);

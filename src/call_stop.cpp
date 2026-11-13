@@ -121,6 +121,11 @@ void RethrowKeptSealed()
     }
 }
 
+std::exception_ptr TakeKept() noexcept
+{
+    return std::exchange(t_kept, nullptr);
+}
+
 void RethrowKept()
 {
     std::rethrow_exception(std::exchange(t_kept, nullptr));

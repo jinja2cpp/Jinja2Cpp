@@ -43,6 +43,9 @@ void KeepFailure() noexcept;
 // RuntimeError, so the exception KeepFailure kept is thrown sealed, no stop for a call site around it; one that is
 // not a stop goes on unchanged
 [[noreturn]] void RethrowKeptSealed();
+// Takes the exception KeepFailure kept, for code that runs more calls before it throws it (a call that fails and is
+// guarded in turn would replace what is kept); throw it with std::rethrow_exception outside the handler
+[[nodiscard]] std::exception_ptr TakeKept() noexcept;
 // Throws the exception KeepFailure kept, outside the handler
 [[noreturn]] void RethrowKept();
 // Forgets the exception KeepFailure kept

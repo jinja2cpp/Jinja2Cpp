@@ -2195,19 +2195,18 @@ public:
         HomeCallSaved m_saved;
     };
 
-    // What Restore records, applied on demand: a call that stops (docs/tasks/0479) leaves the scopes, views,
-    // loop control, template frame, autoescape mode and epoch its body changed, which the render goes on from.
-    // Records a few words and never applies them unless Undo is called
+    // What Restore records, applied on demand: a call that stops (docs/tasks/0479) leaves the scopes and views its
+    // body pushed and its loop control, which the render goes on from. The template frame and the autoescape modes
+    // the body changed are put back by the guards the exception unwinds (TemplateFrameGuard, AutoescapeGuard), and
+    // the epoch by Undo itself. Records two words, which every call pays for, and never applies them unless Undo
+    // is called
     class Snapshot
     {
     public:
         explicit Snapshot(RenderContext& context)
             : m_context(context)
             , m_scopes(context.m_scopes.size())
-            , m_epoch(context.m_epoch)
-            , m_templateFrame(context.m_templateFrame)
             , m_loopControl(context.m_loopControl)
-            , m_autoescape(context.m_autoescapeModes)
         {
         }
         Snapshot(const Snapshot&) = delete;
@@ -2220,21 +2219,20 @@ public:
         {
             HomeCallSaved saved;
             saved.scopes = m_scopes;
-            saved.epoch = m_epoch;
-            saved.bodyEpoch = m_epoch;
-            saved.templateFrame = m_templateFrame;
+            // A new epoch forgets the cached lookups of the scopes the body had
+            saved.epoch = m_context.m_epoch;
+            saved.bodyEpoch = m_context.m_epoch;
+            saved.templateFrame = m_context.m_templateFrame;
             saved.loopControl = m_loopControl;
-            saved.autoescape = m_autoescape;
+            saved.autoescape = m_context.m_autoescapeModes;
             Leave(m_context, saved);
+            m_context.NewEpoch();
         }
 
     private:
         RenderContext& m_context;
         size_t m_scopes;
-        uint64_t m_epoch;
-        TemplateFrame* m_templateFrame;
         LoopControl m_loopControl;
-        AutoescapeModes m_autoescape;
     };
 
     // Where the body runs
