@@ -169,6 +169,28 @@ bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
     return true;
 }
 
+// Whether Jinja2's as_const of the node turns an exception into Impossible (FoldCandidate::failsLoad)
+bool FoldCatchesFailure(const NodeArena& nodes, NodeRef<Expression> node)
+{
+    switch (nodes[node].GetKind())
+    {
+    case NodeKind::UnaryExpr:
+    case NodeKind::IsExpr:
+    case NodeKind::InLiteralExpr:
+    case NodeKind::ConstFormatExpr:
+    case NodeKind::CompareExpr:
+    case NodeKind::SubscriptExpr:
+    case NodeKind::LoopAttrExpr:
+    case NodeKind::FilteredExpr:
+    case NodeKind::SliceExpr:
+        return true;
+    case NodeKind::BinaryExpr:
+        return !nodes.Get<BinaryExpression>(node).IsLogical();
+    default:
+        return false;
+    }
+}
+
 } // namespace
 
 ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(LexScanner& lexer, bool isVolatile)
@@ -264,7 +286,7 @@ void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from,
     }
     if (const auto fold = m_nodes[node].PrepareFold(m_nodes); fold != 0)
     {
-        m_unknown.FoldCandidates().push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output });
+        m_unknown.FoldCandidates().push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output, output || !FoldCatchesFailure(m_nodes, node) });
     }
 }
 
@@ -535,6 +557,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     // operands of a run are always next to each other. Its operands are one flat node and
     // count as one operator
     SmallVector<NodeRef<Expression>, 4> concat;
+    // Jinja2's optimizer folds each operator node made here too (docs/tasks/0484)
+    const unsigned foldFrom = m_tupleSliceSubscripts;
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
                                                                                                          : ParseUnaryPlusMinus(lexer);
     while (left)
@@ -547,11 +571,16 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         if (op.precedence != Precedence::Concat && !concat.empty())
         {
             *left = MakeConcat(m_nodes, concat);
+            NoteFoldCandidate(*left, foldFrom);
         }
         if (op.precedence == Precedence::Compare)
         {
             // Every path assigns `left`, the one value returned, so the result is never moved out
             left = ParseComparisons(lexer, *left, op.operation, op.negated);
+            if (left)
+            {
+                NoteFoldCandidate(*left, foldFrom);
+            }
             continue;
         }
 
@@ -580,12 +609,14 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         else
         {
             *left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
+            NoteFoldCandidate(*left, foldFrom);
         }
     }
 
     if (left && !concat.empty())
     {
         *left = MakeConcat(m_nodes, concat);
+        NoteFoldCandidate(*left, foldFrom);
     }
     return left;
 }
@@ -599,13 +630,16 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseLogica
     {
         return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
     }
+    const unsigned foldFrom = m_tupleSliceSubscripts;
     auto expr = ParseBinary(lexer, Precedence::Not);
     if (!expr)
     {
         return expr;
     }
 
-    return m_nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, *expr);
+    const NodeRef<Expression> result = m_nodes.Make<UnaryExpression>(UnaryExpression::LogicalNot, *expr);
+    NoteFoldCandidate(result, foldFrom);
+    return result;
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseComparisons(LexScanner& lexer,
@@ -687,6 +721,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
         }
         NodeRef<Expression> unary =
             m_nodes.Make<UnaryExpression>(tok == '+' ? UnaryExpression::UnaryPlus : UnaryExpression::UnaryMinus, *subExpr);
+        NoteFoldCandidate(unary, foldFrom);
         if (!StartsOperandSuffix(lexer.PeekNextToken()))
         {
             return unary;
@@ -1501,12 +1536,10 @@ SubscriptParseResult<BracketSubscript> ParseBracketSubscript(ExpressionParser& p
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscript(LexScanner& lexer, NodeRef<Expression> valueRef)
 {
-    // An attribute or item of the undefined a tuple of slices folds to fails as Jinja2 folds it,
-    // so it is not folded: invalid Python (docs/tasks/0445)
-    if (m_tupleSliceValue && &m_nodes[valueRef] == &m_nodes[m_tupleSliceValue])
-    {
-        return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
-    }
+    // An attribute or item of the undefined a tuple of slices folds to is a plain subscript of
+    // it: its evaluation fails as Jinja2's fold of it does, except under ChainableUndefined,
+    // and a fold around it that does not evaluate it (`true or [1][:, :][0]`) still covers the
+    // tuple of slices, which the Load decides (FoldCheckPasses, docs/tasks/0484)
     NodeRef<Expression> indexExpr;
     std::string attrName;
     if (lexer.NextToken() == '.')
@@ -1832,24 +1865,28 @@ bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
     // nested brackets do not evaluate the inner levels again and again
     std::vector<FoldOutcome> outcomes(check.candidates.size(), FoldOutcome::DoesNotFold);
     unsigned foldedFrom = check.to;
+    unsigned outputFoldedFrom = check.to;
     for (std::size_t index = check.candidates.size(); index-- != 0;)
     {
         const auto& candidate = check.candidates[index];
         // Jinja2's optimizer folds every expression of the tree, and a strict undefined that
         // fails a fold fails the compile (UndefinedError) where an Impossible would not: under
-        // StrictUndefined each candidate is evaluated
-        if (!check.strictUndefined && candidate.from >= foldedFrom)
+        // StrictUndefined each candidate is evaluated, except inside an output that folds,
+        // which the compiler folds whole before the optimizer sees its parts (visit_Output,
+        // docs/tasks/0484)
+        if (candidate.from >= (check.strictUndefined ? outputFoldedFrom : foldedFrom))
         {
             continue;
         }
         outcomes[index] = FoldOf(candidate, context, check.strictUndefined);
-        if (check.strictUndefined && outcomes[index] == FoldOutcome::Fails)
+        if (check.strictUndefined && outcomes[index] == FoldOutcome::Fails && candidate.failsLoad)
         {
             return false;
         }
         if (outcomes[index] == FoldOutcome::Folds)
         {
             foldedFrom = candidate.from;
+            outputFoldedFrom = candidate.output ? candidate.from : outputFoldedFrom;
         }
     }
     return CoversEverySubscript(check, [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds; });

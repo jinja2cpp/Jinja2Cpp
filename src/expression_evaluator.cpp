@@ -1320,10 +1320,19 @@ InternalValue TupleSliceExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
     InternalValue value = context.Nodes()[m_value].Evaluate(context);
-    // An item of an undefined raises UndefinedError, which fails Jinja2's fold
+    // An item of an undefined raises UndefinedError, which fails Jinja2's fold, except that
+    // of a ChainableUndefined, which is itself once the parts are evaluated (docs/tasks/0484)
+    bool chainable = false;
     if (value.IsUndefined())
     {
-        throw TemplateRuntimeError("an undefined value has no items");
+        if (const auto* info = GetUndefinedInfo(value))
+        {
+            chainable = info->policy == UndefinedPolicy::Chainable;
+        }
+        if (!chainable)
+        {
+            throw TemplateRuntimeError("an undefined value has no items");
+        }
     }
     // The parts in the order Python evaluates them, each item's repr for the undefined's name
     std::string key = "(";
@@ -1346,6 +1355,10 @@ InternalValue TupleSliceExpression::Evaluate(RenderContext& context)
         CheckSequenceSize(key.size(), "the name of an undefined item");
     }
     key += ")";
+    if (chainable)
+    {
+        return value;
+    }
     // getitem's undefined for the TypeError (KeyError of a dict), of the template's policy
     return MakeUndefinedItem(&context, value, std::move(key));
 }

@@ -2103,6 +2103,17 @@ struct BinaryMathOperation : BaseVisitor<>
             return FromCompare(0);
         }
         CheckStack();
+        // Lists of different lengths are unequal without their items being compared, as in
+        // Python, which matters where an item refuses == (docs/tasks/0484)
+        if (m_oper == BinaryExpression::LogicalEq || m_oper == BinaryExpression::LogicalNe)
+        {
+            const auto leftSize = left.GetSize();
+            const auto rightSize = right.GetSize();
+            if (leftSize && rightSize && *leftSize != *rightSize)
+            {
+                return m_oper == BinaryExpression::LogicalNe;
+            }
+        }
 
         // Lexicographic, as Python: the first differing item decides, else the length.
         // Case folding (the filters' case_sensitive=false) applies to a top-level string
@@ -2111,7 +2122,7 @@ struct BinaryMathOperation : BaseVisitor<>
         auto r = right.begin();
         for (; l != left.end() && r != right.end(); ++l, ++r)
         {
-            if (ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq)))
+            if (CheckItemsCompare(*l, *r) || ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq)))
             {
                 continue;
             }
@@ -2271,7 +2282,7 @@ struct BinaryMathOperation : BaseVisitor<>
             for (auto& [key, value] : left.GetEntries())
             {
                 const auto other = right.FindItem(key);
-                if (!other || !ConvertToBool(Apply2<BinaryMathOperation>(value, *other, BinaryExpression::LogicalEq)))
+                if (!other || (!CheckItemsCompare(value, *other) && !ConvertToBool(Apply2<BinaryMathOperation>(value, *other, BinaryExpression::LogicalEq))))
                 {
                     equal = false;
                     break;

@@ -125,4 +125,32 @@ CASES = [
     ("tuple_of_slices_strict_short_circuit", "{% set q = ()[:, :] or true if 1 and none else 1 %}[{{ q }}]", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_list_compare", "[{{ [1, 2] == ([()[:, :], ()[:, :]]) }}]", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_set", "{% set q = ()[:, :] ~ 'a' %}[{{ q }}]", {"env": {"undefined": "strict"}}),
+    # 0484: an operator node folds too (a `~`, a comparison, `not`, `and`/`or`), and an item or
+    # attribute of the undefined is a plain subscript whose own fold fails
+    ("tuple_of_slices_operator_folds", "[{{ x or 'ab'[1:, 1] ~ ()[:, :] }}|{{ x == [1][:, :] ~ ()[:, :] }}|{{ x ~ ([1][:, :] == 1) }}|{{ x ~ (not [1][:, :]) }}|{{ x ~ ([1][:, :] or 2) }}|{{ x ~ ([1][:, :] is undefined or y) }}]"),
+    ("tuple_of_slices_operator_fails", "[{{ x ~ ([1][:, :] + 1) }}]"),
+    ("tuple_of_slices_operator_unary_fails", "[{{ x ~ -[1][:, :] }}]"),
+    ("tuple_of_slices_item_call", "[{{ [1][:, :].x() }}]"),
+    ("tuple_of_slices_item_call_not_evaluated", "[{{ true or [1][:, :].x() }}]"),
+    ("tuple_of_slices_item_test", "[{{ [1][:, :][0] is undefined }}]"),
+    ("tuple_of_slices_item_chainable", "[{{ [1][:, :][0].b is undefined }}|{{ x ~ [1][:, :].a }}]", {"env": {"undefined": "chainable"}}),
+    ("tuple_of_slices_item_strict", "[{{ true or [1][:, :][0] }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_item_fails", "[{{ [1][:, :][0] }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_operator_impossible", "[{{ true if 1 else ()[:, :] + 1 }}|{{ true if 1 else ()[:, :] == 1 }}|{{ true if 1 else not ()[:, :] }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_concat_inside", "{% set q = 1 if true else (()[:, :] ~ 'a') %}[{{ q }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_and", "[{{ 1 if true else (true and ()[:, :]) }}]", {"env": {"undefined": "strict"}}),
+    # an output folds whole first (visit_Output), top-down; the optimizer folds a statement's
+    # expression, or an output's that did not fold, bottom-up, where `and`, `or` and `~` let a
+    # strict undefined's error out and a filter, a test or an operator gives Impossible
+    ("tuple_of_slices_strict_output_first", "[{{ ()[:, :] ~ 1 if false else 2 }}|{{ 1 if true else (()[:, :] or 1) }}|{{ 1 or ()[:, :]|trim }}|{{ true if 1 else ()[:, :]|length }}|{{ true if 1 else ()[:, :][0] }}|{% print 1 if true else (()[:, :] and 1), 2 %}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_statement_bottom_up", "{% set q = ()[:, :] ~ 1 if false else 2 %}[{{ q }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_output_bottom_up", "[{{ x ~ (()[:, :] ~ 1) }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_statement_filter", "{% set q = 1 if true else ()[:, :]|length %}[{{ q }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_chainable_nested", "[{{ [1][:, :][:, :] is undefined }}|{{ [1][:, :].a[:, :] }}|{{ [1][:, :][:, :] }}]", {"env": {"undefined": "chainable"}}),
+    # the parts of a tuple of slices of a ChainableUndefined are evaluated (Codex on #880)
+    ("tuple_of_slices_chainable_failing_part", "[{{ [1][:, :][:, 1 / 0] }}]", {"env": {"undefined": "chainable"}}),
+    ("tuple_of_slices_nested_default", "[{{ [1][:, :][:, :] is undefined }}]"),
+    # a step of a filter chain folds on its own; the engine's candidate is the whole chain (0497)
+    ("tuple_of_slices_chain_step", "[{% if [1][:, :]|sort|first %}y{% endif %}]"),
+    ("tuple_of_slices_chain_step_strict", "[{% if [1][:, :]|default([])|map('string') %}y{% endif %}]", {"env": {"undefined": "strict"}}),
 ]
