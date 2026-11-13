@@ -707,6 +707,20 @@ TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopRunsItsOldBody)
     EXPECT_EQ((std::vector<std::string>{ "[][1]1", "[[2]2[3]3]A[1]A1", "[A[2]A2A[3]A3]B[1]B1" }), results);
 }
 
+// A stored macro of a tree a later call let go of makes a macro that keeps that tree too (Codex review of #884)
+TEST_F(TemplateModuleChangingSourceTest, MacroMadeByAStoredMacroOfAReleasedTree)
+{
+    const auto results = CallWithLibs("{% set ns = namespace(f=none, g=none) %}{% macro m() %}[{% include 'lib' %}]{% endmacro %}",
+                                      { "",
+                                        "{% macro f() %}{% macro g() %}G{{ 'long enough to leave small string storage' }}{% endmacro %}{% set ns.g = g %}{% endmacro %}{% set ns.f = f %}",
+                                        "3",
+                                        "{% set _ = ns.f() %}{% set ns.f = none %}{{ ns.g() }}",
+                                        "5",
+                                        "{{ ns.g() }}" });
+    const std::string g = "Glong enough to leave small string storage";
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[]", "[3]", "[" + g + "]", "[5]", "[" + g + "]" }), results);
+}
+
 // A value a call stored from the template, text and containers of literals, outlives the tree it came from
 TEST_F(TemplateModuleChangingSourceTest, StoredLiteralsOutliveTheirTree)
 {

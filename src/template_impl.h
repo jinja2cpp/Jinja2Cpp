@@ -1309,6 +1309,15 @@ private:
                     return owner;
                 }
             }
+            // A tree PruneReplaced let go of that a value still keeps: a stored macro of it makes a
+            // new one (Codex review of #884). A live tree's address is not reused
+            for (const auto& [view, weak] : m_loaded->released)
+            {
+                if (view == nodes)
+                {
+                    return weak.lock();
+                }
+            }
             return nullptr;
         }
 
@@ -1351,6 +1360,9 @@ private:
                 named.push_back(entry.second);
             }
             std::sort(named.begin(), named.end(), std::less<>());
+            // The released trees that went since
+            loaded.released.erase(std::remove_if(loaded.released.begin(), loaded.released.end(), [](const auto& entry) { return entry.second.expired(); }),
+                                  loaded.released.end());
             for (auto p = loaded.replaced.begin(); p != loaded.replaced.end();)
             {
                 const LoadTemplateResult* result = &*p;
@@ -1358,6 +1370,21 @@ private:
                 {
                     ++p;
                     continue;
+                }
+                // A tree a value still keeps alive stays findable by TreeOwner while it lives (an
+                // entry of a tree nothing keeps expires with the erase); when noting it cannot
+                // allocate, the tree stays in `replaced` until a later pass
+                if (auto [nodes, owner] = TreeOf(*p); owner)
+                {
+                    try
+                    {
+                        loaded.released.emplace_back(nodes, owner);
+                    }
+                    catch (const std::bad_alloc&)
+                    {
+                        ++p;
+                        continue;
+                    }
                 }
                 p = loaded.replaced.erase(p);
             }
@@ -1445,6 +1472,26 @@ private:
                 },
                 lhs);
         }
+        // The tree of `result`'s template and its owner, both empty for a failed load
+        static std::pair<ArenaView, std::shared_ptr<const void>> TreeOf(const LoadTemplateResult& result)
+        {
+            return std::visit(
+                [](const auto& loaded) -> std::pair<ArenaView, std::shared_ptr<const void>> {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        return {};
+                    }
+                    else
+                    {
+                        if (!loaded)
+                        {
+                            return {};
+                        }
+                        return { loaded.value()->Nodes(), std::shared_ptr<const void>(loaded.value()) };
+                    }
+                },
+                result);
+        }
         // The owner of `result`'s template when its tree is `nodes`
         static std::shared_ptr<const void> OwnerIfTree(const LoadTemplateResult& result, const ArenaView& nodes)
         {
@@ -1490,6 +1537,8 @@ private:
             std::unordered_map<std::string, LoadedTemplate> byName;
             // Results that are not the first for their name: templates reloaded during the render
             std::list<LoadTemplateResult> replaced;
+            // The trees PruneReplaced took out of `replaced` that a value still kept alive (TreeOwner)
+            std::vector<std::pair<ArenaView, std::weak_ptr<const void>>> released;
             // The errors of names that are not strings, which no statement keeps past its throw
             std::list<LoadTemplateResult> invalidNames;
             // The trees of the templates above, and of the rendered one, that handles link to
