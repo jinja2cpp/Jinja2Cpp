@@ -202,6 +202,40 @@ void CycleCollector::CollectExport(std::vector<ValueObjectPtr> roots) noexcept
     CollectFrom(std::move(roots));
 }
 
+bool DroppedExports::Hand(InternalValue&& container) noexcept
+{
+    const std::scoped_lock lock(m_mutex);
+    if (m_closed)
+    {
+        return false;
+    }
+    try
+    {
+        m_dropped.push_back(std::move(container));
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the container goes with the caller's reference; a cycle it closes leaks
+    {
+    }
+    return true;
+}
+
+std::vector<InternalValue> DroppedExports::Take() noexcept
+{
+    std::vector<InternalValue> taken;
+    const std::scoped_lock lock(m_mutex);
+    taken.swap(m_dropped);
+    return taken;
+}
+
+std::vector<InternalValue> DroppedExports::Close() noexcept
+{
+    std::vector<InternalValue> taken;
+    const std::scoped_lock lock(m_mutex);
+    m_closed = true;
+    taken.swap(m_dropped);
+    return taken;
+}
+
 bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names)
 {
     auto* collector = s_current;

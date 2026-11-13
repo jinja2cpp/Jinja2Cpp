@@ -28,6 +28,7 @@ class BorrowedCell;
 class BorrowedCells;
 class CallExports;
 class CycleCollector;
+class DroppedExports;
 
 #ifdef _MSC_VER
 #define JINJA2CPP_CELL_UNLIKELY(cond) (cond)
@@ -391,10 +392,8 @@ using CellTable = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const
 class CallExports final
 {
 public:
-    explicit CallExports(const BorrowedCells& registry) noexcept
-        : m_registry(&registry)
-    {
-    }
+    // Defined after BorrowedCells
+    explicit CallExports(const BorrowedCells& registry) noexcept;
     CallExports(const CallExports&) = delete;
     CallExports(CallExports&&) = delete;
     CallExports& operator=(const CallExports&) = delete;
@@ -413,6 +412,9 @@ public:
     // cell of `identity` copied, which a view then reads (docs/tasks/0361); null otherwise, and
     // when even keeping the sources failed
     [[nodiscard]] const InternalValue* HostSource(const void* identity, bool isList) const noexcept;
+    // Where a view of a list or dict the template owns hands it when the host lets go of the view
+    // while the module may still write it (docs/tasks/0480); expired once the module has gone
+    [[nodiscard]] const std::weak_ptr<DroppedExports>& Dropped() const noexcept { return m_dropped; }
 
 private:
     friend class BorrowedCell;
@@ -447,6 +449,8 @@ private:
 
     // The registry while the call runs, null once pinned
     const BorrowedCells* m_registry;
+    // The module's, from the registry (BorrowedCells::SetDroppedExports)
+    std::weak_ptr<DroppedExports> m_dropped;
     // The cells the values read, by their data's identity, as handed out: a run of the same data
     // is noted once, other repeats when the call ends
     SmallVector<std::pair<const void*, bool>, 1> m_cells;
@@ -467,6 +471,10 @@ private:
 //
 // The first export of a call makes its CallExports in one allocation with the view returned; a
 // null `identity` notes that the call handed out a list or dict the template owns
+// The lists and dicts a template module's calls made that the host let go of once nothing writes
+// them any more (the module has gone): a walk from their items frees a cycle among them, as a
+// render's host copy does (docs/tasks/0424, 0480)
+void CollectDroppedExports(std::vector<InternalValue> containers) noexcept;
 GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container);
 GenericMap ExportCallMap(BorrowedCells& call, const void* identity, InternalValue container);
 // A later view, or one of nested data, of the same call's exports
@@ -623,6 +631,9 @@ public:
     [[nodiscard]] const std::shared_ptr<CallExports>& Exports() const noexcept { return m_exports; }
     // The first value the call hands out made `exports`, which ExportCallList shares with it
     void AdoptExports(std::shared_ptr<CallExports> exports) noexcept;
+    // A template module's registry: the exports of its calls hand `dropped` the containers the
+    // host lets go of (CallExports::Dropped, docs/tasks/0480)
+    void SetDroppedExports(std::weak_ptr<DroppedExports> dropped) noexcept { m_dropped = std::move(dropped); }
     // A value handed out reads the cell of `identity`, or, for a null identity, a list or dict the
     // template owns. The caller makes the value first and commits it after: a note that cannot
     // allocate then leaves no trace (docs/tasks/0338, step D)
@@ -671,6 +682,8 @@ private:
     uint32_t m_lastCall = 0;
     // What the running call handed out, made on its first export
     std::shared_ptr<CallExports> m_exports;
+    // A template module's DroppedExports, empty for a render's registry
+    std::weak_ptr<DroppedExports> m_dropped;
     // The call-scoped cells that values of the module still read when their call ended
     // (FreezeCallScoped): a cycle through one is out of the reach of the module's names, so Release
     // gives them to the module's collector. Pruned of the cells nothing else holds at each call's end,
@@ -680,6 +693,12 @@ private:
     size_t m_callFrozenWalkAt = MinCallFrozenWalk;
     static constexpr size_t MinCallFrozenWalk = 8;
 };
+
+inline CallExports::CallExports(const BorrowedCells& registry) noexcept
+    : m_registry(&registry)
+    , m_dropped(registry.m_dropped)
+{
+}
 
 } // namespace v2
 } // namespace jinja2

@@ -390,7 +390,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
 
     explicit TemplateModuleState(std::shared_ptr<const Impl> tpl)
         : impl(std::move(tpl))
+        , dropped(std::make_shared<DroppedExports>())
     {
+        cells.SetDroppedExports(dropped);
     }
     TemplateModuleState(const TemplateModuleState&) = delete;
     TemplateModuleState(TemplateModuleState&&) = delete;
@@ -406,6 +408,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         // What only the copies the closures kept held is freed rather than counted as held; a
         // cycle among it is noted first (docs/tasks/0407)
         CycleCollector cycles;
+        NoteDropped();
         try
         {
             kept.NoteNames();
@@ -433,7 +436,28 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         cycles.WalkFromEveryNote();
         module.reset();
         callback.reset();
+        // What the host let go of during the walk: nothing writes it any more
+        CollectDroppedExports(dropped->Close());
     }
+
+    // Notes to the collector running on this thread the containers of the module's calls that the
+    // host let go of since (DroppedExports): its walk frees a cycle among them. When noting one
+    // cannot allocate, a cycle through it and the rest leaks
+    void NoteDropped() noexcept
+    {
+        auto values = dropped->Take();
+        try
+        {
+            for (const auto& value : values)
+            {
+                CycleCollector::NoteStore(value);
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+        {
+        }
+    }
+
 
     [[nodiscard]] RenderLimitsScope MakeLimitsScope() const
     {
@@ -530,6 +554,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         {
             // First, so that it ends last: when nothing of the call holds values any more
             ModuleCallCollector cycles(cells, kept, &LiveRoots, this);
+            // The containers of earlier calls the host let go of: this call's walk frees a cycle
+            // among them (docs/tasks/0480)
+            NoteDropped();
             // Then what the call loads, which its collector sees go
             const CallScope callScope(*callback);
             // Then the module's context as the call found it, which a failed call would leave
@@ -636,6 +663,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     KeptObjects kept;
     // Calls of the exports take turns: the context is not shared by concurrent calls
     std::recursive_mutex mutex;
+    // The containers its calls handed out that the host let go of (docs/tasks/0480); the views
+    // hold it weakly. Closed by the destructor
+    std::shared_ptr<DroppedExports> dropped;
 };
 
 namespace

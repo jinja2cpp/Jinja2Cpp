@@ -978,3 +978,66 @@ TEST_F(TemplateModuleTest, SelfHoldingListALaterCallDrops)
         EXPECT_EQ("1", Call(module.exports["n"]).AsString());
     }
 }
+
+// 0480: a container that holds itself, which a module's call hands a host callable that keeps it,
+// goes when the host lets go of it (LSan): after the module, before it, and before a later call
+TEST_F(TemplateModuleTest, KeptSelfHoldingExportGoesWithTheHostsValue)
+{
+    // clang-format off
+    const char* const sources[] = {
+        "{% macro m() %}{% set xs = [1] %}{% set _ = xs.append(xs) %}{% set d = {'a': 1} %}{% set _ = d.update(d=d) %}"
+        "{% set _ = keep(xs) %}{% set _ = keep(d) %}{% endmacro %}",
+        "{% macro m() %}{% set ns = namespace(a=1) %}{% set ns.self = ns %}{% set _ = keep(ns) %}{% endmacro %}",
+        "{% macro m() %}{% set xs = [1] %}{% set d = {'l': xs} %}{% set _ = xs.append(d) %}{% set _ = keep(d) %}{% endmacro %}",
+        // Stored in the module's values too: a later call reads it
+        "{% set ns = namespace(v=none) %}{% macro m() %}{% set xs = [1] %}{% set _ = xs.append(xs) %}{% set ns.v = xs %}"
+        "{% set _ = keep(xs) %}{% endmacro %}",
+        // The module's cell of the host's list `p`
+        "{% macro m() %}{% set _ = p.append(p) %}{% set _ = keep(p) %}{% endmacro %}",
+        "{% macro m() %}{% set xs = [p] %}{% set _ = p.append(xs) %}{% set _ = keep(xs) %}{% endmacro %}",
+    };
+    // clang-format on
+    enum class Order
+    {
+        ModuleFirst,
+        HostFirst,
+        HostThenCall,
+    };
+    for (const auto* source : sources)
+    {
+        for (const auto order : { Order::ModuleFirst, Order::HostFirst, Order::HostThenCall })
+        {
+            SCOPED_TRACE(std::string(source) + " order " + std::to_string(static_cast<int>(order)));
+            auto kept = std::make_shared<std::vector<jinja2::Value>>();
+            jinja2::ValuesMap params;
+            params["keep"] = jinja2::UserCallable(
+              [kept](const jinja2::UserCallableParams& p) {
+                  kept->push_back(p["x"]);
+                  return jinja2::Value();
+              },
+              { jinja2::ArgInfo{ "x" } });
+            params["p"] = jinja2::ValuesList{ 1 };
+            auto module = std::make_unique<jinja2::TemplateModule>(Make(source, params));
+            Call(module->exports["m"]);
+            Call(module->exports["m"]);
+            ASSERT_FALSE(kept->empty());
+            for (const auto& value : *kept)
+            {
+                EXPECT_TRUE(value.GetIf<jinja2::GenericList>() || value.GetIf<jinja2::GenericMap>());
+            }
+            if (order == Order::ModuleFirst)
+            {
+                module.reset();
+                kept->clear();
+                continue;
+            }
+            kept->clear();
+            if (order == Order::HostThenCall)
+            {
+                Call(module->exports["m"]);
+                kept->clear();
+            }
+            module.reset();
+        }
+    }
+}

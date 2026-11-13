@@ -1583,6 +1583,10 @@ Value ExportItem(const Value& item, const std::shared_ptr<const void>& owner)
 // the same kind, for the module's data in its items
 Value CallExportItem(const CallExports& exports, const InternalValue& item);
 
+// The host lets go of a view of the list or dict `container` that a template module's call made
+// (CallListView, CallMapView): it may hold itself, or reach a container that does (docs/tasks/0480)
+void LetGoOfExport(const CallExports& exports, InternalValue&& container) noexcept;
+
 class CallListView final : public IListItemAccessor
     , public IIndexBasedAccessor
 {
@@ -1626,6 +1630,11 @@ public:
         , m_container(std::move(container))
     {
     }
+    CallListView(const CallListView&) = delete;
+    CallListView(CallListView&&) = delete;
+    CallListView& operator=(const CallListView&) = delete;
+    CallListView& operator=(CallListView&&) = delete;
+    ~CallListView() override { LetGoOfExport(m_exports, std::move(m_container)); }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override
     {
@@ -1707,6 +1716,11 @@ public:
         , m_container(std::move(container))
     {
     }
+    CallMapView(const CallMapView&) = delete;
+    CallMapView(CallMapView&&) = delete;
+    CallMapView& operator=(const CallMapView&) = delete;
+    CallMapView& operator=(CallMapView&&) = delete;
+    ~CallMapView() override { LetGoOfExport(m_exports, std::move(m_container)); }
 
     [[nodiscard]] size_t GetSize() const override
     {
@@ -2865,6 +2879,110 @@ void AddTraversableItems(const TemplateDict& items, std::vector<ValueObjectPtr>&
     }
     items.ForEachKeyValue([&roots](const InternalValue& key) { AddTraversable(key, roots); });
 }
+
+// The traversable objects among the items of `container`, a list or dict the template owns, or
+// false when it is no such container
+bool AddContainerItems(const InternalValue& container, std::vector<ValueObjectPtr>& roots)
+{
+    if (const auto list = AsList(container))
+    {
+        const auto* items = list->GetMutableItems();
+        if (items)
+        {
+            AddTraversableItems(*items, roots);
+        }
+        return items != nullptr;
+    }
+    if (const auto map = AsMap(container))
+    {
+        const auto* items = map->GetMutableItems();
+        if (items)
+        {
+            AddTraversableItems(*items, roots);
+        }
+        return items != nullptr;
+    }
+    return false;
+}
+
+// Whether `container`, whose object is `object`, is the only reference to that object and to the
+// items: then nothing else reads or writes them
+bool OwnsExportAlone(const InternalValue& container, const ValueObject& object)
+{
+    // Read first: OwnObjectOf takes a reference too
+    if (object.use_count() != 1 || OwnObjectOf(container).get() != &object)
+    {
+        return false;
+    }
+    if (const auto list = AsList(container))
+    {
+        const auto* accessor = list->GetAccessor();
+        return accessor && accessor == &object && accessor->OwnsMutableItemsAlone();
+    }
+    const auto map = AsMap(container);
+    const auto* accessor = map ? map->GetAccessor() : nullptr;
+    return accessor && accessor == &object && accessor->OwnsMutableItemsAlone();
+}
+
+void LetGoOfExport(const CallExports& exports, InternalValue&& container) noexcept
+{
+    const auto* object = detail::InternalValueAccess::Object(container);
+    if (!object || !object->IsTraversable())
+    {
+        return;
+    }
+    std::vector<ValueObjectPtr> roots;
+    try
+    {
+        // Nothing but this view holds the container or its items, so that nothing else reads or
+        // writes them: with no container among the items, it goes with the view, now
+        if (OwnsExportAlone(container, *object) && AddContainerItems(container, roots) && roots.empty())
+        {
+            return;
+        }
+        roots.clear();
+        // While the module lives, its later calls may write the container, on another thread:
+        // its next call walks from it, or the module when it goes
+        auto dropped = exports.Dropped().lock();
+        if (dropped && dropped->Hand(std::move(container)))
+        {
+            return;
+        }
+        // A module that has gone writes nothing any more: as a render's host copy (HostCopy)
+        if (!dropped && !CycleCollector::IsToken(exports.Dropped()))
+        {
+            // Not a module's: nothing walks it
+            return;
+        }
+        AddContainerItems(container, roots);
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the walk starts from the roots found; a cycle through the others leaks
+    {
+    }
+    container = InternalValue();
+    CycleCollector::CollectExport(std::move(roots));
+}
+} // namespace
+
+void CollectDroppedExports(std::vector<InternalValue> containers) noexcept
+{
+    std::vector<ValueObjectPtr> roots;
+    try
+    {
+        for (const auto& container : containers)
+        {
+            AddContainerItems(container, roots);
+        }
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the walk starts from the roots found; a cycle through the others leaks
+    {
+    }
+    containers.clear();
+    CycleCollector::CollectExport(std::move(roots));
+}
+
+namespace
+{
 
 // The host's copy of a list, dict or namespace that a render made (CreateGenericList,
 // CreateGenericMap), which shares the template's items. While the host holds it, the render's
