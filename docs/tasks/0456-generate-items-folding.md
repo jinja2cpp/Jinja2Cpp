@@ -38,10 +38,13 @@ call). Add the cases to
 
 **Result (parity batch 7).** A body that writes each piece (`ComposedRenderer::RenderNodes<true>`) asks
 each node what it is as a piece (`PieceOf`): template text outside volatile code and a `{{ }}` whose
-expression Jinja2 folds (`Expression::PrepareFold`, kept in the ExpressionRenderer at Load) run together
-into one piece; any other output node (a `{{ }}` evaluated at run time, a filter or call block) ends
+expression is a literal (`Expression::GetConstant`, kept in the ExpressionRenderer at Load) run together
+into one piece, as do the folded values of volatile code and of a finalize; any other output node (a `{{ }}` evaluated at run time, a filter or call block) ends
 its piece with `OutStream::FlushPiece`, which writes an empty piece too. `PieceHold` now covers
 `super()`, `self.b()` and a recursive loop, and holds what overflows the buffer until the piece ends
 (`OutStream::m_held`, counted as written for the output limit), so a long macro is one Write. All the
 cases above match Jinja2 3.1.6 (OutputTest.SinkGetsThePiecesJinja2Folds, test_generate.py). Left: the
-items' Markup type (0493).
+items' Markup type (0493), and a `{{ }}` Jinja2 folds that is no literal (`{{ 1 + 2 }}`, `{{ 'q'|upper }}`,
+`{{ [1, 'a'] }}`, `{{ 1 if true else y }}`) is a piece of its own here: deciding it walks the expression
+(PrepareFold), which cost Load/expressions 3.2% in the instruction gate, more than the generate() split
+is worth; generate()'s text is the same either way.

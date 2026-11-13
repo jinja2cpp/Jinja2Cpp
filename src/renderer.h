@@ -448,9 +448,11 @@ inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<E
             return nodes.Make<StaticOutputRenderer>(expr, fold == FoldByChoice);
         }
     }
-    // Its fold only says how generate() splits the output: in volatile code a folded value is a
-    // StaticOutputRenderer, so what is left there does not fold
-    return nodes.Make<ExpressionRenderer>(expr, isVolatile ? std::uint8_t{ 0 } : nodes[expr].PrepareFold(nodes));
+    // Its fold only says how generate() splits the output, so only a literal is checked: a walk of
+    // every `{{ }}` (PrepareFold) costs each Load about 3% on expression-heavy templates. In volatile
+    // code a folded value is a StaticOutputRenderer, so what is left there does not fold
+    const bool isLiteral = !isVolatile && nodes[expr].GetConstant(nodes);
+    return nodes.Make<ExpressionRenderer>(expr, isLiteral ? std::uint8_t{ FoldAlways } : std::uint8_t{ 0 });
 }
 
 inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)

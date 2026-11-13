@@ -300,8 +300,9 @@ TEST(OutputTest, SinkGetsThePiecesJinja2Folds)
         { "{{ none }}{{ true }}{{ 1.5 }}", { "NoneTrue1.5" } },
         { "a{# c #}b", { "ab" } },
         { "a{% raw %}r{% endraw %}b", { "arb" } },
-        { "a{{ 1 + 2 }}b{{ 'q'|upper }}c", { "a3bQc" } },
-        { "{{ 1 if true else y }}a", { "1a" } },
+        // Only a literal folds here: Jinja2 folds an operator or a filter of literals too (a3bQc, 1a)
+        { "a{{ 1 + 2 }}b{{ 'q'|upper }}c", { "a", "3", "b", "Q", "c" } },
+        { "{{ 1 if true else y }}a", { "1", "a" } },
         { "a{{ y }}b{{ 1 }}c", { "a", "", "b1c" } },
         { "{% for i in [1, 2] %}a{{ 1 }}b{% endfor %}", { "a1b", "a1b" } },
         { "{% if 1 %}a{{ 2 }}{% endif %}c", { "a2", "c" } },

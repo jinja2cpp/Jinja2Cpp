@@ -151,6 +151,7 @@ public:
             {
                 os.m_eachPiece = false;
                 os.m_holding = true;
+                os.m_heldPending = true;
             }
         }
         ~PieceHold()
@@ -159,6 +160,7 @@ public:
             {
                 m_os.m_eachPiece = true;
                 m_os.m_holding = false;
+                m_os.m_heldPending = !m_os.m_held.empty();
             }
         }
         PieceHold(const PieceHold&) = delete;
@@ -230,7 +232,7 @@ private:
     void FlushBuffer();
     void AppendToTarget(const void* ptr, size_t bytes);
     void WriteToSink(const void* ptr, size_t bytes);
-    void WriteHeld(const void* ptr, size_t bytes);
+    void WriteHeldToSink(const void* ptr, size_t bytes);
     void WriteSinkChunk(const void* ptr, size_t bytes, size_t newLength);
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
@@ -258,6 +260,8 @@ private:
     bool m_eachPiece = false;
     // A PieceHold of a stream that writes each piece lives
     bool m_holding = false;
+    // m_holding, or bytes are held (m_held): the one test the sink's path makes
+    bool m_heldPending = false;
 };
 
 // Renders into a new string with `render(OutStream&)` and returns it

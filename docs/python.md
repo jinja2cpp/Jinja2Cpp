@@ -487,7 +487,9 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   Windows and x86-64 or AArch64 Linux, macOS and the BSDs, under a CET or GCS shadow stack, past 8
   generators nested in each other's callables on a thread, or when no stack can be reserved.
 - `generate()` yields `str` items where Jinja2 yields the `Markup` an autoescaped value becomes
-  (`{{ x }}` under autoescape); the text of each item is Jinja2's (0493).
+  (`{{ x }}` under autoescape); the text of each item is Jinja2's (0493). Jinja2 folds a constant
+  expression that is not a literal (`a{{ 1 + 2 }}b`) into the text around it, one item; here it is
+  an item of its own (0456).
 - A Python loader's `get_source` runs again when a template it gave fails to compile, to show
   the line of the error (twice more with the default fallback, which loads it through Jinja2);
   Jinja2 calls it once.

@@ -32,9 +32,9 @@ void OutStream::FlushBuffer()
         AppendToTarget(m_buffer, static_cast<size_t>(m_cur - m_buffer));
         m_cur = m_buffer;
     }
-    else if (!m_held.empty() && !m_holding)
+    else if (m_heldPending && !m_holding)
     {
-        WriteToSink(m_buffer, 0);
+        WriteHeldToSink(m_buffer, 0);
     }
 }
 
@@ -75,18 +75,10 @@ void OutStream::AppendToTarget(const void* ptr, size_t bytes)
 
 void OutStream::WriteToSink(const void* ptr, size_t bytes)
 {
-    if (m_holding)
+    // One flag on the usual path: a held piece is the rare case (writeEachPiece and a PieceHold)
+    if (m_heldPending)
     {
-        WriteHeld(ptr, bytes);
-        return;
-    }
-    if (!m_held.empty())
-    {
-        // The held piece has ended: it goes in one Write with what follows it in the piece
-        const std::string piece = std::move(m_held.append(static_cast<const char*>(ptr), bytes));
-        m_held.clear();
-        // The held part is counted already (WriteHeld)
-        WriteSinkChunk(piece.data(), piece.size(), bytes / m_charSize);
+        WriteHeldToSink(ptr, bytes);
         return;
     }
     // A sink is given an empty chunk only for an empty piece (FlushPiece)
@@ -97,12 +89,23 @@ void OutStream::WriteToSink(const void* ptr, size_t bytes)
     WriteSinkChunk(ptr, bytes, bytes / m_charSize);
 }
 
-// Counted as written, as the limit on the output (Settings::Limits::maxOutputSize) and the offsets of the
-// generation spans read it: the bytes reach the sink once the piece ends
-JINJA2CPP_NOINLINE void OutStream::WriteHeld(const void* ptr, size_t bytes)
+// A piece is held, or has ended with bytes held (PieceHold): held while it lives, then written with
+// what follows it in the piece in one Write. The held bytes are counted as written when held, as the
+// limit on the output (Settings::Limits::maxOutputSize) and the offsets of the generation spans read
+// the count
+JINJA2CPP_NOINLINE void OutStream::WriteHeldToSink(const void* ptr, size_t bytes)
 {
     m_held.append(static_cast<const char*>(ptr), bytes);
-    m_sinkWritten += bytes / m_charSize;
+    if (m_holding)
+    {
+        m_sinkWritten += bytes / m_charSize;
+        return;
+    }
+    const std::string piece = std::move(m_held);
+    m_held.clear();
+    m_heldPending = false;
+    // The held part is counted already
+    WriteSinkChunk(piece.data(), piece.size(), bytes / m_charSize);
 }
 
 void OutStream::WriteSinkChunk(const void* ptr, size_t bytes, size_t newLength)

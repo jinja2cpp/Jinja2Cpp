@@ -86,8 +86,8 @@ def test_stream_buffers_the_items(mode):
         "{% set s %}a{{ x }}b{% endset %}{{ s }}|{% filter upper %}a{{ x }}{% endfilter %}",
         "{% block b %}B{{ x }}{% endblock %}E{% include 'inc' %}|",
         # docs/tasks/0456: folded constants, empty items, and calls whose value is one item however long
-        "a{{ 1 }}b{{ none }}{{ true }}{{ 1.5 }}c{# d #}e{% raw %}r{% endraw %}{{ 1 + 2 }}{{ 'q'|upper }}",
-        "a{{ y }}b{{ 1 if true else y }}{{ '' }}{% if 1 %}{% endif %}{{ x if not x }}",
+        "a{{ 1 }}b{{ none }}{{ true }}{{ 1.5 }}c{# d #}e{% raw %}r{% endraw %}",
+        "a{{ y }}b{{ '' }}{% if 1 %}{% endif %}{{ x if not x }}",
         "{% macro m() %}{% endmacro %}[{{ m() }}]{% filter upper %}{% endfilter %}{% macro c() %}{{ caller() }}{% endmacro %}{% call c() %}{% endcall %}",
         "{% for i in [[1, [2]], 3] recursive %}({{ i if i is number else loop(i) }}){% endfor %}|{% for i in seq recursive %}{{ i }}{% endfor %}",
         "{% block b %}A{{ 5 }}B{% endblock %}{{ self.b() }}",
