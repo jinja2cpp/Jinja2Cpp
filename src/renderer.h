@@ -138,7 +138,7 @@ private:
                     {
                         if (piece == PieceKind::Statement)
                         {
-                            os.Flush();
+                            os.FlushStatement();
                         }
                         else
                         {
@@ -220,11 +220,8 @@ public:
         refs(m_expression);
     }
 
-    // isLiteral: the expression is a literal, which Jinja2 folds into the text around it (generate()'s
-    // pieces, PieceOf)
-    explicit ExpressionRenderer(NodeRef<Expression> expr, bool isLiteral = false)
+    explicit ExpressionRenderer(NodeRef<Expression> expr)
         : m_expression(expr)
-        , m_isLiteral(isLiteral)
     {
     }
     ExpressionRenderer(const ExpressionRenderer&) = delete;
@@ -235,15 +232,16 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override { values.Nodes()[m_expression].Render(os, values); }
 
-    // Whether the expression is a literal (a plain `{{ }}`; the subclasses say whether they fold themselves)
-    [[nodiscard]] bool IsLiteral() const { return m_isLiteral; }
+    // Whether the expression is a literal, which Jinja2 folds into the text around it (generate()'s pieces,
+    // PieceOf). Asked only by a render that writes each piece, so the tree keeps no flag for it. In volatile
+    // code a folded value is a StaticOutputRenderer, so what is left there does not fold
+    [[nodiscard]] bool IsLiteralAt(RenderContext& values) const;
 
 protected:
     // FinalizedExpressionRenderer derives from it
     ~ExpressionRenderer() = default;
 
     NodeRef<Expression> m_expression;
-    bool m_isLiteral = false;
 };
 
 // finalize(value), finalize being Settings::finalize as a callable
@@ -446,11 +444,16 @@ inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<E
             return nodes.Make<StaticOutputRenderer>(expr, fold == FoldByChoice);
         }
     }
-    // Its fold only says how generate() splits the output, so only a literal is checked: a walk of
-    // every `{{ }}` (PrepareFold) costs each Load about 3% on expression-heavy templates. In volatile
-    // code a folded value is a StaticOutputRenderer, so what is left there does not fold
-    const bool isLiteral = !isVolatile && nodes[expr].GetConstant(nodes) != nullptr;
-    return nodes.Make<ExpressionRenderer>(expr, isLiteral);
+    // Its fold only says how generate() splits the output, so a render that writes each piece checks
+    // for a literal then (ExpressionRenderer::IsLiteralAt): a walk of every `{{ }}` (PrepareFold) costs
+    // each Load about 3% on expression-heavy templates
+    return nodes.Make<ExpressionRenderer>(expr);
+}
+
+inline bool ExpressionRenderer::IsLiteralAt(RenderContext& values) const
+{
+    const auto& nodes = values.Nodes();
+    return !values.IsVolatileAutoescape() && nodes[m_expression].ConstantAt(nodes) != nullptr;
 }
 
 inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
@@ -467,7 +470,7 @@ inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
     case NodeKind::MacroCallStmt:
         return PieceKind::Output;
     case NodeKind::ExprRenderer:
-        return nodes[nodes.As<ExpressionRenderer>(node)].IsLiteral() ? PieceKind::Folded : PieceKind::Output;
+        return nodes[nodes.As<ExpressionRenderer>(node)].IsLiteralAt(values) ? PieceKind::Folded : PieceKind::Output;
     case NodeKind::FinalizedExprRenderer:
         return nodes[nodes.As<FinalizedExpressionRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
     case NodeKind::StaticExprRenderer:
