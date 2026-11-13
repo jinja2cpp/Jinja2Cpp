@@ -944,10 +944,7 @@ TEST_F(AllocationFailureTest, ModuleSortKeepsItsItemsWhenTheCopyFails)
         const auto shown = call("show");
         if (threw)
         {
-            // Known gap (task 0485): with memory spent, the copy the restore needs fails too, and the list is left
-            // empty. Remove the allowance when 0485 lands
-            const bool known = g_exhausted && shown == "[]";
-            ASSERT_TRUE(shown == "[[3], [1], [2]]" || shown == "[[1], [2], [3]]" || known) << shown << " at allocation " << n;
+            ASSERT_TRUE(shown == "[[3], [1], [2]]" || shown == "[[1], [2], [3]]") << shown << " at allocation " << n;
         }
         else
         {

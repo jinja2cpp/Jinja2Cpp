@@ -2370,6 +2370,23 @@ InternalValueList& MutableItems(const InternalValue& self)
     return *items;
 }
 
+// The cell of the module's data `self` reads, if it has one
+const BorrowedCell* ListCell(const InternalValue& self) noexcept
+{
+    try
+    {
+        const auto list = AsList(self);
+        const auto* accessor = list ? list->GetAccessor() : nullptr;
+        const auto* link = accessor ? accessor->GetCellLink() : nullptr;
+        return link ? link->Get(*accessor) : nullptr;
+    }
+    catch (...)
+    {
+        // A link that cannot allocate finds no cell: the restore then copies as before
+        return nullptr;
+    }
+}
+
 InternalValue ListIndex(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "index", 1, 3);
@@ -2515,7 +2532,16 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     }
 
     InternalValueList values;
-    values.swap(MutableItems(self));
+    // A key call's module call can hand the list to the host, and the restore below then needs a
+    // copy of the list to write into (D8). It is made here, before anything changes, so that the
+    // restore does not allocate and a list whose key call failed is as it was (docs/tasks/0485)
+    auto& taken = MutableItems(self);
+    InternalValue spare;
+    if (keyFn && CycleCollector::InModuleCall() && ListCell(self))
+    {
+        spare = InternalValue(ListAdapter::CreateAdapter(InternalValueList{}));
+    }
+    values.swap(taken);
     // The render's memory budget counted the buffer taken here (docs/tasks/0459)
     const std::uint64_t takenCapacity = values.capacity();
     // The items are found again after the key calls: a module call a key function makes can hand
@@ -2525,9 +2551,11 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     {
         const InternalValue& self;
         InternalValueList& values;
-        Restore(const InternalValue& list, InternalValueList& taken)
+        InternalValue& spare;
+        Restore(const InternalValue& list, InternalValueList& taken, InternalValue& spareList)
             : self(list)
             , values(taken)
+            , spare(spareList)
         {
         }
         Restore(const Restore&) = delete;
@@ -2543,13 +2571,18 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
             }
             try
             {
+                // The items the host was handed stay as they are; the list moves to the spare
+                if (auto* cell = AsList(spare) ? ListCell(self) : nullptr)
+                {
+                    cell->UnshareWith(spare);
+                }
                 MutableItems(self).swap(values);
             }
             catch (...) // NOLINT(bugprone-empty-catch): out of memory copying the list's items; it keeps what the key calls left
             {
             }
         }
-    } restore{ self, values };
+    } restore{ self, values, spare };
 
     InternalValueList keys;
     if (keyFn)
