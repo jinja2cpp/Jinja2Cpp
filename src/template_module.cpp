@@ -457,9 +457,12 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     // cannot allocate, a cycle through it and the rest leaks
     void NoteDropped() noexcept
     {
-        NoteDroppedExports(dropped->Take());
+        auto taken = dropped->Take();
+        if (!taken.empty())
+        {
+            NoteDroppedExports(std::move(taken));
+        }
     }
-
 
     [[nodiscard]] RenderLimitsScope MakeLimitsScope() const
     {

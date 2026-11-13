@@ -4,6 +4,7 @@
 #include "borrowed_cells.h"
 #include "internal_value.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -69,6 +70,8 @@ public:
 private:
     std::mutex m_mutex;
     std::vector<InternalValue> m_dropped;
+    // Whether m_dropped may hold a container: a call that finds none takes no lock
+    std::atomic<bool> m_any{ false };
     bool m_closed = false;
 };
 

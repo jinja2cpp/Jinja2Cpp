@@ -1131,11 +1131,11 @@ TEST_F(TemplateModuleTest, KeptSelfHoldingExportGoesWithTheHostsValue)
             auto kept = std::make_shared<std::vector<jinja2::Value>>();
             jinja2::ValuesMap params;
             params["keep"] = jinja2::UserCallable(
-              [kept](const jinja2::UserCallableParams& p) {
-                  kept->push_back(p["x"]);
-                  return jinja2::Value();
-              },
-              { jinja2::ArgInfo{ "x" } });
+                [kept](const jinja2::UserCallableParams& p) {
+                    kept->push_back(p["x"]);
+                    return jinja2::Value();
+                },
+                { jinja2::ArgInfo{ "x" } });
             params["p"] = jinja2::ValuesList{ 1 };
             auto module = std::make_unique<jinja2::TemplateModule>(Make(source, params));
             Call(module->exports["m"]);

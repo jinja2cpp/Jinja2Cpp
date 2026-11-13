@@ -3004,7 +3004,8 @@ CallExports::~CallExports()
     // The module's cell may hold itself through the storage the host's views read last, which
     // nothing walks once the module has gone; while it lives, its own walk reaches the cell. The
     // sources a failed call kept are the host's data (docs/tasks/0480)
-    if (m_failed)
+    // Most calls end while their module lives: then nothing to do, at the cost of a load
+    if (m_failed || m_pins.empty() || !m_dropped.expired())
     {
         return;
     }

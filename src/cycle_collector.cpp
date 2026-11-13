@@ -212,6 +212,7 @@ bool DroppedExports::Hand(InternalValue& container) noexcept
     try
     {
         m_dropped.push_back(std::move(container));
+        m_any.store(true, std::memory_order_release);
     }
     catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the container goes with the caller's reference; a cycle it closes leaks
     {
@@ -222,7 +223,13 @@ bool DroppedExports::Hand(InternalValue& container) noexcept
 std::vector<InternalValue> DroppedExports::Take() noexcept
 {
     std::vector<InternalValue> taken;
+    // A container handed after this load waits for the next call
+    if (!m_any.load(std::memory_order_acquire))
+    {
+        return taken;
+    }
     const std::scoped_lock lock(m_mutex);
+    m_any.store(false, std::memory_order_relaxed);
     taken.swap(m_dropped);
     return taken;
 }
