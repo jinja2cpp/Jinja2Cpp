@@ -73,6 +73,9 @@ CASES = [
     ("list_clear_copy", "{% set x = [1, 2] %}{% set y = x.copy() %}{% do x.clear() %}{{ x }}{{ y }}", {"env": {"extensions": ["do"]}}),
     ("list_pop_empty", "{{ [].pop() }}"),
     ("list_extend_self", "{% set x = [1, 2] %}{% do x.extend(x) %}{{ x }}", {"env": {"extensions": ["do"]}}),
+    # task 0489: extend takes any iterable
+    ("list_extend_iterables", "{% set x = [] %}{% do x.extend('ab') %}{% do x.extend({'k': 1}) %}{% do x.extend({'v': 2}.values()) %}{% do x.extend(range(2)) %}{{ x }}", {"env": {"extensions": ["do"]}}),
+    ("list_extend_int", "{% set x = [] %}{% do x.extend(1) %}{{ x }}", {"env": {"extensions": ["do"]}}),
     ("list_pop_chain", "{{ l.pop().bit_length() }}{{ l }}"),
     # Reference semantics: lists and dicts are shared, as in Python
     ("list_accumulate", "{% set x = [] %}{% for i in range(3) %}{% do x.append(i) %}{% endfor %}{{ x }}", {"env": {"extensions": ["do"]}}),

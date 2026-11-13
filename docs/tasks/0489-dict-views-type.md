@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/879
 priority: low
 area: parity
 depends: [0475]
@@ -29,3 +30,22 @@ for, so nothing is lost there.
 
 **Done when** `operators.dict_items_times_int` matches and its divergence line is gone, with cases
 for the repr and the comparison.
+
+**Resolution.** `IteratorKind` gained `DictKeys`, `DictValues` and `DictItems`, which
+`d.keys()`, `values()` and `items()` set on the list they return. A view kind is no iterator
+(`IteratorTypeName` stays null) but takes the iterator paths that fit Python's views: no items,
+slices, list methods, `+` or `*`, no `is sequence`, unhashable as a dict key. It keeps `len()`
+(`length`, `truncate`) and `reversed()` (`dict_keys` reverses into a `dict_reversekeyiterator`,
+values and items into a `list_reverseiterator`, see 0496). `DictViewTypeName` names it for repr
+(`dict_keys([...])`), `PythonTypeName`, `%`/format, `tojson`'s error, `random`'s "not
+subscriptable" and `__class__` (`dict_keys`, `dict_values`, `dict_items` joined the class table).
+
+Comparison follows Python, not a deliberate divergence: two set-like views (keys, items, of
+either kind) compare as sets, by length and one token lookup per item (`AllInDictView`, linear,
+not quadratic); `dict_values` and a view against a list equal only by identity; ordering is a
+set comparison between set-like views and a TypeError otherwise. `isdisjoint` is the one view
+method (keys and items). `list.extend` now takes any iterable (a string, a dict), which the same
+iterable conversion `isdisjoint` needed showed missing.
+
+Cases: `operators.dict_view*`, `operators.list_plus_dict_view`, `operators.dict_values_*`,
+`methods.list_extend_iterables`, `methods.list_extend_int`. Leftovers: 0496.

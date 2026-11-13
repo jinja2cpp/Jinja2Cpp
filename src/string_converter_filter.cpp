@@ -1874,9 +1874,9 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
     {
         size = map->GetSize();
     }
-    else if (auto list = AsList(baseVal); list && list->GetIteratorKind() == IteratorKind::None)
+    else if (auto list = AsList(baseVal); list && !IteratorTypeName(list->GetIteratorKind()))
     {
-        // A generator has no len() (docs/tasks/0401)
+        // A generator has no len() (docs/tasks/0401), a dict view has (docs/tasks/0489)
         size = list->GetSize();
     }
     if (!size)

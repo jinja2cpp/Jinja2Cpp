@@ -130,7 +130,13 @@ enum class IteratorKind : uint8_t
     BatchGenerator,
     SliceGenerator,
     UniqueGenerator,
-    ItemsGenerator
+    ItemsGenerator,
+    // Not iterators: the views dict.keys(), values() and items() return (docs/tasks/0489). They
+    // have len(), `in` and reversed() but, as an iterator, no items, slices, list methods or
+    // `+` and `*`; they print as dict_keys([...]) and compare as their own kind does
+    DictKeys,
+    DictValues,
+    DictItems
 };
 
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
@@ -635,10 +641,12 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
-static_assert(static_cast<uint8_t>(IteratorKind::ItemsGenerator) < 16, "IteratorKind fits four bits of ValueObject's flags");
+static_assert(static_cast<uint8_t>(IteratorKind::DictItems) < 16, "IteratorKind fits four bits of ValueObject's flags");
 
-// The Python type of an iterator (generator, list_reverseiterator, ...), null for None
+// The Python type of an iterator (generator, list_reverseiterator, ...), null for None and a dict view
 const char* IteratorTypeName(IteratorKind kind) noexcept;
+// The Python type of a dict view (dict_keys, dict_values, dict_items), null for the other kinds
+const char* DictViewTypeName(IteratorKind kind) noexcept;
 // The function a generator's repr names (select_or_reject); null for the other kinds
 const char* GeneratorFunctionName(IteratorKind kind) noexcept;
 
