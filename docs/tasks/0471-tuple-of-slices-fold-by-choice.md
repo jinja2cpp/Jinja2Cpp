@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0445]
 touches: [src/expression_parser.cpp#Parse]
 shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt, python/tests/test_fallback.py]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/865
 ---
 # Tuple-of-slices subscripts: folds the engine decides differently from Jinja2
 

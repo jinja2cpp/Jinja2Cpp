@@ -532,9 +532,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
 | [0463](0463-outer-render-sees-nested-global-write.md) | The outer render does not see a global a nested render changed first | robustness | low | open |
 | [0464](0464-lower-upper-tests-cased-letters.md) | `lower` and `upper` tests: a string with no cased letter is neither | parity | medium | done |
-| [0465](0465-dotted-filter-test-names.md) | Dotted filter and test names (`x|ns.f`, `x is ns.t`) | parity | low | open |
+| [0465](0465-dotted-filter-test-names.md) | Dotted filter and test names (`x|ns.f`, `x is ns.t`) | parity | low | done |
 | [0466](0466-python-format-map-native-attribute.md) | The Python module answers format_map from NativeAttribute, which the engine now has | python | low | done |
-| [0471](0471-tuple-of-slices-fold-by-choice.md) | Tuple-of-slices subscripts: folds the engine decides differently from Jinja2 | parity | low | open |
+| [0471](0471-tuple-of-slices-fold-by-choice.md) | Tuple-of-slices subscripts: folds the engine decides differently from Jinja2 | parity | low | done |
 | [0474](0474-loop-call-bound-method-repr.md) | `loop.__call__` prints nothing | parity | low | done |
 | [0475](0475-undefined-identity-and-range-extremes.md) | Leftovers of 0413 and 0420: undefined identity, range extremes, repeat messages | parity | low | open |
 | [0476](0476-class-attribute-of-values.md) | `x.__class__` of the engine's values | parity | low | open |
@@ -543,6 +543,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | open |
 | [0482](0482-module-tree-keep-alives.md) | End the trees a module replaced on a source change | robustness | low | open |
 | [0483](0483-render-memory-uncharged-release.md) | Give the render memory budget back only what it was charged | robustness | low | open |
+| [0484](0484-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds the Load check still decides differently from Jinja2 | parity | low | open |
 | [0485](0485-list-sort-restore-needs-memory.md) | A failed list.sort() loses the list's items when memory stays spent | robustness | low | open |
 | [0486](0486-cycle-walk-needs-memory.md) | Reference cycles leak when memory stays spent at the end of a render | robustness | low | open |
 | [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | open |
