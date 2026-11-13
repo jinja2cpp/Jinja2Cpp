@@ -1863,27 +1863,6 @@ uint64_t ForStatement::NewLoopId()
     return ++lastId;
 }
 
-namespace
-{
-// The filter of a loop (`for x in xs if cond`) as Jinja2 runs it, in a generator: a StopIteration out of the
-// condition is a RuntimeError, not a stopped call (call_stop.h). A call the condition makes is guarded on its own
-// Always inlined: the handler is a call to KeepFailure and the try region costs nothing on the success path, which
-// stays the code of the unguarded loop (a call per item showed in Render/for_filter_if)
-template<typename Node>
-JINJA2CPP_ALWAYS_INLINE bool EvaluateLoopFilter(Node& filter, RenderContext& values)
-{
-    try
-    {
-        return ConvertToBool(filter.Evaluate(values));
-    }
-    catch (...)
-    {
-        detail::KeepFailure();
-    }
-    detail::RethrowKeptSealed();
-}
-} // namespace
-
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values, InternalValue outerLoop) const
 {
     // Like the slotted one below, the filter may run while another template's code does
@@ -1901,24 +1880,40 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
             return ResultType();
         }
         auto& e = *eo;
-        for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
+        // Jinja2 filters a loop in a generator: a StopIteration out of the condition is a RuntimeError, not a
+        // stopped call (call_stop.h), so what fails here is sealed. One guard around the loop, outside the
+        // per-item path; sealed after the handler (MSVC)
+        bool failed = false;
+        try
         {
-            auto curValue = e->GetCurrent();
-            try
+            for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
             {
-                AssignTo(values.Nodes()[m_target], curValue, tempContext, values);
-            }
-            catch (...)
-            {
-                values.ExitScope();
-                throw;
-            }
+                auto curValue = e->GetCurrent();
+                try
+                {
+                    AssignTo(values.Nodes()[m_target], curValue, tempContext, values);
+                }
+                catch (...)
+                {
+                    values.ExitScope();
+                    throw;
+                }
 
-            if (EvaluateLoopFilter(values.Nodes()[m_ifExpr], values))
-            {
-                values.ExitScope();
-                return ResultType(std::move(curValue));
+                if (ConvertToBool(values.Nodes()[m_ifExpr].Evaluate(values)))
+                {
+                    values.ExitScope();
+                    return ResultType(std::move(curValue));
+                }
             }
+        }
+        catch (...)
+        {
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            detail::RethrowKeptSealed();
         }
         values.ExitScope();
 
@@ -1942,34 +1937,50 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, Span<Slot> fram
     auto* const rootSlot = root.isTuple ? nullptr : &sink.slots[root.slot.value + sink.shift];
     const auto rootHash = root.hash;
     bool isFound = false;
-    while (items.MoveNext())
+    // Jinja2 filters a loop in a generator: a StopIteration out of the condition is a RuntimeError, not a stopped
+    // call (call_stop.h), so what fails here is sealed. One guard around the loop, outside the per-item path;
+    // sealed after the handler (MSVC)
+    bool failed = false;
+    try
     {
-        // The items the filter skips render no body, and a plain name or constant checks nothing: each item is a
-        // render step here (Settings::Limits::maxRenderSteps), and reaches a host's poll (RenderOptions::poll) in a
-        // template loaded without limits too
-        CheckStack();
-        // A plain name, the common case, takes the item into its slot and gives it back when
-        // it is kept, without a copy
-        if (rootSlot)
+        while (items.MoveNext())
         {
-            auto& slot = *rootSlot;
-            values.BindSlot(slot, rootHash, items.GetCurrent());
-            if (EvaluateLoopFilter(filter, values))
+            // The items the filter skips render no body, and a plain name or constant checks nothing: each item is a
+            // render step here (Settings::Limits::maxRenderSteps), and reaches a host's poll (RenderOptions::poll) in a
+            // template loaded without limits too
+            CheckStack();
+            // A plain name, the common case, takes the item into its slot and gives it back when
+            // it is kept, without a copy
+            if (rootSlot)
             {
-                item = std::move(static_cast<InternalValue&>(slot));
+                auto& slot = *rootSlot;
+                values.BindSlot(slot, rootHash, items.GetCurrent());
+                if (ConvertToBool(filter.Evaluate(values)))
+                {
+                    item = std::move(static_cast<InternalValue&>(slot));
+                    isFound = true;
+                    break;
+                }
+                continue;
+            }
+            auto curValue = items.GetCurrent();
+            AssignTo(target, curValue, sink, values);
+            if (ConvertToBool(filter.Evaluate(values)))
+            {
+                item = std::move(curValue);
                 isFound = true;
                 break;
             }
-            continue;
         }
-        auto curValue = items.GetCurrent();
-        AssignTo(target, curValue, sink, values);
-        if (EvaluateLoopFilter(filter, values))
-        {
-            item = std::move(curValue);
-            isFound = true;
-            break;
-        }
+    }
+    catch (...)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        detail::RethrowKeptSealed();
     }
     guard.Unbind();
     values.PopFrameView();
