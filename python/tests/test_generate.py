@@ -93,6 +93,8 @@ def test_stream_buffers_the_items(mode):
         "{% block b %}A{{ 5 }}B{% endblock %}{{ self.b() }}",
         "{% extends 'base' %}{% block b %}<{{ super() }}>{% endblock %}",
         "{% macro m() %}{% for i in range(300) %}ab{{ i }}{% endfor %}{% endmacro %}{{ m() }}{{ m()|length }}",
+        "x" * 2000 + "{% if 1 %}" + "y" * 200 + "{{ 1 }}" + "z" * 200 + "{% endif %}{% set s = 'q' * 900 %}a{{ s }}b",
+        "{% for i in [] recursive %}{{ i }}{% endfor %}{% for i in seq recursive %}{% endfor %}x",
         "{% autoescape y %}a{{ 1 }}b{{ 2 }}{{ 3 }}{% endautoescape %}{% autoescape true %}{{ '<' }}a{{ '<' }}{% endautoescape %}",
     ],
 )

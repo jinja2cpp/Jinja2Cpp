@@ -220,10 +220,11 @@ public:
         refs(m_expression);
     }
 
-    // fold: the expression's Expression::PrepareFold, for generate()'s pieces (PieceOf)
-    explicit ExpressionRenderer(NodeRef<Expression> expr, std::uint8_t fold = 0)
+    // isLiteral: the expression is a literal, which Jinja2 folds into the text around it (generate()'s
+    // pieces, PieceOf)
+    explicit ExpressionRenderer(NodeRef<Expression> expr, bool isLiteral = false)
         : m_expression(expr)
-        , m_fold(fold)
+        , m_isLiteral(isLiteral)
     {
     }
     ExpressionRenderer(const ExpressionRenderer&) = delete;
@@ -234,18 +235,15 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override { values.Nodes()[m_expression].Render(os, values); }
 
-    // Whether Jinja2 folds the value at compile time (a plain `{{ }}`; the subclasses say it themselves)
-    [[nodiscard]] bool FoldsAt(RenderContext& values) const
-    {
-        return (m_fold & FoldAlways) != 0 || (m_fold != 0 && values.Nodes()[m_expression].IsFoldableAt(values));
-    }
+    // Whether the expression is a literal (a plain `{{ }}`; the subclasses say whether they fold themselves)
+    [[nodiscard]] bool IsLiteral() const { return m_isLiteral; }
 
 protected:
     // FinalizedExpressionRenderer derives from it
     ~ExpressionRenderer() = default;
 
     NodeRef<Expression> m_expression;
-    std::uint8_t m_fold = 0;
+    bool m_isLiteral = false;
 };
 
 // finalize(value), finalize being Settings::finalize as a callable
@@ -451,8 +449,8 @@ inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<E
     // Its fold only says how generate() splits the output, so only a literal is checked: a walk of
     // every `{{ }}` (PrepareFold) costs each Load about 3% on expression-heavy templates. In volatile
     // code a folded value is a StaticOutputRenderer, so what is left there does not fold
-    const bool isLiteral = !isVolatile && nodes[expr].GetConstant(nodes);
-    return nodes.Make<ExpressionRenderer>(expr, isLiteral ? std::uint8_t{ FoldAlways } : std::uint8_t{ 0 });
+    const bool isLiteral = !isVolatile && nodes[expr].GetConstant(nodes) != nullptr;
+    return nodes.Make<ExpressionRenderer>(expr, isLiteral);
 }
 
 inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
@@ -469,7 +467,7 @@ inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
     case NodeKind::MacroCallStmt:
         return PieceKind::Output;
     case NodeKind::ExprRenderer:
-        return nodes[nodes.As<ExpressionRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
+        return nodes[nodes.As<ExpressionRenderer>(node)].IsLiteral() ? PieceKind::Folded : PieceKind::Output;
     case NodeKind::FinalizedExprRenderer:
         return nodes[nodes.As<FinalizedExpressionRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
     case NodeKind::StaticExprRenderer:

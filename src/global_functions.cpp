@@ -186,7 +186,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
 {
     if (params.posParams.size() > 1)
     {
-        throw TemplateRuntimeError(std::string(fnName) + " expected at most 1 argument, got " + std::to_string(params.posParams.size()));
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, std::string(fnName) + " expected at most 1 argument, got " + std::to_string(params.posParams.size()));
     }
 
     if (!params.posParams.empty())
@@ -195,12 +195,26 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
         // Python's dict() asks an undefined value for its keys(), which fails whatever its policy
         CheckUndefinedUse(source, UndefinedUse::Call);
         auto map = AsMap(source);
-        // None and an object such as namespace() are not iterable
-        if (source.IsNone() || (map && map->GetObjectClass()))
+        // None and an object such as namespace() are not iterable; a host sequence (a Python list) is
+        bool isHostSequence = false;
+        ListAdapter hostItems;
+        if (map && map->GetObjectClass() && map->IsHost())
+        {
+            hostItems = ConvertToList(source, isHostSequence, false);
+        }
+        if (source.IsNone() || (map && map->GetObjectClass() && !isHostSequence))
         {
             throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + Apply<visitors::PythonTypeNameGetter>(source) + "' object is not iterable");
         }
-        if (map)
+        if (isHostSequence)
+        {
+            size_t index = 0;
+            hostItems.ForEach([&](InternalValue&& item) {
+                CollectDictPair(item, index++, result);
+                return true;
+            });
+        }
+        else if (map)
         {
             for (auto& [key, value] : map->GetEntries())
             {

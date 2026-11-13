@@ -9,6 +9,7 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>

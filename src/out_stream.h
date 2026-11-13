@@ -134,7 +134,12 @@ public:
     // Each piece of output goes to the sink on its own (RenderOptions::writeEachPiece): a body flushes the
     // stream after each of its nodes. Only the render's own stream is set; a stream that gathers a part of
     // the output (a `{% set %}` block, a macro's result) never is
-    void WriteEachPiece() noexcept { m_eachPiece = true; }
+    void WriteEachPiece() noexcept
+    {
+        m_eachPiece = true;
+        // Only a sink gets pieces: a string target takes the output as it comes
+        m_heldPending = m_sink != nullptr;
+    }
     [[nodiscard]] bool WritesEachPiece() const noexcept { return m_eachPiece; }
     // A macro's output is one piece in Jinja2, as it is the value its call returns (so are super(), self.b()
     // and a recursive loop, which Jinja2 buffers): the body does not flush the stream while this lives, and
@@ -151,7 +156,6 @@ public:
             {
                 os.m_eachPiece = false;
                 os.m_holding = true;
-                os.m_heldPending = true;
             }
         }
         ~PieceHold()
@@ -160,7 +164,6 @@ public:
             {
                 m_os.m_eachPiece = true;
                 m_os.m_holding = false;
-                m_os.m_heldPending = !m_os.m_held.empty();
             }
         }
         PieceHold(const PieceHold&) = delete;
@@ -232,7 +235,8 @@ private:
     void FlushBuffer();
     void AppendToTarget(const void* ptr, size_t bytes);
     void WriteToSink(const void* ptr, size_t bytes);
-    void WriteHeldToSink(const void* ptr, size_t bytes);
+    void GatherPiece(const void* ptr, size_t bytes);
+    void EndPiece(bool writeEmpty);
     void WriteSinkChunk(const void* ptr, size_t bytes, size_t newLength);
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
@@ -248,8 +252,10 @@ private:
     void* m_sink = nullptr;
     size_t m_sinkWritten = 0;
     size_t m_charSize = 1;
-    // The bytes of a held piece that overflowed the buffer (PieceHold), written with the rest of the piece
+    // The piece a render that writes each piece has gathered so far (GatherPiece), and the bytes of it
+    // charged to the render's memory budget
     std::string m_held;
+    std::uint64_t m_heldCharged = 0;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer
@@ -258,9 +264,10 @@ private:
     unsigned char* m_end = m_buffer + BufferLength;
     // Last: before m_buffer it pads to the alignas, which MSVC reports (C4324)
     bool m_eachPiece = false;
-    // A PieceHold of a stream that writes each piece lives
+    // A PieceHold of a stream that writes each piece lives: a Flush ends no piece
     bool m_holding = false;
-    // m_holding, or bytes are held (m_held): the one test the sink's path makes
+    // The stream writes each piece (WriteEachPiece), so a sink write gathers the piece: the one test the
+    // sink's path makes
     bool m_heldPending = false;
 };
 

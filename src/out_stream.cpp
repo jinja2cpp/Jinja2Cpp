@@ -1,6 +1,7 @@
 #include "out_stream.h"
 
 #include "internal_value.h"
+#include "recursion_guard.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/template.h>
@@ -11,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace jinja2
@@ -19,9 +21,15 @@ inline namespace v2
 {
 void OutStream::Flush()
 {
-    if (!m_writer)
+    if (m_writer)
     {
-        FlushBuffer();
+        return;
+    }
+    FlushBuffer();
+    // A render that writes each piece: what is flushed is a piece's end, unless a piece is held
+    if (m_heldPending && !m_holding)
+    {
+        EndPiece(false);
     }
 }
 
@@ -32,28 +40,34 @@ void OutStream::FlushBuffer()
         AppendToTarget(m_buffer, static_cast<size_t>(m_cur - m_buffer));
         m_cur = m_buffer;
     }
-    else if (m_heldPending && !m_holding)
-    {
-        WriteHeldToSink(m_buffer, 0);
-    }
 }
 
 void OutStream::FlushPiece()
 {
-    if (m_writer)
+    if (m_writer || m_holding)
     {
-        return;
-    }
-    if (m_holding)
-    {
-        return;
-    }
-    if (m_sink && m_cur == m_buffer && m_held.empty())
-    {
-        WriteSinkChunk(m_buffer, 0, 0);
         return;
     }
     FlushBuffer();
+    if (m_heldPending)
+    {
+        EndPiece(true);
+    }
+}
+
+// The piece gathered in m_held goes to the sink in one Write; an empty one only when `writeEmpty`
+JINJA2CPP_NOINLINE void OutStream::EndPiece(bool writeEmpty)
+{
+    if (m_held.empty() && !writeEmpty)
+    {
+        return;
+    }
+    const std::string piece = std::move(m_held);
+    m_held.clear();
+    ReleaseRenderMemory(m_heldCharged);
+    m_heldCharged = 0;
+    // Counted when gathered (GatherPiece)
+    WriteSinkChunk(piece.data(), piece.size(), 0);
 }
 
 void OutStream::AppendToTarget(const void* ptr, size_t bytes)
@@ -75,13 +89,12 @@ void OutStream::AppendToTarget(const void* ptr, size_t bytes)
 
 void OutStream::WriteToSink(const void* ptr, size_t bytes)
 {
-    // One flag on the usual path: a held piece is the rare case (writeEachPiece and a PieceHold)
+    // One flag on the usual path: a render that writes each piece is the rare case
     if (m_heldPending)
     {
-        WriteHeldToSink(ptr, bytes);
+        GatherPiece(ptr, bytes);
         return;
     }
-    // A sink is given an empty chunk only for an empty piece (FlushPiece)
     if (bytes == 0)
     {
         return;
@@ -89,23 +102,20 @@ void OutStream::WriteToSink(const void* ptr, size_t bytes)
     WriteSinkChunk(ptr, bytes, bytes / m_charSize);
 }
 
-// A piece is held, or has ended with bytes held (PieceHold): held while it lives, then written with
-// what follows it in the piece in one Write. The held bytes are counted as written when held, as the
-// limit on the output (Settings::Limits::maxOutputSize) and the offsets of the generation spans read
-// the count
-JINJA2CPP_NOINLINE void OutStream::WriteHeldToSink(const void* ptr, size_t bytes)
+// A render that writes each piece (RenderOptions::writeEachPiece) gathers a piece until it ends (Flush,
+// FlushPiece), so that it reaches the sink in one Write however long it is, as Jinja2's generate() yields
+// it. The bytes are counted as written when gathered, as the limit on the output
+// (Settings::Limits::maxOutputSize) and the offsets of the generation spans read the count, and against
+// the render's memory budget while they are held
+JINJA2CPP_NOINLINE void OutStream::GatherPiece(const void* ptr, size_t bytes)
 {
     m_held.append(static_cast<const char*>(ptr), bytes);
-    if (m_holding)
+    m_sinkWritten += bytes / m_charSize;
+    if (RenderMemoryCounted())
     {
-        m_sinkWritten += bytes / m_charSize;
-        return;
+        ChargeObjectMemory(bytes);
+        m_heldCharged += bytes;
     }
-    const std::string piece = std::move(m_held);
-    m_held.clear();
-    m_heldPending = false;
-    // The held part is counted already
-    WriteSinkChunk(piece.data(), piece.size(), bytes / m_charSize);
 }
 
 void OutStream::WriteSinkChunk(const void* ptr, size_t bytes, size_t newLength)
@@ -119,7 +129,7 @@ void OutStream::WriteSinkChunk(const void* ptr, size_t bytes, size_t newLength)
     {
         static_cast<OutputSinkW*>(m_sink)->Write(std::wstring_view(static_cast<const wchar_t*>(ptr), length));
     }
-    // What a held piece adds was counted when it was held (WriteHeld)
+    // What a gathered piece adds was counted when it was gathered (GatherPiece)
     m_sinkWritten += newLength;
 }
 

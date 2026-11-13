@@ -175,6 +175,19 @@ def test_include_and_constructor_errors_have_jinja2s_class(source):
         assert ours.templates == theirs.templates
 
 
+@pytest.mark.parametrize("source", ["{{ dict(pairs) }}", "{{ dict(empty) }}", "{{ lst|xmlattr }}", "{{ obj|xmlattr }}", "{{ dict(1, 2) }}"])
+def test_constructor_errors_of_host_values(source):
+    # docs/tasks/0458: a Python list is iterable for dict(), and has no items() for xmlattr
+    def result(module):
+        env = module.Environment()
+        try:
+            return env.from_string(source).render(pairs=[("a", 1)], empty=[], lst=[1], obj=object())
+        except Exception as error:  # noqa: BLE001 - the class and message are compared
+            return type(error).__name__, str(error)
+
+    assert result(jinja2cpp) == result(jinja2)
+
+
 def test_include_of_none_or_an_empty_list_ignores_missing():
     for module in (jinja2cpp, jinja2):
         env = module.Environment(loader=module.DictLoader({}))

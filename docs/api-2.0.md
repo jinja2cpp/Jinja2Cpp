@@ -324,7 +324,8 @@ the task was done by 0357 S2c; only the docs changed.
 Jinja2's message). `UnexpectedStatement` keeps the tag in `ExtraParams[0]` and adds Jinja2's sentence
 as `ExtraParams[1]`; `TemplateRuntimeError` adds the Python class (`"TypeError"`, `"ValueError"`, and since 0458
 `"AttributeError"`) as `ExtraParams[1]` where the engine knows it; an include's `TemplateNotFound`
-adds `"list"` as `ExtraParams[1]` when it selected from a list (0458). `RenderOptions` grows by `bool writeEachPiece`: a sink
+adds `"list"` as `ExtraParams[1]` when it selected from a list, and an include name that is neither a
+string nor iterable is `TemplateRuntimeError` (`"TypeError"`) where it was `InvalidTemplateName` (0458). `RenderOptions` grows by `bool writeEachPiece`: a sink
 gets one `Write` per piece Jinja2's `generate()` yields (text run, `{{ }}` value, macro or call
 output, one piece however long since 0456; a run Jinja2 folds is one piece, and an empty item is an
 empty `Write`), so the Python module's `generate()` yields Jinja2's items.

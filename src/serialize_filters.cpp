@@ -1755,10 +1755,14 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     {
         throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
     }
-    // An object such as namespace(): its attribute error names only the attribute
-    if (map->GetObjectClass())
+    // An object such as namespace() (whose attribute error names only the attribute) or a host object
+    if (const auto* objectClass = map->GetObjectClass())
     {
-        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "items");
+        if (!map->IsHost() && std::string_view(objectClass) == "Namespace")
+        {
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "items");
+        }
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
     }
 
     auto escape = [](const std::string& str) { return EscapeHtml(std::string_view(str)); };

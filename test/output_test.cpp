@@ -321,6 +321,15 @@ TEST(OutputTest, SinkGetsThePiecesJinja2Folds)
         { "{% block b %}A{{ 5 }}B{% endblock %}{{ self.b() }}", { "A5B", "A5B" } },
         { "{% macro m() %}{{ 'x' * 900 }}{% endmacro %}{{ m() }}", { std::string(900, 'x') } },
         { longMacro, { longOutput } },
+        // A piece past the buffer or of a long fragment is still one Write, with no empty one after it
+        { std::string(2000, 'x'), { std::string(2000, 'x') } },
+        { "{% if 1 %}" + std::string(2000, 'x') + "{% endif %}c", { std::string(2000, 'x'), "c" } },
+        { "a{{ 1 }}" + std::string(2000, 'x') + "{{ 2 }}b", { "a1" + std::string(2000, 'x') + "2b" } },
+        { std::string(200, 'a') + "{{ 1 }}" + std::string(200, 'b'), { std::string(200, 'a') + "1" + std::string(200, 'b') } },
+        { "{% set s = 'x' * 900 %}a{{ s }}b", { "a", std::string(900, 'x'), "b" } },
+        // An empty recursive loop is an item: Jinja2 yields its buffer
+        { "{% for i in [] recursive %}{{ i }}{% endfor %}", { "" } },
+        { "{% for i in [1, 2] recursive %}{% endfor %}x", { "", "x" } },
     };
     RenderOptions options;
     options.writeEachPiece = true;

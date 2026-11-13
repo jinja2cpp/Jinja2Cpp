@@ -65,8 +65,15 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
         // Jinja2 renders a recursive loop into a buffer: loop(x) is a call of a macro, and generate()
         // yields the whole loop as one item
         const detail::GenerationFreeze freeze(values);
-        const OutStream::PieceHold pieceHold(os);
-        RenderLoop(loopVal, os, values, 0);
+        {
+            const OutStream::PieceHold pieceHold(os);
+            RenderLoop(loopVal, os, values, 0);
+        }
+        // An item even when empty: Jinja2 yields the loop's buffer
+        if (os.WritesEachPiece())
+        {
+            os.FlushPiece();
+        }
         return;
     }
     RenderLoop(loopVal, os, values, 0);
