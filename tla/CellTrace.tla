@@ -137,12 +137,16 @@ Enclosing(r, cur) ==
        \/ cur \in DOMAIN rg /\ rg[cur].alive /\ ~rg[cur].module /\ rg[cur].thr = E.t /\ cur > r
 
 \* A read through an attached adapter: its cell, without a lookup. Unless frozen, the cell is of
-\* the registry running, or of a render the running one is nested in (CellProtocol's NoForeignCell)
+\* the registry running, of a render the running one is nested in, or of a live render nested in
+\* the running one: an outer render's macro lent to a nested render runs with the outer registry
+\* (Reentry) and may read a value the nested render stored (CellProtocol's NoForeignCell,
+\* docs/tasks/0481)
 Hit ==
     /\ E.ev = "hit" /\ Known(E.c)
     /\ Check([LinksAgree |-> L(E.a).cell # E.c,
               NoUseAfterFree |-> ~cl[E.c].alive,
-              NoForeignCell |-> ~cl[E.c].frozen /\ cl[E.c].reg # E.cur /\ ~Enclosing(cl[E.c].reg, E.cur)])
+              NoForeignCell |-> ~cl[E.c].frozen /\ cl[E.c].reg # E.cur /\ ~Enclosing(cl[E.c].reg, E.cur)
+                                /\ ~(E.cur # 0 /\ Enclosing(E.cur, cl[E.c].reg))])
     /\ Next1(TRUE)
     /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
 
