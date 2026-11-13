@@ -151,6 +151,7 @@ namespace jinja2
 inline namespace v2
 {
 Exception::~Exception() = default;
+StopIteration::~StopIteration() = default;
 
 namespace
 {

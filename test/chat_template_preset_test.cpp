@@ -6,10 +6,12 @@
 
 #include <jinja2cpp/chat_template.h>
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/features.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
 #include <gtest/gtest.h>
@@ -18,6 +20,7 @@
 #include <cstddef>
 #include <ctime>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -325,6 +328,16 @@ void CheckSpanCase(const SpanCase& c)
     jinja2::TemplateEnv env;
     jinja2::ConfigureForChatTemplates(env);
     env.AddFilesystemHandler(std::string(), SpanFiles());
+    struct SpanStop
+        : std::runtime_error
+        , jinja2::StopIteration
+    {
+        SpanStop()
+            : std::runtime_error("stop")
+        {
+        }
+    };
+    env.AddFilter("stop", jinja2::MakeCallable([](const jinja2::Value&) -> jinja2::Value { throw SpanStop(); }, jinja2::ArgInfo{ "v" }));
     Tpl tpl(&env);
     ASSERT_TRUE(tpl.Load(jinja2::ConvertString<std::basic_string<CharT>>(std::string(c.tpl)))) << c.tpl;
     std::vector<jinja2::GenerationSpan> spans{ { 7, 7 } }; // cleared by the render
@@ -379,6 +392,8 @@ INSTANTIATE_TEST_SUITE_P(Rows, GenerationSpansTest, ::testing::Values(
     SpanCase{ "{% block x %}x{% generation %}yy{% endgeneration %}{% endblock %}{{ self.x() }}", { { 1, 3 }, { 3, 5 } } },
     SpanCase{ "ab{% include 'inc' %}c", { { 3, 5 } } },
     SpanCase{ "{% macro m() %}zz{% include 'inc' %}{% endmacro %}ab{{ m() }}", { { 2, 4 } } },
+    // A call that stops (docs/tasks/0479) drops the macro's output, and the blocks it held
+    SpanCase{ "{% macro m() %}xx{% generation %}yy{% endgeneration %}{{ 1|stop }}{% endmacro %}ab{{ m() }}c{% generation %}d{% endgeneration %}", { { 3, 4 } } },
     SpanCase{ "{% extends 'base' %}{% block x %}x{% generation %}yy{% endgeneration %}{% endblock %}", { { 2, 4 } } },
     SpanCase{ "{% extends 'base2' %}{% block x %}q{{ super() }}{% endblock %}", { { 2, 3 } } },
     SpanCase{ "abc", {} }));

@@ -68,6 +68,28 @@ private:
     const char* m_file;
     unsigned m_line;
 };
+
+/*!
+ * \brief A mix-in for a host exception that stops a call as Python's `StopIteration` does
+ *
+ * A call the template makes (a macro, `caller()`, `loop(...)`, a callable) that such an exception escapes gives
+ * the render's undefined value, as Jinja2's `Context.call` does. Elsewhere (an argument, a top-level filter, an
+ * included template) it fails the render as any host exception does (`ErrorCode::UserCallableException`, the
+ * exception kept). Not a `std::exception`: a host type derives from it next to its own base.
+ */
+class JINJA2CPP_EXPORT StopIteration
+{
+public:
+    // Out of line: the key function, so that the type has one typeinfo across shared libraries
+    virtual ~StopIteration();
+
+protected:
+    StopIteration() = default;
+    StopIteration(const StopIteration&) = default;
+    StopIteration(StopIteration&&) noexcept = default;
+    StopIteration& operator=(const StopIteration&) = default;
+    StopIteration& operator=(StopIteration&&) noexcept = default;
+};
 } // namespace v2
 } // namespace jinja2
 

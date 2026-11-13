@@ -4,11 +4,27 @@
 #include "common.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/exception.h>
 
 #include <string>
+#include <utility>
 
 namespace jinja2cpp_py
 {
+// A StopIteration a Python callable raised, marked for the engine: a call the template makes that it escapes gives
+// undefined, as Jinja2's Context.call makes it (docs/tasks/0479). Elsewhere it is the python_error it was, which
+// ends the render as 0477 has it
+class PyStopIteration final
+    : public nb::python_error
+    , public jinja2::StopIteration
+{
+public:
+    explicit PyStopIteration(nb::python_error&& error) noexcept
+        : nb::python_error(std::move(error))
+    {
+    }
+};
+
 // Where a failed template came from, for TemplateSyntaxError's attributes: None when unknown
 struct ErrorSource
 {

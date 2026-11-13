@@ -164,6 +164,18 @@ public:
         OutStream& m_os;
         bool m_eachPiece;
     };
+    // Where the output stood: for a call whose output Jinja2 buffers and drops when the call stops (docs/tasks/0479)
+    struct Mark
+    {
+        // The target string's size, or the characters written to the sink
+        size_t base = 0;
+        // The end of the buffered part
+        unsigned char* cur = nullptr;
+    };
+    [[nodiscard]] Mark GetMark() const { return { m_sink ? m_sinkWritten : TargetSize(), m_cur }; }
+    // Drops what was written since `mark`; false when it cannot be: a writer stream, or a sink that has been
+    // given output since (a string target takes it back in full, so does a sink until the buffer spills)
+    [[nodiscard]] bool RollbackTo(const Mark& mark);
     // The sink a writer stream made from this one passes on (ReachesSink)
     [[nodiscard]] void* SinkToPassOn() const { return m_sink; }
 
@@ -222,6 +234,15 @@ private:
         WriteBuffer(str.data(), str.size());
     }
     void FlushBuffer();
+    // The characters in the target string: 0 for a writer stream
+    [[nodiscard]] size_t TargetSize() const
+    {
+        if (!m_target)
+        {
+            return 0;
+        }
+        return m_charSize == 1 ? static_cast<const std::string*>(m_target)->size() : static_cast<const std::wstring*>(m_target)->size();
+    }
     void AppendToTarget(const void* ptr, size_t bytes);
     void WriteToSink(const void* ptr, size_t bytes);
     template<typename CharT>

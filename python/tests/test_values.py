@@ -386,17 +386,159 @@ def test_stop_iteration_from_a_call_is_undefined():
                 with pytest.raises(RuntimeError) as raised:
                     template.render()
             assert isinstance(raised.value.__context__, StopIteration), source
-    # A macro the template calls goes through Context.call too, so Jinja2 gives undefined; the engine's macro
-    # call does not stop the StopIteration (docs/tasks/0479)
+    # A macro the template calls goes through Context.call too: undefined, in both engines (docs/tasks/0479)
     for module in (jinja2cpp, jinja2):
         env = module.Environment()
         env.filters["stop"] = lambda value: stop()
         template = env.from_string("{% macro m() %}{{ 1|stop }}{% endmacro %}[{{ m() }}]")
-        if module is jinja2:
-            assert template.render() == "[]"
-        else:
-            with pytest.raises(RuntimeError, match="^generator raised StopIteration$"):
-                template.render()
+        assert template.render() == "[]"
+
+
+class _Page:
+    """A host object whose property raises StopIteration, as an attribute lookup in a macro."""
+
+    @property
+    def stopping(self):
+        raise StopIteration
+
+    def __getitem__(self, key):
+        raise StopIteration
+
+
+def _stop(*args, **kwargs):
+    raise StopIteration
+
+
+def _stop_env(module, undefined=None, **kwargs):
+    env = module.Environment(
+        undefined=undefined or module.Undefined,
+        loader=module.DictLoader(
+            {
+                "inc": "{{ 1|stop }}",
+                "imp": "{% macro y() %}a{{ 1|stop }}b{% endmacro %}",
+                "par": "{% block b %}{% if flag %}{{ 1|stop }}{% endif %}{% endblock %}",
+                "kid": "{% extends 'par' %}{% block b %}{% macro m() %}<{{ super() }}>{% endmacro %}[{{ m() }}]{% endblock %}",
+            }
+        ),
+        **kwargs,
+    )
+    env.filters["stop"] = _stop
+    env.tests["stop"] = _stop
+    env.globals["f"] = lambda *args: "F"
+    env.globals["page"] = _Page()
+    return env
+
+
+def _stop_outcome(module, source, undefined=None, mode="render", **context):
+    env = _stop_env(module, undefined)
+    try:
+        template = env.from_string(source)
+        if mode == "generate":
+            return list(template.generate(**context))
+        if mode == "stream":
+            return list(template.stream(**context))
+        return template.render(**context)
+    except Exception as error:  # noqa: BLE001 - compared below
+        return error
+
+
+_STOP_MACRO = "{% macro m() %}a{{ 1|stop }}b{% endmacro %}"
+_STOP_UNDEFINED = ["Undefined", "StrictUndefined", "DebugUndefined", "ChainableUndefined"]
+
+# Rendered the same by both engines under every undefined class (the expected text is Jinja2's)
+_STOP_SAME = [
+    _STOP_MACRO + "[{{ m() }}]",
+    _STOP_MACRO + "[{{ m()|upper }}]",
+    _STOP_MACRO + "{% set x = m() %}[{{ x }}]",
+    _STOP_MACRO + "{{ m() is defined }}|{{ m() is undefined }}|{{ m()|default('D') }}|{{ [m()]|length }}",
+    _STOP_MACRO + "[{{ m() ~ 'z' }}]",
+    _STOP_MACRO + "{% for x in [1] %}[{{ m() }}]{% endfor %}",
+    "{% macro c() %}<{{ caller() }}>{% endmacro %}{% call c() %}x{{ 1|stop }}{% endcall %}|after",
+    "{% macro m(caller=none) %}{{ caller() }}{% endmacro %}[{% call m() %}{{ 1|stop }}{% endcall %}]",
+    "{% macro d(a=1|stop) %}{{ a }}{% endmacro %}[{{ d() }}]",
+    "{% macro i() %}{{ 1|stop }}{% endmacro %}{% macro o() %}a{{ i() }}b{% endmacro %}[{{ o() }}]",
+    "{% macro t() %}x{{ 1 is stop }}{% endmacro %}[{{ t() }}]",
+    "{% for i in [[1]] recursive %}<{% if i is iterable %}{{ loop(i) }}{% else %}{{ i|stop }}{% endif %}>{% endfor %}",
+    "{% macro m() %}a{{ page.stopping }}b{% endmacro %}[{{ m() }}]",
+    "{% macro m() %}a{{ page['k'] }}b{% endmacro %}[{{ m() }}]",
+    "{% import 'imp' as x %}[{{ x.y() }}]",
+    "{% from 'imp' import y %}[{{ y() }}]",
+    "{% macro m(x) %}{% set v = x %}{% for q in [1, 2] %}{{ q }}{{ 1|stop }}{% endfor %}{% endmacro %}"
+    "{% set v = 'o' %}{% for q in 'ab' %}[{{ m(q) }}{{ v }}{{ q }}]{% endfor %}{{ v }}",
+    "{% autoescape true %}{% macro m() %}<b>{{ 1|stop }}{% endmacro %}[{{ m() }}]{% endautoescape %}",
+]
+
+
+@pytest.mark.parametrize("source", _STOP_SAME)
+@pytest.mark.parametrize("undefined", _STOP_UNDEFINED)
+def test_stop_iteration_out_of_a_macro_is_undefined(source, undefined):
+    # A macro, caller(), loop(...) and a default go through Context.call (docs/tasks/0479)
+    results = []
+    for module in (jinja2cpp, jinja2):
+        outcome = _stop_outcome(module, source, getattr(module, undefined))
+        results.append(type(outcome).__name__ if isinstance(outcome, Exception) else outcome)
+    assert results[0] == results[1], f"{source!r}: jinja2cpp {results[0]!r}, Jinja2 {results[1]!r}"
+
+
+def test_stop_iteration_out_of_a_macro_in_generate_and_stream():
+    source = _STOP_MACRO + "[{{ m() }}]"
+    for mode in ("generate", "stream"):
+        outcomes = [_stop_outcome(module, source, mode=mode) for module in (jinja2cpp, jinja2)]
+        # Jinja2 yields the stopped call's empty piece as an item of its own
+        assert [item for item in outcomes[0] if item] == [item for item in outcomes[1] if item] == ["[", "]"], mode
+
+
+def test_stop_iteration_out_of_a_long_macro_in_generate_keeps_the_runtime_error():
+    # The macro's output left the buffer before it stopped: it cannot be taken back (docs/python.md)
+    source = "{% macro m() %}{{ 'x' * 600 }}{{ 1|stop }}{% endmacro %}[{{ m() }}]"
+    assert "".join(_stop_outcome(jinja2, source, mode="generate")) == "[]"
+    with pytest.raises(RuntimeError, match="^generator raised StopIteration$"):
+        raise _stop_outcome(jinja2cpp, source, mode="generate")
+    assert _stop_outcome(jinja2cpp, source) == "[]"
+
+
+# What Jinja2 does not give undefined: the call is not Context.call, or a generator ends the render
+_STOP_ERRORS = [
+    (_STOP_MACRO + "{{ m().x }}", "UndefinedError"),
+    (_STOP_MACRO + "[{% call m() %}x{% endcall %}]", "TypeError"),
+    ("{{ f(1|stop) }}", "RuntimeError"),
+    ("{% macro m() %}a{% include 'inc' %}b{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}a{% import 'inc' as b %}b{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}a{% block b %}{{ 1|stop }}{% endblock %}z{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    (
+        "{% block b %}{% if flag %}{{ 1|stop }}{% endif %}{% endblock %}{% set flag = true %}"
+        "{% macro m() %}x{{ self.b() }}y{% endmacro %}[{{ m() }}]",
+        "RuntimeError",
+    ),
+]
+
+
+@pytest.mark.parametrize("source,error", _STOP_ERRORS)
+def test_stop_iteration_where_jinja2_does_not_stop_the_call(source, error):
+    for module in (jinja2cpp, jinja2):
+        outcome = _stop_outcome(module, source)
+        assert type(outcome).__name__ == error, (module.__name__, source, outcome)
+        if error == "RuntimeError":
+            assert str(outcome) == "generator raised StopIteration"
+            assert isinstance(outcome.__cause__, StopIteration)
+
+
+def test_stop_iteration_out_of_super_in_a_macro_is_a_runtime_error():
+    # super() renders the parent's block through a generator, as a block does
+    for module in (jinja2cpp, jinja2):
+        template = _stop_env(module).get_template("kid")
+        assert template.render(flag=False) == "[<>]"
+        with pytest.raises(RuntimeError, match="^generator raised StopIteration$"):
+            template.render(flag=True)
+
+
+def test_stop_iteration_from_a_module_macro_reaches_the_host():
+    # A host's own call of a module's macro is not Context.call: the exception is the caller's
+    for module in (jinja2cpp, jinja2):
+        env = _stop_env(module)
+        built = env.from_string(_STOP_MACRO).module
+        with pytest.raises(StopIteration):
+            built.m()
 
 
 class IntOnly:

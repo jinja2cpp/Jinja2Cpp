@@ -1,7 +1,9 @@
 #include "statements.h"
 
+#include "call_stop.h"
 #include "contracts.h"
 #include "cycle_collector.h"
+#include "render_failure.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generation_tracker.h"
@@ -2009,7 +2011,16 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
     const auto block = blockContext.GetRendererCallback()->Templates().Resolve(p->second[depth]);
     blockContext.PassOverEntryBindings();
     const ArenaSwitch nodesSwitch(blockContext, block.nodes);
-    block.node.RenderBody(os, blockContext, depth);
+    // Jinja2 renders a block through a generator: a StopIteration out of it is a RuntimeError, not a stopped call
+    try
+    {
+        block.node.RenderBody(os, blockContext, depth);
+    }
+    catch (detail::RenderFailure& failure)
+    {
+        failure.SealStop();
+        throw;
+    }
 }
 
 class TemplateFrameGuard
@@ -2695,7 +2706,15 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
         innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
         const UnitCall unitCall(innerContext, m_unitLayout);
-        values.Nodes()[m_mainBody].Render(os, innerContext);
+        try
+        {
+            values.Nodes()[m_mainBody].Render(os, innerContext);
+        }
+        catch (detail::RenderFailure& failure)
+        {
+            failure.SealStop();
+            throw;
+        }
         return;
     }
 
@@ -2855,29 +2874,39 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     frame.childSelf = asParent ? asParent->childSelf : nullptr;
     TemplateFrameGuard frameGuard(values, &frame);
 
-    if (!m_hasExtends)
+    // A template renders through a generator in Jinja2: a StopIteration out of an included, imported or extended
+    // one is a RuntimeError, not a stopped call (call_stop.h)
+    try
     {
+        if (!m_hasExtends)
+        {
+            values.Nodes()[m_body].Render(os, values);
+            if (stack && values.KeepsClosures())
+            {
+                KeepEndedSelf(values, frame);
+            }
+            return;
+        }
+        // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
+        // an include or a call block writes there comes out before the parent's, as in Jinja2
         values.Nodes()[m_body].Render(os, values);
-        if (stack && values.KeepsClosures())
+        if (frame.parent)
+        {
+            const auto parent = values.GetRendererCallback()->Templates().Resolve(frame.parent);
+            const ArenaSwitch nodesSwitch(values, parent.nodes);
+            // A template that extends another has a stack of its own
+            JINJA2CPP_ASSERT(stack);
+            parent.node.RenderAsParent(os, values, *stack, name);
+        }
+        if (values.KeepsClosures())
         {
             KeepEndedSelf(values, frame);
         }
-        return;
     }
-    // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
-    // an include or a call block writes there comes out before the parent's, as in Jinja2
-    values.Nodes()[m_body].Render(os, values);
-    if (frame.parent)
+    catch (detail::RenderFailure& failure)
     {
-        const auto parent = values.GetRendererCallback()->Templates().Resolve(frame.parent);
-        const ArenaSwitch nodesSwitch(values, parent.nodes);
-        // A template that extends another has a stack of its own
-        JINJA2CPP_ASSERT(stack);
-        parent.node.RenderAsParent(os, values, *stack, name);
-    }
-    if (values.KeepsClosures())
-    {
-        KeepEndedSelf(values, frame);
+        failure.SealStop();
+        throw;
     }
 }
 
@@ -3882,6 +3911,23 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     context.ExitScope();
 }
 
+namespace
+{
+// A call block whose call stopped (docs/tasks/0479): Jinja2 yields the undefined value the call gives, which the
+// output cannot join (docs/tasks/0362). A failure that is no stop goes on
+[[noreturn]] void ThrowStoppedCallBlock(RenderContext& values, HomeCall::Snapshot& snapshot, bool stopped)
+{
+    if (!stopped)
+    {
+        detail::RethrowKept();
+    }
+    detail::DropKept();
+    snapshot.Undo();
+    const auto undefined = detail::MakeStopUndefined(values);
+    throw TemplateRuntimeError("expected str instance, "s + Apply<visitors::PythonTypeNameGetter>(undefined) + " found");
+}
+} // namespace
+
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
     const auto& call = values.Nodes()[m_call];
@@ -3915,7 +3961,23 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         // else is the TypeError of joining the output (docs/tasks/0362). A plain string is
         // escaped under autoescape, where Jinja2 writes it raw: a deliberate divergence that
         // keeps a callable's data escaped (Ruslan, 2026-11-02); Markup, as a macro's, is not
-        const auto result = callable->GetExpressionCallable()(callParams, values);
+        InternalValue result;
+        bool failed = false;
+        bool stopped = false;
+        HomeCall::Snapshot snapshot(values);
+        try
+        {
+            result = callable->GetExpressionCallable()(callParams, values);
+        }
+        catch (...)
+        {
+            failed = true;
+            stopped = detail::KeepFailure();
+        }
+        if (failed)
+        {
+            ThrowStoppedCallBlock(values, snapshot, stopped);
+        }
         if (!IsStringValue(result))
         {
             throw TemplateRuntimeError("expected str instance, "s + Apply<visitors::PythonTypeNameGetter>(result) + " found");
@@ -3925,7 +3987,24 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     }
     // A call block's caller runs into a buffer in Jinja2
     const detail::GenerationFreeze freeze(values);
-    callable->GetStatementCallable()(callParams, os, values);
+    const auto mark = os.GetMark(); // NOLINT(clang-analyzer-deadcode.DeadStores): read on the failure path
+    HomeCall::Snapshot snapshot(values);
+    bool stopped = false;
+    try
+    {
+        callable->GetStatementCallable()(callParams, os, values);
+        return;
+    }
+    catch (...)
+    {
+        stopped = detail::KeepFailure();
+    }
+    if (!stopped || !os.RollbackTo(mark))
+    {
+        detail::RethrowKept();
+    }
+    freeze.Discard();
+    ThrowStoppedCallBlock(values, snapshot, true);
 }
 
 void DoStatement::Render(OutStream& /*os*/, RenderContext& values)

@@ -181,6 +181,19 @@ locations), 0255 (engine runtime errors).
   marker in `extraParams[1]`). `UnexpectedException` (1) now means "an exception the
   engine did not raise and could not attribute", with location and `GetException()`.
 
+**`jinja2::StopIteration` (task 0479; approved by Ruslan 2026-11-13, before G1).** A mix-in of
+`exception.h` for a host exception that stops a call as Python's `StopIteration` does: a call the
+template makes (a macro, `caller()`, `loop(...)`, a callable) that such an exception escapes gives the
+render's undefined value, as Jinja2's `Context.call` does. Elsewhere (an argument, a top-level filter,
+test or finalize, an included, imported or extended template, a block, `self.b()`, `super()`) it fails
+the render as any host exception does (`UserCallableException`, exception kept), as Jinja2's generator
+render raises `RuntimeError`. A host type derives from it next to its own base
+(`struct MyStop : std::runtime_error, jinja2::StopIteration`); it is not a `std::exception`, has a
+protected default constructor and one out-of-line virtual destructor (a key function: one typeinfo
+across shared libraries). Purely additive. A stopped call whose macro output already left the stream's
+buffer for a sink (more than a buffer's worth, or a long fragment) cannot take it back: the render
+fails as it did before. The Python module marks Python's `StopIteration` with it.
+
 **Against Python.** Same: syntax, undefined and not-found errors keep their codes, with
 location; `MemoryError` propagates as `bad_alloc` does. Different: errors arrive as `Result`,
 not raised; host exceptions are wrapped, not propagated (`std::rethrow_exception(e.GetException())`
