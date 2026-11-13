@@ -12,9 +12,12 @@ shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt
 engine's fold candidate is the whole chain (ExpressionParser::ParseFiltersAndTests). A chain whose
 last filter does not fold, or folds to an undefined, loses the fold of an earlier step:
 `{% if [1][:, :]|sort|first %}y{% endif %}` renders `[]` in Jinja2 (`[1][:, :]|sort` folds to `[]`),
-and the engine rejects it (`subscripts.tuple_of_slices_chain_step`). The Python module's tests use
-this template as the syntax the engine lacks (`NOPARSE` in `python/tests/test_fallback.py`,
-`test_chat_templates.py`). Also left:
+and the engine rejects it (`subscripts.tuple_of_slices_chain_step`). So does
+`{% if [1][:, :]|default([])|map("string") %}` (`map` takes the context, so Jinja2 does not fold
+it, but `default([])` folds also with StrictUndefined: `tuple_of_slices_chain_step_strict`), which
+the Python module's tests use as the syntax the engine lacks (`NOPARSE` in
+`python/tests/test_fallback.py`, `test_chat_templates.py`; one asserts the engine's error text,
+"Expected expression"). Also left:
 
 - with StrictUndefined `[1][:, :]|batch(2)`, `|slice(2)` and `|unique` fold in Jinja2, whose
   filters return generators, and fail in the engine, which evaluates them eagerly (no case: the
@@ -41,5 +44,5 @@ a candidate that evaluates a prefix of the chain), within the Load perf gate. Fo
 a candidate's inner candidates only where the outer one fails and stop at the first fatal failure.
 
 **Done when.** `subscripts.tuple_of_slices_chain_step` matches in narrow and wide runs and its
-divergence line and module `match` line are gone; `NOPARSE` needs another syntax or its tests are
+and `tuple_of_slices_chain_step_strict` divergence and module `match` lines are gone; `NOPARSE` needs another syntax or its tests are
 dropped.

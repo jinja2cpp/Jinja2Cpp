@@ -358,7 +358,7 @@ def test_include_of_an_unparsable_template_raises_the_engines_error():
         template = make_includer(main).get_template("main")
         with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
             template.render()
-        assert "']' expected" in info.value.message  # the engine's own error, as fallback="never" gives
+        assert "Expected expression" in info.value.message  # the engine's own error, as fallback="never" gives
     with pytest.raises(jinja2cpp.TemplateSyntaxError):
         make_includer("{% include 'inc' %}", fallback="never").get_template("main").render()
     stats = jinja2cpp.stats()
