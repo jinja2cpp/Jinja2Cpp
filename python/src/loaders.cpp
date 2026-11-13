@@ -285,11 +285,18 @@ public:
         m_missed = PyRef();
     }
 
-    // The TemplateNotFound the loader raised when `name` was last not found, or None
+    // The TemplateNotFound the loader raised when `name` was last not found, or None. It is handed over, not
+    // kept: once raised it holds the caller's frames, which a later miss must not keep alive
     void ForgetMissed() const noexcept { m_missed = PyRef(); }
     [[nodiscard]] nb::object Missed(const std::string& name) const
     {
-        return m_missed && m_missedName == name ? nb::borrow(m_missed.Get()) : nb::none();
+        if (!m_missed || m_missedName != name)
+        {
+            return nb::none();
+        }
+        auto missed = nb::borrow(m_missed.Get());
+        m_missed = PyRef();
+        return missed;
     }
 
     // The source of `name` for a diagnostic, read again from the loader: None when it fails

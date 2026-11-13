@@ -168,15 +168,16 @@ void CollectDictPair(const InternalValue& item, size_t index, TemplateDict& resu
     // Any iterable of two items is a pair, a two-character string included
     bool isConverted = false;
     auto itemList = ConvertToList(item, isConverted, false);
-    const auto element = "dictionary update sequence element #" + std::to_string(index);
+    // Built only when it fails: dict(pairs) allocates nothing per pair for the message
+    const auto element = [index] { return "dictionary update sequence element #" + std::to_string(index); };
     if (!isConverted)
     {
-        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "cannot convert " + element + " to a sequence");
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "cannot convert " + element() + " to a sequence");
     }
     auto pair = itemList.ToValueList();
     if (pair.size() != 2)
     {
-        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::ValueError, element + " has length " + std::to_string(pair.size()) + "; 2 is required");
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::ValueError, element() + " has length " + std::to_string(pair.size()) + "; 2 is required");
     }
     result.Set(pair[0], pair[1]);
 }

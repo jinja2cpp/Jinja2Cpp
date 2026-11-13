@@ -148,13 +148,14 @@ JINJA2CPP_NOINLINE void OutStream::GatherPiece(const void* ptr, size_t bytes)
     {
         m_held = std::make_unique<HeldPiece>();
     }
-    m_held->bytes.append(static_cast<const char*>(ptr), bytes);
-    m_sinkWritten += bytes / m_charSize;
+    // Charged before the piece grows: a piece past the budget fails the render, the last one too
     if (RenderMemoryCounted())
     {
-        ChargeObjectMemory(bytes);
+        ChargeRenderMemory(bytes);
         m_held->charged += bytes;
     }
+    m_held->bytes.append(static_cast<const char*>(ptr), bytes);
+    m_sinkWritten += bytes / m_charSize;
 }
 
 

@@ -524,6 +524,31 @@ TEST(OutputTest, BadAllocTruncatesTheString)
     EXPECT_EQ("prefix", out);
 }
 
+TEST(OutputTest, HeldPieceCountsAgainstTheRenderMemoryBudget)
+{
+    // docs/tasks/0456: a piece held for one Write is charged before it grows, the last piece too, so it fails
+    // the render with maxRenderMemory rather than passing it
+    Settings settings;
+    settings.limits.maxRenderMemory = 1 << 14;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% if 1 %}" + std::string(std::size_t{ 1 } << 15, 'x') + "{% endif %}"));
+    RenderOptions options;
+    options.writeEachPiece = true;
+    RecordingSink<char> sink;
+    sink.eachPiece = true;
+    auto result = tpl.RenderTo(sink, {}, options);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_TRUE(sink.chunks.empty());
+
+    // Streamed as it goes, the same output holds nothing
+    RecordingSink<char> streamed;
+    ASSERT_TRUE(tpl.RenderTo(streamed, {}));
+    EXPECT_GT(streamed.output.size(), std::size_t{ 1 } << 14);
+}
+
 TEST(OutputTest, OutputLimitCountsWhatTheSinkGot)
 {
     Settings settings;

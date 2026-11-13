@@ -311,6 +311,35 @@ def test_template_frame_of_a_template_without_a_file_is_template():
     assert (frame.filename, frame.lineno, frame.line) == ("<template>", 2, "")
 
 
+def test_a_raised_loader_exception_is_not_kept():
+    # docs/tasks/0458: the loader's TemplateNotFound is handed to the caller, not kept: raised, it holds the
+    # caller's frames, which a long-lived environment must not keep alive
+    import gc
+    import weakref
+
+    class Request:
+        pass
+
+    class Loader(jinja2cpp.BaseLoader):
+        def get_source(self, environment, template):
+            raise jinja2cpp.TemplateNotFound(template, "no")
+
+    env = jinja2cpp.Environment(loader=Loader())
+    tpl = env.from_string("{% include n %}")
+
+    def handle():
+        request = Request()
+        try:
+            tpl.render(n="a")
+        except jinja2cpp.TemplateNotFound as error:
+            assert error.message == "no"
+        return weakref.ref(request)
+
+    request = handle()
+    gc.collect()
+    assert request() is None
+
+
 def test_a_kept_loader_exception_holds_no_frames():
     # docs/tasks/0458: the loader's TemplateNotFound is kept for the error, without its traceback, and let go of
     # when the loader is replaced, so that the environment and its templates are still collected
