@@ -536,8 +536,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0466](0466-python-format-map-native-attribute.md) | The Python module answers format_map from NativeAttribute, which the engine now has | python | low | done |
 | [0471](0471-tuple-of-slices-fold-by-choice.md) | Tuple-of-slices subscripts: folds the engine decides differently from Jinja2 | parity | low | done |
 | [0474](0474-loop-call-bound-method-repr.md) | `loop.__call__` prints nothing | parity | low | done |
-| [0475](0475-undefined-identity-and-range-extremes.md) | Leftovers of 0413 and 0420: undefined identity, range extremes, repeat messages | parity | low | open |
-| [0476](0476-class-attribute-of-values.md) | `x.__class__` of the engine's values | parity | low | open |
+| [0475](0475-undefined-identity-and-range-extremes.md) | Leftovers of 0413 and 0420: undefined identity, range extremes, repeat messages | parity | low | done |
+| [0476](0476-class-attribute-of-values.md) | `x.__class__` of the engine's values | parity | low | done |
 | [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | done |
 | [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | done |
 | [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | open |
@@ -550,3 +550,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0486](0486-cycle-walk-needs-memory.md) | Reference cycles leak when memory stays spent at the end of a render | robustness | low | open |
 | [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | open |
 | [0488](0488-upstream-reports-and-recipes.md) | Report our fixes upstream and update the package recipes | release | low | open |
+| [0489](0489-dict-views-type.md) | `d.items()`, `d.keys()` and `d.values()` are lists, not dict views | parity | low | open |
+| [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | open |

@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0413, 0420]
 touches: [src/filters.cpp#IsLessKey, src/internal_value.cpp#SliceVisitor, src/value_visitors.h#BinaryMathOperation, src/value_methods.cpp#FormatItem]
 shares: [test/parity/divergences/filters.txt, test/parity/divergences/operators.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/874
 ---
 # Leftovers of 0413 and 0420: undefined identity, range extremes, repeat messages
 
