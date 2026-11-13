@@ -609,8 +609,8 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
-        // A generator is a key by its identity (docs/tasks/0401)
-        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo() && key.GetIteratorKind() == IteratorKind::None)
+        // A generator is a key by its identity (docs/tasks/0401); a list or a dict view is none
+        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo() && !IteratorTypeName(key.GetIteratorKind()))
         {
             return InternalValue();
         }
@@ -2810,9 +2810,27 @@ const char* IteratorTypeName(IteratorKind kind) noexcept
     case IteratorKind::DictReverseKey:
         return "dict_reversekeyiterator";
     case IteratorKind::None:
+    case IteratorKind::DictKeys:
+    case IteratorKind::DictValues:
+    case IteratorKind::DictItems:
         break;
     }
     return nullptr;
+}
+
+const char* DictViewTypeName(IteratorKind kind) noexcept
+{
+    switch (kind)
+    {
+    case IteratorKind::DictKeys:
+        return "dict_keys";
+    case IteratorKind::DictValues:
+        return "dict_values";
+    case IteratorKind::DictItems:
+        return "dict_items";
+    default:
+        return nullptr;
+    }
 }
 
 const char* GeneratorFunctionName(IteratorKind kind) noexcept
@@ -4571,7 +4589,10 @@ constexpr PythonClass PythonClasses[] = {
     { builtinsModule, "bool" },
     { builtinsModule, "builtin_function_or_method" },
     { builtinsModule, "dict" },
+    { builtinsModule, "dict_items" },
+    { builtinsModule, "dict_keys" },
     { builtinsModule, "dict_reversekeyiterator" },
+    { builtinsModule, "dict_values" },
     { builtinsModule, "float" },
     { builtinsModule, "function" },
     { builtinsModule, "generator" },

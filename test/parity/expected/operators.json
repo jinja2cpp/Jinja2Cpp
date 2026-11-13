@@ -4153,6 +4153,652 @@
     "type": "TypeError",
     "message": "unsupported operand type(s) for *: 'dict_items' and 'int'"
    }
+  },
+  {
+   "id": "operators.dict_views_repr",
+   "template": "{{ d.keys() }}|{{ d.values() }}|{{ d.items() }}|{{ {}.items() }}|{{ [d.keys()] }}|{{ d.items() | pprint }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "dict_keys(['a'])|dict_values([1])|dict_items([('a', 1)])|dict_items([])|[dict_keys(['a'])]|dict_items([('a', 1)])"
+  },
+  {
+   "id": "operators.dict_views_str",
+   "template": "{{ d.keys() ~ '' }}|{{ '%s' % (d.values(),) }}|{{ d.items() | string | length }}|{{ d.keys() | e }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "dict_keys(['a'])|dict_values([1])|22|dict_keys([&#39;a&#39;])"
+  },
+  {
+   "id": "operators.dict_views_class",
+   "template": "{{ d.keys().__class__ }}|{{ d.values().__class__.__name__ }}|{{ d.items().__class__.__module__ }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "<class 'dict_keys'>|dict_values|builtins"
+  },
+  {
+   "id": "operators.dict_view_times_str",
+   "template": "{{ d.items() * 'a' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can't multiply sequence by non-int of type 'dict_items'"
+   }
+  },
+  {
+   "id": "operators.dict_view_int_times",
+   "template": "{{ 2 * d.keys() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for *: 'int' and 'dict_keys'"
+   }
+  },
+  {
+   "id": "operators.dict_view_plus_list",
+   "template": "{{ d.items() + [1] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +: 'dict_items' and 'list'"
+   }
+  },
+  {
+   "id": "operators.list_plus_dict_view",
+   "template": "{{ [1] + d.values() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate list (not \"dict_values\") to list"
+   }
+  },
+  {
+   "id": "operators.dict_view_eq_list",
+   "template": "{{ d.keys() == ['a'] }}|{{ d.keys() != ['a'] }}|{{ d.values() == [1] }}|{{ d.items() == [('a', 1)] }}|{{ d.keys() == d.keys() | list }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|True|False|False|False"
+  },
+  {
+   "id": "operators.dict_view_eq_set",
+   "template": "{{ {'a': 1, 'b': 2}.keys() == {'b': 0, 'a': 0}.keys() }}|{{ d.items() == {'a': 1.0}.items() }}|{{ d.items() == {'a': 2}.items() }}|{{ {}.keys() == {}.items() }}|{{ d.keys() == d.items() }}|{{ {('a', 1): 0}.keys() == d.items() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True|False|True|False|True"
+  },
+  {
+   "id": "operators.dict_view_eq_unhashable_value",
+   "template": "{{ {'a': [1]}.items() == {'a': [1]}.items() }}|{{ {'a': [1]}.items() != {'a': [2]}.items() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True"
+  },
+  {
+   "id": "operators.dict_view_subset",
+   "template": "{{ d.keys() < {'a': 1, 'b': 2}.keys() }}|{{ d.keys() <= d.keys() }}|{{ d.keys() < d.keys() }}|{{ {'a': 1, 'b': 2}.items() > d.items() }}|{{ d.items() >= {'a': 2}.items() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True|False|True|False"
+  },
+  {
+   "id": "operators.dict_values_eq",
+   "template": "{{ d.values() == d.values() }}|{% set v = d.values() %}{{ v == v }}|{{ d.values() != d.values() }}|{{ d.keys() == d.values() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|True|True|False"
+  },
+  {
+   "id": "operators.dict_values_ordering",
+   "template": "{{ d.values() < d.values() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'dict_values' and 'dict_values'"
+   }
+  },
+  {
+   "id": "operators.dict_view_ordering_list",
+   "template": "{{ d.keys() < ['a'] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'dict_keys' and 'list'"
+   }
+  },
+  {
+   "id": "operators.dict_view_subscript",
+   "template": "{{ d.keys()[0] is undefined }}|{{ d.items()[0] is undefined }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True"
+  },
+  {
+   "id": "operators.dict_view_slice",
+   "template": "{{ d.keys()[0:1] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'dict_keys' object is not subscriptable"
+   }
+  },
+  {
+   "id": "operators.dict_view_unhashable",
+   "template": "{{ {d.keys(): 1} }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'dict_keys'"
+   }
+  },
+  {
+   "id": "operators.dict_view_isdisjoint",
+   "template": "{{ d.keys().isdisjoint(['x']) }}|{{ d.keys().isdisjoint(['a']) }}|{{ d.items().isdisjoint([('a', 1)]) }}|{{ d.items().isdisjoint([('a', 2), 'zz', [1]]) }}|{{ d.keys().isdisjoint('xyz') }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|False|False|True|True"
+  },
+  {
+   "id": "operators.dict_view_isdisjoint_unhashable",
+   "template": "{{ d.keys().isdisjoint([[1]]) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "operators.dict_values_isdisjoint",
+   "template": "{{ d.values().isdisjoint([1]) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict_values object' has no attribute 'isdisjoint'"
+   }
+  },
+  {
+   "id": "operators.dict_view_sequence_ops",
+   "template": "{{ d.keys() | length }}|{{ d.items() | count }}|{{ d.keys() | first }}|{{ d.values() | last }}|{{ d.keys() | reverse | list }}|{{ 'a' in d.keys() }}|{{ ('a', 1) in d.items() }}|{{ d.keys() is sequence }}|{{ d.keys() is iterable }}|{{ d.values() | list }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1|1|a|1|['a']|True|True|False|True|[1]"
+  },
+  {
+   "id": "operators.dict_view_loop",
+   "template": "{% for k, v in d.items() %}{{ loop.length }}{{ k }}{{ v }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1a1"
+  },
+  {
+   "id": "operators.dict_view_random",
+   "template": "{{ d.keys() | random }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'dict_keys' object is not subscriptable"
+   }
+  },
+  {
+   "id": "operators.dict_view_tojson",
+   "template": "{{ d.keys() | tojson }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Object of type dict_keys is not JSON serializable"
+   }
+  },
+  {
+   "id": "operators.dict_view_mapping",
+   "template": "{{ d.keys().mapping }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'a': 1}"
+  },
+  {
+   "id": "operators.dict_view_reversed_class",
+   "template": "{{ (d.items() | reverse).__class__ }}|{{ (d.values() | reverse).__class__ }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "<class 'dict_reverseitemiterator'>|<class 'dict_reversevalueiterator'>"
+  },
+  {
+   "id": "operators.dict_view_in_unhashable",
+   "template": "{{ [1] in d.keys() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
   }
  ]
 }

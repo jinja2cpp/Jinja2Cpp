@@ -1112,7 +1112,18 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     auto kind = IteratorKind::DictReverseKey;
     if (const auto source = AsList(baseVal))
     {
-        if (source->GetIteratorKind() != IteratorKind::None)
+        const auto sourceKind = source->GetIteratorKind();
+        if (sourceKind == IteratorKind::DictKeys)
+        {
+            // A dict view is reversible (docs/tasks/0489); values and items reverse into iterators
+            // Python names dict_reversevalueiterator and dict_reverseitemiterator, which have no kind here
+            kind = IteratorKind::DictReverseKey;
+        }
+        else if (sourceKind == IteratorKind::DictValues || sourceKind == IteratorKind::DictItems)
+        {
+            kind = IteratorKind::ListReverse;
+        }
+        else if (sourceKind != IteratorKind::None)
         {
             kind = IteratorKind::None;
         }
@@ -1311,6 +1322,11 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                     throw TemplateRuntimeError("'"s + iterator + "' object is not reversible");
                 }
                 throw TemplateRuntimeError("object of type '"s + iterator + "' has no len()");
+            }
+            // A dict view has len() and reversed() but no items to pick (docs/tasks/0489)
+            if (const char* view = m_mode == RandomMode ? DictViewTypeName(iterated->GetIteratorKind()) : nullptr)
+            {
+                throw TemplateRuntimeError("'"s + view + "' object is not subscriptable");
             }
         }
     }

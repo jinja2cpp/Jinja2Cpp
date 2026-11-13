@@ -210,6 +210,10 @@ auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&&... args
 
 bool ConvertToBool(const InternalValue& val);
 
+// Whether every item of `items` is in the dict view `view`, a dict_keys or dict_items, as
+// Python's comparisons of those views (all_contained_in) ask (docs/tasks/0489)
+bool AllInDictView(const ListRef& items, const ListRef& view);
+
 namespace visitors
 {
 template<typename R = InternalValue>
@@ -783,6 +787,13 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
     }
 
     const size_t start = m_os->size();
+    // A dict view prints its items as a list inside its type's name: dict_keys(['a']) (docs/tasks/0489)
+    const char* view = DictViewTypeName(list.GetIteratorKind());
+    if (view)
+    {
+        AppendAscii(view);
+        AppendAscii("(");
+    }
     AppendAscii(isTuple ? "(" : "[");
     size_t count = 0;
     for (const auto& item : list)
@@ -799,6 +810,10 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
         AppendAscii(",");
     }
     AppendAscii(isTuple ? ")" : "]");
+    if (view)
+    {
+        AppendAscii(")");
+    }
     containers.pop_back();
 }
 
@@ -950,6 +965,10 @@ inline const char* PythonTypeName(const ListRef& list)
     if (const char* iterator = IteratorTypeName(list.GetIteratorKind()))
     {
         return iterator;
+    }
+    if (const char* view = DictViewTypeName(list.GetIteratorKind()))
+    {
+        return view;
     }
     if (list.GetRangeInfo())
     {
@@ -2121,6 +2140,11 @@ struct BinaryMathOperation : BaseVisitor<>
     // other operation; a list or tuple on the left names itself, as list.__add__ does
     [[nodiscard]] ResultType IteratorOperands(const ListRef& left, const ListRef& right) const
     {
+        if (IsSetView(left) && IsSetView(right))
+        {
+            return SetViewOperands(left, right);
+        }
+        // A dict_values view, too, equals only itself (docs/tasks/0489)
         if (m_oper == jinja2::BinaryExpression::LogicalEq || m_oper == jinja2::BinaryExpression::LogicalNe)
         {
             return (left.GetIdentity() == right.GetIdentity()) == (m_oper == jinja2::BinaryExpression::LogicalEq);
@@ -2131,6 +2155,36 @@ struct BinaryMathOperation : BaseVisitor<>
             throw TemplateRuntimeError("can only concatenate "s + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
         }
         ThrowUnsupported(left, right);
+    }
+
+    // dict_keys and dict_items are sets in Python: two of them compare as sets do, whatever
+    // their kinds, by length and then by the lookup of one's items in the other (docs/tasks/0489)
+    [[nodiscard]] static bool IsSetView(const ListRef& list)
+    {
+        const auto kind = list.GetIteratorKind();
+        return kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems;
+    }
+    [[nodiscard]] JINJA2CPP_COLD_INLINE ResultType SetViewOperands(const ListRef& left, const ListRef& right) const
+    {
+        const auto leftSize = left.GetSize().value_or(0);
+        const auto rightSize = right.GetSize().value_or(0);
+        switch (m_oper)
+        {
+        case jinja2::BinaryExpression::LogicalEq:
+            return leftSize == rightSize && AllInDictView(left, right);
+        case jinja2::BinaryExpression::LogicalNe:
+            return leftSize != rightSize || !AllInDictView(left, right);
+        case jinja2::BinaryExpression::LogicalLt:
+            return leftSize < rightSize && AllInDictView(left, right);
+        case jinja2::BinaryExpression::LogicalLe:
+            return leftSize <= rightSize && AllInDictView(left, right);
+        case jinja2::BinaryExpression::LogicalGt:
+            return leftSize > rightSize && AllInDictView(right, left);
+        case jinja2::BinaryExpression::LogicalGe:
+            return leftSize >= rightSize && AllInDictView(right, left);
+        default:
+            ThrowUnsupported(left, right);
+        }
     }
 
     // A range (docs/tasks/0401) equals only a range of the same items and has no other

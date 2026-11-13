@@ -60,6 +60,11 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
     {
         // A tuple can nest deeper than the stack: Python raises RecursionError
         CheckStack();
+        // A dict view is unhashable, as a list is (docs/tasks/0489)
+        if (const char* view = DictViewTypeName(list.GetIteratorKind()))
+        {
+            return view;
+        }
         // A generator hashes by identity, as a Python object does (docs/tasks/0401)
         if (list.GetRangeInfo() || list.GetIteratorKind() != IteratorKind::None)
         {
@@ -240,6 +245,11 @@ struct KeyTokenBuilder
             AppendBytes(m_out, start);
             AppendBytes(m_out, step);
             return nullptr;
+        }
+        // A dict view is unhashable, as a list is (docs/tasks/0489)
+        if (const char* view = DictViewTypeName(list.GetIteratorKind()))
+        {
+            return view;
         }
         // A generator or iterator hashes by identity, which its copies share (docs/tasks/0401)
         if (list.GetIteratorKind() != IteratorKind::None)

@@ -2414,8 +2414,9 @@ InternalValue ListAppend(const InternalValue& self, const CallParams& params, Re
 InternalValue ListExtend(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "extend", 1, 1);
+    // Any iterable: a string's characters, a dict's keys (docs/tasks/0489)
     bool isConverted = false;
-    auto other = ConvertToList(params.posParams[0], isConverted);
+    auto other = ConvertToList(params.posParams[0], isConverted, false);
     if (!isConverted)
     {
         Raise("'" + TypeName(params.posParams[0]) + "' object is not iterable");
@@ -2676,7 +2677,8 @@ TemplateDict& MutableDict(const InternalValue& self)
 InternalValue DictKeys(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "keys", 0, 0);
-    return ListAdapter::CreateAdapter(MapOf(self).GetKeyValues());
+    // The views are lists marked with their kind (docs/tasks/0489)
+    return ListAdapter::CreateIterator(MapOf(self).GetKeyValues(), IteratorKind::DictKeys);
 }
 
 InternalValue DictValues(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -2688,7 +2690,7 @@ InternalValue DictValues(const InternalValue& self, const CallParams& params, Re
     {
         result.push_back(std::move(entry.value));
     }
-    InternalValue list = ListAdapter::CreateAdapter(std::move(result));
+    InternalValue list = ListAdapter::CreateIterator(std::move(result), IteratorKind::DictValues);
     if (self.ShouldExtendLifetime())
     {
         list.SetParentData(self);
@@ -2705,7 +2707,7 @@ InternalValue DictItems(const InternalValue& self, const CallParams& params, Ren
     {
         result.push_back(MakeTuple({ std::move(entry.key), std::move(entry.value) }));
     }
-    InternalValue list = ListAdapter::CreateAdapter(std::move(result));
+    InternalValue list = ListAdapter::CreateIterator(std::move(result), IteratorKind::DictItems);
     if (self.ShouldExtendLifetime())
     {
         list.SetParentData(self);
@@ -2904,6 +2906,99 @@ InternalValue DictClear(const InternalValue& self, const CallParams& params, Ren
     items.Clear();
     return InternalValue(NoneValue());
 }
+
+// The key and value of an item of a dict_items view: a 2-tuple, as dictitems_contains asks
+bool ViewItemParts(const InternalValue& item, InternalValue& key, InternalValue& value)
+{
+    if (const auto* pair = GetIf<KeyValuePair>(&item))
+    {
+        key = pair->key;
+        value = pair->value;
+        return true;
+    }
+    const auto list = AsList(item);
+    if (!list || !list->IsTuple() || list->GetSize() != std::optional<size_t>(2))
+    {
+        return false;
+    }
+    key = list->GetValueByIndex(0);
+    value = list->GetValueByIndex(1);
+    return true;
+}
+
+// `in` of a dict_keys or dict_items view as Python's is: one lookup of the item's key, not a
+// walk of the view (docs/tasks/0489). The view's keys are held by their tokens
+class DictViewLookup
+{
+public:
+    explicit DictViewLookup(const ListRef& view)
+        : m_isItems(view.GetIteratorKind() == IteratorKind::DictItems)
+    {
+        for (const auto& entry : view)
+        {
+            InternalValue key = entry;
+            InternalValue value;
+            if (m_isItems && !ViewItemParts(entry, key, value))
+            {
+                continue;
+            }
+            // The keys of a view hash: they come from a dict
+            if (auto token = MakeDictKey(key))
+            {
+                m_entries.emplace(std::move(*token), std::move(value));
+            }
+        }
+    }
+
+    // An unhashable key is Python's TypeError; an item that is no 2-tuple is in no dict_items
+    [[nodiscard]] bool Contains(const InternalValue& item) const
+    {
+        InternalValue key = item;
+        InternalValue value;
+        if (m_isItems && !ViewItemParts(item, key, value))
+        {
+            return false;
+        }
+        const char* unhashable = nullptr;
+        const auto token = MakeDictKey(key, &unhashable);
+        if (!token)
+        {
+            ThrowUnhashable(unhashable);
+        }
+        const auto found = m_entries.find(*token);
+        return found != m_entries.end() && (!m_isItems || Equals(value, found->second));
+    }
+
+private:
+    InternalDict m_entries;
+    bool m_isItems;
+};
+
+InternalValue DictViewIsDisjoint(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "isdisjoint", 1, 1);
+    // Any iterable: a string's characters, a dict's keys
+    bool isConverted = false;
+    auto other = ConvertToList(params.posParams[0], isConverted, false);
+    if (!isConverted)
+    {
+        Raise("'" + TypeName(params.posParams[0]) + "' object is not iterable");
+    }
+    const DictViewLookup lookup(*AsList(self));
+    for (const auto& item : other)
+    {
+        if (lookup.Contains(item))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// The methods of dict_keys and dict_items; dict_values has none (docs/tasks/0489)
+const MethodInfo DictViewMethods[] = {
+    { "isdisjoint", DictViewIsDisjoint, false },
+};
 
 const MethodInfo DictMethods[] = {
     { "keys", DictKeys, false },
@@ -3124,9 +3219,9 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
         if (auto list = AsList(self))
         {
             // An iterator (a lazy filter's generator) has none of a list's methods (docs/tasks/0383)
-            if (list->GetIteratorKind() != IteratorKind::None)
+            if (const auto kind = list->GetIteratorKind(); kind != IteratorKind::None)
             {
-                return nullptr;
+                return kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems ? FindIn(DictViewMethods, name) : nullptr;
             }
             return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
         }
@@ -3167,6 +3262,7 @@ bool IsMethodName(std::string_view name)
         add(StrMethods);
         add(ListMethods);
         add(DictMethods);
+        add(DictViewMethods);
         add(IntMethods);
         add(FloatMethods);
         // The data attributes take the same getattr path
@@ -3515,5 +3611,18 @@ void ThrowNoAttribute(const InternalValue& obj, const std::string& name)
 }
 
 } // namespace methods
+
+bool AllInDictView(const ListRef& items, const ListRef& view)
+{
+    const methods::DictViewLookup lookup(view);
+    for (const auto& item : items)
+    {
+        if (!lookup.Contains(item))
+        {
+            return false;
+        }
+    }
+    return true;
+}
 } // namespace v2
 } // namespace jinja2
