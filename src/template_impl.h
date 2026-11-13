@@ -1049,7 +1049,7 @@ private:
         {
             m_globals = globals.get();
             m_workspace = &workspace;
-            m_running = { &globals, workspace.Running() };
+            m_running = { &globals, workspace.Running(), CycleCollector::Current() };
             workspace.SetRunning(&m_running);
         }
         // A module's callback outlives the call that made it, so it names its globals to no render

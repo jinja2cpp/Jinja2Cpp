@@ -124,6 +124,31 @@ TEST(BorrowedCellsSingle, NestedRenderOfAGlobalWrittenThroughAnAlias)
     EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
 }
 
+TEST(BorrowedCellsSingle, OuterRenderSeesAGlobalANestedRenderWritesFirst)
+{
+    // 0463: a render nested in this one shares its snapshot of the globals; a global it writes
+    // first gets its cell in this render's registry, so this render sees the write once the nested
+    // one has ended, also through an alias made before and in a loop over the global, as Python's
+    // renders share the one list. The next render reads the environment's list
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 0 });
+    env.AddGlobal("e", ValuesList{});
+    Template inner(&env);
+    ASSERT_TRUE(!!inner.Load("{% set _ = g.append(5) %}{{ g }}"));
+    Template innerE(&env);
+    ASSERT_TRUE(!!innerE.Load("{% set _ = e.append(4) %}"));
+    ValuesMap params;
+    params["nested"] = MakeCallable([&inner]() { return inner.RenderAsString({}).value(); });
+    params["nestedE"] = MakeCallable([&innerE]() { return innerE.RenderAsString({}).value(); });
+    EXPECT_EQ("[0][0, 5]|[0, 5]", Render("{{ g }}{{ nested() }}|{{ g }}", params, &env));
+    EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
+    EXPECT_EQ("[4, 1]|[4, 1]", Render("{% set y = e %}{{ nestedE() }}{% set _ = y.append(1) %}{{ y }}|{{ e }}", params, &env));
+    EXPECT_EQ("[]", Render("{{ e }}", {}, &env));
+    EXPECT_EQ("0;[0, 5]5;[0, 5, 5]5;[0, 5, 5, 5]5;|[0, 5, 5, 5]",
+              Render("{% for x in g %}{{ x }};{% if loop.index < 4 %}{{ nested() }}{% endif %}{% endfor %}|{{ g }}", params, &env));
+    EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
+}
+
 TEST(BorrowedCellsSingle, AdapterFindsACellPromotedAcrossThe32BitWrap)
 {
     // 0342: `a` and `b` are two adapters of one host list (the same accessor). `a` stores the

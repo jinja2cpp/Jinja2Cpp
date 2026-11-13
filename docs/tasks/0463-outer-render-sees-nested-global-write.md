@@ -1,6 +1,7 @@
 ---
-status: open
+status: in-progress
 priority: low
+pr: TBD
 area: robustness
 depends: [0324]
 touches: [src/borrowed_cells.cpp, src/cycle_collector.h, src/cycle_collector.cpp, test/borrowed_cells_test.cpp]
@@ -44,3 +45,14 @@ Related gaps seen by the 0324 verifier, same on master or new with 0324 but memo
 
 **Done when.** The reproducer prints `[0][0, 5]|[0, 5]`, a render after it sees `g` as `[0]`, and
 `NestedRenderHasItsOwnCells` still passes.
+
+**Resolution.** A global's adapter (`IsGlobalData`) finds and promotes its cell in the registry of
+the outermost render on the thread whose snapshot of the globals the running render shares
+(`CycleCollector::GlobalCells`, `GlobalCellsForWrite`, through `RenderWorkspace::RunningGlobals`,
+which now names each render's collector). Other data stays in the nested render's registry. The
+cell outlives the nested render and its links detach when the outer render ends.
+`BorrowedCellsSingle.OuterRenderSeesAGlobalANestedRenderWritesFirst` has the reproducer, the alias
+and the loop, each with Python's output, and a render after each sees the environment's list.
+The cell model has the rule (`FixGlobalOuterCell`, `AdReg`) and a new invariant,
+`NestedGlobalKept`, which the mutant `no-global-outer-cell` breaks; `CellTrace.tla` accepts the
+enclosing registry for a global's lookup and promotion. The two related gaps stay as written.
