@@ -2985,14 +2985,7 @@ InternalValue DictViewIsDisjoint(const InternalValue& self, const CallParams& pa
         Raise("'" + TypeName(params.posParams[0]) + "' object is not iterable");
     }
     const DictViewLookup lookup(*AsList(self));
-    for (const auto& item : other)
-    {
-        if (lookup.Contains(item))
-        {
-            return false;
-        }
-    }
-    return true;
+    return std::none_of(other.begin(), other.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
 }
 
 // The methods of dict_keys and dict_items; dict_values has none (docs/tasks/0489)
@@ -3615,14 +3608,7 @@ void ThrowNoAttribute(const InternalValue& obj, const std::string& name)
 bool AllInDictView(const ListRef& items, const ListRef& view)
 {
     const methods::DictViewLookup lookup(view);
-    for (const auto& item : items)
-    {
-        if (!lookup.Contains(item))
-        {
-            return false;
-        }
-    }
-    return true;
+    return std::all_of(items.begin(), items.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
 }
 } // namespace v2
 } // namespace jinja2

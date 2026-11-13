@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0489]
-touches: [src/value_methods.cpp#DictViewMethods, src/testers.cpp#IsValueIn, src/filters.cpp#Reverse]
+touches: [src/value_methods.cpp#DictViewMethods, src/testers.cpp#IsValueIn, src/filters.cpp#Reverse, python/src/adapters.cpp]
 shares: [test/parity/cases/operators.py, test/parity/divergences/operators.txt]
 ---
 # What dict views still lack after 0489
@@ -22,9 +22,15 @@ shares: [test/parity/cases/operators.py, test/parity/divergences/operators.txt]
 4. `d.keys() | indent` fails with `'dict_keys' object has no attribute 'splitlines'`; Python's
    message is `unsupported operand type(s) for +=: 'dict_keys' and 'str'` (a list extends by the
    string first). Message only, which the corpus does not compare.
+5. In the Python module a host dict's `keys()` is Python's own `dict_keys`, while a literal's is
+   the engine's view, which goes to Python as a list: `d.keys() == {'a': 0}.keys()` is `False`
+   (`operators.dict_view_eq_set` in python/tests/parity/module-divergences.txt), and `random` of a
+   host `dict_keys` picks an item where Python fails (`operators.dict_view_random`). Ordering of
+   two host views is 0381 (`operators.dict_view_subset`).
 
 **Proposal.** Keep the source dict in the view (a parent value set always, as the lifetime anchor
 is), add `mapping` as a view attribute; find room for the two reverse kinds; let `in` of a
 set-like view hash the item.
 
-**Done when** the three `operators` divergence lines above are gone.
+**Done when** the three `operators` divergence lines above are gone, and the module's 0492 lines
+in python/tests/parity/module-divergences.txt.
