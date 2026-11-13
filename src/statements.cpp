@@ -43,6 +43,7 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -1315,6 +1316,11 @@ JINJA2CPP_NOINLINE_INLINE void KeepStoppedLoop(const IntrusivePtr<LoopFrame>& st
         try
         {
             KeepLoopState(*state, isFiltered, loopVal, std::move(loopItems));
+        }
+        catch (const std::bad_alloc&)
+        {
+            // Out of memory ends the render, as everywhere else: the stop does not hide it
+            throw;
         }
         catch (...) // NOLINT(bugprone-empty-catch): the rest of a loop that stopped is best effort, the stop goes on
         {
