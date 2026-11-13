@@ -841,6 +841,7 @@ void CallExports::KeepHostSources(const CellTable* table) noexcept
     {
         return;
     }
+    // NOLINTNEXTLINE(bugprone-exception-escape): push_back below capacity copies an InternalValue, which only adds a reference
     const auto keep = [this](const void* identity, const BorrowedCell& cell) noexcept {
         if (!cell.IsFrozen() && m_pins.size() != m_pins.capacity())
         {
