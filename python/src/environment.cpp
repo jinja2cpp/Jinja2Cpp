@@ -504,6 +504,12 @@ void PyEnvironment::SetLoader(nb::handle loader)
     {
         Keep(loader);
     }
+    // A template loaded before may keep the old handler, where the environment's traverse no longer
+    // reaches: what it keeps of a miss goes now (Loader::ForgetMissed)
+    if (m_loaderHandler)
+    {
+        m_loaderHandler->ForgetMissed();
+    }
     m_loaderHandler.reset();
 }
 

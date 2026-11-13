@@ -44,7 +44,9 @@ its piece with `OutStream::FlushPiece`, which writes an empty piece too. `PieceH
 `super()`, `self.b()` and a recursive loop (an empty recursive loop is an item `''`, as Jinja2 yields
 its buffer). A sink stream that writes each piece gathers each piece until it ends (`OutStream::GatherPiece`,
 `m_held`; counted as written for maxOutputSize and charged to maxRenderMemory while held), so a long piece,
-a long text fragment or a folded run around one is one Write. All the
+a long text fragment or a folded run around one is one Write. As in Jinja2, a piece is then held whole
+in memory (a 500 MB macro output takes 500 MB): set maxOutputSize or maxRenderMemory for untrusted
+templates; a sink render without writeEachPiece still streams in 512-character chunks. All the
 cases above match Jinja2 3.1.6 (OutputTest.SinkGetsThePiecesJinja2Folds, test_generate.py). Left: the
 items' Markup type (0493), and a `{{ }}` Jinja2 folds that is no literal (`{{ 1 + 2 }}`, `{{ 'q'|upper }}`,
 `{{ [1, 'a'] }}`, `{{ 1 if true else y }}`) is a piece of its own here: deciding it walks the expression

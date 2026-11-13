@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -122,7 +123,15 @@ JINJA2CPP_NOINLINE void OutStream::EndPiece(bool writeEmpty)
         m_held->bytes.clear();
         ReleaseRenderMemory(std::exchange(m_held->charged, 0));
     }
-    // Counted when gathered (GatherPiece)
+    // Counted when gathered (GatherPiece). A wide piece is copied out of the byte string, whose buffer
+    // need not be aligned for wchar_t (libc++'s short string)
+    if (m_charSize != 1)
+    {
+        std::wstring wide(piece.size() / sizeof(wchar_t), L'\0');
+        std::memcpy(wide.data(), piece.data(), wide.size() * sizeof(wchar_t));
+        WriteSinkChunk(wide.data(), wide.size() * sizeof(wchar_t), 0);
+        return;
+    }
     WriteSinkChunk(piece.data(), piece.size(), 0);
 }
 

@@ -82,10 +82,13 @@ bool PendingIsNotFound(PyRef* kept = nullptr)
     {
         if (kept)
         {
+            // Kept without its traceback and context: their frames (the caller's locals, the template)
+            // would live as long as the loader, and make cycles the collector may not see
             PyErr_NormalizeException(&type, &value, &traceback);
-            if (value && traceback)
+            if (value)
             {
-                PyException_SetTraceback(value, traceback);
+                PyException_SetTraceback(value, Py_None);
+                PyException_SetContext(value, nullptr);
             }
             *kept = PyRef::Steal(std::exchange(value, nullptr));
         }
@@ -283,6 +286,7 @@ public:
     }
 
     // The TemplateNotFound the loader raised when `name` was last not found, or None
+    void ForgetMissed() const noexcept { m_missed = PyRef(); }
     [[nodiscard]] nb::object Missed(const std::string& name) const
     {
         return m_missed && m_missedName == name ? nb::borrow(m_missed.Get()) : nb::none();
@@ -448,6 +452,7 @@ public:
         return source;
     }
     [[nodiscard]] nb::object NotFound(const std::string& name) const override { return m_handler->Missed(name); }
+    void ForgetMissed() const noexcept override { m_handler->ForgetMissed(); }
 
 private:
     std::shared_ptr<SourceHandler> m_handler;

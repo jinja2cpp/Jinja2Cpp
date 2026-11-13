@@ -303,3 +303,34 @@ def test_template_frame_of_a_template_without_a_file_is_template():
         jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"os.py": "\n{{ f() }}"})).get_template("os.py").render(f=lambda: 1 / 0)
     frame = traceback.extract_tb(info.tb)[-2]
     assert (frame.filename, frame.lineno, frame.line) == ("<template>", 2, "")
+
+
+def test_a_kept_loader_exception_holds_no_frames():
+    # docs/tasks/0458: the loader's TemplateNotFound is kept for the error, without its traceback, and let go of
+    # when the loader is replaced, so that the environment and its templates are still collected
+    import gc
+    import weakref
+
+    class Big:
+        pass
+
+    class Loader(jinja2cpp.BaseLoader):
+        def get_source(self, environment, template):
+            big = Big()
+            Loader.big = weakref.ref(big)
+            raise jinja2cpp.TemplateNotFound(template, "no")
+
+    def scenario(swap):
+        env = jinja2cpp.Environment(loader=Loader())
+        tpl = env.from_string("{% include n %}")
+        with pytest.raises(jinja2cpp.TemplateNotFound):
+            tpl.render(n="a")
+        if swap:
+            env.loader = jinja2cpp.DictLoader({})
+        return weakref.ref(env), weakref.ref(tpl)
+
+    for swap in (False, True):
+        env, tpl = scenario(swap)
+        gc.collect()
+        assert env() is None and tpl() is None, swap
+        assert Loader.big() is None, swap
