@@ -117,6 +117,21 @@ public:
     // fails the store and leaves no cycle unnoted (docs/tasks/0283). Does nothing outside a
     // render.
     static void NoteStore(const InternalValue& container);
+    // A container lets go of `value` in a call of a template module: a store that replaces it, a
+    // pop, a clear. The walk at the call's end starts from it too, as it may hold a cycle that an
+    // earlier call made and stored in a value of the module, whose note went with that call's
+    // collector (docs/tasks/0460). Called before the container lets go, so that a note that fails
+    // to allocate fails the change. Does nothing outside a module's call: a render's notes last
+    // as long as its values. Throws std::bad_alloc
+    static void NoteDropped(const InternalValue& value)
+    {
+        if (InModuleCall())
+        {
+            s_current->NoteDroppedInCall(value);
+        }
+    }
+    // Whether a call of a template module runs on this thread: NoteDropped notes something
+    [[nodiscard]] static bool InModuleCall() noexcept { return JINJA2CPP_CELL_UNLIKELY(s_current && s_current->m_module); }
     // The registry of the borrowed cells of the render running on this thread, or null when
     // the render has none yet (docs/tasks/0049)
     [[nodiscard]] static BorrowedCells* CurrentCells() noexcept
@@ -146,6 +161,26 @@ public:
     static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     // The collector of the render running on this thread, or null
     [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
+    // What a container the render running on this thread hands the host keeps, so that the host's
+    // copy can tell when it goes whether that render has ended: then nothing walks the container
+    // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
+    // the render's walk starts. Empty outside a render and in a template module, whose values its
+    // later calls use, on other threads too, and which walks them when it goes. Throws std::bad_alloc
+    static std::weak_ptr<const void> ExportToken();
+    // Whether the render `token` (ExportToken) is of has ended: what its values hold may be
+    // read without a race, as no render writes it any more. False for an empty token
+    [[nodiscard]] static bool HasEnded(const std::weak_ptr<const void>& token) noexcept { return token.expired() && IsToken(token); }
+    // Whether `token` is one ExportToken made, rather than empty
+    [[nodiscard]] static bool IsToken(const std::weak_ptr<const void>& token) noexcept
+    {
+        const std::weak_ptr<const void> none;
+        return token.owner_before(none) || none.owner_before(token);
+    }
+    // The host let go of its copy of a container that a render which HasEnded made, whose items
+    // hold `roots`: a walk from them empties the garbage among what they reach, the container's
+    // own cycle when the template's copy is held by nothing but its items (docs/tasks/0424). One
+    // such walk runs at a time, after the walk of the render that made the container
+    static void CollectExport(std::vector<ValueObjectPtr> roots) noexcept;
     // Makes `collector`, a render's that is still running further down this thread's stack, the
     // current one for the scope: code of that render called back from inside another one (a
     // template callable lent to a host's call that called a module's macro, docs/tasks/0300)
@@ -197,6 +232,7 @@ private:
 
     void Finish() noexcept;
     void Add(ValueObjectPtr object);
+    void NoteDroppedInCall(const InternalValue& value);
     // Drops the candidates nothing else holds; false when there were none
     bool DropUnshared();
     void Collect() noexcept;
@@ -224,6 +260,8 @@ private:
         // The render's copies of the host's data, released before the walk: detaching them
         // frees what only they held
         BorrowedCells cells;
+        // ExportToken: made on the first container the render hands the host
+        std::shared_ptr<const void> exportToken;
     };
 
     CycleCollector* m_outer = s_current;

@@ -772,7 +772,7 @@ void BorrowedCells::PinExports()
     {
         // Failure-atomic (docs/tasks/0338, step D): no storage recorded and no cell marked, so
         // the values read the host's data, which nothing writes; never a mix of the two
-        exports->m_pins.clear();
+        exports->KeepHostSources(m_cells.get());
         exports->Seal();
         throw;
     }
@@ -813,8 +813,62 @@ const InternalValue* CallExports::Storage(const void* identity, bool isList) con
         }
         return &found->second->Storage();
     }
+    const auto* pin = m_failed ? nullptr : Find(identity, isList);
+    return pin ? &pin->storage : nullptr;
+}
+
+const InternalValue* CallExports::HostSource(const void* identity, bool isList) const noexcept
+{
+    const auto* pin = m_failed && !m_registry ? Find(identity, isList) : nullptr;
+    return pin ? &pin->storage : nullptr;
+}
+
+const CallExports::Pinned* CallExports::Find(const void* identity, bool isList) const noexcept
+{
     const auto* const found = std::lower_bound(m_pins.begin(), m_pins.end(), identity, [](const Pinned& pin, const void* key) { return std::less<>()(pin.identity, key); });
-    return found != m_pins.end() && found->identity == identity && found->isList == isList ? &found->storage : nullptr;
+    return found != m_pins.end() && found->identity == identity && found->isList == isList ? found : nullptr;
+}
+
+void CallExports::KeepHostSources(const CellTable* table) noexcept
+{
+    // Nothing is marked: the host's data is never written, and a source only keeps it alive. Every
+    // cell, as a view of nested data the call made reads one the values did not hand out; when
+    // even that allocation fails, the cells handed out, as many as the room the pins have already
+    // holds (one at least), so that a call that ran out of memory needs no more for this
+    m_failed = true;
+    m_pins.clear();
+    if (!table)
+    {
+        return;
+    }
+    // NOLINTNEXTLINE(bugprone-exception-escape): push_back below capacity copies an InternalValue, which only adds a reference
+    const auto keep = [this](const void* identity, const BorrowedCell& cell) noexcept {
+        if (!cell.IsFrozen() && m_pins.size() != m_pins.capacity())
+        {
+            m_pins.push_back(Pinned{ identity, cell.IsList(), cell.m_source, nullptr });
+        }
+    };
+    try
+    {
+        m_pins.reserve(table->size());
+    }
+    catch (const std::exception&)
+    {
+        for (const auto& [identity, isList] : m_cells)
+        {
+            const auto found = table->find(identity);
+            const bool kept = std::any_of(m_pins.begin(), m_pins.end(), [id = identity](const Pinned& pin) { return pin.identity == id; });
+            if (found != table->end() && found->second->IsList() == isList && !kept)
+            {
+                keep(identity, *found->second);
+            }
+        }
+        return;
+    }
+    for (const auto& [identity, cell] : *table)
+    {
+        keep(identity, *cell);
+    }
 }
 
 void CallExports::AddCell(const void* identity, bool isList)

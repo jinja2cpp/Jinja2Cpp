@@ -1,6 +1,7 @@
 ---
-status: open
+status: in-progress
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/870
 area: lifetime
 touches: [src/internal_value.cpp]
 shares: [src/borrowed_cells.h, src/borrowed_cells.cpp, test/allocation_failure_test.cpp]
@@ -25,3 +26,14 @@ the module thread keeps writing.
 
 **Done when.** A failed pin leaves every view reading the host's data, the sweep case asserts
 the host's value, and Module/keep stays within its gate.
+
+**Resolution.** Lazy, so that a call that succeeds pays nothing: when `CallExports::Record`
+fails, `KeepHostSources` keeps each live cell's source (the value whose host data it copied,
+`BorrowedCell::m_source`) in the pins' room instead of their storages, and `HostSource` gives it
+by identity. A view of a module cell (`CallListView`, `CallMapView` with an identity) whose call
+recorded no storage reads the source's `CreateHostGenericList()`/`Map()`, made at the read, never
+the cell. Keeping the sources allocates once for every cell; if that fails too, they go into the
+room the pins already have (at least one slot), handed-out cells first, and a view of a cell with
+no slot reads empty as before. The first version took the host's data at every export, which cost
+Module/keep 1.4% and 32 bytes per view. `AllocationFailureTest.FailedCallsPinIsAllOrNothing` now accepts only
+the call's final state or the host's `[[0]]`.

@@ -950,3 +950,31 @@ TEST_F(TemplateModuleTest, SelfHoldingListCapturedByAStoredClosure)
         EXPECT_EQ("1", Call(module.exports["get"]).AsString());
     }
 }
+
+// 0460: a self-holding list a call stores into a value of the module goes when a later call
+// replaces or removes it, through a namespace, a dict or a list of the module (LSan)
+TEST_F(TemplateModuleTest, SelfHoldingListALaterCallDrops)
+{
+    // clang-format off
+    const char* const sources[] = {
+        "{% set ns = namespace(v=none) %}{% macro n() %}{% set c = [] %}{% set _ = c.append(c) %}{% set ns.v = c %}{{ ns.v|length }}{% endmacro %}",
+        "{% set d = {} %}{% macro n() %}{% set c = [] %}{% set _ = c.append(c) %}{% set _ = d.update(v=c) %}{{ d.v|length }}{% endmacro %}",
+        "{% set d = {} %}{% macro n() %}{% set c = {} %}{% set _ = c.update(c=c) %}{% set _ = d.pop('v', none) %}{% set _ = d.setdefault('v', c) %}{{ d.v|length }}{% endmacro %}",
+        "{% set d = {} %}{% macro n() %}{% set c = [] %}{% set _ = c.append(c) %}{% set _ = d.clear() %}{% set _ = d.update(v=c) %}{{ d.v|length }}{% endmacro %}",
+        "{% set d = {'v': 0} %}{% macro n() %}{% set c = [] %}{% set _ = c.append(c) %}{% set _ = d.popitem() %}{% set _ = d.update(v=c) %}{{ d.v|length }}{% endmacro %}",
+        "{% set l = [] %}{% macro n() %}{% set c = [] %}{% set _ = c.append(c) %}{% set _ = l.pop() if l %}{% set _ = l.append(c) %}{{ l[0]|length }}{% endmacro %}",
+        "{% set l = [] %}{% macro n() %}{% set c = [] %}{% set _ = c.append(c) %}{% set _ = l.clear() %}{% set _ = l.append(c) %}{{ l[0]|length }}{% endmacro %}",
+        "{% set l = [] %}{% macro n() %}{% set c = [] %}{% set _ = c.append(c) %}{% set _ = l.remove(l[0]) if l %}{% set _ = l.append(c) %}{{ l[0]|length }}{% endmacro %}",
+        // Below a value of the module that the call reaches through another one
+        "{% set ns = namespace(d={}) %}{% macro n() %}{% set c = [] %}{% set _ = c.append(c) %}{% set _ = ns.d.update(v=c) %}{{ ns.d.v|length }}{% endmacro %}",
+    };
+    // clang-format on
+    for (const auto* source : sources)
+    {
+        SCOPED_TRACE(source);
+        auto module = Make(source);
+        EXPECT_EQ("1", Call(module.exports["n"]).AsString());
+        EXPECT_EQ("1", Call(module.exports["n"]).AsString());
+        EXPECT_EQ("1", Call(module.exports["n"]).AsString());
+    }
+}

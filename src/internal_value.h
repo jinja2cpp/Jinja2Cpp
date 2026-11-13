@@ -1440,6 +1440,9 @@ public:
     }
 
     void SetParentData(const InternalValue& val);
+    // The value without the anchor SetParentData gave it: it keeps its own object alive, and
+    // nothing of the container it was read from
+    [[nodiscard]] InternalValue WithoutParentData() const;
 
     [[nodiscard]] bool ShouldExtendLifetime() const
     {

@@ -236,6 +236,14 @@ void InternalValue::SetParentData(const InternalValue& val)
     m_obj = MakeRef<Anchor>(std::move(inner), std::move(parent));
 }
 
+InternalValue InternalValue::WithoutParentData() const
+{
+    InternalValue result;
+    result.m_imm = m_imm;
+    result.m_obj = OwnObject(m_obj);
+    return result;
+}
+
 InternalValue::InternalValue(const UndefinedValue& val) noexcept
     : m_imm(UndefinedValue{ val.info, false })
     , m_obj(val.info)
@@ -1619,14 +1627,25 @@ public:
     [[nodiscard]] std::optional<size_t> GetSize() const override
     {
         const auto* items = Items();
-        return items ? items->size() : 0;
+        if (!items)
+        {
+            return ReadHost([](const IListItemAccessor* host) { return host ? host->GetSize() : std::optional<size_t>(0); });
+        }
+        return items->size();
     }
     [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
     [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
     [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
     {
         const auto* items = Items();
-        if (!items || idx < 0 || static_cast<size_t>(idx) >= items->size())
+        if (!items)
+        {
+            return ReadHost([idx](const IListItemAccessor* host) {
+                const auto* indexer = host ? host->GetIndexer() : nullptr;
+                return indexer ? indexer->GetItemByIndex(idx) : Value();
+            });
+        }
+        if (idx < 0 || static_cast<size_t>(idx) >= items->size())
         {
             return Value();
         }
@@ -1635,7 +1654,7 @@ public:
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* view = dynamic_cast<const CallListView*>(&other);
-        return view != nullptr && view->Items() == Items();
+        return view != nullptr && view->Items() == Items() && (Items() != nullptr || view->m_identity == m_identity);
     }
     // A tuple the template made stays one (GenericList::IsTuple): a keepUndefined callable gets
     // a dictsort pair as a 2-tuple (docs/tasks/0347)
@@ -1651,6 +1670,22 @@ private:
         const auto* storage = m_identity ? m_exports.Storage(m_identity, true) : &m_container;
         auto list = storage ? AsList(*storage) : std::nullopt;
         return list ? list->GetMutableItems() : nullptr;
+    }
+    // Calls `read` with the host's list a view of a cell reads when Items finds no storage: the
+    // list the cell copied, made for the read from the source the exports kept when the call
+    // failed at its end (CallExports::HostSource, docs/tasks/0361); null when there is none
+    template<typename Read>
+    [[nodiscard]] std::invoke_result_t<const Read&, const IListItemAccessor*> ReadHost(const Read& read) const
+    {
+        const auto* source = m_identity ? m_exports.HostSource(m_identity, true) : nullptr;
+        const auto list = source ? AsList(*source) : std::nullopt;
+        const auto* accessor = list ? list->GetAccessor() : nullptr;
+        if (!accessor)
+        {
+            return read(nullptr);
+        }
+        const auto host = accessor->CreateHostGenericList();
+        return read(host.GetAccessor());
     }
 
     const CallExports& m_exports;
@@ -1675,7 +1710,7 @@ public:
         const auto* dict = Dict();
         if (!dict)
         {
-            return 0;
+            return ReadHost([](const IMapItemAccessor* host) { return host ? host->GetSize() : size_t{ 0 }; });
         }
         return dict->HasKeyValues() ? Snapshot(*dict).size() : dict->size();
     }
@@ -1684,7 +1719,7 @@ public:
         const auto* dict = Dict();
         if (!dict)
         {
-            return false;
+            return ReadHost([&name](const IMapItemAccessor* host) { return host != nullptr && host->HasValue(name); });
         }
         return dict->HasKeyValues() ? Snapshot(*dict).count(name) != 0 : dict->FindString(name) != dict->end();
     }
@@ -1693,7 +1728,7 @@ public:
         const auto* dict = Dict();
         if (!dict)
         {
-            return Value();
+            return ReadHost([&name](const IMapItemAccessor* host) { return host ? host->GetValueByName(name) : Value(); });
         }
         if (dict->HasKeyValues())
         {
@@ -1710,7 +1745,7 @@ public:
         const auto* dict = Dict();
         if (!dict)
         {
-            return result;
+            return ReadHost([&result](const IMapItemAccessor* host) { return host ? host->GetKeys() : std::move(result); });
         }
         if (dict->HasKeyValues())
         {
@@ -1730,7 +1765,7 @@ public:
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* view = dynamic_cast<const CallMapView*>(&other);
-        return view != nullptr && view->Dict() == Dict();
+        return view != nullptr && view->Dict() == Dict() && (Dict() != nullptr || view->m_identity == m_identity);
     }
     // A namespace stays one to the host (GenericMap::GetObjectClass, docs/tasks/0347)
     [[nodiscard]] const char* GetObjectClass() const override
@@ -1746,6 +1781,20 @@ private:
         const auto* storage = m_identity ? m_exports.Storage(m_identity, false) : &m_container;
         auto map = storage ? AsMap(*storage) : std::nullopt;
         return map ? map->GetMutableItems() : nullptr;
+    }
+    // As CallListView's
+    template<typename Read>
+    [[nodiscard]] std::invoke_result_t<const Read&, const IMapItemAccessor*> ReadHost(const Read& read) const
+    {
+        const auto* source = m_identity ? m_exports.HostSource(m_identity, false) : nullptr;
+        const auto map = source ? AsMap(*source) : std::nullopt;
+        const auto* accessor = map ? map->GetAccessor() : nullptr;
+        if (!accessor)
+        {
+            return read(nullptr);
+        }
+        const auto host = accessor->CreateHostGenericMap();
+        return read(host.GetAccessor());
     }
     // A dict with a key that is not a string, spelled as SharedDictAdapter::CreateSnapshot does
     [[nodiscard]] ValuesMap Snapshot(const TemplateDict& dict) const
@@ -1860,6 +1909,22 @@ template<typename T>
 std::weak_ptr<const void> AdaptersOwner(const BySharedVal<T>& holder)
 {
     return holder.GetOwner();
+}
+
+// What a module's cell of a generic container keeps as its source (BorrowedCell::IsUnheld): the
+// adapter that wrote it. An adapter that owns its copy of the container (BySharedVal) keeps the
+// accessor alive itself, which holds what it reads (LendGenericItem's WithOwner), so the cell
+// keeps none of the container it was read from: that container's copy shares the accessor, and
+// would keep the cell from ever dropping as long as the cell kept it (docs/tasks/0365)
+template<typename Holder>
+InternalValue CellSource(const Holder& /*holder*/, const InternalValue& self)
+{
+    return self;
+}
+template<typename T>
+InternalValue CellSource(const BySharedVal<T>& /*holder*/, const InternalValue& self)
+{
+    return self.WithoutParentData();
 }
 
 // Whether the container's accessor has an owner besides `container` and its copies' owner: the
@@ -2225,7 +2290,7 @@ public:
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
     {
         // A global's data is the host's, whatever holds it
-        return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
+        return m_link.Adopt(CellSource(m_values, self), GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
                             HasNodeIdentity(m_node));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
@@ -2772,6 +2837,98 @@ const char* GeneratorFunctionName(IteratorKind kind) noexcept
 
 namespace
 {
+// The object of `value` that a walk of the collector follows, appended to `roots`
+void AddTraversable(const InternalValue& value, std::vector<ValueObjectPtr>& roots)
+{
+    if (auto object = OwnObjectOf(value); object && object->IsTraversable())
+    {
+        roots.push_back(std::move(object));
+    }
+}
+
+void AddTraversableItems(const InternalValueList& items, std::vector<ValueObjectPtr>& roots)
+{
+    for (const auto& item : items)
+    {
+        AddTraversable(item, roots);
+    }
+}
+
+void AddTraversableItems(const TemplateDict& items, std::vector<ValueObjectPtr>& roots)
+{
+    for (const auto& entry : items)
+    {
+        AddTraversable(entry.second, roots);
+    }
+    items.ForEachKeyValue([&roots](const InternalValue& key) { AddTraversable(key, roots); });
+}
+
+// The host's copy of a list, dict or namespace that a render made (CreateGenericList,
+// CreateGenericMap), which shares the template's items. While the host holds it, the render's
+// walk counts the items as held from outside; once the render has ended, nothing else walks
+// them, so the host's last reference walks from them when it goes: a container that holds
+// itself, held by nothing but its own items now, is freed as Python's collector frees it
+// (docs/tasks/0424). Before the render has ended, its own walk does that. The token tells
+// which (CycleCollector::ExportToken)
+template<typename Adapter>
+class HostCopy
+{
+public:
+    HostCopy(const Adapter& adapter, std::weak_ptr<const void> token)
+        : m_adapter(std::in_place, adapter)
+        , m_token(std::move(token))
+    {
+    }
+    HostCopy(const HostCopy&) = delete;
+    HostCopy(HostCopy&&) = delete;
+    HostCopy& operator=(const HostCopy&) = delete;
+    HostCopy& operator=(HostCopy&&) = delete;
+    ~HostCopy()
+    {
+        // Read only once no render writes them: a render that still runs, on another thread too,
+        // walks them when it ends
+        if (!CycleCollector::HasEnded(m_token))
+        {
+            return;
+        }
+        std::vector<ValueObjectPtr> roots;
+        try
+        {
+            if (const auto* items = m_adapter ? m_adapter->GetMutableItems() : nullptr)
+            {
+                AddTraversableItems(*items, roots);
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the walk starts from the roots found; a cycle through the others leaks
+        {
+        }
+        // The template's copy owns the items alone now, so that the walk follows them
+        m_adapter.reset();
+        CycleCollector::CollectExport(std::move(roots));
+    }
+
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access): set from construction until the destructor
+    [[nodiscard]] const Adapter& Get() const noexcept { return *m_adapter; }
+
+private:
+    std::optional<Adapter> m_adapter;
+    std::weak_ptr<const void> m_token;
+};
+
+// A copy of `adapter` for the host, a HostCopy when a render made it (CycleCollector::ExportToken)
+template<typename Accessor, typename Adapter>
+std::shared_ptr<const Accessor> MakeHostCopy(const Adapter& adapter)
+{
+    auto token = CycleCollector::ExportToken();
+    if (!CycleCollector::IsToken(token))
+    {
+        return std::make_shared<const Adapter>(adapter);
+    }
+    // One allocation, as make_shared's: the accessor is the copy inside the holder
+    auto holder = std::make_shared<const HostCopy<Adapter>>(adapter, std::move(token));
+    return std::shared_ptr<const Accessor>(holder, &holder->Get());
+}
+
 ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind)
 {
     // The items are shared by every copy of the list, as a Python list is shared by its
@@ -2819,7 +2976,7 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
                 // A copy that shares the items, as the GenericList below holds
                 return ExportCallList(*call, nullptr, InternalValue(ListAdapter(MakeRef<Adapter>(*this))));
             }
-            return GenericList(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
+            return GenericList(MakeHostCopy<IListItemAccessor>(*this));
         }
         void Traverse(const TraverseFn& fn) const override
         {
@@ -3451,7 +3608,30 @@ public:
         , m_items(std::move(items))
         , m_owner(std::move(owner))
         , m_identity(identity)
+        , m_token(CycleCollector::ExportToken())
     {
+    }
+    DictExportView(const DictExportView&) = delete;
+    DictExportView(DictExportView&&) = delete;
+    DictExportView& operator=(const DictExportView&) = delete;
+    DictExportView& operator=(DictExportView&&) = delete;
+    // The dict may hold itself, as the template's list a HostCopy shares (docs/tasks/0424)
+    ~DictExportView() override
+    {
+        if (!CycleCollector::HasEnded(m_token))
+        {
+            return;
+        }
+        std::vector<ValueObjectPtr> roots;
+        try
+        {
+            roots.emplace_back(m_owner);
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a cycle through the dict leaks
+        {
+        }
+        m_owner = nullptr;
+        CycleCollector::CollectExport(std::move(roots));
     }
 
     [[nodiscard]] size_t GetSize() const override { return m_snapshot.GetAccessor()->GetSize(); }
@@ -3473,6 +3653,7 @@ private:
     std::vector<std::pair<Value, Value>> m_items;
     IntrusivePtr<const IMapAccessor> m_owner;
     const void* m_identity;
+    std::weak_ptr<const void> m_token;
 };
 } // namespace
 
@@ -3594,7 +3775,7 @@ public:
         {
             return ExportCallMap(*call, nullptr, InternalValue(MapAdapter(MakeRef<SharedDictAdapter>(*this))));
         }
-        return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
+        return GenericMap(MakeHostCopy<IMapItemAccessor>(*this));
     }
 
 protected:
@@ -3658,7 +3839,7 @@ public:
         {
             return ExportCallMap(*call, nullptr, InternalValue(MapAdapter(MakeRef<NamespaceAdapter>(*this))));
         }
-        return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
+        return GenericMap(MakeHostCopy<IMapItemAccessor>(*this));
     }
 };
 
@@ -3820,7 +4001,7 @@ public:
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
     {
         // As GenericListAdapter's
-        return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
+        return m_link.Adopt(CellSource(m_values, self), GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
                             HasNodeIdentity(m_node));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }

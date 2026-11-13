@@ -409,6 +409,10 @@ public:
     // the storage recorded at its end after; null for data with no cell, which reads the host's
     // data
     [[nodiscard]] const InternalValue* Storage(const void* identity, bool isList) const noexcept;
+    // For a call that failed at its end, which recorded no storage: the value whose host data the
+    // cell of `identity` copied, which a view then reads (docs/tasks/0361); null otherwise, and
+    // when even keeping the sources failed
+    [[nodiscard]] const InternalValue* HostSource(const void* identity, bool isList) const noexcept;
 
 private:
     friend class BorrowedCell;
@@ -431,8 +435,11 @@ private:
     void Record(const CellTable& table);
     // Once Record succeeded: marks the recorded cells shared, allocating nothing
     void Commit() noexcept;
+    // Instead, once Record failed: keeps the source of each of the module's cells, for HostSource
+    void KeepHostSources(const CellTable* table) noexcept;
     // Then, whatever Record did: from now on a read goes to the recorded storages only
     void Seal() noexcept;
+    [[nodiscard]] const Pinned* Find(const void* identity, bool isList) const noexcept;
     // Records the storage of a cell the values reach
     void PinCell(const BorrowedCell& cell);
     // The cells of nested data the recorded storages reach
@@ -446,6 +453,8 @@ private:
     // Whether a value reads a list or dict the template owns, whose items may be any of the
     // module's data: the pin then takes every cell of the module, which only copies more
     bool m_containers = false;
+    // Set by KeepHostSources: m_pins then holds the cells' sources rather than their storages
+    bool m_failed = false;
     // Recorded by Pin, sorted by identity
     SmallVector<Pinned, 1> m_pins;
     // Set by BorrowedCells::AdoptExports. Weak: the views keep the exports alive, and the first

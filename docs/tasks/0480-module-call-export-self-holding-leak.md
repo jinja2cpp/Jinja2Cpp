@@ -1,0 +1,32 @@
+---
+status: open
+priority: low
+area: robustness
+depends: [0424]
+touches: [src/internal_value.cpp, src/borrowed_cells.cpp, src/template_module.cpp]
+shares: [test/template_module_test.cpp]
+---
+# A self-holding container a module's call hands a host leaks when the host keeps it
+
+**Problem.** Found while fixing 0424. Since 0424 the host's copy of a list, dict or namespace a
+render made walks from its items when the host lets go of it after the render, so a container
+that holds itself goes with the host's last reference. A template module's call hands the host
+a view of its exports instead (`CallListView`, `CallMapView` with the template's container,
+docs/tasks/0332), which 0424 does not cover. With the macro
+`{% macro m() %}{% set xs = [1] %}{% set _ = xs.append(xs) %}{% set d = {'a': 1} %}{% set _ = d.update(d=d) %}{% set _ = keep(xs) %}{% set _ = keep(d) %}{% endmacro %}`
+and a `keep` callable that stores its argument, two calls and the module's destruction followed by
+the host dropping what it kept leak 440 bytes in 7 allocations under LSan (master after 0424). The
+call's walk sees the view's copy of the adapter share the storage, so it counts the container as
+held from outside; afterwards nothing walks it.
+
+The render's fix does not carry over as it is: after the call, the module's later calls may write
+a container the call stored in the module's values, on another thread under the module's lock,
+while the host drops its view on its own thread, so a walk from the view would race with them.
+
+**Proposal.** When the view goes, walk from its container under the module's lock (the view would
+need a weak reference to the module's state, `TemplateModuleState::mutex`), or hand its items to
+the module's collector to walk at its next call or when it goes (`KeptObjects`), which needs no lock
+on the host's thread.
+
+**Done when** a `TemplateModuleTest` row with the macro above passes under LSan, and
+`Module/keep` does not move in `bench/count.py`.
