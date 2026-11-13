@@ -4,6 +4,7 @@ priority: low
 area: robustness
 depends: [0256]
 touches: [src/cycle_collector.h, src/cycle_collector.cpp, test/allocation_failure_test.cpp, test/internal_value_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/882
 ---
 # Reference cycles leak when memory stays spent at the end of a render
 
