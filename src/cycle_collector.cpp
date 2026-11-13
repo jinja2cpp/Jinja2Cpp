@@ -124,6 +124,8 @@ void CycleCollector::Finish() noexcept
         // What the outer one did not take is collected here: the render that made it ended
         Collect();
     }
+    // Last: the values of this render that the walk may reach are gone or handed over
+    DropTreesUnlessWritten();
 }
 
 void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
@@ -152,14 +154,25 @@ void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
     }
 }
 
-void CycleCollector::DropTreesUnlessWritten(std::size_t mark) noexcept
+void CycleCollector::KeepTreesIn(CycleCollector& keeper)
 {
-    if (!m_notes || m_notes->cells.HasCells())
+    if (!m_notes)
+    {
+        m_notes = std::make_unique<Notes>();
+    }
+    m_notes->treeKeeper = &keeper;
+    m_notes->treeMark = keeper.m_notes ? keeper.m_notes->trees.size() : 0;
+}
+
+void CycleCollector::DropTreesUnlessWritten() noexcept
+{
+    auto* keeper = m_notes->treeKeeper;
+    if (!keeper || !keeper->m_notes || keeper->m_notes->cells.HasCells())
     {
         return;
     }
-    auto& notes = *m_notes;
-    while (notes.trees.size() > mark)
+    auto& notes = *keeper->m_notes;
+    while (notes.trees.size() > m_notes->treeMark)
     {
         notes.treeSet.erase(notes.trees.back().get());
         notes.trees.pop_back();

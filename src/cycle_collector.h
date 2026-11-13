@@ -176,13 +176,12 @@ public:
     // a param it views. The host may destroy the nested template once its render has returned,
     // so this render keeps it (docs/tasks/0481). A tree is kept once. Throws std::bad_alloc
     void KeepTree(std::shared_ptr<const void> tree);
-    // How many trees this render keeps, for DropTreesUnlessWritten
-    [[nodiscard]] std::size_t KeptTrees() const noexcept { return m_notes ? m_notes->trees.size() : 0; }
-    // A nested render that kept its trees here from `mark` on (KeptTrees) has ended: they go
-    // unless a write promoted a cell in this render's registry. Without one no global was changed
-    // in place, so no value of the nested render can be stored where this render reads it, and a
-    // loop of nested renders of new templates keeps none of them (docs/tasks/0481)
-    void DropTreesUnlessWritten(std::size_t mark) noexcept;
+    // This collector's render runs inside the one of `keeper`, which keeps its trees from now on
+    // (KeepTree). When this render ends they go again unless a write promoted a cell in the keeper's
+    // registry. Without one no global was changed in place, so no value of this render can be stored
+    // where the outer render reads it, and a loop of nested renders of new templates keeps none of
+    // them (docs/tasks/0481). Throws std::bad_alloc
+    void KeepTreesIn(CycleCollector& keeper);
     // What a container the render running on this thread hands the host keeps, so that the host's
     // copy can tell when it goes whether that render has ended: then nothing walks the container
     // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
@@ -272,6 +271,9 @@ private:
         // KeepTree's: first, so that it goes last, after every value of the render
         std::vector<std::shared_ptr<const void>> trees;
         std::unordered_set<const void*> treeSet;
+        // KeepTreesIn's: the keeper and how many trees it kept before
+        CycleCollector* treeKeeper = nullptr;
+        std::size_t treeMark = 0;
         // The receiving containers, held until the render ends
         std::vector<ValueObjectPtr> candidates;
         std::unordered_set<const void*> noted;
@@ -290,6 +292,9 @@ private:
         // ExportToken: made on the first container the render hands the host
         std::shared_ptr<const void> exportToken;
     };
+
+    // KeepTreesIn's end
+    void DropTreesUnlessWritten() noexcept;
 
     CycleCollector* m_outer = s_current;
     std::unique_ptr<Notes> m_notes;
