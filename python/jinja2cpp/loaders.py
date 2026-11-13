@@ -34,15 +34,18 @@ def _is_filesystem_loader(loader: t.Any) -> bool:
     return any(c.__name__ == "FileSystemLoader" and c.__module__.split(".")[0] in ("jinja2", "jinja2cpp") for c in type(loader).__mro__)
 
 
-def _not_found(environment: t.Any, names: t.Any) -> TemplateNotFound:
+def _not_found(environment: t.Any, names: t.Any, selected: bool = False) -> TemplateNotFound:
     """The exception for templates the engine did not find (the module raises it, docs/tasks/0432).
 
     `names` is the name, or the list of names of an include, that the engine looked for. A list of
-    several is Jinja2's TemplatesNotFound (``.templates``, ``.name`` the last); one name under a
-    FileSystemLoader names the loader's search path as it is now.
+    several, or any list an include selected from (`selected`, docs/tasks/0458), is Jinja2's
+    TemplatesNotFound (``.templates``, ``.name`` the last); one name under a FileSystemLoader names the
+    loader's search path as it is now.
     """
     if isinstance(names, (list, tuple)):
-        if len(names) != 1:
+        if selected and not names:
+            return TemplatesNotFound(message="Tried to select from an empty list of templates.")
+        if selected or len(names) != 1:
             return TemplatesNotFound(list(names))
         names = names[0]
     loader = getattr(environment, "loader", None)

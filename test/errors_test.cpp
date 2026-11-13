@@ -1268,6 +1268,18 @@ TEST(ErrorsJinjaMessagesTest, RuntimeErrorsNameTheirPythonClass)
         { "{{ {\"a'b c\": 1}|xmlattr }}", "ValueError", "Invalid character in attribute name: \"a'b c\"" },
         { "{% macro m(caller=1) %}{{ caller }}{% endmacro %}{{ m(1, caller=2) }}", "TypeError",
           "macro 'm' was invoked with two values for the special caller argument. This is most likely a bug." },
+        // dict() and xmlattr as Python's dict() and d.items() fail (docs/tasks/0458)
+        { "{{ dict(5) }}", "TypeError", "'int' object is not iterable" },
+        { "{{ dict(1.5) }}", "TypeError", "'float' object is not iterable" },
+        { "{{ dict(true) }}", "TypeError", "'bool' object is not iterable" },
+        { "{{ dict('ab') }}", "ValueError", "dictionary update sequence element #0 has length 1; 2 is required" },
+        { "{{ dict([[1, 2], 'abc']) }}", "ValueError", "dictionary update sequence element #1 has length 3; 2 is required" },
+        { "{{ dict([[1, 2], 3]) }}", "TypeError", "cannot convert dictionary update sequence element #1 to a sequence" },
+        { "{{ [1]|xmlattr }}", "AttributeError", "'list' object has no attribute 'items'" },
+        { "{{ 5|xmlattr }}", "AttributeError", "'int' object has no attribute 'items'" },
+        { "{{ 's'|xmlattr }}", "AttributeError", "'str' object has no attribute 'items'" },
+        { "{{ none|xmlattr }}", "AttributeError", "'NoneType' object has no attribute 'items'" },
+        { "{{ namespace()|xmlattr }}", "AttributeError", "items" },
         // Not reclassified
         { "{{ 1 + 'a' }}", nullptr, nullptr },
     };

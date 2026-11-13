@@ -22,6 +22,24 @@ namespace
     throw nb::python_error();
 }
 
+// The Python class the engine names for a TemplateRuntimeError (ExtraParams[1]), or null
+PyObject* PythonClassOf(const std::string& kind)
+{
+    if (kind == "TypeError")
+    {
+        return PyExc_TypeError;
+    }
+    if (kind == "ValueError")
+    {
+        return PyExc_ValueError;
+    }
+    if (kind == "AttributeError")
+    {
+        return PyExc_AttributeError;
+    }
+    return nullptr;
+}
+
 std::string ParamText(const jinja2::ErrorInfo& error, size_t index)
 {
     const auto& params = error.GetExtraParams();
@@ -218,7 +236,8 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
     case ErrorCode::FileNotFound:
         if (!error.GetExtraParams().empty())
         {
-            RaiseTemplateNotFound(source.environment, ToPython(error.GetExtraParams()[0]));
+            // A list of names is select_template's (ExtraParams[1] "list"), even of one name
+            RaiseTemplateNotFound(source.environment, ToPython(error.GetExtraParams()[0]), ParamText(error, 1) == "list");
         }
         Raise(names.templateNotFound, names.templateNotFound(message));
     case ErrorCode::UndefinedError:
@@ -243,9 +262,9 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         throw nb::python_error();
     case ErrorCode::TemplateRuntimeError:
         // Python's class of the error, when the engine names it (ExtraParams[1])
-        if (const auto kind = ParamText(error, 1); kind == "TypeError" || kind == "ValueError")
+        if (auto* type = PythonClassOf(ParamText(error, 1)))
         {
-            PyErr_SetObject(kind == "TypeError" ? PyExc_TypeError : PyExc_ValueError, message.ptr());
+            PyErr_SetObject(type, message.ptr());
             throw nb::python_error();
         }
         Raise(names.templateRuntimeError, names.templateRuntimeError(message));
@@ -313,9 +332,25 @@ void RaiseTemplateNotFound(nb::handle name)
     Raise(type, type(name));
 }
 
-void RaiseTemplateNotFound(nb::handle environment, nb::handle names)
+void RaiseTemplateNotFound(nb::handle environment, nb::handle names, bool selected)
 {
-    auto instance = nb::module_::import_("jinja2cpp.loaders").attr("_not_found")(environment, names);
+    // One name a Python loader did not find: Jinja2 raises the loader's own exception
+    if (!selected)
+    {
+        nb::object name = nb::borrow(names);
+        if (nb::isinstance<nb::list>(names) && nb::len(names) == 1)
+        {
+            name = names[0];
+        }
+        if (PyUnicode_Check(name.ptr()))
+        {
+            if (auto kept = LoaderNotFoundOf(environment, Utf8(name)); !kept.is_none())
+            {
+                Raise(reinterpret_cast<PyObject*>(Py_TYPE(kept.ptr())), kept);
+            }
+        }
+    }
+    auto instance = nb::module_::import_("jinja2cpp.loaders").attr("_not_found")(environment, names, selected);
     Raise(reinterpret_cast<PyObject*>(Py_TYPE(instance.ptr())), instance);
 }
 } // namespace jinja2cpp_py

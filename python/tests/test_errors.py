@@ -1,6 +1,7 @@
 """Exceptions: Jinja2's hierarchy and attributes, and a callable's own exception raised as itself."""
 
 import os
+import sys
 
 import jinja2
 import jinja2cpp
@@ -138,6 +139,93 @@ def test_include_of_several_missing_templates_is_templates_not_found():
         assert str(info.value) == "none of the templates given were found: missing, missing2"
 
 
+_PY312_TEXT = {"{{ dict([[1, 2], 3]) }}": "cannot convert dictionary update sequence element #1 to a sequence"}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{% include ['missing'] %}",
+        "{% include ('missing',) %}",
+        "{% include [] %}",
+        "{% include none %}",
+        "{% include 'missing' %}",
+        "{% include 5 %}",
+        "{% include 5 ignore missing %}",
+        "{% include 1.5 %}",
+        "{% include nope %}",
+        "{{ dict(5) }}",
+        "{{ dict('ab') }}",
+        "{{ dict([[1, 2], 3]) }}",
+        "{{ dict(nope) }}",
+        "{{ [1]|xmlattr }}",
+        "{{ none|xmlattr }}",
+        "{{ namespace()|xmlattr }}",
+        "{{ nope|xmlattr }}",
+    ],
+)
+def test_include_and_constructor_errors_have_jinja2s_class(source):
+    # docs/tasks/0458: a list of names is select_template's TemplatesNotFound, even of one name
+    def fails(module):
+        env = module.Environment(loader=module.DictLoader({"header": "H"}))
+        with pytest.raises(Exception) as info:
+            env.from_string(source).render()
+        return info.value
+
+    ours, theirs = fails(jinja2cpp), fails(jinja2)
+    assert type(ours).__name__ == type(theirs).__name__, source
+    # The oracle is Python 3.12 (.python-version); CPython 3.14 shortened this one message.
+    oracle_text = _PY312_TEXT.get(source) if sys.version_info >= (3, 14) else None
+    assert str(ours) == (oracle_text or str(theirs)), source
+    if isinstance(theirs, jinja2.TemplatesNotFound):
+        assert ours.templates == theirs.templates
+
+
+@pytest.mark.parametrize("source", ["{{ dict(pairs) }}", "{{ dict(empty) }}", "{{ lst|xmlattr }}", "{{ obj|xmlattr }}", "{{ dict(1, 2) }}"])
+def test_constructor_errors_of_host_values(source):
+    # docs/tasks/0458: a Python list is iterable for dict(), and has no items() for xmlattr
+    def result(module):
+        env = module.Environment()
+        try:
+            return env.from_string(source).render(pairs=[("a", 1)], empty=[], lst=[1], obj=object())
+        except Exception as error:  # noqa: BLE001 - the class and message are compared
+            return type(error).__name__, str(error)
+
+    assert result(jinja2cpp) == result(jinja2)
+
+
+def test_include_of_none_or_an_empty_list_ignores_missing():
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader({}))
+        assert env.from_string("{% include none ignore missing %}|{% include [] ignore missing %}").render() == "|", module
+
+
+def test_a_loaders_own_template_not_found_is_raised():
+    # Jinja2 lets the loader's exception through, with its message (docs/tasks/0458)
+    for module in (jinja2cpp, jinja2):
+
+        class Loader(module.BaseLoader):
+            def get_source(self, environment, template):
+                raise module.TemplateNotFound(template, "custom message")
+
+        class Sub(module.FileSystemLoader):
+            pass
+
+        env = module.Environment(loader=Loader())
+        for render in (lambda: env.from_string("{% include 'x' %}").render(), lambda: env.get_template("x")):
+            with pytest.raises(module.TemplateNotFound) as info:
+                render()
+            assert (str(info.value), info.value.name) == ("custom message", "x"), module
+        # A list selects: the loader's message is not used
+        with pytest.raises(module.TemplatesNotFound) as info:
+            env.from_string("{% include ['x'] %}").render()
+        assert str(info.value) == "none of the templates given were found: x", module
+        env = module.Environment(loader=Sub("nowhere"))
+        with pytest.raises(module.TemplateNotFound) as info:
+            env.from_string("{% include 'x' %}").render()
+        assert str(info.value) == "'x' not found in search path: 'nowhere'", module
+
+
 def test_include_of_an_iterator_stops_at_the_first_template_found():
     def names_then_fail():
         yield "missing"
@@ -221,3 +309,63 @@ def test_template_frame_of_a_template_without_a_file_is_template():
         jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"os.py": "\n{{ f() }}"})).get_template("os.py").render(f=lambda: 1 / 0)
     frame = traceback.extract_tb(info.tb)[-2]
     assert (frame.filename, frame.lineno, frame.line) == ("<template>", 2, "")
+
+
+def test_a_raised_loader_exception_is_not_kept():
+    # docs/tasks/0458: the loader's TemplateNotFound is handed to the caller, not kept: raised, it holds the
+    # caller's frames, which a long-lived environment must not keep alive
+    import gc
+    import weakref
+
+    class Request:
+        pass
+
+    class Loader(jinja2cpp.BaseLoader):
+        def get_source(self, environment, template):
+            raise jinja2cpp.TemplateNotFound(template, "no")
+
+    env = jinja2cpp.Environment(loader=Loader())
+    tpl = env.from_string("{% include n %}")
+
+    def handle():
+        request = Request()
+        try:
+            tpl.render(n="a")
+        except jinja2cpp.TemplateNotFound as error:
+            assert error.message == "no"
+        return weakref.ref(request)
+
+    request = handle()
+    gc.collect()
+    assert request() is None
+
+
+def test_a_kept_loader_exception_holds_no_frames():
+    # docs/tasks/0458: the loader's TemplateNotFound is kept for the error, without its traceback, and let go of
+    # when the loader is replaced, so that the environment and its templates are still collected
+    import gc
+    import weakref
+
+    class Big:
+        pass
+
+    class Loader(jinja2cpp.BaseLoader):
+        def get_source(self, environment, template):
+            big = Big()
+            Loader.big = weakref.ref(big)
+            raise jinja2cpp.TemplateNotFound(template, "no")
+
+    def scenario(swap):
+        env = jinja2cpp.Environment(loader=Loader())
+        tpl = env.from_string("{% include n %}")
+        with pytest.raises(jinja2cpp.TemplateNotFound):
+            tpl.render(n="a")
+        if swap:
+            env.loader = jinja2cpp.DictLoader({})
+        return weakref.ref(env), weakref.ref(tpl)
+
+    for swap in (False, True):
+        env, tpl = scenario(swap)
+        gc.collect()
+        assert env() is None and tpl() is None, swap
+        assert Loader.big() is None, swap

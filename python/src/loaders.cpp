@@ -54,8 +54,9 @@ private:
     mutable std::int64_t m_last = 0;
 };
 
-// Whether the pending Python error is a TemplateNotFound, ours or Jinja2's
-bool PendingIsNotFound()
+// Whether the pending Python error is a TemplateNotFound, ours or Jinja2's: then it is cleared, and
+// the exception, with its traceback, goes to `kept` when given
+bool PendingIsNotFound(PyRef* kept = nullptr)
 {
     PyObject* type = nullptr;
     PyObject* value = nullptr;
@@ -79,6 +80,18 @@ bool PendingIsNotFound()
     }
     if (notFound)
     {
+        if (kept)
+        {
+            // Kept without its traceback and context: their frames (the caller's locals, the template)
+            // would live as long as the loader, and make cycles the collector may not see
+            PyErr_NormalizeException(&type, &value, &traceback);
+            if (value)
+            {
+                PyException_SetTraceback(value, Py_None);
+                PyException_SetContext(value, nullptr);
+            }
+            *kept = PyRef::Steal(std::exchange(value, nullptr));
+        }
         Py_XDECREF(type);
         Py_XDECREF(value);
         Py_XDECREF(traceback);
@@ -204,8 +217,11 @@ public:
         PyObject* result = PyObject_CallMethod(m_loader, "get_source", "OO", m_environment, key.ptr());
         if (!result)
         {
-            if (PendingIsNotFound())
+            if (PyRef missed; PendingIsNotFound(&missed))
             {
+                // Kept for the error: Jinja2 raises the loader's own TemplateNotFound
+                m_missedName = name;
+                m_missed = std::move(missed);
                 return CharFileStreamPtr(nullptr, [](std::istream* stream) { delete stream; });
             }
             throw nb::python_error();
@@ -260,9 +276,28 @@ public:
             Py_VISIT(entry.filename.Get());
             Py_VISIT(entry.uptodate.Get());
         }
+        Py_VISIT(m_missed.Get());
         return 0;
     }
-    void Clear() const noexcept { m_entries.clear(); }
+    void Clear() const noexcept
+    {
+        m_entries.clear();
+        m_missed = PyRef();
+    }
+
+    // The TemplateNotFound the loader raised when `name` was last not found, or None. It is handed over, not
+    // kept: once raised it holds the caller's frames, which a later miss must not keep alive
+    void ForgetMissed() const noexcept { m_missed = PyRef(); }
+    [[nodiscard]] nb::object Missed(const std::string& name) const
+    {
+        if (!m_missed || m_missedName != name)
+        {
+            return nb::none();
+        }
+        auto missed = nb::borrow(m_missed.Get());
+        m_missed = PyRef();
+        return missed;
+    }
 
     // The source of `name` for a diagnostic, read again from the loader: None when it fails
     [[nodiscard]] nb::object Source(const std::string& name) const
@@ -298,6 +333,9 @@ private:
     PyObject* m_loader;
     PyObject* m_environment;
     mutable std::unordered_map<std::string, Entry> m_entries;
+    // The last name not found and the loader's exception for it (renders hold the GIL)
+    mutable std::string m_missedName;
+    mutable PyRef m_missed;
     Versions m_versions;
 };
 
@@ -420,6 +458,8 @@ public:
         }
         return source;
     }
+    [[nodiscard]] nb::object NotFound(const std::string& name) const override { return m_handler->Missed(name); }
+    void ForgetMissed() const noexcept override { m_handler->ForgetMissed(); }
 
 private:
     std::shared_ptr<SourceHandler> m_handler;

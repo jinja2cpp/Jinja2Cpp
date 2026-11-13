@@ -504,6 +504,12 @@ void PyEnvironment::SetLoader(nb::handle loader)
     {
         Keep(loader);
     }
+    // A template loaded before may keep the old handler, where the environment's traverse no longer
+    // reaches: what it keeps of a miss goes now (Loader::ForgetMissed)
+    if (m_loaderHandler)
+    {
+        m_loaderHandler->ForgetMissed();
+    }
     m_loaderHandler.reset();
 }
 
@@ -689,6 +695,20 @@ ErrorSource PyEnvironment::SourceOf(const std::string& name, bool withSource) co
     ErrorSource source;
     source.name = MakeStr(name);
     return source;
+}
+
+nb::object PyEnvironment::LoaderNotFound(const std::string& name) const
+{
+    return m_loaderHandler ? m_loaderHandler->NotFound(name) : nb::none();
+}
+
+nb::object LoaderNotFoundOf(nb::handle environment, const std::string& name)
+{
+    if (environment.is_none() || !nb::isinstance<PyEnvironment>(environment))
+    {
+        return nb::none();
+    }
+    return nb::cast<const PyEnvironment&>(environment).LoaderNotFound(name);
 }
 
 nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass)

@@ -62,9 +62,18 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 
     if (m_isRecursive)
     {
-        // Jinja2 renders a recursive loop into a buffer: loop(x) is a call of a macro
+        // Jinja2 renders a recursive loop into a buffer: loop(x) is a call of a macro, and generate()
+        // yields the whole loop as one item
         const detail::GenerationFreeze freeze(values);
-        RenderLoop(loopVal, os, values, 0);
+        {
+            const OutStream::PieceHold pieceHold(os);
+            RenderLoop(loopVal, os, values, 0);
+        }
+        // An item even when empty: Jinja2 yields the loop's buffer
+        if (os.WritesEachPiece())
+        {
+            os.FlushPiece();
+        }
         return;
     }
     RenderLoop(loopVal, os, values, 0);
@@ -2147,6 +2156,8 @@ struct SelfBlockCall
             frame = curFrame;
         }
         blockContext.SetTemplateFrame(frame);
+        // self.b() returns the block's output: one item of generate(), as a macro's output is
+        const OutStream::PieceHold pieceHold(stream);
         RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
     }
 };
@@ -2742,6 +2753,8 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             // The parent block sees the scopes below this block's, wherever super() is called
             // from (a macro the block passes it to): a context on them in the block's own
             parentBlock.emplace(Callable::Macro, [owner = stack->self, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
+                // The value of the call, one item of generate() as a macro's output is
+                const OutStream::PieceHold pieceHold(stream);
                 const auto home = site.Resolve(context);
                 RenderContext superContext(*home.context, home.link);
                 RenderBlockAt(owner->live ? *owner->live : owner->ended, name, depth + 1, stream, superContext);
@@ -3123,12 +3136,24 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
 {
     auto* callback = values.GetRendererCallback();
     auto templateNames = values.Nodes()[m_expr].Evaluate(values);
+    // Python's get_or_select_template: an undefined name fails as it is used, whatever its policy
+    CheckUndefinedUse(templateNames, UndefinedUse::Call);
     bool isConverted = false;
     ListAdapter list = ConvertToList(templateNames, isConverted);
     // A host sequence is stored as a map and iterates: Python's select_template takes any iterable
     if (!isConverted && AsMap(templateNames))
     {
         list = ConvertToList(templateNames, isConverted, false);
+    }
+    // None selects from an empty list; what is neither a name nor iterable fails, `ignore missing` or not
+    if (!isConverted && templateNames.IsNone())
+    {
+        list = ListAdapter::CreateAdapter(InternalValueList{});
+        isConverted = true;
+    }
+    else if (!isConverted && !templateNames.IsUndefined() && !IsStringValue(templateNames) && !IsStringView(templateNames))
+    {
+        CheckIterable(templateNames);
     }
 
     bool rendered = false;
@@ -3165,7 +3190,9 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
         ValuesList extraParams;
         if (isConverted)
         {
+            // A list of names is Python's select_template, which raises TemplatesNotFound
             extraParams.push_back(IntValue2Value(ListAdapter::CreateAdapter(std::move(tried))));
+            extraParams.emplace_back(std::string("list"));
         }
         else
         {

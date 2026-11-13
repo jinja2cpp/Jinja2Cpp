@@ -42,7 +42,9 @@ extern const char* const kIncludedSyntaxNote;
 [[noreturn]] void RaiseTemplateNotFound(nb::handle name);
 // Jinja2's exception for templates not found: TemplatesNotFound for several names, and the search path of
 // a FileSystemLoader of `environment` (None when unknown) in the message (jinja2cpp.loaders._not_found)
-[[noreturn]] void RaiseTemplateNotFound(nb::handle environment, nb::handle names);
+[[noreturn]] void RaiseTemplateNotFound(nb::handle environment, nb::handle names, bool selected = false);
+// The TemplateNotFound the loader of `environment` (a jinja2cpp.Environment, or None) raised for `name`, or None
+nb::object LoaderNotFoundOf(nb::handle environment, const std::string& name);
 
 // Jinja2's message of the error, without the engine's location prefix
 std::string ErrorMessage(const jinja2::ErrorInfo& error);

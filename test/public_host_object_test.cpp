@@ -2196,10 +2196,11 @@ TEST(PublicHostObjectTest, IncludeTriesTheNamesOfAHostSequence)
     ASSERT_NE(nullptr, tried);
     EXPECT_EQ(2U, tried->GetSize().value());
 
-    // An object that does not iterate is still not a template name
+    // An object that does not iterate is no template name: Python's TypeError (0458)
     auto notIterable = tpl.RenderAsString({ { "x", MakeToy() } });
     ASSERT_FALSE(notIterable.has_value());
-    EXPECT_EQ(ErrorCode::InvalidTemplateName, notIterable.error().GetCode());
+    EXPECT_EQ(ErrorCode::TemplateRuntimeError, notIterable.error().GetCode());
+    EXPECT_EQ("TypeError", notIterable.error().GetExtraParams().at(1).AsString());
 }
 
 // 0424: a container that holds itself, which a host callable keeps past the render, goes when
