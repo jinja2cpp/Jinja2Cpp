@@ -36,7 +36,7 @@ for the repr and the comparison.
 (`IteratorTypeName` stays null) but takes the iterator paths that fit Python's views: no items,
 slices, list methods, `+` or `*`, no `is sequence`, unhashable as a dict key. It keeps `len()`
 (`length`, `truncate`) and `reversed()` (`dict_keys` reverses into a `dict_reversekeyiterator`,
-values and items into a `list_reverseiterator`, see 0495). `DictViewTypeName` names it for repr
+values and items into a `list_reverseiterator`, see 0496). `DictViewTypeName` names it for repr
 (`dict_keys([...])`), `PythonTypeName`, `%`/format, `tojson`'s error, `random`'s "not
 subscriptable" and `__class__` (`dict_keys`, `dict_values`, `dict_items` joined the class table).
 
@@ -48,4 +48,4 @@ method (keys and items). `list.extend` now takes any iterable (a string, a dict)
 iterable conversion `isdisjoint` needed showed missing.
 
 Cases: `operators.dict_view*`, `operators.list_plus_dict_view`, `operators.dict_values_*`,
-`methods.list_extend_iterables`, `methods.list_extend_int`. Leftovers: 0495.
+`methods.list_extend_iterables`, `methods.list_extend_int`. Leftovers: 0496.

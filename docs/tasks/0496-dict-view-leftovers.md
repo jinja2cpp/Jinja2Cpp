@@ -37,5 +37,5 @@ shares: [test/parity/cases/operators.py, test/parity/divergences/operators.txt]
 is), add `mapping` as a view attribute; find room for the two reverse kinds; let `in` of a
 set-like view hash the item.
 
-**Done when** the three `operators` divergence lines above are gone, and the module's 0495 lines
+**Done when** the three `operators` divergence lines above are gone, and the module's 0496 lines
 in python/tests/parity/module-divergences.txt.
