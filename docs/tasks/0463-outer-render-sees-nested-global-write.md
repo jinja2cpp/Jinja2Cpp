@@ -1,7 +1,7 @@
 ---
 status: in-progress
 priority: low
-pr: TBD
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/878
 area: robustness
 depends: [0324]
 touches: [src/borrowed_cells.cpp, src/cycle_collector.h, src/cycle_collector.cpp, test/borrowed_cells_test.cpp]

@@ -1,7 +1,7 @@
 ---
 status: in-progress
 priority: high
-pr: TBD
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/878
 area: lifetime
 depends: [0324]
 touches: [src/template_impl.h, src/cycle_collector.h, src/cycle_collector.cpp, src/template_module.cpp]
