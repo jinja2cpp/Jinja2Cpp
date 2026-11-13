@@ -116,6 +116,22 @@ inline void CheckUndefinedUse(const InternalValue& val, UndefinedUse use)
     }
 }
 
+// Python's == of two items of a list, tuple or dict, and `in`, first takes an item as equal to
+// itself (identity): a copy of one undefined value is the same object, a new lookup is not.
+// Otherwise a StrictUndefined item refuses == (docs/tasks/0484)
+inline bool CheckItemsCompare(const InternalValue& left, const InternalValue& right)
+{
+    const auto* leftInfo = GetUndefinedInfo(left);
+    const auto* rightInfo = GetUndefinedInfo(right);
+    if (leftInfo && leftInfo == rightInfo)
+    {
+        return true;
+    }
+    CheckUndefinedUse(left, UndefinedUse::Operator);
+    CheckUndefinedUse(right, UndefinedUse::Operator);
+    return false;
+}
+
 // For str(), bool(), len() and iteration, which only StrictUndefined refuses
 inline void CheckStrictUndefined(const UndefinedValue& val)
 {

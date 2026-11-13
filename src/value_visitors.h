@@ -2103,10 +2103,7 @@ struct BinaryMathOperation : BaseVisitor<>
         auto r = right.begin();
         for (; l != left.end() && r != right.end(); ++l, ++r)
         {
-            // Python compares the items with ==, which a StrictUndefined refuses (docs/tasks/0484)
-            CheckUndefinedUse(*l, UndefinedUse::Operator);
-            CheckUndefinedUse(*r, UndefinedUse::Operator);
-            if (ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq)))
+            if (CheckItemsCompare(*l, *r) || ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq)))
             {
                 continue;
             }
@@ -2229,13 +2226,7 @@ struct BinaryMathOperation : BaseVisitor<>
             for (auto& [key, value] : left.GetEntries())
             {
                 const auto other = right.FindItem(key);
-                if (other)
-                {
-                    // As the items of a list (docs/tasks/0484)
-                    CheckUndefinedUse(value, UndefinedUse::Operator);
-                    CheckUndefinedUse(*other, UndefinedUse::Operator);
-                }
-                if (!other || !ConvertToBool(Apply2<BinaryMathOperation>(value, *other, BinaryExpression::LogicalEq)))
+                if (!other || (!CheckItemsCompare(value, *other) && !ConvertToBool(Apply2<BinaryMathOperation>(value, *other, BinaryExpression::LogicalEq))))
                 {
                     equal = false;
                     break;

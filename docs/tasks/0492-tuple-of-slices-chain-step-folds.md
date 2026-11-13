@@ -20,6 +20,12 @@ this template as the syntax the engine lacks (`NOPARSE` in `python/tests/test_fa
   filters return generators, and fail in the engine, which evaluates them eagerly (no case: the
   output is a generator's repr with its address);
 - a host filter in a chain, `[1][:, :] is undefined|host_filter`, the same as the chain above;
+- with StrictUndefined, FoldCandidate::failsLoad is decided by the candidate's node kind, so a
+  conditional does not pass on the Impossible of a filter in a branch:
+  `{% if false and ([1][:, :]|length if 1 else x) %}a{% else %}b{% endif %}` renders `b` in Jinja2
+  and fails the engine's Load; and `{% if false and (1 if [1][:, :] else x) %}` fails Jinja2's
+  compile (the test's truthiness of a strict undefined) where the engine renders `b` (the verifier
+  of 0484; both as before 0484);
 - cost: under StrictUndefined every candidate is evaluated, and since 0484 every operator node
   around a tuple-of-slices subscript is a candidate, so a chain of N operators evaluates about N^2/2
   nodes at Load (N is bounded by Settings::Limits::maxExpressionOperators, 491), and nested brackets

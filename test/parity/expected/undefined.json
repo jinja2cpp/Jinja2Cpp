@@ -2047,6 +2047,21 @@
    "output": "False|False|False|True"
   },
   {
+   "id": "undefined.strict_compare_identity",
+   "template": "{% set a = nope %}{{ [a] == [a] }}|{{ (a,) != (a,) }}|{{ {'k': a} == {'k': a} }}|{{ [a, 1] == [a, 2] }}|{{ a is in [a] }}|{% for i in [nope] %}{{ [i] == [i] }}{% endfor %}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "True|False|True|False|True|True"
+  },
+  {
    "id": "undefined.default_list_compare",
    "template": "{{ [nope] == [1] }}|{{ [nope] == [nope2] }}|{{ 1 in [nope] }}|{{ {'a': nope} == {'a': 1} }}",
    "context": {
