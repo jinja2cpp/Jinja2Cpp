@@ -372,21 +372,20 @@ public:
 
             // Only a template with a subscript by a tuple of slices has fold checks, which need the
             // sealed tree, and the parse's state for the error: such a template holds both at once
-            const auto& foldChecks = parser.GetFoldChecks();
-            if (foldChecks.empty())
+            const auto* foldChecks = parser.GetFoldChecks();
+            if (!foldChecks)
             {
                 parser.ReleaseParseState();
             }
             // Its fields are set once the Load succeeds
             nodes.SetOrigin(&m_origin);
             auto sealed = nodes.Seal(*parseResult);
-            if (!foldChecks.empty())
+            if (foldChecks)
             {
-                if (const auto failed = FailedFold(foldChecks, sealed.View()); failed < foldChecks.size())
+                if (auto error = FailedFoldError(parser, *foldChecks, sealed.View()))
                 {
-                    return parser.GetFoldCheckError(foldChecks[failed]);
+                    return error;
                 }
-                parser.ReleaseParseState();
             }
             auto convertedTexts = parser.TakeConvertedTexts();
             auto metadataInfo = parser.GetMetadataInfo();
@@ -415,6 +414,18 @@ public:
     // The first of `checks` that fails on the sealed tree `nodes`, or checks.size() (FoldCheck,
     // docs/tasks/0471): Jinja2 folds when it compiles, so the folds are evaluated in a context of
     // their own, with no values, in the template's settings
+    // The error of the first of `checks` that fails, else none, and the parse's state released.
+    // Out of line, as Load is: few templates have checks
+    JINJA2CPP_NOINLINE std::optional<BasicErrorInfo<CharT>> FailedFoldError(TemplateParser<CharT>& parser, const std::vector<FoldCheck>& checks, const ArenaView& nodes) const
+    {
+        if (const auto failed = FailedFold(checks, nodes); failed < checks.size())
+        {
+            return parser.GetFoldCheckError(checks[failed]);
+        }
+        parser.ReleaseParseState();
+        return std::nullopt;
+    }
+
     std::size_t FailedFold(const std::vector<FoldCheck>& checks, const ArenaView& nodes) const
     {
         if (checks.empty())

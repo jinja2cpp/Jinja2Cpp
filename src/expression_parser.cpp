@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -168,32 +169,16 @@ bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
     return true;
 }
 
-// In a top-level expression while it lives (ExpressionParser::m_inFoldRoot)
-class FoldRootScope
-{
-public:
-    explicit FoldRootScope(bool& inRoot)
-        : m_inRoot(inRoot)
-        , m_saved(inRoot)
-    {
-        inRoot = true;
-    }
-    ~FoldRootScope() { m_inRoot = m_saved; }
-    FoldRootScope(const FoldRootScope&) = delete;
-    FoldRootScope& operator=(const FoldRootScope&) = delete;
-
-private:
-    bool& m_inRoot;
-    bool m_saved;
-};
 } // namespace
 
 ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(LexScanner& lexer, bool isVolatile)
 {
     m_volatile = isVolatile;
-    const auto startTok = lexer.PeekNextToken();
-    const FoldRootScope foldRoot(m_inFoldRoot);
-    BeginFoldRoot();
+    // The tokens outlive the parse: no copy
+    const auto& startTok = lexer.PeekNextToken();
+    // The output is the top-level expression (FoldCheck): the expressions in it are none
+    m_outputRoot = true;
+    const unsigned foldFrom = m_tupleSliceSubscripts;
     auto evaluator = ParseTupleOrExpression(lexer);
     if (!evaluator)
     {
@@ -201,14 +186,14 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
     }
     // A subscript by a tuple of slices compiles where Jinja2 folds an expression around it, or
     // the output's whole value (FoldCheck); printing the strict undefined it folds to fails
-    if (m_tupleSliceSubscripts != m_foldRootFrom)
+    if (m_tupleSliceSubscripts != foldFrom)
     {
         if (m_strictUndefined && &m_nodes[*evaluator] == &m_nodes[m_tupleSliceValue])
         {
             return MakeParseError(ErrorCode::ExpectedSquareBracket, startTok);
         }
-        AddFoldCandidate(*evaluator, m_foldRootFrom, true);
-        if (auto finished = FinishFoldRoot(startTok); !finished)
+        AddFoldCandidate(*evaluator, foldFrom, true);
+        if (auto finished = FinishFoldRoot(startTok, foldFrom); !finished)
         {
             return MakeUnexpected(finished.error());
         }
@@ -228,17 +213,52 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
     return result;
 }
 
-void ExpressionParser::BeginFoldRoot()
+struct UnknownCallables::FoldState
 {
-    m_foldRootFrom = m_tupleSliceSubscripts;
-    // A root that failed to parse returned before FinishFoldRoot and left its candidates, with
-    // subscript indices of its own parser: none belongs to the root starting here
-    m_unknown.FoldCandidates().clear();
+    std::vector<FoldCheck> checks;
+    std::vector<FoldCandidate> candidates;
+};
+
+void UnknownCallables::FoldStateDeleter::operator()(FoldState* state) const
+{
+    std::default_delete<FoldState>()(state);
+}
+
+UnknownCallables::FoldState& UnknownCallables::Fold()
+{
+    if (!m_fold)
+    {
+        m_fold.reset(new FoldState());
+    }
+    return *m_fold;
+}
+
+void UnknownCallables::AddFoldCheck(FoldCheck check)
+{
+    Fold().checks.push_back(std::move(check));
+}
+
+const std::vector<FoldCheck>* UnknownCallables::FoldChecks() const
+{
+    return !m_fold->checks.empty() ? &m_fold->checks : nullptr;
+}
+
+std::vector<FoldCandidate>& UnknownCallables::FoldCandidates()
+{
+    return Fold().candidates;
+}
+
+void UnknownCallables::DropFoldCandidates()
+{
+    if (m_fold)
+    {
+        m_fold->candidates.clear();
+    }
 }
 
 void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output)
 {
-    if (!m_inFoldRoot)
+    if (!InFoldRoot())
     {
         return;
     }
@@ -248,18 +268,31 @@ void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from,
     }
 }
 
-nonstd::expected<void, ParseError> ExpressionParser::FinishFoldRoot(const Token& tok)
+JINJA2CPP_NOINLINE nonstd::expected<void, ParseError> ExpressionParser::NoteFullExpressionFold(NodeRef<Expression> result, unsigned from, const Token& tok)
+{
+    // A statement's expression is a top-level one (FoldCheck), unless it is an output's
+    const bool isFoldRoot = m_depth == 1 && !m_outputRoot && !m_inElseChain;
+    AddFoldCandidate(result, from, isFoldRoot && m_outputExpressions);
+    if (isFoldRoot)
+    {
+        return FinishFoldRoot(tok, from);
+    }
+    return {};
+}
+
+nonstd::expected<void, ParseError> ExpressionParser::FinishFoldRoot(const Token& tok, unsigned rootFrom)
 {
     FoldCheck check;
     auto& candidates = m_unknown.FoldCandidates();
-    // Only this root's (BeginFoldRoot cleared the rest)
+    // Only this root's: a root of this parser that failed left its own, of lower indices; the
+    // first subscript of a parser drops those of the others (ParseSubscript)
     candidates.erase(std::remove_if(candidates.begin(),
                                     candidates.end(),
-                                    [this](const FoldCandidate& candidate) { return candidate.from < m_foldRootFrom || candidate.to > m_tupleSliceSubscripts; }),
+                                    [this, rootFrom](const FoldCandidate& candidate) { return candidate.from < rootFrom || candidate.to > m_tupleSliceSubscripts; }),
                      candidates.end());
     check.candidates = std::move(candidates);
     candidates.clear();
-    check.from = m_foldRootFrom;
+    check.from = rootFrom;
     check.to = m_tupleSliceSubscripts;
     if (!CoversEverySubscript(check, [](std::size_t /*index*/) { return true; }))
     {
@@ -289,12 +322,6 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     LexScanner::StateSaver saver(lexer);
     const auto unknownMark = m_unknown.Mark();
     // A statement's expression is a top-level one (FoldCheck); an output's is Parse's
-    const bool isFoldRoot = !m_inFoldRoot;
-    const FoldRootScope foldRoot(m_inFoldRoot);
-    if (isFoldRoot)
-    {
-        BeginFoldRoot();
-    }
     const unsigned foldFrom = m_tupleSliceSubscripts;
 
     auto value = ParseBinary(lexer, Precedence::Or);
@@ -339,12 +366,11 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
         chained = true;
     }
 
-    NoteFoldCandidate(result, foldFrom, isFoldRoot && m_outputExpressions);
-    if (isFoldRoot && m_tupleSliceSubscripts != m_foldRootFrom)
+    if (m_tupleSliceSubscripts != foldFrom)
     {
-        if (auto finished = FinishFoldRoot(*saver.m_state.m_cur); !finished)
+        if (auto folded = NoteFullExpressionFold(result, foldFrom, *saver.m_state.m_cur); !folded)
         {
-            return MakeUnexpected(finished.error());
+            return MakeUnexpected(folded.error());
         }
     }
     saver.Commit();
@@ -1507,11 +1533,15 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
             // Jinja2 folds a subscript of a literal by constants through Environment.getitem,
             // which gives an undefined for the TypeError of a list, tuple or string and the
             // KeyError of a dict. Unfolded, the slice inside the tuple is invalid Python
-            if (!m_inFoldRoot || !bracket->foldable || !m_nodes[valueRef].IsFoldable(m_nodes))
+            if (!InFoldRoot() || !bracket->foldable || !m_nodes[valueRef].IsFoldable(m_nodes))
             {
                 return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
             }
-            ++m_tupleSliceSubscripts;
+            // The candidates left now are those of another parser's root that failed
+            if (m_tupleSliceSubscripts++ == 0)
+            {
+                m_unknown.DropFoldCandidates();
+            }
             const NodeRef<Expression> undefined = m_nodes.Make<TupleSliceExpression>(valueRef, bracket->tupleItems);
             m_tupleSliceValue = undefined;
             return undefined;
@@ -1668,8 +1698,12 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
             }
+            // Not counted as nested, and still in the expression's root, if it is one (IsFoldRoot)
             --m_depth;
+            const bool inElse = m_inElseChain;
+            m_inElseChain = true;
             auto value = ParseFullExpression(lexer);
+            m_inElseChain = inElse;
             ++m_depth;
             if (!value)
             {

@@ -15,8 +15,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -144,15 +144,25 @@ public:
 
     // The folds the Load checks on the sealed tree (FoldCheck): the parse-wide list of what is
     // left to check after the parse, as the names are
-    void AddFoldCheck(FoldCheck check) { m_foldChecks.push_back(std::move(check)); }
-    [[nodiscard]] const std::vector<FoldCheck>& GetFoldChecks() const { return m_foldChecks; }
+    // Only a template with a subscript by a tuple of slices has them: the rest hold one null pointer
+    // pointer, out of line, so that the parsers that inline this class's members do not grow
+    void AddFoldCheck(FoldCheck check);
+    // Null when there are none
+    [[nodiscard]] const std::vector<FoldCheck>* GetFoldChecks() const { return m_fold ? FoldChecks() : nullptr; }
     // Those of the top-level expression being parsed (ExpressionParser::AddFoldCandidate)
-    std::vector<FoldCandidate>& FoldCandidates() { return m_foldCandidates; }
+    std::vector<FoldCandidate>& FoldCandidates();
+    void DropFoldCandidates();
 
 private:
     std::vector<Name> m_names;
-    std::vector<FoldCheck> m_foldChecks;
-    std::vector<FoldCandidate> m_foldCandidates;
+    struct FoldState;
+    struct FoldStateDeleter
+    {
+        void operator()(FoldState* state) const;
+    };
+    FoldState& Fold();
+    [[nodiscard]] const std::vector<FoldCheck>* FoldChecks() const;
+    std::unique_ptr<FoldState, FoldStateDeleter> m_fold;
     // m_names.size(), which every expression reads twice: a load, not a division by sizeof(Name)
     // (docs/tasks/0205)
     std::size_t m_count = 0;
@@ -264,12 +274,16 @@ private:
             AddFoldCandidate(node, from, output);
         }
     }
-    // Starts a top-level expression: its subscripts are counted from here, with no candidates
-    void BeginFoldRoot();
+    // In a top-level expression (FoldCheck): Parse's output, or a statement's ParseFullExpression,
+    // which do not nest: the rest are nested in one (m_depth counts them)
+    [[nodiscard]] bool InFoldRoot() const { return m_outputRoot || m_depth != 0; }
     void AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output);
     // At the end of the top-level expression starting at `tok`: an error if one of its subscripts
     // cannot fold, else the check goes to the Load
-    nonstd::expected<void, ParseError> FinishFoldRoot(const Token& tok);
+    nonstd::expected<void, ParseError> FinishFoldRoot(const Token& tok, unsigned rootFrom);
+    // At the end of ParseFullExpression, when its value made tuple-slice subscripts: the value
+    // is a candidate, and a top-level expression's check is made (out of line: few do)
+    nonstd::expected<void, ParseError> NoteFullExpressionFold(NodeRef<Expression> result, unsigned from, const Token& tok);
     // Counts one more chained operator; false past Settings::Limits::maxExpressionOperators
     bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
@@ -287,12 +301,12 @@ private:
     bool m_volatile = false;
     // SetOutputExpressions
     bool m_outputExpressions = false;
-    // In a top-level expression (Parse, or a statement's ParseFullExpression), which do not
-    // nest: the tuple-slice subscripts it makes start at m_foldRootFrom, and the expressions in
-    // it that may fold them away go to UnknownCallables::FoldCandidates, which the parsers of
-    // one template share, so that a parser, made for each tag, owns no list
-    bool m_inFoldRoot = false;
-    unsigned m_foldRootFrom = 0;
+    // Parse's output is the top-level expression (InFoldRoot). The expressions in a top-level
+    // one that may fold its tuple-slice subscripts away go to UnknownCallables::FoldCandidates,
+    // which the parsers of one template share, so that a parser, made for each tag, owns no list
+    bool m_outputRoot = false;
+    // In the else branch of a conditional, parsed as if it were not nested (ParseIfExpression)
+    bool m_inElseChain = false;
     // Subscripts by a tuple holding a slice (`[1, 2][1:2, 3]`) made so far: Jinja2 compiles one
     // only where it folds an expression around it, else it writes invalid Python (FoldCheck)
     unsigned m_tupleSliceSubscripts = 0;
