@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_IMPL_H
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
+#include "borrowed_cells.h"
 #include "cycle_collector.h"
 #include "dialect.h"
 #include "error_boundary.h"
