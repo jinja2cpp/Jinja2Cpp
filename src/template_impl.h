@@ -561,6 +561,35 @@ public:
 
     // `hooks` (with hasHooks set) brings the render's own globals and poll (RenderHooks). A
     // separate instantiation, so that the ordinary Render pays nothing for them
+    // RenderCore of a render started inside another one: the collector of the outermost render that
+    // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
+    // again as copies of `params` (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
+    template<typename ParamsMap>
+    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace, const GlobalsSnapshot& globals, const ParamsMap& params, InternalValueMap& intParams) const
+    {
+        auto* keeper = SharedSnapshotKeeper(workspace, &globals);
+        if (!keeper)
+        {
+            return nullptr;
+        }
+        keeper->KeepTree(this->weak_from_this().lock());
+        if constexpr (std::is_same_v<ParamsMap, GenericMap>)
+        {
+            for (auto& name : params.GetKeys())
+            {
+                intParams[name] = OwnedArgument(params.GetValueByName(name));
+            }
+        }
+        else
+        {
+            for (const auto& [name, value] : params)
+            {
+                intParams[name] = OwnedArgument(value);
+            }
+        }
+        return keeper;
+    }
+
     template<bool hasHooks, typename Target, typename ParamsMap>
     std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const RenderHooks* hooks) const
     {
@@ -599,7 +628,7 @@ public:
         {
             // First, so that it ends last: when nothing of the render holds values any more
             // It also keeps the render's copies of the host's data (docs/tasks/0049)
-            const CycleCollector cycles;
+            CycleCollector cycles;
             // Before the limits, which start counting the steps to the first poll. Nothing at all for an ordinary render
             std::conditional_t<hasHooks, std::optional<HostPollScope>, NoPollScope> pollScope;
             const auto poll = InstallPoll(pollScope, hooks);
@@ -614,18 +643,8 @@ public:
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
             auto& intParams = maps.Params();
-            // A render started inside another one that shares its globals: a value it stores in a
-            // global outlives it in the outer render, which keeps this template and the params'
-            // copies alive until it ends, as the host may destroy both once this render returns
-            // (docs/tasks/0481)
-            CycleCollector* const keeper = globals && maps.Workspace().Running() ? SharedSnapshotKeeper(maps.Workspace(), globals.get()) : nullptr;
-            if (keeper)
-            {
-                keeper->KeepTree(this->weak_from_this().lock());
-            }
-
-            auto convertParam = [&intParams, keeper](const std::string& name, const Value& value) {
-                intParams[name] = keeper ? OwnedArgument(value) : visit(visitors::InputValueConvertor(false, true), value.GetData());
+            auto convertParam = [&intParams](const std::string& name, const Value& value) {
+                intParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
@@ -644,9 +663,21 @@ public:
                     convertParam(name, value);
                 }
             }
+            // A render started inside another one that shares its globals: a value it stores in a
+            // global outlives it in the outer render, which keeps this template and the params'
+            // copies alive until it ends, as the host may destroy both once this render returns
+            // (docs/tasks/0481). One compare for a render that runs inside no other one
+            CycleCollector* keeper = nullptr;
+            if (JINJA2CPP_CELL_UNLIKELY(maps.Workspace().Running() != nullptr) && globals)
+            {
+                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, intParams);
+            }
             RendererCallback callback(this);
-            callback.SetGlobals(maps.Workspace(), globals);
-            callback.SetKeeper(keeper);
+            callback.SetGlobals(maps.Workspace(), globals, cycles);
+            if (keeper)
+            {
+                callback.SetKeeper(keeper);
+            }
             const InternalValueMap& renderGlobals = hostGlobals ? *hostGlobals : globals ? globals->values
                                                                                          : noGlobals;
             RenderContext context(intParams,
@@ -1079,11 +1110,11 @@ private:
         // The render reads `globals` (null without an environment); the renders started inside it
         // find them here (GetGlobalsSnapshot, docs/tasks/0324). The callback is the render's own
         // object whose address the render hands out anyway, so naming them costs it no reloads
-        void SetGlobals(RenderWorkspace& workspace, const std::shared_ptr<const GlobalsSnapshot>& globals) noexcept
+        void SetGlobals(RenderWorkspace& workspace, const std::shared_ptr<const GlobalsSnapshot>& globals, CycleCollector& collector) noexcept
         {
             m_globals = globals.get();
             m_workspace = &workspace;
-            m_running = { &globals, workspace.Running(), CycleCollector::Current() };
+            m_running = { &globals, workspace.Running(), &collector };
             workspace.SetRunning(&m_running);
         }
         // A module's callback outlives the call that made it, so it names its globals to no render
