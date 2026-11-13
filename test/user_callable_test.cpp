@@ -668,6 +668,39 @@ TEST(EnvCallablesTest, FiltersAndTestsBindWhenTheTemplateIsLoaded)
     EXPECT_EQ("global a", legacy.RenderAsString({}).value());
 }
 
+// A filter or test name may be dotted, as Jinja2 reads `x|ns.f` (docs/tasks/0465)
+TEST(EnvCallablesTest, DottedNames)
+{
+    TemplateEnv env;
+    env.AddFilter("my.tag", MakeCallable([](const std::string& s, const std::string& end) { return "<" + s + end + ">"; }, ArgInfo{ "s" }, ArgInfo{ "end", false, "" }));
+    env.AddTest("my.short", MakeCallable([](const std::string& s) { return s.size() < 3; }, ArgInfo{ "s" }));
+    env.AddFilter("tag", MakeCallable([](const std::string& s) { return "[" + s + "]"; }, ArgInfo{ "s" }));
+
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ 'a'|my.tag }} {{ 'a'|my . tag('!')|upper }} {{ 'ab' is my.short }} {{ 'abc' is not my.short }} {{ 'my.tag' is filter }}").has_value());
+    EXPECT_EQ("<a> <A!> True True True", tpl.RenderAsString({}).value());
+
+    // `x|tag.upper` is the filter `tag.upper`, not `(x|tag).upper`; unknown, it fails only when it runs
+    Template unknown(&env);
+    auto loaded = unknown.Load("{{ 'a'|tag.upper }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::UnknownFilter, loaded.error().GetCode());
+    EXPECT_EQ("noname.j2tpl:1:8: error: No filter named 'tag.upper'.\n{{ 'a'|tag.upper }}\n    ---^-------", loaded.error().ToString());
+    Template notRun(&env);
+    ASSERT_TRUE(notRun.Load("{% if false %}{{ 'a'|tag.upper() }}{{ 1 is tag.odd }}{% endif %}ok").has_value());
+    EXPECT_EQ("ok", notRun.RenderAsString({}).value());
+
+    // A dot ends the name only before a name
+    Template broken(&env);
+    loaded = broken.Load("{{ 'a'|my.'tag' }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ExpectedIdentifier, loaded.error().GetCode());
+
+    TemplateW wide(&env);
+    ASSERT_TRUE(wide.Load(L"{{ 'ab' is my.short }}").has_value());
+    EXPECT_EQ(L"True", wide.RenderAsString({}).value());
+}
+
 TEST(EnvCallablesTest, WideTemplate)
 {
     TemplateEnv env;

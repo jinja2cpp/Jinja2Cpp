@@ -1289,6 +1289,40 @@ InternalValue SliceExpression::SliceOther(const InternalValue& value, InternalVa
     throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not subscriptable");
 }
 
+InternalValue TupleSliceExpression::Evaluate(RenderContext& context)
+{
+    CheckStack();
+    InternalValue value = context.Nodes()[m_value].Evaluate(context);
+    // An item of an undefined raises UndefinedError, which fails Jinja2's fold
+    if (value.IsUndefined())
+    {
+        throw TemplateRuntimeError("an undefined value has no items");
+    }
+    // The parts in the order Python evaluates them, each item's repr for the undefined's name
+    std::string key = "(";
+    const auto repr = [&context](const NodeRef<Expression>& part) {
+        std::string text;
+        if (!part)
+        {
+            return std::string("None");
+        }
+        Apply<visitors::ValueRenderer<char>>(context.Nodes()[part].Evaluate(context), text, true);
+        return text;
+    };
+    bool first = true;
+    for (const auto& item : context.Nodes()[m_items])
+    {
+        key += first ? "" : ", ";
+        first = false;
+        key += item.isSlice ? "slice(" + repr(item.parts[0]) + ", " + repr(item.parts[1]) + ", " + repr(item.parts[2]) + ")" : repr(item.parts[0]);
+        // Each part fits the sequence cap, the name made of them all must too
+        CheckSequenceSize(key.size(), "the name of an undefined item");
+    }
+    key += ")";
+    // getitem's undefined for the TypeError (KeyError of a dict), of the template's policy
+    return MakeUndefinedItem(&context, value, std::move(key));
+}
+
 bool TupleCreator::IsFoldable(const NodeArena& nodes) const
 {
     if (FoldWalkTooDeep())

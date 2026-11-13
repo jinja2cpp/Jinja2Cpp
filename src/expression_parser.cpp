@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -137,22 +138,65 @@ InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) co
     return tester ? visitors::InputValueConvertor::ConvertUserCallable(*tester) : InternalValue();
 }
 
+namespace
+{
+// Whether the candidates of `check` that `counts` (by index) cover each of its subscripts, in
+// one sweep over their ranges
+template<typename Counts>
+bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
+{
+    std::vector<int> starts(check.to - check.from + 1, 0);
+    for (std::size_t index = 0; index != check.candidates.size(); ++index)
+    {
+        const auto& candidate = check.candidates[index];
+        // Only a candidate inside the check's range counts: an index outside it would write
+        // past `starts`
+        if (candidate.from >= check.from && candidate.to <= check.to && candidate.from <= candidate.to && counts(index))
+        {
+            ++starts[candidate.from - check.from];
+            --starts[candidate.to - check.from];
+        }
+    }
+    int open = 0;
+    for (unsigned subscript = 0; subscript != check.to - check.from; ++subscript)
+    {
+        open += starts[subscript];
+        if (open <= 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
 ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(LexScanner& lexer, bool isVolatile)
 {
     m_volatile = isVolatile;
-    const auto startTok = lexer.PeekNextToken();
-    const unsigned tupleSlices = m_tupleSliceSubscripts;
-    m_inOutput = true;
+    // The tokens outlive the parse: no copy
+    const auto& startTok = lexer.PeekNextToken();
+    // The output is the top-level expression (FoldCheck): the expressions in it are none
+    m_outputRoot = true;
+    const unsigned foldFrom = m_tupleSliceSubscripts;
     auto evaluator = ParseTupleOrExpression(lexer);
-    m_inOutput = false;
     if (!evaluator)
     {
         return MakeUnexpected(evaluator.error());
     }
-    // A subscript by a tuple of slices compiles only inside an output Jinja2 folds whole
-    if (m_tupleSliceSubscripts != tupleSlices && (!m_nodes[*evaluator].IsFoldable(m_nodes) || (m_strictUndefined && &m_nodes[*evaluator] == &m_nodes[m_tupleSliceValue])))
+    // A subscript by a tuple of slices compiles where Jinja2 folds an expression around it, or
+    // the output's whole value (FoldCheck); printing the strict undefined it folds to fails
+    if (m_tupleSliceSubscripts != foldFrom)
     {
-        return MakeParseError(ErrorCode::ExpectedSquareBracket, startTok);
+        if (m_strictUndefined && &m_nodes[*evaluator] == &m_nodes[m_tupleSliceValue])
+        {
+            return MakeParseError(ErrorCode::ExpectedSquareBracket, startTok);
+        }
+        AddFoldCandidate(*evaluator, foldFrom, true);
+        if (auto finished = FinishFoldRoot(startTok, foldFrom); !finished)
+        {
+            return MakeUnexpected(finished.error());
+        }
     }
 
     const auto& tok = lexer.NextToken();
@@ -169,10 +213,102 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
     return result;
 }
 
+struct UnknownCallables::FoldState
+{
+    std::vector<FoldCheck> checks;
+    std::vector<FoldCandidate> candidates;
+};
+
+void UnknownCallables::FoldStateDeleter::operator()(FoldState* state) const
+{
+    std::default_delete<FoldState>()(state);
+}
+
+UnknownCallables::FoldState& UnknownCallables::Fold()
+{
+    if (!m_fold)
+    {
+        m_fold.reset(new FoldState());
+    }
+    return *m_fold;
+}
+
+void UnknownCallables::AddFoldCheck(FoldCheck check)
+{
+    Fold().checks.push_back(std::move(check));
+}
+
+const std::vector<FoldCheck>* UnknownCallables::FoldChecks() const
+{
+    return !m_fold->checks.empty() ? &m_fold->checks : nullptr;
+}
+
+std::vector<FoldCandidate>& UnknownCallables::FoldCandidates()
+{
+    return Fold().candidates;
+}
+
+void UnknownCallables::DropFoldCandidates()
+{
+    if (m_fold)
+    {
+        m_fold->candidates.clear();
+    }
+}
+
+void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output)
+{
+    if (!InFoldRoot())
+    {
+        return;
+    }
+    if (const auto fold = m_nodes[node].PrepareFold(m_nodes); fold != 0)
+    {
+        m_unknown.FoldCandidates().push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output });
+    }
+}
+
+JINJA2CPP_NOINLINE nonstd::expected<void, ParseError> ExpressionParser::NoteFullExpressionFold(NodeRef<Expression> result, unsigned from, const Token& tok)
+{
+    // A statement's expression is a top-level one (FoldCheck), unless it is an output's
+    const bool isFoldRoot = m_depth == 1 && !m_outputRoot && !m_inElseChain;
+    AddFoldCandidate(result, from, isFoldRoot && m_outputExpressions);
+    if (isFoldRoot)
+    {
+        return FinishFoldRoot(tok, from);
+    }
+    return {};
+}
+
+nonstd::expected<void, ParseError> ExpressionParser::FinishFoldRoot(const Token& tok, unsigned rootFrom)
+{
+    FoldCheck check;
+    auto& candidates = m_unknown.FoldCandidates();
+    // Only this root's: a root of this parser that failed left its own, of lower indices; the
+    // first subscript of a parser drops those of the others (ParseSubscript)
+    candidates.erase(std::remove_if(candidates.begin(),
+                                    candidates.end(),
+                                    [this, rootFrom](const FoldCandidate& candidate) { return candidate.from < rootFrom || candidate.to > m_tupleSliceSubscripts; }),
+                     candidates.end());
+    check.candidates = std::move(candidates);
+    candidates.clear();
+    check.from = rootFrom;
+    check.to = m_tupleSliceSubscripts;
+    if (!CoversEverySubscript(check, [](std::size_t /*index*/) { return true; }))
+    {
+        return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
+    }
+    check.strictUndefined = m_strictUndefined;
+    check.error = ParseError(ErrorCode::ExpectedSquareBracket, tok);
+    m_unknown.AddFoldCheck(std::move(check));
+    return {};
+}
+
 bool ExpressionParser::AddOperator()
 {
     return ++m_operators <= detail::t_parseLimits.maxExpressionOperators && !StackNearlyExhausted();
 }
+
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
 {
@@ -185,6 +321,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     }
     LexScanner::StateSaver saver(lexer);
     const auto unknownMark = m_unknown.Mark();
+    // A statement's expression is a top-level one (FoldCheck); an output's is Parse's
+    const unsigned foldFrom = m_tupleSliceSubscripts;
 
     auto value = ParseBinary(lexer, Precedence::Or);
     if (!value)
@@ -228,6 +366,13 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
         chained = true;
     }
 
+    if (m_tupleSliceSubscripts != foldFrom)
+    {
+        if (auto folded = NoteFullExpressionFold(result, foldFrom, *saver.m_state.m_cur); !folded)
+        {
+            return MakeUnexpected(folded.error());
+        }
+    }
     saver.Commit();
     return result;
 }
@@ -528,6 +673,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
     const auto& tok = lexer.PeekNextToken();
     if (tok == '+' || tok == '-')
     {
+        const unsigned foldFrom = m_tupleSliceSubscripts;
         lexer.EatToken();
         if (!AddOperator())
         {
@@ -545,7 +691,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
         {
             return unary;
         }
-        return ParseOperandSuffix(lexer, unary, withFilter);
+        return ParseOperandSuffix(lexer, unary, withFilter, foldFrom);
     }
 
     return ParseValueExpression(lexer, withFilter);
@@ -553,7 +699,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseUnaryP
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperandSuffix(LexScanner& lexer,
                                                                                         NodeRef<Expression> operand,
-                                                                                        bool withFilter)
+                                                                                        bool withFilter,
+                                                                                        unsigned foldFrom)
 {
     const auto& next = lexer.PeekNextToken();
     if (next == '.' || next == '[' || next == '(')
@@ -568,7 +715,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperan
     const auto& filterStart = lexer.PeekNextToken();
     if (withFilter && (filterStart == '|' || filterStart == '(' || filterStart.keyword == Keyword::Is))
     {
-        return ParseFiltersAndTests(lexer, operand);
+        return ParseFiltersAndTests(lexer, operand, foldFrom);
     }
 
     return operand;
@@ -576,6 +723,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseOperan
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueExpression(LexScanner& lexer, bool withFilter)
 {
+    // The operand's subscripts are the chain's too (ParseFiltersAndTests)
+    const unsigned foldFrom = m_tupleSliceSubscripts;
     const auto& tok = lexer.NextToken();
 
     NodeRef<Expression> value;
@@ -664,7 +813,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
     {
         return value;
     }
-    return ParseOperandSuffix(lexer, value, withFilter);
+    return ParseOperandSuffix(lexer, value, withFilter, foldFrom);
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParsePostfix(LexScanner& lexer, NodeRef<Expression> valueRef)
@@ -694,8 +843,32 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParsePostfi
     return result;
 }
 
+namespace
+{
+// Jinja2's parse_filter and parse_test read a dotted name, `x|ns.f`, as one name (docs/tasks/0465):
+// appends each `.name` that follows to `name`. A name after the dot may be any of Jinja2's names,
+// `true` and `none` among them. `nameTok` is widened to the whole name, which an unknown name's
+// error quotes
+JINJA2CPP_NOINLINE_INLINE nonstd::expected<void, ParseError> ReadDottedName(LexScanner& lexer, std::string& name, std::size_t& nameEnd)
+{
+    while (lexer.EatIfEqual('.'))
+    {
+        const auto& tok = lexer.NextToken();
+        if (tok != Token::Identifier && tok != Token::True && tok != Token::False && tok != Token::None)
+        {
+            return MakeParseError(ErrorCode::ExpectedIdentifier, tok);
+        }
+        name += '.';
+        name += lexer.GetAsString(tok);
+        nameEnd = tok.range.endOffset;
+    }
+    return {};
+}
+} // namespace
+
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFiltersAndTests(LexScanner& lexer,
-                                                                                          NodeRef<Expression> valueRef)
+                                                                                          NodeRef<Expression> valueRef,
+                                                                                          unsigned foldFrom)
 {
     ParseResult<NodeRef<Expression>> result = valueRef;
     while (result)
@@ -736,6 +909,12 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFilter
         }
     }
 
+    // Jinja2's optimizer folds each filter and test of a chain, its operand included (FoldCheck):
+    // the whole chain is the candidate, so that a long chain is evaluated once
+    if (result)
+    {
+        NoteFoldCandidate(*result, foldFrom);
+    }
     return result;
 }
 
@@ -757,6 +936,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     else
     {
         return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
+    }
+    if (auto dotted = lexer.PeekNextToken() == '.' ? ReadDottedName(lexer, name, nameTok.range.endOffset) : nonstd::expected<void, ParseError>(); !dotted)
+    {
+        return MakeUnexpected(dotted.error());
     }
 
     CallArgsInfo params;
@@ -1157,6 +1340,8 @@ struct BracketSubscript
     // is foldable; the parts themselves are not kept
     bool isTupleOfSlices = false;
     bool foldable = true;
+    // Of a tuple of slices: its items
+    ArenaSpan<TupleSliceExpression::Item> tupleItems;
 };
 
 bool EndsSlicePart(LexScanner& lexer)
@@ -1237,12 +1422,14 @@ SubscriptParseResult<BracketSubscript> ParseSubscriptTuple(ExpressionParser& par
     std::vector<NodeRef<Expression>> items;
     bool hasSlice = first.isSlice;
     bool foldable = true;
-    const auto addItem = [&nodes, &foldable, &items](const BracketSubscript& item) {
+    std::vector<TupleSliceExpression::Item> sliceItems;
+    const auto addItem = [&nodes, &foldable, &items, &sliceItems](const BracketSubscript& item) {
         for (const auto& part : item.parts)
         {
             foldable = foldable && (!part || nodes[part].IsFoldable(nodes));
         }
         items.push_back(item.parts[0]);
+        sliceItems.push_back(TupleSliceExpression::Item{ { item.parts[0], item.parts[1], item.parts[2] }, item.isSlice });
     };
     if (first.parts[0] || first.isSlice)
     {
@@ -1268,6 +1455,7 @@ SubscriptParseResult<BracketSubscript> ParseSubscriptTuple(ExpressionParser& par
     {
         result.isTupleOfSlices = true;
         result.foldable = foldable;
+        result.tupleItems = nodes.MakeSpan(sliceItems);
     }
     else
     {
@@ -1345,12 +1533,16 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
             // Jinja2 folds a subscript of a literal by constants through Environment.getitem,
             // which gives an undefined for the TypeError of a list, tuple or string and the
             // KeyError of a dict. Unfolded, the slice inside the tuple is invalid Python
-            if (!m_inOutput || !bracket->foldable || !m_nodes[valueRef].IsFoldable(m_nodes))
+            if (!InFoldRoot() || !bracket->foldable || !m_nodes[valueRef].IsFoldable(m_nodes))
             {
                 return MakeParseError(ErrorCode::ExpectedSquareBracket, lexer.PeekNextToken());
             }
-            ++m_tupleSliceSubscripts;
-            const NodeRef<Expression> undefined = m_nodes.Make<ConstantExpression>(InternalValue());
+            // The candidates left now are those of another parser's root that failed
+            if (m_tupleSliceSubscripts++ == 0)
+            {
+                m_unknown.DropFoldCandidates();
+            }
+            const NodeRef<Expression> undefined = m_nodes.Make<TupleSliceExpression>(valueRef, bracket->tupleItems);
             m_tupleSliceValue = undefined;
             return undefined;
         }
@@ -1406,6 +1598,12 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             }
 
             std::string name = lexer.GetAsString(tok);
+            auto nameEnd = tok.range.endOffset;
+            // Rare: out of line
+            if (auto dotted = lexer.PeekNextToken() == '.' ? ReadDottedName(lexer, name, nameEnd) : nonstd::expected<void, ParseError>(); !dotted)
+            {
+                return MakeUnexpected(dotted.error());
+            }
             const bool hasArgs = lexer.NextToken() == '(';
             if (!hasArgs)
             {
@@ -1433,7 +1631,10 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             }
             if (unknown)
             {
-                m_unknown.Add(tok, false);
+                // Quoting the whole dotted name
+                auto nameTok = tok;
+                nameTok.range.endOffset = nameEnd;
+                m_unknown.Add(nameTok, false);
                 if (m_names.ReadsOpen())
                 {
                     m_names.AddReadOfName(name);
@@ -1479,11 +1680,14 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
 
     try
     {
+        const unsigned foldFrom = m_tupleSliceSubscripts;
         auto testExpr = ParseBinary(lexer, Precedence::Or);
         if (!testExpr)
         {
             return MakeUnexpected(testExpr.error());
         }
+        // Folded by the optimizer whatever the conditional does (FoldCheck)
+        NoteFoldCandidate(*testExpr, foldFrom);
 
         ParseResult<NodeRef<Expression>> altValue;
         if (lexer.PeekNextToken().keyword == Keyword::Else)
@@ -1494,8 +1698,12 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
             }
+            // Not counted as nested, and still in the expression's root, if it is one (IsFoldRoot)
             --m_depth;
+            const bool inElse = m_inElseChain;
+            m_inElseChain = true;
             auto value = ParseFullExpression(lexer);
+            m_inElseChain = inElse;
             ++m_depth;
             if (!value)
             {
@@ -1524,6 +1732,127 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
     }
 
     return result;
+}
+
+namespace
+{
+// Jinja2's has_safe_repr, which the optimizer asks of a folded value before it puts it in the
+// code: None, bools, numbers, strings, and lists, tuples and dicts of them; not an undefined
+bool HasSafeRepr(const InternalValue& value)
+{
+    // Repeated lists share their items, so a small value can have very many: under limits
+    // each visit is a render step, which bounds the walk (RecursionLimitError near the
+    // stack's end, both failing the Load)
+    CheckStack();
+    switch (value.Kind())
+    {
+    case ValueKind::None:
+    case ValueKind::Bool:
+    case ValueKind::String:
+    case ValueKind::Int:
+    case ValueKind::Double:
+    case ValueKind::BigInt:
+        return true;
+    case ValueKind::List:
+    {
+        const auto list = AsList(value);
+        if (!list || list->GetIteratorKind() != IteratorKind::None)
+        {
+            return false;
+        }
+        bool safe = true;
+        list->ForEach([&safe](const InternalValue& item) {
+            safe = HasSafeRepr(item);
+            return safe;
+        });
+        return safe;
+    }
+    case ValueKind::Map:
+    {
+        const auto map = AsMap(value);
+        if (!map || map->IsHost() || map->IsNamespace())
+        {
+            return false;
+        }
+        const auto entries = map->GetEntries();
+        return std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return HasSafeRepr(entry.key) && HasSafeRepr(entry.value); });
+    }
+    default:
+        return false;
+    }
+}
+
+enum class FoldOutcome : std::uint8_t
+{
+    Folds,
+    DoesNotFold,
+    // Its evaluation failed
+    Fails,
+};
+
+FoldOutcome FoldOf(const FoldCandidate& candidate, RenderContext& context, bool strictUndefined)
+{
+    try
+    {
+        auto& node = context.Nodes()[candidate.node];
+        if ((candidate.fold & FoldAlways) == 0 && !node.IsFoldableAt(context))
+        {
+            return FoldOutcome::DoesNotFold;
+        }
+        const auto value = node.Evaluate(context);
+        // An output folds into str(value), which fails for a strict undefined
+        if (candidate.output)
+        {
+            return strictUndefined && value.IsUndefined() ? FoldOutcome::Fails : FoldOutcome::Folds;
+        }
+        return HasSafeRepr(value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+    }
+    // What Jinja2's as_const turns into Impossible or UndefinedError; a limit of the render, a
+    // recursion limit or a bug fails the Load as it is
+    catch (const TemplateRuntimeError&)
+    {
+        return FoldOutcome::Fails;
+    }
+    catch (const UndefinedError&)
+    {
+        return FoldOutcome::Fails;
+    }
+    catch (const IntegerOutOfRangeError&)
+    {
+        return FoldOutcome::Fails;
+    }
+}
+} // namespace
+
+bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
+{
+    // The candidates were recorded as their parse ended, so an expression comes after the ones
+    // inside it, which start where it starts or later. Walked outermost first, the candidates
+    // inside one that folds need no evaluation of their own: their subscripts are covered, and
+    // nested brackets do not evaluate the inner levels again and again
+    std::vector<FoldOutcome> outcomes(check.candidates.size(), FoldOutcome::DoesNotFold);
+    unsigned foldedFrom = check.to;
+    for (std::size_t index = check.candidates.size(); index-- != 0;)
+    {
+        const auto& candidate = check.candidates[index];
+        // Jinja2's optimizer folds every expression of the tree, and a strict undefined that
+        // fails a fold fails the compile (UndefinedError) where an Impossible would not: under
+        // StrictUndefined each candidate is evaluated
+        if (!check.strictUndefined && candidate.from >= foldedFrom)
+        {
+            continue;
+        }
+        outcomes[index] = FoldOf(candidate, context, check.strictUndefined);
+        if (check.strictUndefined && outcomes[index] == FoldOutcome::Fails)
+        {
+            return false;
+        }
+        if (outcomes[index] == FoldOutcome::Folds)
+        {
+            foldedFrom = candidate.from;
+        }
+    }
+    return CoversEverySubscript(check, [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds; });
 }
 
 } // namespace v2

@@ -1056,6 +1056,46 @@ private:
     bool m_foldPrepared = false;
 };
 
+// A subscript of a literal by a tuple holding a slice, `[1, 2][1:2, 3]` (docs/tasks/0445): Python's
+// extended slice, which Jinja2 compiles only where it folds the subscript, through
+// Environment.getitem, to an undefined. The parser keeps it only where such a fold makes it go
+// (ExpressionParser::FoldRoot), and the Load checks that the fold succeeds (docs/tasks/0471).
+// Evaluating it fails where Jinja2's fold of it fails: on an undefined value (whose item
+// raises) or a part that raises
+class TupleSliceExpression final : public Expression
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::TupleSliceExpr;
+    // An item of the tuple: an expression (parts[0]) or a slice start:stop:step, any part omitted
+    struct Item
+    {
+        NodeRef<Expression> parts[3];
+        bool isSlice = false;
+    };
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_value);
+        refs(m_items, [](detail::RefChecker& r, const Item& item) {
+            r(item.parts[0]);
+            r(item.parts[1]);
+            r(item.parts[2]);
+        });
+    }
+
+    TupleSliceExpression(NodeRef<Expression> value, ArenaSpan<Item> items)
+        : m_value(value)
+        , m_items(items)
+    {
+    }
+    InternalValue Evaluate(RenderContext& context) override;
+    // The parser makes one only of foldable operands
+    [[nodiscard]] bool IsFoldable(const NodeArena& /*nodes*/) const override { return true; }
+
+private:
+    NodeRef<Expression> m_value;
+    ArenaSpan<Item> m_items;
+};
+
 class CallExpression final : public Expression
 {
 public:

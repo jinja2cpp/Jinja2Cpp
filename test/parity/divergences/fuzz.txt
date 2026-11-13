@@ -1,5 +1,3 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the fuzz area (cases/fuzz.py).
 # Format and kinds: test/parity/README.md.
 
-fuzz.dotted_filter_name_not_run         rejects     0465 the parser does not take a dotted filter name and rejects it at load
-fuzz.dotted_test_name_not_run           rejects     0465 the parser does not take a dotted test name and rejects it at load

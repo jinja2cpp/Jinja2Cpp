@@ -21,6 +21,12 @@
 #include <type_traits>
 #include <utility>
 
+#ifdef _MSC_VER
+#define JINJA2CPP_ARENA_INLINE __forceinline
+#else
+#define JINJA2CPP_ARENA_INLINE __attribute__((always_inline))
+#endif
+
 // The handles a parse tree is linked with (docs/design/0118-parse-tree-arena-plan.md).
 //
 // Every node of a template's tree belongs to the template's arena, and nodes refer to each
@@ -81,6 +87,7 @@ enum class NodeKind : std::uint8_t
     CompareExpr,
     ConcatExpr,
     SliceExpr,
+    TupleSliceExpr,
     CallExpr,
     FilterChain,
     IfExpr,
@@ -1336,8 +1343,9 @@ private:
 
     // Raw storage from the current block, or from a new one twice as large. Every size is
     // rounded up to Alignment, so every result stays aligned to it. An object never spans
-    // two blocks, so a handle resolves within one
-    void* Allocate(std::size_t size, std::uint32_t& offset)
+    // two blocks, so a handle resolves within one. Always inline: GCC outlined it from the
+    // parser's hottest functions once they grew (PR #865), a call for every node
+    JINJA2CPP_ARENA_INLINE void* Allocate(std::size_t size, std::uint32_t& offset)
     {
         size = (size + Alignment - 1) & ~(Alignment - 1);
         if (size > std::numeric_limits<std::uint32_t>::max() - m_used)

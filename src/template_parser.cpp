@@ -1886,6 +1886,8 @@ StatementsParser::ParseResult StatementsParser::ParsePrint(LexScanner& lexer, St
     const bool isVolatile = InVolatileCode(m_root, m_nodes, statementsInfo);
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     exprParser.SetVolatile(isVolatile);
+    // Each is an output's value, which Jinja2 folds whole (FoldCandidate::output)
+    exprParser.SetOutputExpressions(true);
     bool first = true;
     while (lexer.PeekNextToken() != Token::Eof)
     {

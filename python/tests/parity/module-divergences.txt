@@ -2,9 +2,5 @@
 # (python/tests/test_parity_corpus.py, docs/tasks/0355). Same format as test/parity/divergences:
 #   <case id> <kind> <task> <reason>
 # The kind is the module's outcome (match where the C++ suite has a listed divergence).
-subscripts.tuple_of_slices_fold_by_choice match 0471 the module falls back to Jinja2 for the template the engine cannot parse
-subscripts.tuple_of_slices_in_test match 0471 the module falls back to Jinja2 for the template the engine cannot parse
-subscripts.tuple_of_slices_set_by_choice match 0471 the module falls back to Jinja2 for the template the engine cannot parse
-subscripts.tuple_of_slices_print match 0471 the module falls back to Jinja2 for the template the engine cannot parse
-fuzz.dotted_filter_name_not_run match 0465 the module falls back to Jinja2 for the template the engine cannot parse
-fuzz.dotted_test_name_not_run match 0465 the module falls back to Jinja2 for the template the engine cannot parse
+subscripts.tuple_of_slices_item_not_evaluated match 0484 the module falls back to Jinja2 for the template the engine cannot parse
+subscripts.tuple_of_slices_chainable_item match 0484 the module falls back to Jinja2 for the template the engine cannot parse

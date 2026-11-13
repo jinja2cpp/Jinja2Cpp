@@ -1,10 +1,7 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
-subscripts.tuple_of_slices_fold_by_choice rejects 0471 Jinja2 folds a conditional by the branch its folded test picks; the engine decides that only when it renders, so it rejects an unfolded subscript by a tuple of slices in the other branch
-subscripts.tuple_of_slices_in_test rejects 0471 Jinja2 folds a conditional by its folded test; the engine decides that only when it renders, so it rejects a tuple of slices in the test
-subscripts.tuple_of_slices_set_by_choice rejects 0471 Jinja2's optimizer folds a conditional by its folded test in a set too; the engine folds a tuple of slices only in an output
-subscripts.tuple_of_slices_print rejects 0471 Jinja2's print builds an Output it folds; the engine folds a tuple of slices only in {{ }}
-subscripts.tuple_of_slices_strict_concat accepts 0471 with StrictUndefined, Jinja2's fold fails wherever the undefined is stringified or compared; the engine refuses only a bare output of it
-subscripts.tuple_of_slices_of_folded_undefined accepts 0471 a literal subscript that folds to an undefined cannot be subscripted by a tuple of slices in Jinja2's fold; the engine folds it again
-subscripts.tuple_of_slices_failing_part accepts 0471 Jinja2's fold fails when a part raises (1 / 0), so its code is invalid Python; the engine checks only that the parts are foldable
+subscripts.tuple_of_slices_item_not_evaluated rejects 0484 the parser rejects an item or attribute of a subscript by a tuple of slices, also where Jinja2 folds an expression around it without evaluating it
+subscripts.tuple_of_slices_chainable_item rejects 0484 under ChainableUndefined an attribute of the undefined such a subscript folds to folds too; the parser rejects any attribute or item of it
+subscripts.tuple_of_slices_strict_short_circuit accepts 0484 Jinja2's optimizer folds every expression of the tree, so a strict undefined fails inside an or that a folded test skips; the engine's candidates cover only the expressions it records
+subscripts.tuple_of_slices_strict_list_compare accepts 0484 comparing lists holding a strict undefined raises in Python; the engine compares them without using the undefined

@@ -714,6 +714,13 @@ public:
         return templateRenderer;
     }
 
+    // The folds the Load checks on the sealed tree (FoldCheck), and the error of one that fails,
+    // worked out before ReleaseParseState
+    [[nodiscard]] const std::vector<FoldCheck>* GetFoldChecks() const { return m_unknown.GetFoldChecks(); }
+    // Through ParseErrorsToErrorInfo: a second caller of ParseErrorToErrorInfo changes how GCC
+    // inlines Parse, a cost on every Load (PR #865)
+    [[nodiscard]] ErrorInfo GetFoldCheckError(const FoldCheck& check) { return ParseErrorsToErrorInfo(std::vector<ParseError>{ check.error }).error()[0]; }
+
     // Frees what only the parse needed. Load calls it before Seal makes the tree's buffer,
     // so that the two are not held at once
     void ReleaseParseState()
@@ -1618,8 +1625,9 @@ private:
 
     // Text is rendered straight from the template source unless newlines must become
     // newline_sequence, which needs a converted copy: the template keeps those with its
-    // source (TakeConvertedTexts)
-    NodeRef<RawTextRenderer> MakeRawTextRenderer(const CharRange& range)
+    // source (TakeConvertedTexts). Forced inline into its one caller: NodeArena::Allocate is
+    // forced inline, and with it GCC kept this out of FineParseBlock (PR #865)
+    JINJA2CPP_HOT_INLINE NodeRef<RawTextRenderer> MakeRawTextRenderer(const CharRange& range)
     {
         const CharT* text = m_template->data() + range.startOffset;
         if (m_settings.newlineSequence == "\n" || std::find(text, text + range.size(), '\n') == text + range.size())

@@ -5,6 +5,7 @@
 #include "dialect.h"
 #include "error_boundary.h"
 #include "expression_evaluator.h"
+#include "expression_parser.h"
 #include "generation_tracker.h"
 #include "internal_value.h"
 #include "json_reader.h"
@@ -369,10 +370,23 @@ public:
                 return parseResult.error()[0];
             }
 
-            parser.ReleaseParseState();
+            // Only a template with a subscript by a tuple of slices has fold checks, which need the
+            // sealed tree, and the parse's state for the error: such a template holds both at once
+            const auto* foldChecks = parser.GetFoldChecks();
+            if (!foldChecks)
+            {
+                parser.ReleaseParseState();
+            }
             // Its fields are set once the Load succeeds
             nodes.SetOrigin(&m_origin);
             auto sealed = nodes.Seal(*parseResult);
+            if (foldChecks)
+            {
+                if (auto error = FailedFoldError(parser, *foldChecks, sealed.View()))
+                {
+                    return error;
+                }
+            }
             auto convertedTexts = parser.TakeConvertedTexts();
             auto metadataInfo = parser.GetMetadataInfo();
             m_nodes = std::move(sealed);
@@ -395,6 +409,44 @@ public:
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
         ResetMetadataCache();
         return std::optional<BasicErrorInfo<CharT>>();
+    }
+
+    // The first of `checks` that fails on the sealed tree `nodes`, or checks.size() (FoldCheck,
+    // docs/tasks/0471): Jinja2 folds when it compiles, so the folds are evaluated in a context of
+    // their own, with no values, in the template's settings
+    // The error of the first of `checks` that fails, else none, and the parse's state released.
+    // Out of line, as Load is: few templates have checks
+    JINJA2CPP_NOINLINE std::optional<BasicErrorInfo<CharT>> FailedFoldError(TemplateParser<CharT>& parser, const std::vector<FoldCheck>& checks, const ArenaView& nodes) const
+    {
+        if (const auto failed = FailedFold(checks, nodes); failed < checks.size())
+        {
+            return parser.GetFoldCheckError(checks[failed]);
+        }
+        parser.ReleaseParseState();
+        return std::nullopt;
+    }
+
+    std::size_t FailedFold(const std::vector<FoldCheck>& checks, const ArenaView& nodes) const
+    {
+        if (checks.empty())
+        {
+            return 0;
+        }
+        const InternalValueMap noValues;
+        // A fold may compute as much as a render: under the template's limits
+        const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
+        RendererCallback callback(this);
+        RenderContext context(noValues, noValues, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
+        context.SetLookupCache(&LookupCache::ForThisThread());
+        context.SetNodes(nodes);
+        for (std::size_t index = 0; index != checks.size(); ++index)
+        {
+            if (!FoldCheckPasses(checks[index], context))
+            {
+                return index;
+            }
+        }
+        return checks.size();
     }
 
     // BasicTemplate::Load of a template another object may hold: parses into a new template with

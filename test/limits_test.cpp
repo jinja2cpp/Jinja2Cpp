@@ -290,6 +290,94 @@ TEST_F(LimitsEnvTest, LongChainsWithUnlimitedOperators)
     }
 }
 
+// The Load evaluates the folds Jinja2 makes when it compiles a subscript by a tuple of slices
+// (docs/tasks/0471) under the template's limits: a limit fails the Load as itself, and a failed
+// Load keeps the template loaded before
+TEST_F(LimitsEnvTest, FoldsAtLoad)
+{
+    Settings settings;
+    settings.limits = UntrustedLimits();
+    m_env.SetSettings(settings);
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{{ ()[:, :] ~ 'a' }}").has_value());
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+
+    auto loaded = tpl.Load("{{ ()[:, :] ~ ('a' * 99999999) }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << ErrorToString(loaded.error());
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+
+    // A fold that fails leaves the subscript unfolded: invalid Python, a Load error
+    loaded = tpl.Load("{{ ()[0][:, :] }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ExpectedSquareBracket, loaded.error().GetCode());
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+
+    TemplateW wide(&m_env);
+    ASSERT_TRUE(wide.Load(L"{{ [1][:, :] is undefined }}").has_value());
+    EXPECT_FALSE(wide.Load(L"{{ ()[:, :] ~ ('a' * 99999999) }}").has_value());
+    EXPECT_EQ(L"True", wide.RenderAsString({}).value());
+}
+
+TEST_F(LimitsEnvTest, ReprOfSharedItems)
+{
+    Settings settings;
+    settings.limits.maxSequenceSize = 1000;
+    m_env.SetSettings(settings);
+    Template tpl(&m_env);
+    // Each list fits the cap; the repr repeats the shared items 100 * 100 times
+    auto loaded = tpl.Load("{{ ()[:, [['x' * 100] * 100] * 100] is undefined }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << ErrorToString(loaded.error());
+
+    ASSERT_TRUE(tpl.Load("{{ [['x' * 100] * 100] * 100 }}").has_value());
+    auto rendered = tpl.RenderAsString({});
+    ASSERT_FALSE(rendered.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, rendered.error().GetCode()) << ErrorToString(rendered.error());
+
+    // Output written before the container does not count toward its repr
+    ASSERT_TRUE(tpl.Load("{{ 'y' * 999 }}{{ ['ab', 'cd'] }}").has_value());
+    EXPECT_EQ(std::string(999, 'y') + "['ab', 'cd']", tpl.RenderAsString({}).value());
+
+    // The name of the undefined item is held to the cap too, not only each part of it
+    loaded = tpl.Load("{{ ()[('a' * 600), ('b' * 600), :] ~ 'x' }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << ErrorToString(loaded.error());
+
+    TemplateW wide(&m_env);
+    EXPECT_FALSE(wide.Load(L"{{ ()[:, [['x' * 100] * 100] * 100] is undefined }}").has_value());
+}
+
+// Checking a folded value's repr visits each item of repeated lists: under limits, each visit
+// is a render step
+TEST_F(LimitsEnvTest, FoldOfSharedItemsCountsSteps)
+{
+    Settings settings;
+    settings.limits.maxSequenceSize = 1000;
+    settings.limits.maxRenderSteps = 100000;
+    m_env.SetSettings(settings);
+    Template tpl(&m_env);
+    auto loaded = tpl.Load("{% set q = [[[[()[:, :] is undefined] * 1000] * 1000] * 1000] * 1000 %}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << ErrorToString(loaded.error());
+}
+
+// A tag that fails to parse leaves its fold candidates behind; the next tag's check must not
+// count them (their subscript indices are another parser's)
+TEST_F(LimitsEnvTest, FoldCandidatesOfAFailedTag)
+{
+    std::string source = "{{ (";
+    for (int item = 0; item != 2000; ++item)
+    {
+        source += "()[:, :]|string, ";
+    }
+    source += "+ }}{{ ()[:, :] ~ 'a' }}";
+    Template tpl(&m_env);
+    EXPECT_FALSE(tpl.Load(source).has_value());
+    ASSERT_TRUE(tpl.Load("{{ ()[:, :] ~ 'a' }}").has_value());
+    EXPECT_EQ("a", tpl.RenderAsString({}).value());
+}
+
 TEST_F(LimitsEnvTest, ErrorMessage)
 {
     Settings settings;
