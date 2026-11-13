@@ -160,6 +160,27 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
     return cached;
 }
 
+// The collector of the outermost render running on this thread whose snapshot of the globals is
+// `globals`: a render that shares it (GetGlobalsSnapshot) keeps there what its values need, as a
+// value it stores in a global can outlive it there (CycleCollector::KeepTree, docs/tasks/0481).
+// Null for a render that runs inside no other one, or that reads globals of its own
+inline CycleCollector* SharedSnapshotKeeper(const RenderWorkspace& workspace, const GlobalsSnapshot* globals) noexcept
+{
+    CycleCollector* keeper = nullptr;
+    for (const auto* running = workspace.Running(); running; running = running->outer)
+    {
+        if (running->collector && running->owner && running->owner->get() == globals)
+        {
+            keeper = running->collector;
+        }
+    }
+    return keeper;
+}
+
+// A host Value as a value the template owns, copied and converted by value, so that a value it
+// is stored in never refers to the host's (template_module.cpp)
+InternalValue OwnedArgument(const Value& value);
+
 class ITemplateImpl
 {
 public:
@@ -275,7 +296,10 @@ template<typename CharT>
 struct TemplateModuleState;
 
 template<typename CharT>
-class TemplateImpl : public ITemplateImpl
+class TemplateImpl
+    : public ITemplateImpl
+    // A render nested in another one keeps its template alive past its end (CycleCollector::KeepTree)
+    , public std::enable_shared_from_this<TemplateImpl<CharT>>
 {
 public:
     using ThisType = TemplateImpl<CharT>;
@@ -590,9 +614,18 @@ public:
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
             auto& intParams = maps.Params();
+            // A render started inside another one that shares its globals: a value it stores in a
+            // global outlives it in the outer render, which keeps this template and the params'
+            // copies alive until it ends, as the host may destroy both once this render returns
+            // (docs/tasks/0481)
+            CycleCollector* const keeper = globals && maps.Workspace().Running() ? SharedSnapshotKeeper(maps.Workspace(), globals.get()) : nullptr;
+            if (keeper)
+            {
+                keeper->KeepTree(this->weak_from_this().lock());
+            }
 
-            auto convertParam = [&intParams](const std::string& name, const Value& value) {
-                intParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
+            auto convertParam = [&intParams, keeper](const std::string& name, const Value& value) {
+                intParams[name] = keeper ? OwnedArgument(value) : visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
@@ -613,6 +646,7 @@ public:
             }
             RendererCallback callback(this);
             callback.SetGlobals(maps.Workspace(), globals);
+            callback.SetKeeper(keeper);
             const InternalValueMap& renderGlobals = hostGlobals ? *hostGlobals : globals ? globals->values
                                                                                          : noGlobals;
             RenderContext context(intParams,
@@ -1054,6 +1088,8 @@ private:
         }
         // A module's callback outlives the call that made it, so it names its globals to no render
         void SetGlobals(const GlobalsSnapshot* globals) noexcept { m_globals = globals; }
+        // The outer render that keeps the templates this one loads (SharedSnapshotKeeper)
+        void SetKeeper(CycleCollector* keeper) noexcept { m_keeper = keeper; }
         RendererCallback(const RendererCallback&) = delete;
         RendererCallback(RendererCallback&&) = delete;
         RendererCallback& operator=(const RendererCallback&) = delete;
@@ -1082,6 +1118,7 @@ private:
                 CountTemplateLoad();
                 auto& entry = loaded.emplace(fileName, LoadedTemplate{ m_host->LoadTemplate(fileName), nullptr }).first->second;
                 entry.latest = &entry.first;
+                KeepLoaded(entry.first);
                 return entry.first;
             }
             auto& entry = p->second;
@@ -1095,6 +1132,7 @@ private:
                 if (!IsSameTemplate(result, *entry.latest))
                 {
                     entry.latest = &Loaded().replaced.emplace_back(std::move(result));
+                    KeepLoaded(*entry.latest);
                 }
                 else
                 {
@@ -1318,6 +1356,28 @@ private:
             return *m_loaded;
         }
         mutable std::unique_ptr<LoadedTemplates> m_loaded;
+        // SetKeeper's: null but for a render nested in another one that shares its globals
+        CycleCollector* m_keeper = nullptr;
+        // A template this render loaded, which a value it stores in a shared global may run in or
+        // view once this render has ended (docs/tasks/0481). Throws std::bad_alloc
+        void KeepLoaded(const LoadTemplateResult& result) const
+        {
+            if (!m_keeper)
+            {
+                return;
+            }
+            std::visit(
+                [this](const auto& loaded) {
+                    if constexpr (!std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        if (loaded)
+                        {
+                            m_keeper->KeepTree(loaded.value());
+                        }
+                    }
+                },
+                result);
+        }
         // lipsum's generator: default-seeded, so each render draws the same text
         std::minstd_rand m_random;
         // The globals this render uses, which it keeps alive; only compared

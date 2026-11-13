@@ -299,7 +299,10 @@ render writes first gets its cell in the outermost render's registry (`FixGlobal
 outlives the nested render and its links detach when the outer render ends; without it the nested
 render freezes the cell and the outer render reads the environment's data again
 (`no-global-outer-cell`, `NestedGlobalKept`). `no-nested-global` and `no-mark-order` guard the
-design before it (each render its own cells) and run without it.
+design before it (each render its own cells) and run without it. What the values a nested render
+stores there run in or view (its template's tree, the templates it loaded, its params) is outside
+the model: the outermost render sharing the snapshot keeps them until its collector ends, after its
+cells (`CycleCollector::KeepTree`, task 0481), so no cell outlives the tree its values need.
 
 **Closed since.** 0342, the epoch wrap: the C++ epoch is 64 bits, so it never returns to a stored
 value, which is the unbounded counter the pass runs use; `epoch-wrap` (`MaxEpoch = 2`) keeps the

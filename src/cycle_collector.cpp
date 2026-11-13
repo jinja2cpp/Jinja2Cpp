@@ -104,6 +104,12 @@ void CycleCollector::Finish() noexcept
     }
     try
     {
+        // The outer render's walk reaches what this one noted: it keeps the trees those values
+        // run in too
+        for (auto& tree : m_notes->trees)
+        {
+            m_outer->KeepTree(std::move(tree));
+        }
         for (const auto& candidate : m_notes->candidates)
         {
             m_outer->Add(candidate);
@@ -118,6 +124,27 @@ void CycleCollector::Finish() noexcept
         // What the outer one did not take is collected here: the render that made it ended
         Collect();
     }
+}
+
+void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
+{
+    if (!tree)
+    {
+        return;
+    }
+    if (!m_notes)
+    {
+        m_notes = std::make_unique<Notes>();
+    }
+    auto& trees = m_notes->trees;
+    // A render nested in a loop renders the same few templates again and again
+    constexpr std::ptrdiff_t recent = 4;
+    const auto from = trees.end() - std::min<std::ptrdiff_t>(recent, static_cast<std::ptrdiff_t>(trees.size()));
+    if (std::any_of(from, trees.end(), [&tree](const auto& kept) { return kept == tree; }))
+    {
+        return;
+    }
+    trees.push_back(std::move(tree));
 }
 
 std::weak_ptr<const void> CycleCollector::ExportToken()

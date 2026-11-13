@@ -5,6 +5,7 @@
 
 #include "../src/borrowed_cells.h"
 
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
@@ -1612,4 +1613,112 @@ TEST(BorrowedCellsSingle, GenericListLoopFollowsACellMadeInTheBody)
     EXPECT_EQ("32|[1, 2]", Render("{% for i in l %}{% if loop.first %}{% set _ = l.pop(0) %}{% endif %}{{ i }}{% endfor %}|{{ l }}", params));
     // An inner loop over the list after the write is the cell's own enumeration; the outer one goes on from its index
     EXPECT_EQ("3:31;1:3;|[3]", Render("{% for i in l %}{% set _ = l.pop() %}{{ i }}:{% for k in l %}{{ k }}{% endfor %};{% endfor %}|{{ l }}", params));
+}
+
+namespace
+{
+// Renders `outer` with `inner()`: a host callable that loads `inner` into a template of its own,
+// renders it with params of its own and destroys both before it returns (docs/tasks/0481)
+std::string RenderWithDestroyedNested(const std::string& outer, const std::string& inner)
+{
+    TemplateEnv env;
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("lib.j2", "{% macro lm() %}lib-{{ 'x' }}{% endmacro %}");
+    env.AddFilesystemHandler(std::string(), fs);
+    // Nothing caches lib.j2: only the nested render holds it
+    env.GetSettings().cacheSize = 0;
+    env.AddGlobal("g", ValuesList{});
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&env, inner](const UserCallableParams&) {
+            auto tpl = std::make_unique<Template>(&env);
+            EXPECT_TRUE(!!tpl->Load(inner));
+            auto innerParams = std::make_unique<ValuesMap>();
+            (*innerParams)["p"] = ValuesList{ Value(std::string("param-str")), Value(ValuesList{ 1, 2 }) };
+            auto result = tpl->RenderAsString(*innerParams);
+            EXPECT_TRUE(!!result) << (result ? std::string() : result.error().ToString());
+            return Value(std::string());
+        },
+        {});
+    return Render(outer, params, &env);
+}
+} // namespace
+
+TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
+{
+    // 0481: a render nested in this one shares its globals (0324, 0463), so a value it stores in
+    // one outlives it here: a macro or `caller` that runs in its tree, a loop or a module of a
+    // template it imported, a copy of its params. The host destroys the nested template and its
+    // params once the nested render returns; this render keeps them alive until it ends. The
+    // expectations are Python Jinja2's, but where noted (task 0491)
+    struct Case
+    {
+        const char* outer;
+        const char* inner;
+        const char* expected;
+    };
+    const char* const macro = "{% macro m() %}hi{% endmacro %}{% set _ = g.append(m) %}";
+    const Case cases[] = {
+        // The reproducer of 0481, the outer render writing first, and that of 0463, the nested one first
+        { "{% set _ = g.append(1) %}{{ inner() }}{{ g[-1]() }}", macro, "hi" },
+        { "{{ inner() }}{{ g[-1]() }}", macro, "hi" },
+        { "{{ inner() }}{{ g[-1].f() }}", "{% macro m() %}hi{% endmacro %}{% set _ = g.append({'f': m}) %}", "hi" },
+        { "{{ inner() }}{{ g[-1] }}{{ g[-2] }}", "{% set _ = g.append(p) %}{% set _ = g.append(p[0]) %}", "param-str['param-str', [1, 2]]" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% macro keep() %}{% set _ = g.append(caller) %}{% endmacro %}{% call keep() %}from-caller{% endcall %}", "from-caller" },
+        { "{{ inner() }}{{ g[-1].index }}{{ g[-1]([7]) }}", "{% for x in [1] recursive %}[{{ x }}]{% set _ = g.append(loop) %}{% endfor %}", "1[7]" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% import 'lib.j2' as lib %}{% set _ = g.append(lib.lm) %}", "lib-x" },
+        { "{{ inner() }}{{ g[-1].lm() }}", "{% import 'lib.j2' as lib %}{% set _ = g.append(lib) %}", "lib-x" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% from 'lib.j2' import lm %}{% set _ = g.append(lm) %}", "lib-x" },
+        { "{% set _ = g.append(0) %}{% for x in g %}{% if loop.index < 3 %}{{ inner() }}{% endif %}{{ x is number }}{% endfor %}{{ g[-1]() }}", macro,
+          "TrueFalseFalsehi" },
+        { "{% for i in range(3) %}{{ inner() }}{% endfor %}{{ g|length }}{{ g[0]() }}{{ g[2]() }}", macro, "3hihi" },
+        // Python reads the closure's names: "cl" and "capk" (0491)
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}", "" },
+        { "{{ inner() }}{{ g[-1]('k') }}", "{% macro o(n) %}{% macro i(k) %}{{ n }}{{ k }}{% endmacro %}{% set _ = g.append(i) %}{% endmacro %}{{ o('cap') }}", "k" },
+    };
+    for (const auto& c : cases)
+    {
+        EXPECT_EQ(c.expected, RenderWithDestroyedNested(c.outer, c.inner)) << c.outer << " | " << c.inner;
+    }
+}
+
+TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
+{
+    // 0481: a nested render's `self` stored in a global and called once that render ended fails
+    // rather than read the destroyed template; Python prints "blk" (0491)
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{});
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&env](const UserCallableParams&) {
+            auto tpl = std::make_unique<Template>(&env);
+            EXPECT_TRUE(!!tpl->Load("{% block b %}blk{% endblock %}{% set _ = g.append(self) %}"));
+            EXPECT_TRUE(!!tpl->RenderAsString({}));
+            return Value(std::string());
+        },
+        {});
+    Template outer(&env);
+    ASSERT_TRUE(!!outer.Load("{{ inner() }}{{ g[-1].b() }}"));
+    EXPECT_FALSE(outer.RenderAsString(params));
+}
+
+TEST(BorrowedCellsSingle, WideNestedRenderMacroOutlivesItsTemplate)
+{
+    // 0481 for wide templates
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{});
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&env](const UserCallableParams&) {
+            auto tpl = std::make_unique<TemplateW>(&env);
+            EXPECT_TRUE(!!tpl->Load(L"{% macro m() %}hi{% endmacro %}{% set _ = g.append(m) %}"));
+            EXPECT_TRUE(!!tpl->RenderAsString({}));
+            return Value(std::string());
+        },
+        {});
+    TemplateW outer(&env);
+    ASSERT_TRUE(!!outer.Load(L"{% set _ = g.append(1) %}{{ inner() }}{{ g[-1]() }}"));
+    auto result = outer.RenderAsString(params);
+    ASSERT_TRUE(!!result);
+    EXPECT_EQ(L"hi", result.value());
 }

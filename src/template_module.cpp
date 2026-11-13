@@ -264,6 +264,8 @@ Value OwnedCopy(const Value& value, std::uintptr_t entry)
     return Value(std::move(copy));
 }
 
+} // namespace
+
 // A host Value as a value the module owns: copied and converted by value, so that a module
 // value the macro stores it in (a namespace) never refers to the host's
 InternalValue OwnedArgument(const Value& value)
@@ -283,7 +285,6 @@ InternalValue OwnedArgument(const Value& value)
     Value copy = OwnedCopy(value, entry);
     return visit(visitors::InputValueConvertor(true, false), copy.GetData());
 }
-} // namespace
 
 template<typename CharT>
 struct TemplateModuleState;
