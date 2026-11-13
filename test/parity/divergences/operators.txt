@@ -1,9 +1,9 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the operators area (cases/operators.py).
 # Format and kinds: test/parity/README.md.
 
-operators.dict_view_in_unhashable       accepts     0492 `in` of a dict view walks its items, so an unhashable item is only absent; Python hashes it and raises
-operators.dict_view_mapping             output      0492 dict views have no .mapping attribute here (Python: a mappingproxy of the dict)
-operators.dict_view_reversed_class      output      0492 reversed() of dict_items and dict_values is a list_reverseiterator here (Python: dict_reverseitemiterator, dict_reversevalueiterator)
+operators.dict_view_in_unhashable       accepts     0493 `in` of a dict view walks its items, so an unhashable item is only absent; Python hashes it and raises
+operators.dict_view_mapping             output      0493 dict views have no .mapping attribute here (Python: a mappingproxy of the dict)
+operators.dict_view_reversed_class      output      0493 reversed() of dict_items and dict_values is a list_reverseiterator here (Python: dict_reverseitemiterator, dict_reversevalueiterator)
 operators.int_big_pow                   rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
 operators.int_min_floordiv_overflow     rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
 operators.int_overflow_mul              rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)

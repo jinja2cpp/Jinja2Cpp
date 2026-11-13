@@ -4,8 +4,8 @@
 # The kind is the module's outcome (match where the C++ suite has a listed divergence).
 subscripts.tuple_of_slices_item_not_evaluated match 0484 the module falls back to Jinja2 for the template the engine cannot parse
 subscripts.tuple_of_slices_chainable_item match 0484 the module falls back to Jinja2 for the template the engine cannot parse
-operators.dict_view_eq_set output 0492 a host dict's keys() is Python's dict_keys, which the engine's view (passed to Python as a list) does not equal
-operators.dict_view_in_unhashable match 0492 `in` of a host dict's dict_keys runs in Python, which raises as Jinja2 does
-operators.dict_view_mapping match 0492 a host dict's dict_keys has Python's .mapping
-operators.dict_view_random accepts 0492 random of a host dict's dict_keys picks an item where Python's random.choice fails to subscript it
+operators.dict_view_eq_set output 0493 a host dict's keys() is Python's dict_keys, which the engine's view (passed to Python as a list) does not equal
+operators.dict_view_in_unhashable match 0493 `in` of a host dict's dict_keys runs in Python, which raises as Jinja2 does
+operators.dict_view_mapping match 0493 a host dict's dict_keys has Python's .mapping
+operators.dict_view_random accepts 0493 random of a host dict's dict_keys picks an item where Python's random.choice fails to subscript it
 operators.dict_view_subset rejects 0381 a host dict's dict_keys has no ordering in the engine (host objects support only ==)

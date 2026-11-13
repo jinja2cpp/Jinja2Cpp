@@ -221,7 +221,7 @@ CASES = [
     ('dict_view_random', "{{ d.keys() | random }}"),
     ('dict_view_random_empty', "{{ {}.keys() | random }}|{{ {}.items() | random }}"),
     ('dict_view_tojson', "{{ d.keys() | tojson }}"),
-    # task 0492: what dict views still lack
+    # task 0493: what dict views still lack
     ('dict_view_mapping', "{{ d.keys().mapping }}"),
     ('dict_view_reversed_class', "{{ (d.items() | reverse).__class__ }}|{{ (d.values() | reverse).__class__ }}"),
     ('dict_view_in_unhashable', "{{ [1] in d.keys() }}"),
