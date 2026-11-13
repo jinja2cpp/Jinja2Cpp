@@ -1757,6 +1757,15 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
                 return false;
             }
         }
+        // x.__class__(...): a class that is a global (dict, range, ...) calls it (docs/tasks/0476)
+        if (callee.IsUndefined() && !GetUndefinedInfo(callee))
+        {
+            if (auto cls = methods::ClassAttribute(receiver, *name, &values))
+            {
+                callee = std::move(*cls);
+                return false;
+            }
+        }
         if (callee.IsUndefined() && !GetUndefinedInfo(callee))
         {
             if (auto replacement = SandboxedNativeAttribute(&values, receiver, *name))

@@ -28,7 +28,9 @@ render still refuses `__class__`.
 (internal_value.cpp) gives the class of a value the engine made: an object of class `type` with
 `__name__`, `__qualname__` and `__module__`, printed as `<class 'str'>` (`<class 'markupsafe.Markup'>`
 for a module other than builtins). Its identity is the class's entry in a fixed table, so two reads
-are equal, `sameas` and the same dict key, and it equals nothing else. `x.__class__`, `x['__class__']`,
+are equal, `sameas` and the same dict key, and it equals nothing else. A class that is a global (`range`,
+`dict`, `cycler`, `joiner`, `namespace`) is that global, one object for every render, so `{}.__class__ == dict` and
+`{}.__class__(a=1)` calls it. `x.__class__`, `x['__class__']`,
 `x|attr('__class__')` and `'{0.__class__}'.format(x)` reach it; an undefined has its policy's class
 (`jinja2.runtime.StrictUndefined`, ...). A dict's own `__class__` key stays its item (`d['__class__']`)
 while `d.__class__` is the class, as in Python. Not covered: host objects (their own attribute), maps

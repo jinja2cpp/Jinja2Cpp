@@ -113,4 +113,6 @@ CASES = [
     ("class_through_attribute_paths", "{{ [1, 'a', 2.5, none]|map(attribute='__class__.__name__')|join(',') }}|{{ [1, 'a']|selectattr('__class__')|list }}|{{ [1, 'a', 2]|unique(attribute='__class__')|list }}"),
     ("class_sort_key", "{{ [1, 'a']|sort(attribute='__class__')|list }}"),
     ("class_format_item_of_none", "{{ '{0[__class__]}'.format(none) }}"),
+    # Codex on #874: a class that is a global is that global
+    ("class_is_the_global", "{{ {}.__class__ == dict }}|{{ range(1).__class__ is sameas range }}|{{ {dict: 1}[{}.__class__] }}|{{ namespace().__class__ == namespace }}|{{ {}.__class__ is callable }}|{{ {}.__class__(a=1) }}|{{ dict.__name__ }}|{{ cycler(1).__class__.__module__ }}"),
 ]

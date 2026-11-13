@@ -4673,6 +4673,11 @@ std::optional<InternalValue> MakeNamedClassObject(std::string_view className)
     {
         return std::nullopt;
     }
+    // A class that is a global (range, dict, cycler, ...) is that global
+    if (auto global = ClassGlobalOf(cls->module, cls->name))
+    {
+        return global;
+    }
     return InternalValue(MapAdapter(MakeRef<ClassObjectAdapter>(*cls)));
 }
 

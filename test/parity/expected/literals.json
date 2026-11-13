@@ -931,6 +931,14 @@
     "type": "TypeError",
     "message": "'NoneType' object is not subscriptable"
    }
+  },
+  {
+   "id": "literals.class_is_the_global",
+   "template": "{{ {}.__class__ == dict }}|{{ range(1).__class__ is sameas range }}|{{ {dict: 1}[{}.__class__] }}|{{ namespace().__class__ == namespace }}|{{ {}.__class__ is callable }}|{{ {}.__class__(a=1) }}|{{ dict.__name__ }}|{{ cycler(1).__class__.__module__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|True|1|True|True|{'a': 1}|dict|jinja2.utils"
   }
  ]
 }

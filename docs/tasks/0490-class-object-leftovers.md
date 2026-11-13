@@ -11,10 +11,10 @@ shares: [test/parity/cases/literals.py, test/parity/divergences/literals.txt]
 **Problem.** Found by the verifier of the 0475/0476 PR (Jinja2 3.1.6). The class `x.__class__` gives
 (0476) differs from Python's:
 
-1. It is not callable: `{{ (1).__class__ is callable }}` is `False` (Python `True`), and
-   `{{ (1).__class__() }}` fails with `'int object' has no attribute '__class__'` where Python
-   prints `0` (`(1).__class__('5')`, `zzz.__class__()` likewise). At least the message should name
-   the call of a class.
+1. Only the classes that are globals (`range`, `dict`, `cycler`, `joiner`, `namespace`) are
+   callable, being those globals. The rest are not: `{{ (1).__class__ is callable }}` is `False`
+   (Python `True`), and `{{ (1).__class__() }}` fails with `'type' object is not callable` where
+   Python prints `0` (`(1).__class__('5')`, `zzz.__class__()` likewise).
 2. `__mro__`, `__bases__` and `mro` are undefined (Python: a tuple of classes, a bound method).
 3. Some values name another class than Python's: groupby's groups are `tuple` (Python
    `jinja2.filters._GroupTuple`), `self.blk` and `super` are `Macro` (Python `BlockReference`),

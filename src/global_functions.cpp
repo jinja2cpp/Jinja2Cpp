@@ -24,6 +24,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <string_view>
 #include <vector>
 
 // The default globals of a Jinja2 environment: range, dict, cycler, joiner, namespace and lipsum
@@ -612,13 +613,47 @@ void SetupI18nGlobals(InternalValueMap& globalParams)
     globalParams.emplace("_", MakeFunction(CallGettextAlias));
 }
 
+// The globals that are classes in Jinja2, one object each for every render and every environment, so that a value's
+// __class__ is the global itself: {}.__class__ == dict (docs/tasks/0476)
+struct ClassGlobal
+{
+    const char* global;
+    // Python's __name__ and __module__
+    const char* name;
+    const char* module;
+    Callable value;
+};
+
+Callable MakeClassGlobal(Callable::ExpressionCallable fn, const char* repr, const char* name, const char* module)
+{
+    auto result = MakeClass(std::move(fn), repr);
+    result.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{
+        { "__name__", InternalValue(std::string(name)) }, { "__qualname__", InternalValue(std::string(name)) }, { "__module__", InternalValue(std::string(module)) } }));
+    return result;
+}
+
+const std::vector<ClassGlobal>& ClassGlobals()
+{
+    static const auto classes = [] {
+        // Made once, maybe in a render with a memory budget, for every render after it
+        const UncountedMemoryScope uncounted;
+        return std::vector<ClassGlobal>{
+            { "range", "range", "builtins", MakeClassGlobal(CallRange, "<class 'range'>", "range", "builtins") },
+            { "dict", "dict", "builtins", MakeClassGlobal(CallDict, "<class 'dict'>", "dict", "builtins") },
+            { "cycler", "Cycler", "jinja2.utils", MakeClassGlobal(CallCycler, "<class 'jinja2.utils.Cycler'>", "Cycler", "jinja2.utils") },
+            { "joiner", "Joiner", "jinja2.utils", MakeClassGlobal(CallJoiner, "<class 'jinja2.utils.Joiner'>", "Joiner", "jinja2.utils") },
+            { "namespace", "Namespace", "jinja2.utils", MakeClassGlobal(CallNamespace, "<class 'jinja2.utils.Namespace'>", "Namespace", "jinja2.utils") },
+        };
+    }();
+    return classes;
+}
+
 void SetupGlobals(InternalValueMap& globalParams)
 {
-    globalParams.emplace("range", MakeClass(CallRange, "<class 'range'>"));
-    globalParams.emplace("dict", MakeClass(CallDict, "<class 'dict'>"));
-    globalParams.emplace("cycler", MakeClass(CallCycler, "<class 'jinja2.utils.Cycler'>"));
-    globalParams.emplace("joiner", MakeClass(CallJoiner, "<class 'jinja2.utils.Joiner'>"));
-    globalParams.emplace("namespace", MakeClass(CallNamespace, "<class 'jinja2.utils.Namespace'>"));
+    for (const auto& cls : ClassGlobals())
+    {
+        globalParams.emplace(cls.global, cls.value);
+    }
     // A function, which prints as <function generate_lorem_ipsum at 0x...> (docs/tasks/0368)
     auto lipsum = MakeFunction([](const CallParams& params, RenderContext& context) {
         // Every render has a callback (TemplateImpl::Render)
@@ -628,6 +663,18 @@ void SetupGlobals(InternalValueMap& globalParams)
     globalParams.emplace("lipsum", std::move(lipsum));
 }
 } // namespace
+
+std::optional<InternalValue> ClassGlobalOf(std::string_view module, std::string_view name)
+{
+    for (const auto& cls : ClassGlobals())
+    {
+        if (cls.name == name && cls.module == module)
+        {
+            return InternalValue(cls.value);
+        }
+    }
+    return std::nullopt;
+}
 
 const InternalValueMap& GetBuiltinGlobals(bool withI18n)
 {
