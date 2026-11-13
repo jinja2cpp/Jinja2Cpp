@@ -1,6 +1,7 @@
 #include "value_methods.h"
 
 #include "big_int.h"
+#include "borrowed_cells.h"
 #include "case_mapping.h"
 #include "cycle_collector.h"
 #include "dialect.h"
@@ -2572,7 +2573,7 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
             try
             {
                 // The items the host was handed stay as they are; the list moves to the spare
-                if (auto* cell = AsList(spare) ? ListCell(self) : nullptr)
+                if (const auto* cell = AsList(spare) ? ListCell(self) : nullptr)
                 {
                     cell->UnshareWith(spare);
                 }

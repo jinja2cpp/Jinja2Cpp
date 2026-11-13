@@ -472,8 +472,8 @@ TEST(WalkTablesTest, CollectFromEmptiesOnlyGarbage)
 {
     auto marker = ListAdapter::CreateAdapter(InternalValueList{});
     auto list = ListAdapter::CreateAdapter(InternalValueList{});
-    list.GetMutableItems()->push_back(InternalValue(list));
-    list.GetMutableItems()->push_back(InternalValue(marker));
+    list.GetMutableItems()->emplace_back(list);
+    list.GetMutableItems()->emplace_back(marker);
     const auto markerRefs = OwnObjectOf(InternalValue(marker))->use_count();
 
     std::vector<ValueObjectPtr> roots;

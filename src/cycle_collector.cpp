@@ -1,6 +1,7 @@
 #include "cycle_collector.h"
 
 #include "internal_value.h"
+#include "recursion_guard.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -36,7 +37,8 @@ std::mutex& ExportWalks()
 class ExportWalk
 {
 public:
-    ExportWalk()
+    // Out of line: inlined, GCC's -Wdangling-pointer cannot see that the destructor clears s_held
+    JINJA2CPP_NOINLINE ExportWalk()
     {
         if (!s_held)
         {
@@ -322,40 +324,10 @@ bool IsLive(const std::vector<const ValueObject*>& live, const ValueObject* obje
     return !live.empty() && std::binary_search(live.begin(), live.end(), object);
 }
 
-// The walk from `candidates` and `roots`, which it empties, or, with `keepRoots`, leaves with the
-// roots that are not garbage: the garbage among what they reach is emptied, which breaks its
-// cycles. The objects in `live` (sorted) are held from outside and are not walked into: none of what
-// they reach is garbage, and what the walk finds that only they hold counts as held from outside,
-// which it is. Allocates only to grow `tables`, and when that fails the walk saturates
-// (WalkTables): it frees less, never more
-void WalkAndClear(WalkTables& tables, std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots, bool keepRoots = false, const std::vector<const ValueObject*>& live = {}) noexcept
+// Marks the nodes held from outside the walk, and every node they reach: a node with more references than the
+// walk counted is held from outside. Untracked objects (a saturated walk) are skipped
+void MarkHeldFromOutside(WalkTables& tables, const std::vector<const ValueObject*>& live) noexcept
 {
-    tables.Reset();
-    auto visit = [&tables, &live](const ValueObject* object) {
-        // Strings, numbers and host adapters hold no template value
-        if (object->IsTraversable() && !IsLive(live, object))
-        {
-            tables.Count(object);
-        }
-    };
-
-    for (const auto& candidate : candidates)
-    {
-        visit(candidate.get());
-    }
-    for (const auto& root : roots)
-    {
-        visit(root.get());
-    }
-    // The nodes are in the order found, and the walk finds more while it goes. Read by index: growing
-    // moves them
-    for (size_t next = 0; next != tables.Size(); ++next)
-    {
-        tables.At(next).object->Traverse(visit);
-    }
-
-    // A node with more references than the walk found is held from outside, and so is
-    // every node it reaches
     for (size_t index = 0; index != tables.Size(); ++index)
     {
         auto& node = tables.At(index);
@@ -388,6 +360,63 @@ void WalkAndClear(WalkTables& tables, std::vector<ValueObjectPtr>& candidates, s
     {
         tables.At(index).object->Traverse(markReachable);
     }
+}
+
+// Empties the garbage (the nodes not marked) while it is held, then lets go of it
+void ClearGarbage(WalkTables& tables) noexcept
+{
+    // The tables are the walk's own, and what they name that is garbage is held: emptying an object
+    // may free others and start a render, but nothing else reads the tables
+    for (size_t i = 0; i != tables.Size(); ++i)
+    {
+        if (!tables.At(i).reachable)
+        {
+            tables.At(i).object->Clear();
+        }
+    }
+    for (size_t i = 0; i != tables.Size(); ++i)
+    {
+        if (!tables.At(i).reachable)
+        {
+            // Adopts the reference taken above and lets it go
+            const ValueObjectPtr release(tables.At(i).object, false);
+        }
+    }
+}
+
+// The walk from `candidates` and `roots`, which it empties, or, with `keepRoots`, leaves with the
+// roots that are not garbage: the garbage among what they reach is emptied, which breaks its
+// cycles. The objects in `live` (sorted) are held from outside and are not walked into: none of what
+// they reach is garbage, and what the walk finds that only they hold counts as held from outside,
+// which it is. Allocates only to grow `tables`, and when that fails the walk saturates
+// (WalkTables): it frees less, never more
+void WalkAndClear(WalkTables& tables, std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots, bool keepRoots = false, const std::vector<const ValueObject*>& live = {}) noexcept
+{
+    tables.Reset();
+    auto visit = [&tables, &live](const ValueObject* object) {
+        // Strings, numbers and host adapters hold no template value
+        if (object->IsTraversable() && !IsLive(live, object))
+        {
+            tables.Count(object);
+        }
+    };
+
+    for (const auto& candidate : candidates)
+    {
+        visit(candidate.get());
+    }
+    for (const auto& root : roots)
+    {
+        visit(root.get());
+    }
+    // The nodes are in the order found, and the walk finds more while it goes. Read by index: growing
+    // moves them
+    for (size_t next = 0; next != tables.Size(); ++next)
+    {
+        tables.At(next).object->Traverse(visit);
+    }
+
+    MarkHeldFromOutside(tables, live);
 
     // The garbage is held while it is emptied, so that emptying one object frees none that is
     // still to be emptied; letting go of it then frees all of it. A reference taken here needs no
@@ -413,23 +442,7 @@ void WalkAndClear(WalkTables& tables, std::vector<ValueObjectPtr>& candidates, s
         roots.clear();
     }
     candidates.clear();
-    // The tables are the walk's own, and what they name that is garbage is held: emptying an object
-    // may free others and start a render, but nothing else reads the tables
-    for (size_t i = 0; i != tables.Size(); ++i)
-    {
-        if (!tables.At(i).reachable)
-        {
-            tables.At(i).object->Clear();
-        }
-    }
-    for (size_t i = 0; i != tables.Size(); ++i)
-    {
-        if (!tables.At(i).reachable)
-        {
-            // Adopts the reference taken above and lets it go
-            const ValueObjectPtr release(tables.At(i).object, false);
-        }
-    }
+    ClearGarbage(tables);
 }
 } // namespace
 
