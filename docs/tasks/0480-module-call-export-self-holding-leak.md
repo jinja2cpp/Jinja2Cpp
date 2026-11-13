@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0424]
-touches: [src/internal_value.cpp, src/borrowed_cells.cpp, src/template_module.cpp]
+touches: [src/internal_value.cpp, src/borrowed_cells.h, src/cycle_collector.h, src/cycle_collector.cpp, src/template_module.cpp]
 shares: [test/template_module_test.cpp]
 ---
 # A self-holding container a module's call hands a host leaks when the host keeps it
@@ -30,3 +30,15 @@ on the host's thread.
 
 **Done when** a `TemplateModuleTest` row with the macro above passes under LSan, and
 `Module/keep` does not move in `bench/count.py`.
+
+**Resolution.** The second proposal, without a lock on the host's thread: a module keeps a
+`DroppedExports` (cycle_collector.h, a list under its own small mutex), which its registry and
+each call's `CallExports` see weakly. When the host lets go of a `CallListView`/`CallMapView` of a
+template container, or of the last view of a call (`~CallExports`, for the storages it pinned of the
+module's cells), the container goes now if the view held it and its items alone and none of them
+is a container; else it is handed to the module, whose next call notes its items to that call's
+walk (`NoteDroppedExports`) and whose destructor walks what is left (`CollectDroppedExports`)
+after closing the list; once the module has gone, the host's thread walks it as a render's host
+copy does (0424). Rows: `TemplateModuleTest.KeptSelfHoldingExportGoesWithTheHostsValue`, six
+sources (list, dict, namespace, list-dict cycle, stored in the module, the module's cell of a
+host list) times three orders (module first, host first, host then a later call), LSan clean.
