@@ -422,7 +422,6 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         // before it are joined
         values.ForEach([&](const InternalValue& item) {
             bool failed = false;
-            bool stopped = false;
             try
             {
                 items.push_back(GetAttributeByPath(item, path, InternalValue(), context));
@@ -430,11 +429,11 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
             catch (...)
             {
                 failed = true;
-                stopped = detail::KeepFailure();
+                detail::KeepFailure();
             }
             if (failed)
             {
-                if (!stopped)
+                if (!detail::KeptIsStop())
                 {
                     detail::RethrowKept();
                 }
@@ -923,13 +922,19 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         ReserveHint(resultList, list.GetSize().value_or(0));
         list.ForEach([&](const InternalValue& item) {
             // Jinja2's map is a generator: a StopIteration out of the attribute is a RuntimeError
+            bool failed = false;
             try
             {
                 resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
             }
             catch (...)
             {
-                detail::RethrowSealed();
+                failed = true;
+                detail::KeepFailure();
+            }
+            if (failed)
+            {
+                detail::RethrowKeptSealed();
             }
             return true;
         });
@@ -981,13 +986,19 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
             throw TemplateRuntimeError(AsString(filterName) + "() " + argsError);
         }
         // Jinja2's map is a generator: a StopIteration out of the filter is a RuntimeError
+        bool failed = false;
         try
         {
             resultList.push_back(filter->Filter(val, context));
         }
         catch (...)
         {
-            detail::RethrowSealed();
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            detail::RethrowKeptSealed();
         }
         return true;
     });
@@ -1205,7 +1216,6 @@ InternalValue Sum(const ListAdapter& list, const InternalValueList& path, std::o
             // `sum(map(attrgetter, iterable))` of Python's builtin ends where the attribute raises StopIteration:
             // the items before it are added
             bool failed = false;
-            bool stopped = false;
             try
             {
                 item = GetAttributeByPath(val, path, InternalValue(), context);
@@ -1213,11 +1223,11 @@ InternalValue Sum(const ListAdapter& list, const InternalValueList& path, std::o
             catch (...)
             {
                 failed = true;
-                stopped = detail::KeepFailure();
+                detail::KeepFailure();
             }
             if (failed)
             {
-                if (!stopped)
+                if (!detail::KeptIsStop())
                 {
                     detail::RethrowKept();
                 }
@@ -1300,13 +1310,19 @@ InternalValue Unique(const ListAdapter& list,
         else
         {
             // Jinja2's unique is a generator: a StopIteration out of the attribute is a RuntimeError
+            bool failed = false;
             try
             {
                 key = GetAttributeByPath(v, path, InternalValue(), context);
             }
             catch (...)
             {
-                detail::RethrowSealed();
+                failed = true;
+                detail::KeepFailure();
+            }
+            if (failed)
+            {
+                detail::RethrowKeptSealed();
             }
         }
         items.push_back(UniqueItem{ std::move(key), idx++ });
@@ -1709,13 +1725,19 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         // Jinja2's select and reject are generators: a StopIteration out of the attribute or the test is a
         // RuntimeError
         bool selected = false;
+        bool failed = false;
         try
         {
             selected = isSelected(val);
         }
         catch (...)
         {
-            detail::RethrowSealed();
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            detail::RethrowKeptSealed();
         }
         if (selected)
         {

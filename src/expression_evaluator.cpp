@@ -1914,7 +1914,6 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
     // A call that raises a StopIteration gives undefined (Context.call, docs/tasks/0479): only the invocation is
     // guarded, not the arguments or the write of the result
     bool failed = false;
-    bool stopped = false;
     if (callable.GetType() == Callable::Type::Expression)
     {
         InternalValue result;
@@ -1926,11 +1925,11 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
         catch (...)
         {
             failed = true;
-            stopped = detail::KeepFailure();
+            detail::KeepFailure();
         }
         if (failed)
         {
-            result = StopResult(values, snapshot, stopped);
+            result = StopResult(values, snapshot, detail::KeptIsStop());
         }
         WriteOutput(stream, result, values);
         return;
@@ -1948,11 +1947,11 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
         catch (...)
         {
             failed = true;
-            stopped = detail::KeepFailure();
+            detail::KeepFailure();
         }
         if (failed)
         {
-            result = StopResult(values, snapshot, stopped);
+            result = StopResult(values, snapshot, detail::KeptIsStop());
         }
         WriteOutput(stream, result, values);
         return;
@@ -1969,11 +1968,11 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
     catch (...)
     {
         failed = true;
-        stopped = detail::KeepFailure();
+        detail::KeepFailure();
     }
     // The macro's output so far is dropped as Jinja2's buffer is; a stream that has passed it on cannot (0477's
     // RuntimeError stays)
-    if (!stopped || !stream.RollbackTo(mark))
+    if (!detail::KeptIsStop() || !stream.RollbackTo(mark))
     {
         detail::RethrowKept();
     }
@@ -2045,7 +2044,6 @@ InternalValue CallExpression::CallCallable(RenderContext& values, const Callable
     {
         return InternalValue();
     }
-    bool stopped = false;
     const auto callParams = helpers::EvaluateCallParams(m_params, values);
     HomeCall::Snapshot snapshot(values);
     try
@@ -2054,9 +2052,9 @@ InternalValue CallExpression::CallCallable(RenderContext& values, const Callable
     }
     catch (...)
     {
-        stopped = detail::KeepFailure();
+        detail::KeepFailure();
     }
-    return StopResult(values, snapshot, stopped);
+    return StopResult(values, snapshot, detail::KeptIsStop());
 }
 
 InternalValue CallExpression::CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params)

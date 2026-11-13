@@ -19,7 +19,7 @@ namespace detail
 {
 namespace
 {
-// The exception KeepUnlessStop kept, between its handler and RethrowKept; one at a time per thread
+// The exception KeepFailure kept, between its handler and RethrowKept or RethrowKeptSealed; one at a time per thread
 thread_local std::exception_ptr t_kept;
 
 HostCallableFailure SealedFailure(std::exception_ptr exception)
@@ -49,12 +49,18 @@ bool HoldsStop(const std::exception_ptr& exception)
     return false;
 }
 
-// Whether the exception being handled is a stop
-bool IsStop() noexcept
+// Whether `exception` is a stop. Outside any handler: the classifier's rethrow then runs on the stack of the call site,
+// not on top of the stack of the throw, which MSVC keeps while a handler runs (a failure of the recursion guard
+// comes from a deep stack)
+bool IsStopException(const std::exception_ptr& exception) noexcept
 {
+    if (!exception)
+    {
+        return false;
+    }
     try
     {
-        throw;
+        std::rethrow_exception(exception);
     }
     catch (const RenderFailure& failure)
     {
@@ -76,31 +82,36 @@ bool IsStop() noexcept
 }
 } // namespace
 
-bool IsStopBeingHandled() noexcept
+bool IsStop(const std::exception_ptr& failure) noexcept
 {
-    return IsStop();
+    return IsStopException(failure);
 }
 
-bool KeepFailure() noexcept
+void KeepFailure() noexcept
 {
     t_kept = std::current_exception();
-    return IsStop();
 }
 
-void RethrowSealed()
+bool KeptIsStop() noexcept
 {
+    return IsStopException(t_kept);
+}
+
+void RethrowKeptSealed()
+{
+    auto failure = std::exchange(t_kept, nullptr);
     try
     {
+        std::rethrow_exception(std::move(failure));
+    }
+    catch (HostCallableFailure& sealed)
+    {
+        sealed.SealStop();
         throw;
     }
-    catch (HostCallableFailure& failure)
+    catch (RenderFailure& sealed)
     {
-        failure.SealStop();
-        throw;
-    }
-    catch (RenderFailure& failure)
-    {
-        failure.SealStop();
+        sealed.SealStop();
         throw;
     }
     catch (const StopIteration&)

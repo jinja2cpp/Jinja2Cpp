@@ -1556,7 +1556,6 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     // The scopes of the loop's end, which a call that stops closes over as the end does
     const size_t endScopes = values.GetScopesCount() - 1;
     std::exception_ptr failure;
-    bool stopped = false;
     try
     {
         for (size_t itemIdx = 0; hasItem; ++itemIdx)
@@ -1593,11 +1592,10 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     catch (...)
     {
         failure = std::current_exception();
-        stopped = detail::IsStopBeingHandled();
     }
     if (failure)
     {
-        if (stopped)
+        if (detail::IsStop(failure))
         {
             values.CaptureClosures(FrameEnd::Soft(endScopes));
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
@@ -1718,7 +1716,6 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     // The scopes of the loop's end, which a call that stops closes over as the end does
     const size_t endScopes = values.GetScopesCount();
     std::exception_ptr failure;
-    bool stopped = false;
     try
     {
         for (size_t itemIdx = 0; hasItem; ++itemIdx)
@@ -1777,11 +1774,10 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     catch (...)
     {
         failure = std::current_exception();
-        stopped = detail::IsStopBeingHandled();
     }
     if (failure)
     {
-        if (stopped)
+        if (detail::IsStop(failure))
         {
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
             // The end unbinds the slots before it closes over the frame
@@ -1857,8 +1853,9 @@ bool EvaluateLoopFilter(Node& filter, RenderContext& values)
     }
     catch (...)
     {
-        detail::RethrowSealed();
+        detail::KeepFailure();
     }
+    detail::RethrowKeptSealed();
 }
 } // namespace
 
@@ -2093,14 +2090,21 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
     blockContext.PassOverEntryBindings();
     const ArenaSwitch nodesSwitch(blockContext, block.nodes);
     // Jinja2 renders a block through a generator: a StopIteration out of it is a RuntimeError, not a stopped call
+    // Sealed outside the handler: MSVC runs a handler on top of the stack of the throw, and a rethrow from it
+    // would keep that stack through every template boundary the failure passes
+    bool failed = false;
     try
     {
         block.node.RenderBody(os, blockContext, depth);
     }
-    catch (detail::RenderFailure& failure)
+    catch (const detail::RenderFailure&)
     {
-        failure.SealStop();
-        throw;
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        detail::RethrowKeptSealed();
     }
 }
 
@@ -2787,14 +2791,21 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
         innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
         const UnitCall unitCall(innerContext, m_unitLayout);
+        // Sealed outside the handler: MSVC runs a handler on top of the stack of the throw, and a rethrow from it
+        // would keep that stack through every template boundary the failure passes
+        bool failed = false;
         try
         {
             values.Nodes()[m_mainBody].Render(os, innerContext);
         }
-        catch (detail::RenderFailure& failure)
+        catch (const detail::RenderFailure&)
         {
-            failure.SealStop();
-            throw;
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            detail::RethrowKeptSealed();
         }
         return;
     }
@@ -2957,6 +2968,9 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
 
     // A template renders through a generator in Jinja2: a StopIteration out of an included, imported or extended
     // one is a RuntimeError, not a stopped call (call_stop.h)
+    // Sealed outside the handler: MSVC runs a handler on top of the stack of the throw, and a rethrow from it
+    // would keep that stack through every template boundary the failure passes
+    bool failed = false;
     try
     {
         if (!m_hasExtends)
@@ -2984,10 +2998,14 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
             KeepEndedSelf(values, frame);
         }
     }
-    catch (detail::RenderFailure& failure)
+    catch (const detail::RenderFailure&)
     {
-        failure.SealStop();
-        throw;
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        detail::RethrowKeptSealed();
     }
 }
 
@@ -3942,7 +3960,6 @@ void RenderMacroBody(RenderContext& context, size_t link, const Body& body)
 {
     const size_t endScopes = context.GetScopesCount();
     std::exception_ptr failure;
-    bool stopped = false;
     try
     {
         body();
@@ -3951,9 +3968,8 @@ void RenderMacroBody(RenderContext& context, size_t link, const Body& body)
     catch (...)
     {
         failure = std::current_exception();
-        stopped = detail::IsStopBeingHandled();
     }
-    if (stopped)
+    if (detail::IsStop(failure))
     {
         context.CaptureClosures(FrameEnd::Call(endScopes, link));
     }
@@ -4073,7 +4089,6 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         // keeps a callable's data escaped (Ruslan, 2026-11-02); Markup, as a macro's, is not
         InternalValue result;
         bool failed = false;
-        bool stopped = false;
         HomeCall::Snapshot snapshot(values);
         try
         {
@@ -4082,11 +4097,11 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         catch (...)
         {
             failed = true;
-            stopped = detail::KeepFailure();
+            detail::KeepFailure();
         }
         if (failed)
         {
-            ThrowStoppedCallBlock(values, snapshot, stopped);
+            ThrowStoppedCallBlock(values, snapshot, detail::KeptIsStop());
         }
         if (!IsStringValue(result))
         {
@@ -4099,7 +4114,6 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     const detail::GenerationFreeze freeze(values);
     const auto mark = os.GetMark(); // NOLINT(clang-analyzer-deadcode.DeadStores): read on the failure path
     HomeCall::Snapshot snapshot(values);
-    bool stopped = false;
     try
     {
         callable->GetStatementCallable()(callParams, os, values);
@@ -4107,9 +4121,9 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     }
     catch (...)
     {
-        stopped = detail::KeepFailure();
+        detail::KeepFailure();
     }
-    if (!stopped || !os.RollbackTo(mark))
+    if (!detail::KeptIsStop() || !os.RollbackTo(mark))
     {
         detail::RethrowKept();
     }
