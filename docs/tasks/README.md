@@ -430,11 +430,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | done |
 | [0359](0359-token-budget-filters.md) | Token budget filters: `count_tokens`, `truncate_tokens` and `pack` | api | medium | done |
 | [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | done |
-| [0361](0361-failed-call-top-view-reads-empty.md) | A failed module call's view of a module cell reads no items | lifetime | low | open |
+| [0361](0361-failed-call-top-view-reads-empty.md) | A failed module call's view of a module cell reads no items | lifetime | low | done |
 | [0362](0362-host-object-python-errors.md) | Host objects: Python's errors where generic filters guess | parity | low | done |
 | [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | open |
 | [0364](0364-frozen-version-deep-validation.md) | Validate a frozen version deeply, from time to time | robustness | medium | open |
-| [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | open |
+| [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | done |
 | [0366](0366-bound-loop-method-repr-after-break.md) | A kept `loop.cycle` prints `?` for the length of a lazily filtered loop it broke out of | parity | low | done |
 | [0367](0367-module-object-is-escaped.md) | `m is escaped` of an imported module | parity | low | done |
 | [0368](0368-callable-python-type-names.md) | Python type names of callables in error messages | parity | low | done |
@@ -491,7 +491,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0421](0421-host-tuple-inbound.md) | A tuple a host returns stays a tuple | api | low | open |
 | [0422](0422-module-call-exports-views.md) | Exports of a running module call keep tuples, keys and lent members | api | low | open |
 | [0423](0423-lent-members-nested.md) | Template callables nested two levels deep in a host call's argument | api | low | open |
-| [0424](0424-host-kept-cycle-leak.md) | A template container that holds itself leaks when a host keeps its export | robustness | low | open |
+| [0424](0424-host-kept-cycle-leak.md) | A template container that holds itself leaks when a host keeps its export | robustness | low | done |
 | [0425](0425-sandbox-parity-leftovers.md) | Sandbox parity leftovers of 0354 | parity | low | open |
 | [0426](0426-sandbox-refused-attribute-cost.md) | Cost of a refused attribute in the sandbox | perf | low | open |
 | [0427](0427-sandbox-policy-and-template-cache.md) | Sandbox policy and the template cache (for 0357) | api | low | done |
@@ -527,7 +527,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | done |
 | [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
 | [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | in-progress |
-| [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | open |
+| [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | done |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
 | [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
 | [0463](0463-outer-render-sees-nested-global-write.md) | The outer render does not see a global a nested render changed first | robustness | low | open |
@@ -541,6 +541,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | done |
 | [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | done |
 | [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | open |
+| [0480](0480-module-call-export-self-holding-leak.md) | A self-holding container a module's call hands a host leaks when the host keeps it | robustness | low | open |
+| [0481](0481-nested-render-macro-in-shared-global-use-after-free.md) | A macro a nested render writes into a shared global is called after its template is gone | lifetime | high | open |
 | [0482](0482-module-tree-keep-alives.md) | End the trees a module replaced on a source change | robustness | low | open |
 | [0483](0483-render-memory-uncharged-release.md) | Give the render memory budget back only what it was charged | robustness | low | open |
 | [0484](0484-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds the Load check still decides differently from Jinja2 | parity | low | open |
