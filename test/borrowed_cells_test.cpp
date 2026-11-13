@@ -1682,6 +1682,45 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
     }
 }
 
+namespace
+{
+// A host map whose getter hands out the next number on each call, as a stateful accessor may
+struct CountingMapAccessor : IMapItemAccessor
+{
+    mutable int64_t calls = 0;
+
+    [[nodiscard]] size_t GetSize() const override { return 1; }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return name == "n"; }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override { return name == "n" ? Value(++calls) : Value(); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "n" }; }
+};
+} // namespace
+
+TEST(BorrowedCellsSingle, NestedGenericRenderAsksTheHostOnce)
+{
+    // 0481: a nested render the outer one keeps copies its GenericMap params from the values it
+    // already took, not by asking the host's accessor again (Codex review of #878)
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{});
+    CountingMapAccessor accessor;
+    std::string nested;
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&env, &accessor, &nested](const UserCallableParams&) {
+            Template tpl(&env);
+            EXPECT_TRUE(!!tpl.Load("{{ n }}{% set _ = g.append(n) %}"));
+            const GenericMap map([&accessor]() { return &accessor; });
+            auto result = tpl.RenderAsString(map);
+            EXPECT_TRUE(!!result);
+            nested = result ? result.value() : std::string();
+            return Value(std::string());
+        },
+        {});
+    EXPECT_EQ("|1", Render("{{ inner() }}|{{ g|join }}", params, &env));
+    EXPECT_EQ("1", nested);
+    EXPECT_EQ(1, accessor.calls);
+}
+
 TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
 {
     // 0481: a nested render's `self` stored in a global and called once that render ended fails

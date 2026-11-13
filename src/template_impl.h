@@ -564,9 +564,14 @@ public:
     // separate instantiation, so that the ordinary Render pays nothing for them
     // RenderCore of a render started inside another one: the collector of the outermost render that
     // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
-    // again as copies of `params` (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
+    // again as copies of `params`, or of the values a GenericMap gave (`genericValues`), so that the host's
+    // accessor is not asked twice (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
     template<typename ParamsMap>
-    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace, const GlobalsSnapshot& globals, const ParamsMap& params, InternalValueMap& intParams) const
+    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace,
+                                                          const GlobalsSnapshot& globals,
+                                                          [[maybe_unused]] const ParamsMap& params,
+                                                          [[maybe_unused]] const std::list<std::pair<std::string, Value>>& genericValues,
+                                                          InternalValueMap& intParams) const
     {
         auto* keeper = SharedSnapshotKeeper(workspace, &globals);
         if (!keeper)
@@ -576,9 +581,9 @@ public:
         keeper->KeepTree(this->weak_from_this().lock());
         if constexpr (std::is_same_v<ParamsMap, GenericMap>)
         {
-            for (auto& name : params.GetKeys())
+            for (const auto& [name, value] : genericValues)
             {
-                intParams[name] = OwnedArgument(params.GetValueByName(name));
+                intParams[name] = OwnedArgument(value);
             }
         }
         else
@@ -648,13 +653,15 @@ public:
                 intParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
 
-            // A GenericMap returns values by copy; the context refers to them, so they live here
-            std::list<Value> genericValues;
+            // A GenericMap returns values by copy; the context refers to them, so they live here, each
+            // with its name, so that a keep converts them again without asking the host twice
+            std::list<std::pair<std::string, Value>> genericValues;
             if constexpr (std::is_same_v<ParamsMap, GenericMap>)
             {
                 for (auto& name : params.GetKeys())
                 {
-                    convertParam(name, genericValues.emplace_back(params.GetValueByName(name)));
+                    auto& entry = genericValues.emplace_back(name, params.GetValueByName(name));
+                    convertParam(entry.first, entry.second);
                 }
             }
             else
@@ -671,7 +678,7 @@ public:
             CycleCollector* keeper = nullptr;
             if (JINJA2CPP_CELL_UNLIKELY(maps.Workspace().Running() != nullptr) && globals)
             {
-                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, intParams);
+                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, genericValues, intParams);
             }
             RendererCallback callback(this);
             callback.SetGlobals(maps.Workspace(), globals, cycles);
