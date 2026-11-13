@@ -857,7 +857,7 @@ void CallExports::KeepHostSources(const CellTable* table) noexcept
         for (const auto& [identity, isList] : m_cells)
         {
             const auto found = table->find(identity);
-            const bool kept = std::any_of(m_pins.begin(), m_pins.end(), [identity = identity](const Pinned& pin) { return pin.identity == identity; });
+            const bool kept = std::any_of(m_pins.begin(), m_pins.end(), [id = identity](const Pinned& pin) { return pin.identity == id; });
             if (found != table->end() && found->second->IsList() == isList && !kept)
             {
                 keep(identity, *found->second);
