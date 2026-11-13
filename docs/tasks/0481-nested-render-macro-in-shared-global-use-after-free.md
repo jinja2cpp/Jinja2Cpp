@@ -59,18 +59,21 @@ global stays valid there until the outer render ends:
 - its template (`TemplateImpl` is `enable_shared_from_this`) and each template it loads
   (`RendererCallback::KeepLoaded`), held by the outer render's collector (`CycleCollector::KeepTree`,
   `Notes::trees`, declared first so that it goes after the cells and the walk; a nested collector
-  that has some hands them to its outer one, as it hands its notes). The last four kept are
-  checked, so a loop rendering the same template keeps it once;
+  that has some hands them to its outer one, as it hands its notes). A tree is kept once
+  (`Notes::treeSet`). When the nested render ends, what it kept goes again unless the keeper's
+  registry holds a cell (`DropTreesUnlessWritten`): with none, no global was changed in place, so
+  no value of the nested render can be where the outer render reads it, and a loop of nested
+  renders of new templates stays flat (20000 renders of a 2 KB template: 43 to 47 MB);
 - its params as owned copies (`OwnedArgument`, as a template module converts them) rather than
   views of the host's `ValuesMap`.
 Before the fix ASan reported a use-after-free for 13 of 19 variants: a macro written outer-first
 (the reproducer) and nested-first (0463), in a dict, a `caller`, a recursive `loop`, `self`, an
 imported module, its macro and a `from` import, a macro defined in a macro, a param and an item of
-it. A render that runs inside no other one pays one compare (`Running()`). Memory: the outer
-render holds every distinct template a nested render loaded or rendered until it ends; the host
-decides how many there are. Host data that a param only points to (a reflected pointer, a
+it. A render that runs inside no other one pays one compare (`Running()`). Memory: once a
+global was written in place, the outer render holds every distinct template a nested render loaded
+or rendered until it ends, outside `maxRenderMemory` (the same loop: 47 to 122 MB); filed as 0492. Host data that a param only points to (a reflected pointer, a
 `GenericList` accessor) stays the host's to keep alive, as for any value a render hands out.
-`BorrowedCellsSingle.NestedRenderValueOutlivesItsTemplate`, `NestedRenderSelfOutsideItsRender`
-and `WideNestedRenderMacroOutlivesItsTemplate` destroy the nested template and params before the
+`BorrowedCellsSingle.NestedRenderValueOutlivesItsTemplate`, `NestedRenderSelfOutsideItsRender`,
+`NestedRenderValueOutlivesItsTemplateInsideAnotherEnvironment` and `WideNestedRenderMacroOutlivesItsTemplate` destroy the nested template and params before the
 outer render reads the value; under ASan they report nothing. Python agrees but for closures of
 the nested render's frames and its `self`, memory-safe, filed as 0491.

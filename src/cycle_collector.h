@@ -174,9 +174,15 @@ public:
     // globals can store a value of its own in a global this render reads afterwards (docs/tasks/
     // 0324, 0463), a macro or `caller` that runs in that tree, a `self` or loop that names it,
     // a param it views. The host may destroy the nested template once its render has returned,
-    // so this render keeps it (docs/tasks/0481). The same tree as one of the last ones kept is
-    // kept once. Throws std::bad_alloc
+    // so this render keeps it (docs/tasks/0481). A tree is kept once. Throws std::bad_alloc
     void KeepTree(std::shared_ptr<const void> tree);
+    // How many trees this render keeps, for DropTreesUnlessWritten
+    [[nodiscard]] std::size_t KeptTrees() const noexcept { return m_notes ? m_notes->trees.size() : 0; }
+    // A nested render that kept its trees here from `mark` on (KeptTrees) has ended: they go
+    // unless a write promoted a cell in this render's registry. Without one no global was changed
+    // in place, so no value of the nested render can be stored where this render reads it, and a
+    // loop of nested renders of new templates keeps none of them (docs/tasks/0481)
+    void DropTreesUnlessWritten(std::size_t mark) noexcept;
     // What a container the render running on this thread hands the host keeps, so that the host's
     // copy can tell when it goes whether that render has ended: then nothing walks the container
     // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
@@ -265,6 +271,7 @@ private:
     {
         // KeepTree's: first, so that it goes last, after every value of the render
         std::vector<std::shared_ptr<const void>> trees;
+        std::unordered_set<const void*> treeSet;
         // The receiving containers, held until the render ends
         std::vector<ValueObjectPtr> candidates;
         std::unordered_set<const void*> noted;

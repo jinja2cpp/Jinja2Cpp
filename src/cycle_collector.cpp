@@ -108,7 +108,7 @@ void CycleCollector::Finish() noexcept
         // run in too
         for (auto& tree : m_notes->trees)
         {
-            m_outer->KeepTree(std::move(tree));
+            m_outer->KeepTree(tree);
         }
         for (const auto& candidate : m_notes->candidates)
         {
@@ -136,15 +136,34 @@ void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
     {
         m_notes = std::make_unique<Notes>();
     }
-    auto& trees = m_notes->trees;
-    // A render nested in a loop renders the same few templates again and again
-    constexpr std::ptrdiff_t recent = 4;
-    const auto from = trees.end() - std::min<std::ptrdiff_t>(recent, static_cast<std::ptrdiff_t>(trees.size()));
-    if (std::any_of(from, trees.end(), [&tree](const auto& kept) { return kept == tree; }))
+    auto& notes = *m_notes;
+    if (!notes.treeSet.insert(tree.get()).second)
     {
         return;
     }
-    trees.push_back(std::move(tree));
+    try
+    {
+        notes.trees.push_back(std::move(tree));
+    }
+    catch (...)
+    {
+        notes.treeSet.erase(tree.get());
+        throw;
+    }
+}
+
+void CycleCollector::DropTreesUnlessWritten(std::size_t mark) noexcept
+{
+    if (!m_notes || m_notes->cells.HasCells())
+    {
+        return;
+    }
+    auto& notes = *m_notes;
+    while (notes.trees.size() > mark)
+    {
+        notes.treeSet.erase(notes.trees.back().get());
+        notes.trees.pop_back();
+    }
 }
 
 std::weak_ptr<const void> CycleCollector::ExportToken()

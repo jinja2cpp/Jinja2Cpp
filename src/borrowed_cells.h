@@ -578,6 +578,9 @@ public:
         ReleaseCallFrozen(collector);
     }
 
+    // Whether a write promoted a cell here that the registry still holds
+    [[nodiscard]] bool HasCells() const noexcept { return m_cells && !m_cells->empty(); }
+
     // The cells by the identity of the host's data (IListAccessor::GetIdentity)
     using Table = CellTable;
 

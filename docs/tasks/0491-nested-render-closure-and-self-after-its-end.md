@@ -18,6 +18,9 @@ context ended with the nested render, so the call runs with every scope hidden (
 | `{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}` → `g.append(m)` | `g[-1]()` | `cl` | `` |
 | `{% macro o(n) %}{% macro i(k) %}{{ n }}{{ k }}{% endmacro %}{% set _ = g.append(i) %}{% endmacro %}{{ o('cap') }}` | `g[-1]('k')` | `capk` | `k` |
 | `{% block b %}blk{% endblock %}` → `g.append(self)` | `g[-1].b()` | `blk` | error: a template handle used outside the render that made it |
+| `{% macro m2() %}{{ caller(5) }}{% endmacro %}{% macro m() %}{% call(q) m2() %}c{{ q }}{% endcall %}{% endmacro %}` → `g.append(m)` | `g[-1]()` | `c5` per call | error: 'm2' is undefined |
+| a module macro `f` whose module did `{% from 'modB' import m2 %}`, `f` calls `m2()` → `g.append(mod.f)` | `g[-1]()` | `f:deep` | error: 'm2' is undefined |
+| a block's `super` → `g.append(super)` | `g[-1]()` | the parent block | error: a template handle used outside the render that made it |
 
 Pinned by `BorrowedCellsSingle.NestedRenderValueOutlivesItsTemplate` (last two rows) and
 `BorrowedCellsSingle.NestedRenderSelfOutsideItsRender`. Memory-safe: a divergence only.
@@ -28,4 +31,6 @@ for the closures that escaped into the outer render's cells, as 0326 copies a ma
 (`CycleCollector::KeepUntilEnd` of that render's collector). `self` needs its handles made valid
 for the outer render (`TemplateSlots`) or a keep-alive of the nested render's slots.
 
-**Done when.** The three rows print Python's output, ASan clean.
+A macro calling a sibling macro of its template is the common case (found by the 0481 verifier).
+
+**Done when.** The rows print Python's output, ASan clean.

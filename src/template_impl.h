@@ -565,14 +565,17 @@ public:
     // RenderCore of a render started inside another one: the collector of the outermost render that
     // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
     // again as copies of `params` (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
+    // `mark`: what the keeper kept before (CycleCollector::KeptTrees), which the render's end goes back to
+    // unless a global was written (RendererCallback::SetKeeper)
     template<typename ParamsMap>
-    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace, const GlobalsSnapshot& globals, const ParamsMap& params, InternalValueMap& intParams) const
+    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace, const GlobalsSnapshot& globals, const ParamsMap& params, InternalValueMap& intParams, std::size_t& mark) const
     {
         auto* keeper = SharedSnapshotKeeper(workspace, &globals);
         if (!keeper)
         {
             return nullptr;
         }
+        mark = keeper->KeptTrees();
         keeper->KeepTree(this->weak_from_this().lock());
         if constexpr (std::is_same_v<ParamsMap, GenericMap>)
         {
@@ -669,15 +672,16 @@ public:
             // copies alive until it ends, as the host may destroy both once this render returns
             // (docs/tasks/0481). One compare for a render that runs inside no other one
             CycleCollector* keeper = nullptr;
+            std::size_t keptMark = 0;
             if (JINJA2CPP_CELL_UNLIKELY(maps.Workspace().Running() != nullptr) && globals)
             {
-                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, intParams);
+                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, intParams, keptMark);
             }
             RendererCallback callback(this);
             callback.SetGlobals(maps.Workspace(), globals, cycles);
             if (keeper)
             {
-                callback.SetKeeper(keeper);
+                callback.SetKeeper(keeper, keptMark);
             }
             const InternalValueMap& renderGlobals = hostGlobals ? *hostGlobals : globals ? globals->values
                                                                                          : noGlobals;
@@ -1120,14 +1124,24 @@ private:
         }
         // A module's callback outlives the call that made it, so it names its globals to no render
         void SetGlobals(const GlobalsSnapshot* globals) noexcept { m_globals = globals; }
-        // The outer render that keeps the templates this one loads (SharedSnapshotKeeper)
-        void SetKeeper(CycleCollector* keeper) noexcept { m_keeper = keeper; }
+        // The outer render that keeps the templates this one loads (SharedSnapshotKeeper), and what
+        // it kept before this render: when this render ends, with its context and values gone, the
+        // trees go again unless a global was written in place (CycleCollector::DropTreesUnlessWritten)
+        void SetKeeper(CycleCollector* keeper, std::size_t mark) noexcept
+        {
+            m_keeper = keeper;
+            m_keptMark = mark;
+        }
         RendererCallback(const RendererCallback&) = delete;
         RendererCallback(RendererCallback&&) = delete;
         RendererCallback& operator=(const RendererCallback&) = delete;
         RendererCallback& operator=(RendererCallback&&) = delete;
         ~RendererCallback() override
         {
+            if (JINJA2CPP_CELL_UNLIKELY(m_keeper != nullptr))
+            {
+                m_keeper->DropTreesUnlessWritten(m_keptMark);
+            }
             if (m_workspace)
             {
                 m_workspace->SetRunning(m_running.outer);
@@ -1392,6 +1406,7 @@ private:
         mutable std::unique_ptr<LoadedTemplates> m_loaded;
         // SetKeeper's: null but for a render nested in another one that shares its globals
         CycleCollector* m_keeper = nullptr;
+        std::size_t m_keptMark = 0;
         // A template this render loaded, which a value it stores in a shared global may run in or
         // view once this render has ended (docs/tasks/0481). Throws std::bad_alloc
         void KeepLoaded(const LoadTemplateResult& result) const

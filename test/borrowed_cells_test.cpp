@@ -1702,6 +1702,34 @@ TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
     EXPECT_FALSE(outer.RenderAsString(params));
 }
 
+TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplateInsideAnotherEnvironment)
+{
+    // 0481: the render that keeps the nested template runs itself inside a render of another
+    // environment, which gets the kept trees when it ends, with what that render noted
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{});
+    TemplateEnv otherEnv;
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&env](const UserCallableParams&) {
+            auto tpl = std::make_unique<Template>(&env);
+            EXPECT_TRUE(!!tpl->Load("{% macro m() %}hi{% endmacro %}{% set _ = g.append(m) %}{% set ns = namespace(f=m) %}{% set _ = g.append(ns) %}"));
+            EXPECT_TRUE(!!tpl->RenderAsString({}));
+            return Value(std::string());
+        },
+        {});
+    Template middle(&env);
+    ASSERT_TRUE(!!middle.Load("{{ inner() }}{{ g[0]() }}{{ g[1].f() }}"));
+    ValuesMap outerParams;
+    outerParams["middle"] = UserCallable(
+        [&middle, &params](const UserCallableParams&) {
+            auto result = middle.RenderAsString(params);
+            return Value(result ? result.value() : result.error().ToString());
+        },
+        {});
+    EXPECT_EQ("hihi", Render("{{ middle() }}", outerParams, &otherEnv));
+}
+
 TEST(BorrowedCellsSingle, WideNestedRenderMacroOutlivesItsTemplate)
 {
     // 0481 for wide templates
