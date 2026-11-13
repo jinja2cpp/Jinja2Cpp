@@ -199,6 +199,18 @@ TEST_F(IncludeTest, NamesAsSelectTemplateTakesThem)
     ASSERT_FALSE(number.has_value());
     EXPECT_EQ("'int' object is not iterable", number.error().GetExtraParams()[0].AsString());
 
+    // A name the caller's values hold, as a string, a list item or a map item, is a name
+    jinja2::Template byValue(&m_env);
+    ASSERT_TRUE(byValue.Load("{% include n %}|{% include l %}|{% include d.k %}|{% for i in l %}{% include i %}{% endfor %}").has_value());
+    const jinja2::ValuesMap values{ { "foo", 1 },
+                                    { "bar", 2 },
+                                    { "n", "header" },
+                                    { "l", jinja2::ValuesList{ "header" } },
+                                    { "d", jinja2::ValuesMap{ { "k", std::string("header") } } } };
+    const auto byValueResult = byValue.RenderAsString(values);
+    ASSERT_TRUE(byValueResult.has_value()) << byValueResult.error().ToString();
+    EXPECT_EQ("[1|2]|[1|2]|[1|2]|[1|2]", byValueResult.value());
+
     // An undefined name fails as it is used, whatever its policy (UndefinedError)
     for (const std::string source : { "{% include nope %}", "{% include nope ignore missing %}" })
     {
