@@ -98,4 +98,16 @@ CASES = [
     ("unicode_16_0_named_any_case", r"{{ '\N{latin capital letter rams horn}'|length }}"),
     # task 0476: the engine's values have no __class__ (Jinja2's `x.__class__.__name__` names the Python type)
     ("class_name_of_str", "{{ 'a'.__class__.__name__ }}|{{ ('a'|safe).__class__.__name__ }}"),
+    ("class_repr_of_values", "{{ (1).__class__ }}{{ (1.5).__class__ }}{{ true.__class__ }}{{ none.__class__ }}{{ [].__class__ }}{{ ().__class__ }}{{ {}.__class__ }}{{ range(1).__class__ }}{{ ('a'|safe).__class__ }}"),
+    ("class_equals_only_itself", "{{ 'a'.__class__ == 'b'.__class__ }}|{{ 'a'.__class__ == (1).__class__ }}|{{ 'a'.__class__ is sameas 'b'.__class__ }}|{{ {'a'.__class__: 1}['b'.__class__] }}"),
+    ("class_names", "{{ 'a'.__class__.__qualname__ }}|{{ 'a'.__class__.__module__ }}|{{ ('a'|safe).__class__.__module__ }}|{{ 'a'.__class__.__class__ }}"),
+    ("class_through_item_and_attr", "{{ 'a'['__class__'] }}|{{ 'a'|attr('__class__') }}|{% set s = 'a' %}{{ s.__class__.__name__ }}|{{ '{0.__class__.__name__}'.format(1) }}"),
+    ("class_of_dict_with_class_key", "{{ {'__class__': 1}.__class__ }}|{{ {'__class__': 1}['__class__'] }}"),
+    ("class_of_engine_objects", "{{ namespace().__class__ }}|{{ joiner().__class__ }}|{% for i in [1] %}{{ loop.__class__ }}{% endfor %}|{{ ([1]|select).__class__ }}|{{ lipsum.__class__ }}|{{ 'a'.upper.__class__ }}|{{ range.__class__ }}"),
+    ("class_of_macro_result", "{% macro f() %}x{% endmacro %}{{ f().__class__.__name__ }}"),
+    ("class_of_macro_result_autoescape", "{% macro f() %}x{% endmacro %}{{ f().__class__.__name__ }}", {"env": {"autoescape": True}}),
+    ("class_of_undefined", "{{ x.__class__ }}|{{ x.__class__.__name__ }}"),
+    ("class_of_strict_undefined", "{{ x.__class__.__name__ }}", {"env": {"undefined": "strict"}}),
+    ("class_tojson", "{{ 'a'.__class__|tojson }}"),
+    ("class_not_iterable", "{{ 'a'.__class__|list }}"),
 ]

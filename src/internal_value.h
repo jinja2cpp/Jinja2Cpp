@@ -1766,6 +1766,13 @@ MapAdapter CreateNamespaceAdapter(TemplateDict&& values);
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className);
 // An object of `className` that prints as <className repr(reprArgument)>
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument);
+// x.__class__ of a value the engine made (docs/tasks/0476): the Python class it stands for, as a read-only object
+// that prints as <class 'str'> and equals only itself; nullopt for a host object or a value whose class the engine
+// does not know
+std::optional<InternalValue> MakeClassObject(const InternalValue& value);
+// The class named `className` (str, Markup, StrictUndefined, ...), as MakeClassObject gives it; nullopt for a name
+// it does not know
+std::optional<InternalValue> MakeNamedClassObject(std::string_view className);
 // Jinja2's TemplateModule of an imported template named `name`: `values` are its exports,
 // `output` the text str() prints (docs/tasks/0309)
 MapAdapter CreateModuleAdapter(InternalValueMap&& values, InternalValue name, InternalValue output);

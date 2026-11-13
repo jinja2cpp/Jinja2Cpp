@@ -3931,6 +3931,228 @@
     "type": "TypeError",
     "message": "range indices must be integers or slices, not str"
    }
+  },
+  {
+   "id": "operators.format_field_list_str_key",
+   "template": "{{ '{0[count]}'.format([1]) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "list indices must be integers or slices, not str"
+   }
+  },
+  {
+   "id": "operators.format_field_str_str_key",
+   "template": "{{ '{0[a]}'.format('abc') }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "string indices must be integers, not 'str'"
+   }
+  },
+  {
+   "id": "operators.format_field_namedtuple_str_key",
+   "template": "{% for g in [{'a': 1}]|groupby('a') %}{{ '{0[grouper]}'.format(g) }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "tuple indices must be integers or slices, not str"
+   }
+  },
+  {
+   "id": "operators.format_field_sequence_index",
+   "template": "{{ '{0[1]}'.format(range(3)) }}|{{ '{0[0]}'.format('abc') }}|{{ '{0[a]}'.format({'a': 1}) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1|a|1"
+  },
+  {
+   "id": "operators.range_slice_step_int64_min",
+   "template": "{{ range(10)[::-9223372036854775808] }}|{{ range(10)[::-9223372036854775808].step }}|{{ range(10)[::-9223372036854775808]|list }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "range(9, -1, -9223372036854775808)|-9223372036854775808|[9]"
+  },
+  {
+   "id": "operators.markup_times_str",
+   "template": "{{ ('a'|safe) * 'b' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'str' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "operators.markup_times_float",
+   "template": "{{ ('a'|safe) * 1.5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'float' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "operators.markup_times_int",
+   "template": "{{ 2 * ('a'|safe) }}|{{ ('a'|safe) * true }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "aa|a"
+  },
+  {
+   "id": "operators.dict_items_times_int",
+   "template": "{{ {'a': 1}.items() * 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for *: 'dict_items' and 'int'"
+   }
   }
  ]
 }

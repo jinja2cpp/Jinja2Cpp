@@ -283,6 +283,14 @@ bool HasStrictUndefined(const InternalValueList& keys)
 // undefined equals another undefined
 bool IsLessKey(const InternalValue& key1, const InternalValue& key2, BinaryExpression::Operation oper, BinaryExpression::CompareType compType, bool checkStrict, bool& isEqual)
 {
+    // Python's list comparison tests identity before ==: one undefined object (`{% set u = zzz %}`, read twice) is
+    // equal to itself unasked. Its description is its identity: each lookup that misses makes its own (docs/tasks/0475)
+    const auto* info1 = GetUndefinedInfo(key1);
+    if (info1 && info1 == GetUndefinedInfo(key2))
+    {
+        isEqual = true;
+        return false;
+    }
     if (checkStrict)
     {
         CheckUndefinedUse(key1, UndefinedUse::Operator);
@@ -554,6 +562,10 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
             }
             return methods::MakeBoundMethod(baseVal, *method);
         }
+    }
+    if (auto cls = methods::ClassAttribute(baseVal, attrName, &context))
+    {
+        return std::move(*cls);
     }
     if (isPlainDict)
     {

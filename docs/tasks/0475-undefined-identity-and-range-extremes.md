@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0413, 0420]
@@ -34,3 +34,18 @@ taken. 3: match the messages if dict views gain a type of their own.
 
 **Done when** item 1's divergence line is gone or recorded deliberate, and items 2-3 are fixed or
 recorded deliberate.
+
+**Resolution** (PR pending, branch `claude/project-thread-rhjf86`).
+
+1. Fixed: a sort key compares an undefined with itself by identity first, as Python's list
+   comparison does. An undefined's description is shared by its copies and made anew by each
+   lookup that misses, so it serves as the identity: `{% set u = zzz %}[u, u]|sort` sorts, `[zzz, yyy]`
+   still fails under `StrictUndefined` (`filters.sort_same_undefined_strict`,
+   `sort_same_undefined_attribute_strict`, `sort_distinct_undefined_strict`).
+2. Fixed: the slice of a range keeps the step as given; only the item walk clamps it
+   (`operators.range_slice_step_int64_min`).
+3. `Markup * x` for a non-int `x` names `x`'s type as MarkupSafe's `str.__mul__` does (unit test in
+   errors_test.cpp; `operators.markup_times_*`). The dict-view items (`d.items() * 'a'`'s message,
+   `{'a': 1}.items() * 2` renders) are filed as 0489 and pinned by `operators.dict_items_times_int`.
+4. Fixed: outside the sandbox `FormatItem` raises Python's TypeError for a string key of a str, list,
+   tuple (a named tuple's too) or range (`operators.format_field_*`).
