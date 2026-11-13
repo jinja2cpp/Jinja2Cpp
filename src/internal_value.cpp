@@ -609,8 +609,10 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
-        // A generator is a key by its identity (docs/tasks/0401); a list or a dict view is none
-        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo() && !IteratorTypeName(key.GetIteratorKind()))
+        // A generator and a dict_values view are keys by their identity (docs/tasks/0401, 0489); a list,
+        // dict_keys and dict_items are none
+        const auto kind = key.GetIteratorKind();
+        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo() && !IteratorTypeName(kind) && kind != IteratorKind::DictValues)
         {
             return InternalValue();
         }

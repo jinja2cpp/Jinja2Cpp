@@ -218,6 +218,8 @@ CASES = [
     ('dict_values_isdisjoint', "{{ d.values().isdisjoint([1]) }}"),
     ('dict_view_sequence_ops', "{{ d.keys() | length }}|{{ d.items() | count }}|{{ d.keys() | first }}|{{ d.values() | last }}|{{ d.keys() | reverse | list }}|{{ 'a' in d.keys() }}|{{ ('a', 1) in d.items() }}|{{ d.keys() is sequence }}|{{ d.keys() is iterable }}|{{ d.values() | list }}"),
     ('dict_view_loop', "{% for k, v in d.items() %}{{ loop.length }}{{ k }}{{ v }}{% endfor %}"),
+    ('dict_values_key_lookup', "{% set v = {'a': 1}.values() %}{% set m = {v: 42} %}{{ m[v] }}|{{ m[{'a': 1}.values()] is undefined }}"),
+    ('dict_items_nested_compare', "{% set ns = namespace(a=0, b=0) %}{% for i in range(100000) %}{% set ns.a = {'x': ns.a}.items() %}{% set ns.b = {'x': ns.b}.items() %}{% endfor %}{{ ns.a == ns.b }}"),
     ('dict_view_random', "{{ d.keys() | random }}"),
     ('dict_view_random_empty', "{{ {}.keys() | random }}|{{ {}.items() | random }}"),
     ('dict_view_tojson', "{{ d.keys() | tojson }}"),

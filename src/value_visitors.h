@@ -2166,6 +2166,8 @@ struct BinaryMathOperation : BaseVisitor<>
     }
     [[nodiscard]] JINJA2CPP_COLD_INLINE ResultType SetViewOperands(const ListRef& left, const ListRef& right) const
     {
+        // Views of views nest as deep as a template makes them: the item lookup compares values
+        CheckStack();
         const auto leftSize = left.GetSize().value_or(0);
         const auto rightSize = right.GetSize().value_or(0);
         switch (m_oper)

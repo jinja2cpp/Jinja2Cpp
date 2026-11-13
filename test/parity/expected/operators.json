@@ -4727,6 +4727,54 @@
    "output": "1a1"
   },
   {
+   "id": "operators.dict_values_key_lookup",
+   "template": "{% set v = {'a': 1}.values() %}{% set m = {v: 42} %}{{ m[v] }}|{{ m[{'a': 1}.values()] is undefined }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "42|True"
+  },
+  {
+   "id": "operators.dict_items_nested_compare",
+   "template": "{% set ns = namespace(a=0, b=0) %}{% for i in range(100000) %}{% set ns.a = {'x': ns.a}.items() %}{% set ns.b = {'x': ns.b}.items() %}{% endfor %}{{ ns.a == ns.b }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RecursionError",
+    "message": "maximum recursion depth exceeded in comparison"
+   }
+  },
+  {
    "id": "operators.dict_view_random",
    "template": "{{ d.keys() | random }}",
    "context": {
