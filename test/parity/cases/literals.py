@@ -98,4 +98,22 @@ CASES = [
     ("unicode_16_0_named_any_case", r"{{ '\N{latin capital letter rams horn}'|length }}"),
     # task 0476: the engine's values have no __class__ (Jinja2's `x.__class__.__name__` names the Python type)
     ("class_name_of_str", "{{ 'a'.__class__.__name__ }}|{{ ('a'|safe).__class__.__name__ }}"),
+    ("class_repr_of_values", "{{ (1).__class__ }}{{ (1.5).__class__ }}{{ true.__class__ }}{{ none.__class__ }}{{ [].__class__ }}{{ ().__class__ }}{{ {}.__class__ }}{{ range(1).__class__ }}{{ ('a'|safe).__class__ }}"),
+    ("class_equals_only_itself", "{{ 'a'.__class__ == 'b'.__class__ }}|{{ 'a'.__class__ == (1).__class__ }}|{{ 'a'.__class__ is sameas 'b'.__class__ }}|{{ {'a'.__class__: 1}['b'.__class__] }}"),
+    ("class_names", "{{ 'a'.__class__.__qualname__ }}|{{ 'a'.__class__.__module__ }}|{{ ('a'|safe).__class__.__module__ }}|{{ 'a'.__class__.__class__ }}"),
+    ("class_through_item_and_attr", "{{ 'a'['__class__'] }}|{{ 'a'|attr('__class__') }}|{% set s = 'a' %}{{ s.__class__.__name__ }}|{{ '{0.__class__.__name__}'.format(1) }}"),
+    ("class_of_dict_with_class_key", "{{ {'__class__': 1}.__class__ }}|{{ {'__class__': 1}['__class__'] }}"),
+    ("class_of_engine_objects", "{{ namespace().__class__ }}|{{ joiner().__class__ }}|{% for i in [1] %}{{ loop.__class__ }}{% endfor %}|{{ ([1]|select).__class__ }}|{{ lipsum.__class__ }}|{{ 'a'.upper.__class__ }}|{{ range.__class__ }}"),
+    ("class_of_macro_result", "{% macro f() %}x{% endmacro %}{{ f().__class__.__name__ }}"),
+    ("class_of_macro_result_autoescape", "{% macro f() %}x{% endmacro %}{{ f().__class__.__name__ }}", {"env": {"autoescape": True}}),
+    ("class_of_undefined", "{{ x.__class__ }}|{{ x.__class__.__name__ }}"),
+    ("class_of_strict_undefined", "{{ x.__class__.__name__ }}", {"env": {"undefined": "strict"}}),
+    ("class_tojson", "{{ 'a'.__class__|tojson }}"),
+    ("class_not_iterable", "{{ 'a'.__class__|list }}"),
+    ("class_through_attribute_paths", "{{ [1, 'a', 2.5, none]|map(attribute='__class__.__name__')|join(',') }}|{{ [1, 'a']|selectattr('__class__')|list }}|{{ [1, 'a', 2]|unique(attribute='__class__')|list }}"),
+    ("class_sort_key", "{{ [1, 'a']|sort(attribute='__class__')|list }}"),
+    ("class_format_item_of_none", "{{ '{0[__class__]}'.format(none) }}"),
+    # Codex on #874: a class that is a global is that global
+    ("class_is_the_global", "{{ {}.__class__ == dict }}|{{ range(1).__class__ is sameas range }}|{{ {dict: 1}[{}.__class__] }}|{{ namespace().__class__ == namespace }}|{{ {}.__class__ is callable }}|{{ {}.__class__(a=1) }}|{{ dict.__name__ }}|{{ cycler(1).__class__.__module__ }}"),
+    ("class_call_before_dict_item", "{{ {'__class__': 1}.__class__(a=2) }}|{{ {'__class__': 1}['__class__'] }}"),
 ]

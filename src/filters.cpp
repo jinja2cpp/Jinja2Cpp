@@ -166,6 +166,19 @@ InternalValue SandboxedSubscript(const InternalValue& obj, const InternalValue& 
 
 // Jinja2's make_attrgetter: looks the path up item by item and replaces an undefined step
 // with `defaultVal` unless it is None or missing
+namespace
+{
+bool IsClassName(const InternalValue& name)
+{
+    if (const auto narrow = AsStringView<char>(name))
+    {
+        return *narrow == "__class__";
+    }
+    const auto wide = AsStringView<wchar_t>(name);
+    return wide && *wide == L"__class__";
+}
+} // namespace
+
 InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueList& path, const InternalValue& defaultVal, RenderContext& context)
 {
     InternalValue result = item;
@@ -180,6 +193,14 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
             if (auto attr = methods::GetNumberDataAttr(result, AsString(part), &context))
             {
                 next = std::move(*attr);
+            }
+            // Told by a view, so that a missing attribute of every item costs no copy of its name
+            else if (IsClassName(part))
+            {
+                if (auto cls = methods::ClassAttribute(result, "__class__", &context))
+                {
+                    next = std::move(*cls);
+                }
             }
         }
         if (next.IsUndefined() && !GetUndefinedInfo(next))
@@ -285,6 +306,15 @@ bool IsLessKey(const InternalValue& key1, const InternalValue& key2, BinaryExpre
 {
     if (checkStrict)
     {
+        // Python's list comparison tests identity before ==: one undefined object (`{% set u = zzz %}`, read twice)
+        // is equal to itself unasked. Its description is its identity: each lookup that misses makes its own
+        // (docs/tasks/0475). Any other undefined equals an undefined, so only a strict one needs it
+        const auto* info1 = GetUndefinedInfo(key1);
+        if (info1 && info1 == GetUndefinedInfo(key2))
+        {
+            isEqual = true;
+            return false;
+        }
         CheckUndefinedUse(key1, UndefinedUse::Operator);
         CheckUndefinedUse(key2, UndefinedUse::Operator);
     }
@@ -554,6 +584,10 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
             }
             return methods::MakeBoundMethod(baseVal, *method);
         }
+    }
+    if (auto cls = methods::ClassAttribute(baseVal, attrName, &context))
+    {
+        return std::move(*cls);
     }
     if (isPlainDict)
     {

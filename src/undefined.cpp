@@ -243,6 +243,11 @@ std::optional<InternalValue> UndefinedField(const UndefinedInfo& info, std::stri
         }
         return InternalValue(info.name);
     }
+    // Its class, which getattr finds on the object before __getattr__ (docs/tasks/0476)
+    if (name == "__class__")
+    {
+        return MakeNamedClassObject(UndefinedClassName(info));
+    }
     if (name == "_undefined_hint")
     {
         auto hint = HintOf(info);

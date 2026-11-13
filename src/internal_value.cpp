@@ -836,6 +836,8 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         size_t count = 0;
         // The clipped stop index, which a slice of a range keeps (range(10)[1:6:2] is range(1, 6, 2))
         int64_t end = 0;
+        // The step as given, which a slice of a range keeps: `step` is clamped to -INT64_MAX so that -step is defined
+        int64_t givenStep = 1;
 
         // Stepping past the last index could overflow with a huge step, so index directly
         [[nodiscard]] size_t At(size_t n) const { return static_cast<size_t>(start + (static_cast<int64_t>(n) * step)); }
@@ -896,7 +898,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         int64_t start = 0;
         int64_t stop = 0;
         int64_t step = 0;
-        if (visitors::MulOverflows(indices.start, range.step, start) || visitors::AddOverflows(range.start, start, start) || visitors::MulOverflows(indices.end, range.step, stop) || visitors::AddOverflows(range.start, stop, stop) || visitors::MulOverflows(indices.step, range.step, step))
+        if (visitors::MulOverflows(indices.start, range.step, start) || visitors::AddOverflows(range.start, start, start) || visitors::MulOverflows(indices.end, range.step, stop) || visitors::AddOverflows(range.start, stop, stop) || visitors::MulOverflows(indices.givenStep, range.step, step))
         {
             return std::nullopt;
         }
@@ -1048,6 +1050,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         {
             throw TemplateRuntimeError("slice step cannot be zero");
         }
+        indices.givenStep = indices.step;
         // Any step at least as long as the sequence takes one item; this keeps -step defined
         if (indices.step < -std::numeric_limits<int64_t>::max())
         {
@@ -4547,6 +4550,157 @@ MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className,
 MapAdapter CreateModuleAdapter(InternalValueMap&& values, InternalValue name, InternalValue output)
 {
     return MapAdapter(MakeRef<ModuleMapAdapter>(std::move(values), std::move(name), std::move(output)));
+}
+
+namespace
+{
+// A Python class the engine's values have (docs/tasks/0476): its module and its name
+struct PythonClass
+{
+    std::string_view module;
+    std::string_view name;
+};
+
+constexpr std::string_view builtinsModule = "builtins";
+constexpr std::string_view runtimeModule = "jinja2.runtime";
+constexpr std::string_view utilsModule = "jinja2.utils";
+
+// One entry per class, whose address is the class's identity: two reads of 'a'.__class__ are one object
+constexpr PythonClass PythonClasses[] = {
+    { builtinsModule, "NoneType" },
+    { builtinsModule, "bool" },
+    { builtinsModule, "builtin_function_or_method" },
+    { builtinsModule, "dict" },
+    { builtinsModule, "dict_reversekeyiterator" },
+    { builtinsModule, "float" },
+    { builtinsModule, "function" },
+    { builtinsModule, "generator" },
+    { builtinsModule, "int" },
+    { builtinsModule, "list" },
+    { builtinsModule, "list_reverseiterator" },
+    { builtinsModule, "method" },
+    { builtinsModule, "range" },
+    { builtinsModule, "range_iterator" },
+    { builtinsModule, "reversed" },
+    { builtinsModule, "str" },
+    { builtinsModule, "tuple" },
+    { builtinsModule, "type" },
+    { "markupsafe", "Markup" },
+    { runtimeModule, "ChainableUndefined" },
+    { runtimeModule, "DebugUndefined" },
+    { runtimeModule, "LoopContext" },
+    { runtimeModule, "Macro" },
+    { runtimeModule, "StrictUndefined" },
+    { runtimeModule, "TemplateReference" },
+    { runtimeModule, "Undefined" },
+    { utilsModule, "Cycler" },
+    { utilsModule, "Joiner" },
+    { utilsModule, "Namespace" },
+    { "jinja2.environment", "TemplateModule" },
+};
+
+const PythonClass* FindPythonClass(std::string_view name)
+{
+    const auto* found = std::find_if(std::begin(PythonClasses), std::end(PythonClasses), [name](const PythonClass& cls) { return cls.name == name; });
+    return found == std::end(PythonClasses) ? nullptr : found;
+}
+
+// A class: <class 'str'>, with __name__, __qualname__ and __module__, which equals only itself: one per class
+// (MakeNamedClassObject), whose identity is the class's entry
+class ClassObjectAdapter final : public ObjectMapAdapter
+{
+public:
+    explicit ClassObjectAdapter(const PythonClass& cls)
+        : ObjectMapAdapter(Attributes(cls), "type", InternalValue(QualifiedName(cls)))
+        , m_class(&cls)
+    {
+    }
+
+    [[nodiscard]] const void* GetIdentity() const override { return m_class; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* cls = dynamic_cast<const ClassObjectAdapter*>(&other);
+        return cls != nullptr && cls->m_class == m_class;
+    }
+    [[nodiscard]] GenericMap CreateGenericMap() const override { return GenericMap(std::make_shared<const ClassObjectAdapter>(*this)); }
+
+private:
+    static InternalValueMap Attributes(const PythonClass& cls)
+    {
+        InternalValueMap result;
+        result.emplace("__name__", InternalValue(std::string(cls.name)));
+        result.emplace("__qualname__", InternalValue(std::string(cls.name)));
+        result.emplace("__module__", InternalValue(std::string(cls.module)));
+        return result;
+    }
+    static std::string QualifiedName(const PythonClass& cls)
+    {
+        return cls.module == builtinsModule ? std::string(cls.name) : std::string(cls.module) + "." + std::string(cls.name);
+    }
+
+    // An entry of PythonClasses, which outlives every value
+    const PythonClass* m_class;
+};
+
+// The name of the Python class of a value the engine made; empty for one whose class it does not know
+std::string_view PythonClassName(const InternalValue& value)
+{
+    if (const auto* undefined = GetIf<UndefinedValue>(&value))
+    {
+        // An undefined value without its description is a host's null, not one of Jinja2's undefined objects
+        return undefined->info ? UndefinedClassName(*undefined->info) : std::string_view();
+    }
+    if (IsStringValue(value))
+    {
+        return value.IsMarkup() ? "Markup" : "str";
+    }
+    if (const auto map = AsMap(value))
+    {
+        // A map whose keys come first (a reflected struct) is no dict of Python's
+        if (map->GetAttrPolicy() == MapAttrPolicy::KeysFirst)
+        {
+            return {};
+        }
+    }
+    return Apply<visitors::PythonTypeNameGetter>(value);
+}
+} // namespace
+
+std::optional<InternalValue> MakeNamedClassObject(std::string_view className)
+{
+    const auto* cls = FindPythonClass(className);
+    if (!cls)
+    {
+        return std::nullopt;
+    }
+    // A class that is a global (range, dict, cycler, ...) is that global
+    if (auto global = ClassGlobalOf(cls->module, cls->name))
+    {
+        return global;
+    }
+    // Made once for every render, as the globals are: immutable (a method that changes it changes a copy, MakeMutable),
+    // so that a read per item (map(attribute='__class__')) allocates nothing
+    static const auto objects = [] {
+        // Made once, maybe in a render with a memory budget, for every render after it
+        const UncountedMemoryScope uncounted;
+        std::vector<InternalValue> result;
+        result.reserve(std::size(PythonClasses));
+        for (const auto& entry : PythonClasses)
+        {
+            result.emplace_back(MapAdapter(MakeRef<ClassObjectAdapter>(entry)));
+        }
+        return result;
+    }();
+    return objects[static_cast<size_t>(cls - std::begin(PythonClasses))];
+}
+
+std::optional<InternalValue> MakeClassObject(const InternalValue& value)
+{
+    if (GetHostObject(value))
+    {
+        return std::nullopt;
+    }
+    return MakeNamedClassObject(PythonClassName(value));
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

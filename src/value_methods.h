@@ -35,6 +35,9 @@ bool IsMethodName(std::string_view name);
 // judges the attribute as any other (is_safe_attribute): its replacement, the unsafe undefined of a refused one, is the
 // answer; nullptr `context` asks no policy
 std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name, const RenderContext* context);
+// x.__class__ of a value the engine made (docs/tasks/0476), or nothing for another name or a host object; in a sandbox
+// the policy judges it first, as GetNumberDataAttr's attributes
+std::optional<InternalValue> ClassAttribute(const InternalValue& obj, std::string_view name, const RenderContext* context);
 // Whether a dict has a method of this name (items, get, ...), for a parser that tells
 // map attributes apart from the methods of other kinds (title of a string)
 bool IsDictMethodName(std::string_view name);

@@ -181,4 +181,16 @@ CASES = [
     ('str_times_range', "{{ 'a' * range(3) }}"),
     ('list_times_float', "{{ [1] * 1.5 }}"),
     ('format_field_range_attribute_item', "{{ '{0[start]}'.format(range(3)) }}"),
+    # task 0475: str.format's [key] of a sequence takes an index only
+    ('format_field_list_str_key', "{{ '{0[count]}'.format([1]) }}"),
+    ('format_field_str_str_key', "{{ '{0[a]}'.format('abc') }}"),
+    ('format_field_namedtuple_str_key', "{% for g in [{'a': 1}]|groupby('a') %}{{ '{0[grouper]}'.format(g) }}{% endfor %}"),
+    ('format_field_sequence_index', "{{ '{0[1]}'.format(range(3)) }}|{{ '{0[0]}'.format('abc') }}|{{ '{0[a]}'.format({'a': 1}) }}"),
+    # task 0475: a slice of a range keeps a step of -2**63
+    ('range_slice_step_int64_min', "{{ range(10)[::-9223372036854775808] }}|{{ range(10)[::-9223372036854775808].step }}|{{ range(10)[::-9223372036854775808]|list }}"),
+    # task 0475: Markup * x takes an index only
+    ('markup_times_str', "{{ ('a'|safe) * 'b' }}"),
+    ('markup_times_float', "{{ ('a'|safe) * 1.5 }}"),
+    ('markup_times_int', "{{ 2 * ('a'|safe) }}|{{ ('a'|safe) * true }}"),
+    ('dict_items_times_int', "{{ {'a': 1}.items() * 2 }}"),
 ]

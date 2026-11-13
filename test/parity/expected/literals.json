@@ -791,6 +791,162 @@
    "env": {},
    "templates": {},
    "output": "str|Markup"
+  },
+  {
+   "id": "literals.class_repr_of_values",
+   "template": "{{ (1).__class__ }}{{ (1.5).__class__ }}{{ true.__class__ }}{{ none.__class__ }}{{ [].__class__ }}{{ ().__class__ }}{{ {}.__class__ }}{{ range(1).__class__ }}{{ ('a'|safe).__class__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'int'><class 'float'><class 'bool'><class 'NoneType'><class 'list'><class 'tuple'><class 'dict'><class 'range'><class 'markupsafe.Markup'>"
+  },
+  {
+   "id": "literals.class_equals_only_itself",
+   "template": "{{ 'a'.__class__ == 'b'.__class__ }}|{{ 'a'.__class__ == (1).__class__ }}|{{ 'a'.__class__ is sameas 'b'.__class__ }}|{{ {'a'.__class__: 1}['b'.__class__] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|False|True|1"
+  },
+  {
+   "id": "literals.class_names",
+   "template": "{{ 'a'.__class__.__qualname__ }}|{{ 'a'.__class__.__module__ }}|{{ ('a'|safe).__class__.__module__ }}|{{ 'a'.__class__.__class__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "str|builtins|markupsafe|<class 'type'>"
+  },
+  {
+   "id": "literals.class_through_item_and_attr",
+   "template": "{{ 'a'['__class__'] }}|{{ 'a'|attr('__class__') }}|{% set s = 'a' %}{{ s.__class__.__name__ }}|{{ '{0.__class__.__name__}'.format(1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'str'>|<class 'str'>|str|int"
+  },
+  {
+   "id": "literals.class_of_dict_with_class_key",
+   "template": "{{ {'__class__': 1}.__class__ }}|{{ {'__class__': 1}['__class__'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'dict'>|1"
+  },
+  {
+   "id": "literals.class_of_engine_objects",
+   "template": "{{ namespace().__class__ }}|{{ joiner().__class__ }}|{% for i in [1] %}{{ loop.__class__ }}{% endfor %}|{{ ([1]|select).__class__ }}|{{ lipsum.__class__ }}|{{ 'a'.upper.__class__ }}|{{ range.__class__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'jinja2.utils.Namespace'>|<class 'jinja2.utils.Joiner'>|<class 'jinja2.runtime.LoopContext'>|<class 'generator'>|<class 'function'>|<class 'builtin_function_or_method'>|<class 'type'>"
+  },
+  {
+   "id": "literals.class_of_macro_result",
+   "template": "{% macro f() %}x{% endmacro %}{{ f().__class__.__name__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "str"
+  },
+  {
+   "id": "literals.class_of_macro_result_autoescape",
+   "template": "{% macro f() %}x{% endmacro %}{{ f().__class__.__name__ }}",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "Markup"
+  },
+  {
+   "id": "literals.class_of_undefined",
+   "template": "{{ x.__class__ }}|{{ x.__class__.__name__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'jinja2.runtime.Undefined'>|Undefined"
+  },
+  {
+   "id": "literals.class_of_strict_undefined",
+   "template": "{{ x.__class__.__name__ }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "StrictUndefined"
+  },
+  {
+   "id": "literals.class_tojson",
+   "template": "{{ 'a'.__class__|tojson }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Object of type type is not JSON serializable"
+   }
+  },
+  {
+   "id": "literals.class_not_iterable",
+   "template": "{{ 'a'.__class__|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'type' object is not iterable"
+   }
+  },
+  {
+   "id": "literals.class_through_attribute_paths",
+   "template": "{{ [1, 'a', 2.5, none]|map(attribute='__class__.__name__')|join(',') }}|{{ [1, 'a']|selectattr('__class__')|list }}|{{ [1, 'a', 2]|unique(attribute='__class__')|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "int,str,float,NoneType|[1, 'a']|[1, 'a']"
+  },
+  {
+   "id": "literals.class_sort_key",
+   "template": "{{ [1, 'a']|sort(attribute='__class__')|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'type' and 'type'"
+   }
+  },
+  {
+   "id": "literals.class_format_item_of_none",
+   "template": "{{ '{0[__class__]}'.format(none) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not subscriptable"
+   }
+  },
+  {
+   "id": "literals.class_is_the_global",
+   "template": "{{ {}.__class__ == dict }}|{{ range(1).__class__ is sameas range }}|{{ {dict: 1}[{}.__class__] }}|{{ namespace().__class__ == namespace }}|{{ {}.__class__ is callable }}|{{ {}.__class__(a=1) }}|{{ dict.__name__ }}|{{ cycler(1).__class__.__module__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|True|1|True|True|{'a': 1}|dict|jinja2.utils"
+  },
+  {
+   "id": "literals.class_call_before_dict_item",
+   "template": "{{ {'__class__': 1}.__class__(a=2) }}|{{ {'__class__': 1}['__class__'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 2}|1"
   }
  ]
 }

@@ -838,8 +838,9 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
     const char* objectClass = map.GetObjectClass();
     if (const auto* reprArgument = objectClass ? map.GetReprArgument() : nullptr)
     {
+        // A class (x.__class__, docs/tasks/0476) prints as <class 'str'>
         AppendAscii("<");
-        AppendAscii(objectClass);
+        AppendAscii(std::string_view(objectClass) == "type" ? "class" : objectClass);
         AppendAscii(" ");
         RenderRepr(*reprArgument, m_containers);
         AppendAscii(">");

@@ -308,3 +308,13 @@ TEST(PublicSandboxPolicyTest, SettingsCompareThePolicyByIdentity)
     b.immutableContainers = true;
     EXPECT_NE(a, b);
 }
+
+// x.__class__ (docs/tasks/0476) is the policy's to refuse on every path to it, and without a policy the class
+TEST(PublicSandboxPolicyTest, TheClassOfAValueAsksThePolicy)
+{
+    TemplateEnv env;
+    env.GetSettings().sandboxPolicy = std::make_shared<const ToyPolicy>();
+    EXPECT_EQ("False|False|False|False", RenderOrError(env, "{{ 'a'.__class__ is defined }}|{{ 'a'['__class__'] is defined }}|{{ ('a'|attr('__class__')) is defined }}|{{ {}.__class__ is defined }}"));
+    TemplateEnv plain;
+    EXPECT_EQ("<class 'str'>|<class 'str'>|<class 'str'>|<class 'dict'>", RenderOrError(plain, "{{ 'a'.__class__ }}|{{ 'a'['__class__'] }}|{{ 'a'|attr('__class__') }}|{{ {}.__class__ }}"));
+}

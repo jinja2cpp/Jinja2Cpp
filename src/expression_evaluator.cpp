@@ -224,7 +224,8 @@ void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> v
     idx.expr = value;
     idx.isAttr = !attrName.empty();
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
-    idx.maybeDictMethod = idx.maybeMethod && methods::IsDictMethodName(attrName);
+    // A map's __class__ is its class, not an item (docs/tasks/0476)
+    idx.maybeDictMethod = idx.maybeMethod && (methods::IsDictMethodName(attrName) || attrName == "__class__");
     // x.name of a map is then no plain item lookup either: the policy is asked first
     idx.sandboxed = detail::t_parseLimits.sandboxed;
     idx.maybeDictMethod = idx.maybeDictMethod || (idx.sandboxed && idx.isAttr);
@@ -892,6 +893,28 @@ void CheckUndefinedOperands(BinaryExpression::Operation oper, const InternalValu
 }
 
 // The comparison and arithmetic operators on values that are not both numbers
+namespace
+{
+// Markup * n is str.__mul__(n) (MarkupSafe 3), which takes an index only: anything else is a TypeError naming its
+// type, not the "can't multiply sequence" of str * x. An undefined count fails as its own use does (docs/tasks/0475)
+void CheckMarkupRepeatCount(const InternalValue& count)
+{
+    switch (count.Kind())
+    {
+    case ValueKind::Int:
+    case ValueKind::BigInt:
+    case ValueKind::Bool:
+    case ValueKind::Undefined:
+    case ValueKind::HostValue:
+        return;
+    default:
+        break;
+    }
+    const std::string type = count.IsMarkup() && IsStringValue(count) ? "Markup" : Apply<visitors::PythonTypeNameGetter>(count);
+    throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'" + type + "' object cannot be interpreted as an integer");
+}
+} // namespace
+
 InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
     // Markup + str escapes the other operand, Markup * n stays Markup
@@ -901,6 +924,10 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
         InternalValue result = Apply2<visitors::BinaryMathOperation>(MarkupEscape(leftVal, callback), MarkupEscape(rightVal, callback), oper);
         result.SetMarkup();
         return result;
+    }
+    if (oper == BinaryExpression::Mul && (leftVal.IsMarkup() || rightVal.IsMarkup()))
+    {
+        CheckMarkupRepeatCount(leftVal.IsMarkup() ? rightVal : leftVal);
     }
     InternalValue result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, oper);
     if (oper == BinaryExpression::Mul && (leftVal.IsMarkup() || rightVal.IsMarkup()))
@@ -1717,6 +1744,15 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
     if (!method)
     {
+        // x.__class__(...) is the class, before a dict's own `__class__` item (docs/tasks/0476)
+        if (*name == "__class__")
+        {
+            if (auto cls = methods::ClassAttribute(receiver, *name, &values))
+            {
+                callee = std::move(*cls);
+                return false;
+            }
+        }
         callee = Subscript(receiver, *name, &values);
         if (receiver.ShouldExtendLifetime())
         {

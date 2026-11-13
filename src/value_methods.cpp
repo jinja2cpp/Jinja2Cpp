@@ -1724,6 +1724,10 @@ struct StrOps
         {
             result = std::move(attrValue);
         }
+        else if (auto cls = ClassAttribute(value, attr, nullptr))
+        {
+            result = std::move(cls);
+        }
         else if (isObject || isField || value.Kind() == ValueKind::Callable)
         {
             // The fields of a reflected object, of namespace(), loop or a named tuple, the
@@ -1758,6 +1762,21 @@ struct StrOps
         return *idx >= -count && *idx < count;
     }
 
+    // A str key of a str, list, tuple or range: Python's TypeError
+    static void ThrowIfSequence(const InternalValue& value)
+    {
+        if (IsStringValue(value))
+        {
+            Raise("string indices must be integers, not 'str'");
+        }
+        const auto list = AsList(value);
+        if ((list && list->GetIteratorKind() == IteratorKind::None) || value.Kind() == ValueKind::KeyValuePair)
+        {
+            // A named tuple (groupby's groups) is a tuple
+            Raise((list && list->GetFieldNames() ? std::string("tuple") : TypeName(value)) + " indices must be integers or slices, not str");
+        }
+    }
+
     // Python's obj[key], as a field's [key] part looks it up: __getitem__ only, so an object
     // such as namespace() or loop is not subscriptable and a missing key fails
     static InternalValue FormatItem(const InternalValue& value, const InternalValue& key, RenderContext& context)
@@ -1787,7 +1806,15 @@ struct StrOps
         }
         else
         {
-            result = GetItem(value, key, &context);
+            // A sequence takes an index only: GetItem would fall back to its attributes ('{0[start]}' of a range, a
+            // named tuple's field), which only the sandbox's formatter reaches through getitem (docs/tasks/0475)
+            const bool plainFormatter = IsStringValue(key) && context.GetSandboxPolicy() == nullptr;
+            if (plainFormatter)
+            {
+                ThrowIfSequence(value);
+            }
+            // Nor is __class__ an item of anything that has items ('{0[__class__]}' of None fails)
+            result = plainFormatter && AsString(key) == "__class__" ? Subscript(value, key, &context) : GetItem(value, key, &context);
         }
         if (!result || (result->IsUndefined() && !HasItem(value, key)))
         {
@@ -3147,6 +3174,8 @@ bool IsMethodName(std::string_view name)
         {
             result[std::min(attr.size(), maxLength)].push_back(attr);
         }
+        constexpr std::string_view classAttribute = "__class__";
+        result[classAttribute.size()].push_back(classAttribute);
         for (auto& sameLength : result)
         {
             std::sort(sameLength.begin(), sameLength.end());
@@ -3209,6 +3238,28 @@ std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::s
         }
     }
     return attr;
+}
+
+std::optional<InternalValue> ClassAttribute(const InternalValue& obj, std::string_view name, const RenderContext* context)
+{
+    if (name != "__class__")
+    {
+        return std::nullopt;
+    }
+    // A host object answers for itself; a map's own `__class__` key is the attribute of a map whose keys come first
+    if (GetHostObject(obj))
+    {
+        return std::nullopt;
+    }
+    // The sandbox refuses it as Jinja2's does, by its name
+    if (context && context->GetSandboxPolicy())
+    {
+        if (auto replacement = SandboxedNativeAttribute(context, obj, std::string(name)))
+        {
+            return replacement;
+        }
+    }
+    return MakeClassObject(obj);
 }
 
 bool IsDictMethodName(std::string_view name)
@@ -3297,6 +3348,10 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
     {
         return std::move(*attr);
     }
+    if (auto cls = ClassAttribute(obj, name, context))
+    {
+        return std::move(*cls);
+    }
     return Subscript(obj, name, context);
 }
 
@@ -3331,6 +3386,10 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
         if (auto attr = GetNumberDataAttr(obj, AsString(key), context))
         {
             return std::move(*attr);
+        }
+        if (auto cls = ClassAttribute(obj, AsString(key), context))
+        {
+            return std::move(*cls);
         }
     }
     return result;

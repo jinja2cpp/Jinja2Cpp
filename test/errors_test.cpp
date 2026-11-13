@@ -1289,3 +1289,30 @@ TEST(ErrorsJinjaMessagesTest, RuntimeErrorsNameTheirPythonClass)
         EXPECT_EQ(row.pythonClass, params[1].AsString()) << row.source;
     }
 }
+
+// Python's messages for str.format's [key] of a sequence and for Markup * x (docs/tasks/0475)
+TEST(ErrorsJinjaMessagesTest, FormatItemAndMarkupRepeatMessages)
+{
+    const std::pair<const char*, const char*> rows[] = {
+        { "{{ '{0[start]}'.format(range(3)) }}", "range indices must be integers or slices, not str" },
+        { "{{ '{0[a]}'.format([1]) }}", "list indices must be integers or slices, not str" },
+        { "{{ '{0[a]}'.format((1,)) }}", "tuple indices must be integers or slices, not str" },
+        { "{% for g in [{'a': 1}]|groupby('a') %}{{ '{0[grouper]}'.format(g) }}{% endfor %}", "tuple indices must be integers or slices, not str" },
+        { "{{ '{0[a]}'.format('abc') }}", "string indices must be integers, not 'str'" },
+        { "{{ ('a'|safe) * 'b' }}", "'str' object cannot be interpreted as an integer" },
+        { "{{ 'b' * ('a'|safe) }}", "'str' object cannot be interpreted as an integer" },
+        { "{{ ('a'|safe) * 1.5 }}", "'float' object cannot be interpreted as an integer" },
+        { "{{ ('a'|safe) * ('b'|safe) }}", "'Markup' object cannot be interpreted as an integer" },
+        { "{{ ('a'|safe) * none }}", "'NoneType' object cannot be interpreted as an integer" },
+    };
+    for (const auto& [source, message] : rows)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        const auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << source;
+        const auto& params = result.error().GetExtraParams();
+        ASSERT_FALSE(params.empty()) << source;
+        EXPECT_EQ(message, params[0].AsString()) << source;
+    }
+}

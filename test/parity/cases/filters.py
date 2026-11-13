@@ -490,6 +490,8 @@ CASES = [
     ("sort_strict_tie_second_key_undefined_reverse", "{{ [{'a': 1, 'b': 1}, {'a': 1, 'b': 2}]|sort(attribute='a,zzz', reverse=true)|list|length }}", {"env": {"undefined": "strict"}}),
     ("sort_strict_mixed_types_before_undefined", "{{ [1, 'a', x]|sort|list|length }}", {"env": {"undefined": "strict"}}),
     ("sort_same_undefined_strict", "{% set u = zzz %}{{ [u, u]|sort|list|length }}", {"env": {"undefined": "strict"}}),
+    ("sort_same_undefined_attribute_strict", "{% set u = zzz %}{{ [{'a': u}, {'a': u}]|sort(attribute='a')|list|length }}", {"env": {"undefined": "strict"}}),
+    ("sort_distinct_undefined_strict", "{{ [zzz, yyy]|sort|list|length }}", {"env": {"undefined": "strict"}}),
     ("sort_unique_attribute_missing_default", "{{ [{'a': 1}, {'a': 2}, {'a': 3}]|sort(attribute='zzz')|list|length }}|{{ [{'a': 1}, {'a': 2}]|unique(attribute='zzz')|list|length }}"),
     # task 0368: json.dumps names a callable's type
     ("tojson_callable", "{{ lipsum|tojson }}"),
