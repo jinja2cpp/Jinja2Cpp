@@ -486,9 +486,8 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   a thread), on CPython 3.14.0 and versions after 3.15 (not yet checked), on platforms other than
   Windows and x86-64 or AArch64 Linux, macOS and the BSDs, under a CET or GCS shadow stack, past 8
   generators nested in each other's callables on a thread, or when no stack can be reserved.
-- Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here three), and
-  yields `super()`, `self.block()` and a recursive loop's call as one item, a macro's output of
-  more than 512 characters as one item, and an empty `{{ }}` as `''` (0456).
+- `generate()` yields `str` items where Jinja2 yields the `Markup` an autoescaped value becomes
+  (`{{ x }}` under autoescape); the text of each item is Jinja2's (0493).
 - A Python loader's `get_source` runs again when a template it gave fails to compile, to show
   the line of the error (twice more with the default fallback, which loads it through Jinja2);
   Jinja2 calls it once.

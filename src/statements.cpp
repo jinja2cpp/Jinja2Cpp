@@ -62,8 +62,10 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 
     if (m_isRecursive)
     {
-        // Jinja2 renders a recursive loop into a buffer: loop(x) is a call of a macro
+        // Jinja2 renders a recursive loop into a buffer: loop(x) is a call of a macro, and generate()
+        // yields the whole loop as one item
         const detail::GenerationFreeze freeze(values);
+        const OutStream::PieceHold pieceHold(os);
         RenderLoop(loopVal, os, values, 0);
         return;
     }
@@ -2147,6 +2149,8 @@ struct SelfBlockCall
             frame = curFrame;
         }
         blockContext.SetTemplateFrame(frame);
+        // self.b() returns the block's output: one item of generate(), as a macro's output is
+        const OutStream::PieceHold pieceHold(stream);
         RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
     }
 };
@@ -2742,6 +2746,8 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             // The parent block sees the scopes below this block's, wherever super() is called
             // from (a macro the block passes it to): a context on them in the block's own
             parentBlock.emplace(Callable::Macro, [owner = stack->self, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
+                // The value of the call, one item of generate() as a macro's output is
+                const OutStream::PieceHold pieceHold(stream);
                 const auto home = site.Resolve(context);
                 RenderContext superContext(*home.context, home.link);
                 RenderBlockAt(owner->live ? *owner->live : owner->ended, name, depth + 1, stream, superContext);

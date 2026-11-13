@@ -106,6 +106,9 @@ public:
 
     // Appends the buffered output to the target string, or writes it to the sink
     void Flush();
+    // The end of a piece Jinja2's generate() yields (RenderOptions::writeEachPiece): what is buffered goes to
+    // the sink as one Write, an empty one too, as Jinja2 yields '' for `{{ '' }}` or an empty macro call
+    void FlushPiece();
     // Whether the output goes to a host's sink, which may run a render on this thread while
     // the stream still needs a fragment: such fragments must not live in a per-thread
     // scratch buffer that the render reuses (the HTML-escape buffer, WriteEscaped)
@@ -133,8 +136,9 @@ public:
     // the output (a `{% set %}` block, a macro's result) never is
     void WriteEachPiece() noexcept { m_eachPiece = true; }
     [[nodiscard]] bool WritesEachPiece() const noexcept { return m_eachPiece; }
-    // A macro's output is one piece in Jinja2, as it is the value its call returns: the macro's body does not
-    // flush the stream while this lives
+    // A macro's output is one piece in Jinja2, as it is the value its call returns (so are super(), self.b()
+    // and a recursive loop, which Jinja2 buffers): the body does not flush the stream while this lives, and
+    // what overflows the buffer is held until the piece ends, so that the piece reaches the sink in one Write
     class PieceHold
     {
     public:
@@ -146,6 +150,7 @@ public:
             if (m_eachPiece)
             {
                 os.m_eachPiece = false;
+                os.m_holding = true;
             }
         }
         ~PieceHold()
@@ -153,6 +158,7 @@ public:
             if (m_eachPiece)
             {
                 m_os.m_eachPiece = true;
+                m_os.m_holding = false;
             }
         }
         PieceHold(const PieceHold&) = delete;
@@ -224,6 +230,8 @@ private:
     void FlushBuffer();
     void AppendToTarget(const void* ptr, size_t bytes);
     void WriteToSink(const void* ptr, size_t bytes);
+    void WriteHeld(const void* ptr, size_t bytes);
+    void WriteSinkChunk(const void* ptr, size_t bytes, size_t newLength);
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
     template<typename CharT>
@@ -238,6 +246,8 @@ private:
     void* m_sink = nullptr;
     size_t m_sinkWritten = 0;
     size_t m_charSize = 1;
+    // The bytes of a held piece that overflowed the buffer (PieceHold), written with the rest of the piece
+    std::string m_held;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer
@@ -246,6 +256,8 @@ private:
     unsigned char* m_end = m_buffer + BufferLength;
     // Last: before m_buffer it pads to the alignas, which MSVC reports (C4324)
     bool m_eachPiece = false;
+    // A PieceHold of a stream that writes each piece lives
+    bool m_holding = false;
 };
 
 // Renders into a new string with `render(OutStream&)` and returns it

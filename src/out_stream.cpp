@@ -32,6 +32,28 @@ void OutStream::FlushBuffer()
         AppendToTarget(m_buffer, static_cast<size_t>(m_cur - m_buffer));
         m_cur = m_buffer;
     }
+    else if (!m_held.empty() && !m_holding)
+    {
+        WriteToSink(m_buffer, 0);
+    }
+}
+
+void OutStream::FlushPiece()
+{
+    if (m_writer)
+    {
+        return;
+    }
+    if (m_holding)
+    {
+        return;
+    }
+    if (m_sink && m_cur == m_buffer && m_held.empty())
+    {
+        WriteSinkChunk(m_buffer, 0, 0);
+        return;
+    }
+    FlushBuffer();
 }
 
 void OutStream::AppendToTarget(const void* ptr, size_t bytes)
@@ -53,11 +75,38 @@ void OutStream::AppendToTarget(const void* ptr, size_t bytes)
 
 void OutStream::WriteToSink(const void* ptr, size_t bytes)
 {
-    // A sink is never given an empty chunk
+    if (m_holding)
+    {
+        WriteHeld(ptr, bytes);
+        return;
+    }
+    if (!m_held.empty())
+    {
+        // The held piece has ended: it goes in one Write with what follows it in the piece
+        const std::string piece = std::move(m_held.append(static_cast<const char*>(ptr), bytes));
+        m_held.clear();
+        // The held part is counted already (WriteHeld)
+        WriteSinkChunk(piece.data(), piece.size(), bytes / m_charSize);
+        return;
+    }
+    // A sink is given an empty chunk only for an empty piece (FlushPiece)
     if (bytes == 0)
     {
         return;
     }
+    WriteSinkChunk(ptr, bytes, bytes / m_charSize);
+}
+
+// Counted as written, as the limit on the output (Settings::Limits::maxOutputSize) and the offsets of the
+// generation spans read it: the bytes reach the sink once the piece ends
+JINJA2CPP_NOINLINE void OutStream::WriteHeld(const void* ptr, size_t bytes)
+{
+    m_held.append(static_cast<const char*>(ptr), bytes);
+    m_sinkWritten += bytes / m_charSize;
+}
+
+void OutStream::WriteSinkChunk(const void* ptr, size_t bytes, size_t newLength)
+{
     const size_t length = bytes / m_charSize;
     if (m_charSize == 1)
     {
@@ -67,7 +116,8 @@ void OutStream::WriteToSink(const void* ptr, size_t bytes)
     {
         static_cast<OutputSinkW*>(m_sink)->Write(std::wstring_view(static_cast<const wchar_t*>(ptr), length));
     }
-    m_sinkWritten += length;
+    // What a held piece adds was counted when it was held (WriteHeld)
+    m_sinkWritten += newLength;
 }
 
 void OutStream::WriteBufferSlow(const void* ptr, size_t length)

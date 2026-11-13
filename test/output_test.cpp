@@ -22,6 +22,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 using namespace jinja2;
@@ -40,11 +41,13 @@ class RecordingSink final : public BasicOutputSink<CharT>
 public:
     void Write(std::basic_string_view<CharT> text) override
     {
-        EXPECT_FALSE(text.empty());
+        // Only a render that writes each piece writes an empty one, an item Jinja2's generate() yields
+        EXPECT_TRUE(eachPiece || !text.empty());
         chunks.emplace_back(text);
         output.append(text);
     }
 
+    bool eachPiece = false;
     std::vector<std::basic_string<CharT>> chunks;
     std::basic_string<CharT> output;
 };
@@ -281,6 +284,82 @@ TEST(OutputTest, SinkGetsEachPieceWhenAsked)
     EXPECT_EQ(gathered.chunks.size(), 1U);
 }
 
+TEST(OutputTest, SinkGetsThePiecesJinja2Folds)
+{
+    // docs/tasks/0456, Jinja2 3.1.6's generate(): its compiler folds constant output into the text next to it, a
+    // value it evaluates is an item even when empty, and super(), self.b(), a recursive loop and a macro's output
+    // are one item however long
+    const std::string longMacro = "{% macro m() %}{% for i in range(300) %}ab{{ i }}{% endfor %}{% endmacro %}{{ m() }}";
+    std::string longOutput;
+    for (int idx = 0; idx != 300; ++idx)
+    {
+        longOutput += "ab" + std::to_string(idx);
+    }
+    const std::vector<std::pair<std::string, std::vector<std::string>>> rows = {
+        { "a{{ 1 }}b", { "a1b" } },
+        { "{{ none }}{{ true }}{{ 1.5 }}", { "NoneTrue1.5" } },
+        { "a{# c #}b", { "ab" } },
+        { "a{% raw %}r{% endraw %}b", { "arb" } },
+        { "a{{ 1 + 2 }}b{{ 'q'|upper }}c", { "a3bQc" } },
+        { "{{ 1 if true else y }}a", { "1a" } },
+        { "a{{ y }}b{{ 1 }}c", { "a", "", "b1c" } },
+        { "{% for i in [1, 2] %}a{{ 1 }}b{% endfor %}", { "a1b", "a1b" } },
+        { "{% if 1 %}a{{ 2 }}{% endif %}c", { "a2", "c" } },
+        { "{{ 1 }}{% if 1 %}{% endif %}{{ 2 }}", { "1", "2" } },
+        { "{% set q = 1 %}a{{ q }}b", { "a", "1", "b" } },
+        { "{{ y }}{{ 1 }}{{ y }}", { "", "1", "" } },
+        { "{{ '' }}", { "" } },
+        { "{% macro m() %}{% endmacro %}{{ m() }}", { "" } },
+        { "{% filter upper %}{% endfilter %}", { "" } },
+        { "{% filter upper %}a{{ y }}b{% endfilter %}", { "AB" } },
+        { "{% macro m() %}{{ caller() }}{% endmacro %}{% call m() %}{% endcall %}|", { "", "|" } },
+        { "{% set x %}{% endset %}a{{ 1 }}", { "a1" } },
+        { "{% autoescape y %}a{{ 1 }}b{{ 2 }}{% endautoescape %}", { "a", "1", "b", "2" } },
+        { "{% for i in [[1, [2]], 3] recursive %}({{ i if i is number else loop(i) }}){% endfor %}", { "((1)((2)))(3)" } },
+        { "x{% for i in [1, 2] recursive %}{{ i }}{% endfor %}y", { "x", "12", "y" } },
+        { "{% block b %}A{{ 5 }}B{% endblock %}{{ self.b() }}", { "A5B", "A5B" } },
+        { "{% macro m() %}{{ 'x' * 900 }}{% endmacro %}{{ m() }}", { std::string(900, 'x') } },
+        { longMacro, { longOutput } },
+    };
+    RenderOptions options;
+    options.writeEachPiece = true;
+    for (const auto& [source, expected] : rows)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        RecordingSink<char> sink;
+        sink.eachPiece = true;
+        ASSERT_TRUE(tpl.RenderTo(sink, {}, options)) << source;
+        EXPECT_EQ(sink.chunks, expected) << source;
+
+        TemplateW wide;
+        ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end()))) << source;
+        RecordingSink<wchar_t> wideSink;
+        wideSink.eachPiece = true;
+        ASSERT_TRUE(wide.RenderTo(wideSink, {}, options)) << source;
+        ASSERT_EQ(wideSink.chunks.size(), expected.size()) << source;
+        for (std::size_t idx = 0; idx != expected.size(); ++idx)
+        {
+            EXPECT_EQ(wideSink.chunks[idx], std::wstring(expected[idx].begin(), expected[idx].end())) << source << " " << idx;
+        }
+
+        // The default gathers the pieces, and gives the sink no empty one
+        RecordingSink<char> gathered;
+        ASSERT_TRUE(tpl.RenderTo(gathered, {})) << source;
+    }
+
+    // super() of a parent block, in a template that extends another
+    TemplateEnv env;
+    auto handler = std::make_shared<MemoryFileSystem>();
+    handler->AddFile("base", "A{% block b %}P{{ x }}Q{% endblock %}Z");
+    env.AddFilesystemHandler(std::string(), handler);
+    Template child(&env);
+    ASSERT_TRUE(child.Load("{% extends 'base' %}{% block b %}<{{ super() }}>{% endblock %}"));
+    RecordingSink<char> sink;
+    ASSERT_TRUE(child.RenderTo(sink, { { "x", 1 } }, options));
+    EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "A", "<", "P1Q", ">", "Z" }));
+}
+
 TEST(OutputTest, EachPieceRenderKeepsItsPiecesAroundOthersOnTheThread)
 {
     // The piece flush rides the stack check's slow path (EachPieceScope): a render with limits, and a render a
@@ -300,14 +379,15 @@ TEST(OutputTest, EachPieceRenderKeepsItsPiecesAroundOthersOnTheThread)
     ASSERT_TRUE(outer.Load("a{{ f() }}b{{ g() }}c{{ 3 }}"));
     RecordingSink<char> sink;
     ASSERT_TRUE(outer.RenderTo(sink, params, options));
-    EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "a", "x1y", "b", "p2q", "c", "3" }));
+    // c{{ 3 }} is one piece: Jinja2 folds the constant into the text (0456)
+    EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "a", "x1y", "b", "p2q", "c3" }));
 
     // With limits of its own
     Template outerLimited(&env);
     ASSERT_TRUE(outerLimited.Load("a{{ f() }}b{{ 3 }}"));
     RecordingSink<char> limitedSink;
     ASSERT_TRUE(outerLimited.RenderTo(limitedSink, params, options));
-    EXPECT_EQ(limitedSink.chunks, (std::vector<std::string>{ "a", "x1y", "b", "3" }));
+    EXPECT_EQ(limitedSink.chunks, (std::vector<std::string>{ "a", "x1y", "b3" }));
 
     RecordingSink<char> gathered;
     ASSERT_TRUE(outer.RenderTo(gathered, params));
