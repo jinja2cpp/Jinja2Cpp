@@ -29,7 +29,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -371,7 +370,6 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             : m_callback(callback)
             , m_mark(callback.MarkCall())
             , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
-            , m_uncaught(std::uncaught_exceptions())
         {
             ++m_callback.calls;
         }
@@ -385,12 +383,15 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             m_callback.sharedDepth = m_sharedDepth;
             const auto& owner = m_callback;
             m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
-            // A call that unwinds leaves what its error views as it is (docs/tasks/0482)
-            if (m_callback.calls == 0 && std::uncaught_exceptions() <= m_uncaught)
+            // A call that failed leaves what its error views as it is (docs/tasks/0482)
+            if (m_succeeded && m_callback.calls == 0 && m_callback.HasReplaced())
             {
                 m_callback.PruneReplaced();
             }
         }
+
+        // The call returns its result: the trees a source change replaced may go
+        void Succeeded() noexcept { m_succeeded = true; }
 
     private:
         Callback& m_callback;
@@ -398,7 +399,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         // A call made from a shared module's top level (a host callable there) imports for
         // itself: its modules end with it
         std::size_t m_sharedDepth;
-        int m_uncaught;
+        // Set by Succeeded
+        bool m_succeeded = false;
     };
 
     explicit TemplateModuleState(std::shared_ptr<const Impl> tpl)
@@ -457,10 +459,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     // cannot allocate, a cycle through it and the rest leaks
     void NoteDropped() noexcept
     {
-        auto taken = dropped->Take();
-        if (!taken.empty())
+        if (dropped->MayHoldAny())
         {
-            NoteDroppedExports(std::move(taken));
+            NoteDroppedExports(dropped->Take());
         }
     }
 
@@ -563,7 +564,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // among them (docs/tasks/0480)
             NoteDropped();
             // Then what the call loads, which its collector sees go
-            const CallScope callScope(*callback);
+            CallScope callScope(*callback);
             // Then the module's context as the call found it, which a failed call would leave
             // with its scopes pushed
             const HomeCall::Restore restore(module->Context());
@@ -603,6 +604,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
                 detail::PollDeadline();
             }
             cycles.Complete();
+            callScope.Succeeded();
             return result;
         }
         catch (const std::bad_alloc&)

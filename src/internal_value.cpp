@@ -1636,7 +1636,14 @@ public:
     CallListView(CallListView&&) = delete;
     CallListView& operator=(const CallListView&) = delete;
     CallListView& operator=(CallListView&&) = delete;
-    ~CallListView() override { LetGoOfExport(m_exports, m_container); }
+    ~CallListView() override
+    {
+        // A view of a cell reads the module's storage, which CallExports pins
+        if (!m_identity)
+        {
+            LetGoOfExport(m_exports, m_container);
+        }
+    }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override
     {
@@ -1722,7 +1729,14 @@ public:
     CallMapView(CallMapView&&) = delete;
     CallMapView& operator=(const CallMapView&) = delete;
     CallMapView& operator=(CallMapView&&) = delete;
-    ~CallMapView() override { LetGoOfExport(m_exports, m_container); }
+    ~CallMapView() override
+    {
+        // A view of a cell reads the module's storage, which CallExports pins
+        if (!m_identity)
+        {
+            LetGoOfExport(m_exports, m_container);
+        }
+    }
 
     [[nodiscard]] size_t GetSize() const override
     {

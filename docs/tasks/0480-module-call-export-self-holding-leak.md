@@ -42,3 +42,9 @@ after closing the list; once the module has gone, the host's thread walks it as 
 copy does (0424). Rows: `TemplateModuleTest.KeptSelfHoldingExportGoesWithTheHostsValue`, six
 sources (list, dict, namespace, list-dict cycle, stored in the module, the module's cell of a
 host list) times three orders (module first, host first, host then a later call), LSan clean.
+
+Limit: a container the host lets go of while the module lives, and that held other containers, is
+freed at the module's next call or when it goes, not at once (a host that drops many such
+containers between calls holds them until then). A view of the module's cell needs nothing: the
+module's own walk reaches the cell while it lives, and the last view's `~CallExports` walks the
+pinned storages once it has gone. `Module/keep` costs one predictable branch per call more.

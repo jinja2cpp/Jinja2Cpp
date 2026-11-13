@@ -1312,26 +1312,49 @@ private:
             return nullptr;
         }
 
+        // Whether a source change replaced a tree this render loaded (PruneReplaced)
+        [[nodiscard]] bool HasReplaced() const noexcept { return m_loaded && !m_loaded->replaced.empty(); }
         // Ends the trees a source change replaced that nothing of the render's own reaches: not the latest of their
         // name, a shared module's template, a statement's `bySite` result or a tree with a slot, which handles
         // link to. What else views one (a macro, a recursive loop, an imported module) holds its owner
         // (docs/tasks/0482). Called when the outermost call of a module ends
         void PruneReplaced() noexcept
         {
-            if (!m_loaded || m_loaded->replaced.empty())
+            if (!HasReplaced())
             {
                 return;
             }
             auto& loaded = *m_loaded;
             // Freed uncounted, as the dropped reload of LoadTemplate: they were made uncounted
             const UncountedMemoryScope uncounted;
+            // The results something names, sorted once: a pass is O(n log n) in the loads, not O(n^2)
+            std::vector<const LoadTemplateResult*> named;
+            try
+            {
+                named.reserve(loaded.byName.size() + loaded.sharedModules.size() + loaded.bySite.size());
+            }
+            catch (const std::bad_alloc&)
+            {
+                // The trees stay until a later call's pass
+                return;
+            }
+            for (const auto& entry : loaded.byName)
+            {
+                named.push_back(entry.second.latest);
+            }
+            for (const auto& entry : loaded.sharedModules)
+            {
+                named.push_back(entry.first);
+            }
+            for (const auto& entry : loaded.bySite)
+            {
+                named.push_back(entry.second);
+            }
+            std::sort(named.begin(), named.end(), std::less<>());
             for (auto p = loaded.replaced.begin(); p != loaded.replaced.end();)
             {
                 const LoadTemplateResult* result = &*p;
-                const bool isLatest = std::any_of(loaded.byName.begin(), loaded.byName.end(), [result](const auto& entry) { return entry.second.latest == result; });
-                const bool isShared = std::any_of(loaded.sharedModules.begin(), loaded.sharedModules.end(), [result](const auto& entry) { return entry.first == result; });
-                const bool isSite = std::any_of(loaded.bySite.begin(), loaded.bySite.end(), [result](const auto& entry) { return entry.second == result; });
-                if (isLatest || isShared || isSite || HoldsSlot(*result, loaded.templates))
+                if (std::binary_search(named.begin(), named.end(), result, std::less<>()) || HoldsSlot(*result, loaded.templates))
                 {
                     ++p;
                     continue;

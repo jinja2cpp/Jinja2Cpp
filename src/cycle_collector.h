@@ -62,6 +62,8 @@ public:
     // caller walks it, as nothing writes it any more. When noting it cannot allocate, it is let go of here: a cycle
     // it closes leaks
     bool Hand(InternalValue& container) noexcept;
+    // Whether Take may find a container: a call that finds none takes no lock
+    [[nodiscard]] bool MayHoldAny() const noexcept { return m_any.load(std::memory_order_acquire); }
     // What the host let go of since the last call
     std::vector<InternalValue> Take() noexcept;
     // The module goes: what is left, and Hand refuses from now on
