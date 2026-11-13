@@ -166,6 +166,19 @@ InternalValue SandboxedSubscript(const InternalValue& obj, const InternalValue& 
 
 // Jinja2's make_attrgetter: looks the path up item by item and replaces an undefined step
 // with `defaultVal` unless it is None or missing
+namespace
+{
+bool IsClassName(const InternalValue& name)
+{
+    if (const auto narrow = AsStringView<char>(name))
+    {
+        return *narrow == "__class__";
+    }
+    const auto wide = AsStringView<wchar_t>(name);
+    return wide && *wide == L"__class__";
+}
+} // namespace
+
 InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueList& path, const InternalValue& defaultVal, RenderContext& context)
 {
     InternalValue result = item;
@@ -181,9 +194,13 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
             {
                 next = std::move(*attr);
             }
-            else if (auto cls = methods::ClassAttribute(result, AsString(part), &context))
+            // Told by a view, so that a missing attribute of every item costs no copy of its name
+            else if (IsClassName(part))
             {
-                next = std::move(*cls);
+                if (auto cls = methods::ClassAttribute(result, "__class__", &context))
+                {
+                    next = std::move(*cls);
+                }
             }
         }
         if (next.IsUndefined() && !GetUndefinedInfo(next))
