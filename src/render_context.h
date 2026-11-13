@@ -160,6 +160,14 @@ struct IRendererCallback : IComparable
     virtual std::size_t EnterSharedModule() { return 0; }
     virtual void LeaveSharedModule(std::size_t /*token*/, bool /*shared*/) {}
 
+    // Whether a value that views a template's tree (a macro, a recursive loop, an imported module) holds the tree's
+    // owner, because a module's callback frees the trees a source change replaced (docs/tasks/0482). A plain field,
+    // read where such a value is made: a render that does not free trees pays one branch there
+    [[nodiscard]] bool KeepsTreesByValue() const noexcept { return m_keepsTreesByValue; }
+    // What keeps the tree `nodes` of a template this render loaded alive: null when nothing frees it (a plain render,
+    // which keeps every tree until it ends) or for a tree this render does not know. Asked only if KeepsTreesByValue
+    [[nodiscard]] virtual std::shared_ptr<const void> TreeOwner(const ArenaView& /*nodes*/) const { return nullptr; }
+
     // The escaper of AutoescapeMode::Prompt, null in HTML mode. Read where a value is escaped (MarkupEscape,
     // WriteEscaped), so that it costs a load, not a virtual call (docs/tasks/0358)
     [[nodiscard]] const detail::PromptEscaperImpl* GetPromptEscaper() const noexcept { return m_promptEscaper; }
@@ -173,11 +181,14 @@ protected:
     // Called once, when the template's callback is made
     void SetPromptEscaper(const detail::PromptEscaperImpl* escaper) noexcept { m_promptEscaper = escaper; }
     void SetSandboxPolicy(const IEngineSandboxPolicy* policy) noexcept { m_sandboxPolicy = policy; }
+    // Called once, by the callback of a module that frees replaced trees
+    void SetKeepsTreesByValue() noexcept { m_keepsTreesByValue = true; }
 
 private:
     const detail::PromptEscaperImpl* m_promptEscaper = nullptr;
     const IEngineSandboxPolicy* m_sandboxPolicy = nullptr;
     detail::GenerationTracker* m_generationTracker = nullptr;
+    bool m_keepsTreesByValue = false;
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
@@ -1056,6 +1067,12 @@ public:
     auto GetRendererCallback()
     {
         return m_rendererCallback;
+    }
+    // What keeps the tree the code runs in alive, for a value that outlives the call (a macro, a recursive loop); null
+    // unless the render's callback frees replaced trees (IRendererCallback::KeepsTreesByValue, docs/tasks/0482)
+    [[nodiscard]] std::shared_ptr<const void> TreeOwner() const
+    {
+        return m_rendererCallback && m_rendererCallback->KeepsTreesByValue() ? m_rendererCallback->TreeOwner(m_nodes) : nullptr;
     }
     // The environment the template was loaded in, if any
     [[nodiscard]] TemplateEnv* GetEnv() const

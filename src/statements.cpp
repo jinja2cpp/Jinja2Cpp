@@ -303,6 +303,8 @@ struct LoopState : ValueObject
     bool recursiveAutoescape = false;
     // Whether the loop is in volatile code (RenderContext::IsVolatileAutoescape)
     bool recursiveVolatile = false;
+    // Keeps recursiveNodes alive when a module frees replaced trees (docs/tasks/0482)
+    std::shared_ptr<const void> recursiveOwner;
     // The arguments of the last loop.changed() call, made on first use: a list [called,
     // *args] its callables hold as their receiver, where the cycle collector sees them
     InternalValue lastChanged;
@@ -468,6 +470,7 @@ struct LoopState : ValueObject
         }
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
+        recursiveOwner.reset();
         // Most loops never read loop.changed: the reset is out of line, so that its temporary
         // gives this function no stack frame to guard
         if (!lastChanged.IsUndefined())
@@ -833,7 +836,8 @@ JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCall(const LoopState& state)
             throw TemplateRuntimeError("The loop must have the 'recursive' marker to be called recursively.");
         });
     }
-    return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape, state.recursiveVolatile);
+    return ForStatement::MakeLoopRecursion(
+        state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape, state.recursiveVolatile, state.recursiveOwner);
 }
 
 // loop.__call__: loop(...) as the bound method it is in Jinja2, which prints
@@ -1380,9 +1384,15 @@ private:
 };
 } // namespace
 
-Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape, bool isVolatile)
+Callable ForStatement::MakeLoopRecursion(ForStatement* statement,
+                                         const ArenaView& nodes,
+                                         int level,
+                                         const ClosureSite& site,
+                                         bool autoescape,
+                                         bool isVolatile,
+                                         std::shared_ptr<const void> treeOwner)
 {
-    return Callable(Callable::GlobalFunc, [statement, nodes, level, site, autoescape, isVolatile](const CallParams& params, RenderContext& context) -> InternalValue {
+    return Callable(Callable::GlobalFunc, [statement, nodes, level, site, autoescape, isVolatile, treeOwner = std::move(treeOwner)](const CallParams& params, RenderContext& context) -> InternalValue {
         // As Python's LoopContext.__call__(iterable)
         for (const auto& kwParam : params.kwParams)
         {
@@ -1501,6 +1511,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         state->recursiveSite = site ? *site : ClosureSite(values);
         state->recursiveAutoescape = values.IsStaticAutoescape();
         state->recursiveVolatile = values.IsVolatileAutoescape();
+        state->recursiveOwner = values.TreeOwner();
     }
     auto context = values.EnterScope(std::move(state->loopScope));
     if (!state->loopSlot)
@@ -2097,7 +2108,9 @@ struct SelfBlockCall
     std::string name;
     std::shared_ptr<SelfBlocks> owner;
     ClosureSite site;
-    std::string_view templateName;
+    // Owned: the name is the template's, whose tree has no slot when only its parent defines the blocks, so a module
+    // may free it while `self` is stored (docs/tasks/0482)
+    std::string templateName;
 
     void operator()(const CallParams& params, OutStream& stream, RenderContext& context) const
     {
@@ -2163,7 +2176,7 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
     for (const auto& block : stack.blocks)
     {
         std::string blockName(block.first);
-        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, stack.self, site, templateName }), keepAlive));
+        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, stack.self, site, std::string(templateName) }), keepAlive));
     }
     return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)));
 }
@@ -3269,6 +3282,11 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     }
     // Owned by the render, so that its macros find their names wherever they are called
     auto& module = callback.AddModule(std::make_unique<ImportedModule>(values, m_withContext));
+    // A module that frees the trees a source change replaced: this one's tree stays while its names do
+    if (callback.KeepsTreesByValue())
+    {
+        module.SetTreeOwner(VisitTemplateImpl<std::shared_ptr<const void>>(tpl, true, [](const auto& tplPtr) { return std::shared_ptr<const void>(tplPtr); }));
+    }
     // Made by a host's call of a module's macro, it ends with that call (docs/tasks/0301);
     // one imported without context is shared on for the module's life, and so is what its
     // top level imports
@@ -3476,6 +3494,9 @@ struct MacroStatement::CallableBody
     ClosureSite site;
     // MacroStatement::ReadsSlotsOnly
     bool readsSlotsOnly;
+    // Keeps `nodes` alive when a module frees the trees a source change replaced; null in a plain render
+    // (docs/tasks/0482)
+    std::shared_ptr<const void> treeOwner;
 
     void operator()(const CallParams& callParams, OutStream& stream, RenderContext& context) const
     {
@@ -3504,7 +3525,8 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     {
         capture = site.CaptureOnEnd(values, values.Nodes()[m_bodyReads], false);
     }
-    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly });
+    Callable result(Callable::Macro,
+                    CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly, values.TreeOwner() });
     result.SetAttributes(m_attributes);
     result.SetKeepAlive(std::move(capture));
     return result;

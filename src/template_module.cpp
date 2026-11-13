@@ -29,6 +29,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -304,7 +305,12 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     class Callback final : public Impl::RendererCallback
     {
     public:
-        using Impl::RendererCallback::RendererCallback;
+        explicit Callback(const Impl* host)
+            : Impl::RendererCallback(host)
+        {
+            // The trees its calls replace are freed once nothing of a call reaches them (docs/tasks/0482)
+            this->SetKeepsTreesByValue();
+        }
 
         // The modules a call imports with context end with it (CallScope), but those a module
         // shared without context imports, which live as long as it does
@@ -365,6 +371,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             : m_callback(callback)
             , m_mark(callback.MarkCall())
             , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
+            , m_uncaught(std::uncaught_exceptions())
         {
             ++m_callback.calls;
         }
@@ -378,6 +385,11 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             m_callback.sharedDepth = m_sharedDepth;
             const auto& owner = m_callback;
             m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
+            // A call that unwinds leaves what its error views as it is (docs/tasks/0482)
+            if (m_callback.calls == 0 && std::uncaught_exceptions() <= m_uncaught)
+            {
+                m_callback.PruneReplaced();
+            }
         }
 
     private:
@@ -386,6 +398,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         // A call made from a shared module's top level (a host callable there) imports for
         // itself: its modules end with it
         std::size_t m_sharedDepth;
+        int m_uncaught;
     };
 
     explicit TemplateModuleState(std::shared_ptr<const Impl> tpl)

@@ -22,6 +22,8 @@ callback drops each replaced result that is not the latest for its name, not a s
 `bySite` and holds no slot. Full analysis, oracle rows and cost estimate: project file `0313/plan.md`. Needs a
 recorded decision (cross-module, adds a member to macro bodies) and `bench/count.py`.
 
+**Decision.** 2026-11-13, Ruslan: keep-alives as Python does (option c of the plan).
+
 **Done when** a module called after N source changes of an included, imported (with context) or from-imported
 template holds a bounded number of trees (`ModuleCallTest.EveryUseReloadsStayFlat` with a changing source), the
 stored-macro and stored-`self` rows print what Jinja2 prints, and `TemplateModuleTest*`/`ModuleCallTest*` pass

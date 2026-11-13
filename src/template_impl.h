@@ -1235,8 +1235,8 @@ private:
         // Ends what the call that took `mark` added: the modules it imported, but those shared
         // without context, which see nothing of the call and stay for the module's life, as
         // Jinja2 keeps a template's default module, and those `isKept` names, which such a module's
-        // top level imported. The trees stay too: what a module's macro
-        // stored views its tree. What still refers to an ended module does so through its
+        // top level imported. The trees stay too, until PruneReplaced: what a module's macro
+        // stored holds the owner of its own. What still refers to an ended module does so through its
         // anchor (ClosureSite), which a module made in the call marks as ending with it
         template<typename IsKept>
         void EndCall(const CallMark& mark, const IsKept& isKept) noexcept
@@ -1276,6 +1276,67 @@ private:
             while (invalid.size() > mark.invalidNames)
             {
                 invalid.pop_back();
+            }
+        }
+
+        // The owner of the template whose tree is `nodes`: the rendered one or one this render loaded (docs/tasks/0482)
+        [[nodiscard]] std::shared_ptr<const void> TreeOwner(const ArenaView& nodes) const override
+        {
+            if (m_host->Nodes() == nodes)
+            {
+                return m_host->weak_from_this().lock();
+            }
+            if (!m_loaded)
+            {
+                return nullptr;
+            }
+            // The trees a render runs are the latest of their names, or kept by a slot or a module: look there first
+            for (const auto& [name, entry] : m_loaded->byName)
+            {
+                if (auto owner = OwnerIfTree(*entry.latest, nodes))
+                {
+                    return owner;
+                }
+                if (auto owner = OwnerIfTree(entry.first, nodes))
+                {
+                    return owner;
+                }
+            }
+            for (const auto& result : m_loaded->replaced)
+            {
+                if (auto owner = OwnerIfTree(result, nodes))
+                {
+                    return owner;
+                }
+            }
+            return nullptr;
+        }
+
+        // Ends the trees a source change replaced that nothing of the render's own reaches: not the latest of their
+        // name, a shared module's template, a statement's `bySite` result or a tree with a slot, which handles
+        // link to. What else views one (a macro, a recursive loop, an imported module) holds its owner
+        // (docs/tasks/0482). Called when the outermost call of a module ends
+        void PruneReplaced() noexcept
+        {
+            if (!m_loaded || m_loaded->replaced.empty())
+            {
+                return;
+            }
+            auto& loaded = *m_loaded;
+            // Freed uncounted, as the dropped reload of LoadTemplate: they were made uncounted
+            const UncountedMemoryScope uncounted;
+            for (auto p = loaded.replaced.begin(); p != loaded.replaced.end();)
+            {
+                const LoadTemplateResult* result = &*p;
+                const bool isLatest = std::any_of(loaded.byName.begin(), loaded.byName.end(), [result](const auto& entry) { return entry.second.latest == result; });
+                const bool isShared = std::any_of(loaded.sharedModules.begin(), loaded.sharedModules.end(), [result](const auto& entry) { return entry.first == result; });
+                const bool isSite = std::any_of(loaded.bySite.begin(), loaded.bySite.end(), [result](const auto& entry) { return entry.second == result; });
+                if (isLatest || isShared || isSite || HoldsSlot(*result, loaded.templates))
+                {
+                    ++p;
+                    continue;
+                }
+                p = loaded.replaced.erase(p);
             }
         }
 
@@ -1360,6 +1421,38 @@ private:
                     }
                 },
                 lhs);
+        }
+        // The owner of `result`'s template when its tree is `nodes`
+        static std::shared_ptr<const void> OwnerIfTree(const LoadTemplateResult& result, const ArenaView& nodes)
+        {
+            return std::visit(
+                [&nodes](const auto& loaded) -> std::shared_ptr<const void> {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        return nullptr;
+                    }
+                    else
+                    {
+                        return loaded && loaded.value()->Nodes() == nodes ? std::shared_ptr<const void>(loaded.value()) : nullptr;
+                    }
+                },
+                result);
+        }
+        // Whether `templates` has a slot for the tree of `result`
+        static bool HoldsSlot(const LoadTemplateResult& result, const TemplateSlots& templates)
+        {
+            return std::visit(
+                [&templates](const auto& loaded) {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        return false;
+                    }
+                    else
+                    {
+                        return loaded && templates.Holds(loaded.value()->Nodes());
+                    }
+                },
+                result);
         }
         struct LoadedTemplates
         {

@@ -649,6 +649,7 @@ protected:
         fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}");
         fs->AddFile("fails", "{% import 'lib' as l with context %}{{ 1 // 0 }}");
         m_env.AddFilesystemHandler(std::string(), fs);
+        m_fs = fs;
         EXPECT_TRUE(!!m_tpl.Load("{% macro m() %}" + body + "{% endmacro %}"));
         auto module = m_tpl.MakeModule();
         EXPECT_TRUE(!!module);
@@ -662,6 +663,7 @@ protected:
     }
 
     Template m_tpl{ &m_env };
+    std::shared_ptr<MemoryFileSystem> m_fs;
 };
 
 TEST_F(ModuleCallTest, CallsStayFlat)
@@ -731,6 +733,38 @@ TEST_F(ModuleCallTest, EveryUseReloadsStayFlat)
         const long before = g_live.load(std::memory_order_relaxed);
         callMany(1000);
         // Each call kept a tree, about 11 allocations, before
+        EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
+    }
+}
+
+// The same with a source that changes before every call: each call parses a tree that differs from the last, and the
+// module frees the one it replaced when the call ends, as nothing of the call refers to it (docs/tasks/0482)
+TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
+    m_env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+    m_env.GetSettings().cacheSize = 0;
+    m_tpl = Template(&m_env);
+    for (const char* body : { "{% include 'lib' %}{{ 1 }}", "{% import 'lib' as l with context %}{{ l.x() }}", "{% import 'lib' as l %}{{ l.x() }}",
+                              "{% from 'lib' import x with context %}{{ x() }}", "{% from 'lib' import x %}{{ x() }}", "{% for i in range(3) %}{% include 'lib' %}{% endfor %}" })
+    {
+        auto module = MakeModule(body);
+        const auto& m = module.exports["m"];
+        int serial = 0;
+        const auto callMany = [&](int count) {
+            for (int i = 0; i != count; ++i)
+            {
+                // The same text length, so that every tree is the same size
+                m_fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}{# " + std::to_string(1000000 + ++serial) + " #}");
+                Call(m);
+            }
+        };
+        callMany(100);
+        const long before = g_live.load(std::memory_order_relaxed);
+        callMany(1000);
         EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
     }
 }

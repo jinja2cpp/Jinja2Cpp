@@ -6,6 +6,7 @@
 #include "engine_errors.h"
 #include "small_vector.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -105,6 +106,16 @@ public:
             return { p->second, m_generation };
         }
         return Append(nodes);
+    }
+
+    // Whether `nodes` has a slot: a handle may link to the tree, which must then stay (docs/tasks/0482)
+    [[nodiscard]] bool Holds(const ArenaView& nodes) const
+    {
+        if (!m_bySlot.empty())
+        {
+            return m_bySlot.find(nodes.Id()) != m_bySlot.end();
+        }
+        return std::any_of(m_slots.begin(), m_slots.end(), [&nodes](const ArenaView& slot) { return slot == nodes; });
     }
 
     // Throws for a handle another render made (but with NodeRefChecks OFF, only for one past

@@ -651,6 +651,126 @@ TEST_F(TemplateModuleTest, MacroStoredAcrossCallsExpires)
     EXPECT_EQ("AMAM", Call(module.exports["keep"]).AsString());
 }
 
+// With EveryUse and no cache a module drops the trees a source change replaced when a call ends (docs/tasks/0482).
+// What a call stored from one still runs it, as Jinja2 keeps the old Template alive: the next call prints the old
+// output, the one after it the new (3.1.6; the rows are its make_module() results)
+class TemplateModuleChangingSourceTest : public TemplateModuleTest
+{
+protected:
+    void SetUp() override
+    {
+        TemplateModuleTest::SetUp();
+        m_env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+        m_env.GetSettings().cacheSize = 0;
+    }
+
+    // Calls `m` once for each text of `lib`, which the file system serves from the call on
+    std::vector<std::string> CallWithLibs(const std::string& source, const std::vector<std::string>& libs)
+    {
+        AddFile("lib", libs.front());
+        auto module = Make(source);
+        std::vector<std::string> results;
+        for (const auto& lib : libs)
+        {
+            AddFile("lib", lib);
+            results.push_back(Call(module.exports["m"]).AsString());
+        }
+        return results;
+    }
+};
+
+TEST_F(TemplateModuleChangingSourceTest, StoredMacroOfIncludeRunsItsOldTree)
+{
+    const auto results = CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% macro x() %}OLD{% endmacro %}{% set ns.f = x %}",
+                                        "{% macro x() %}NEW{% endmacro %}{% set ns.f = x %}",
+                                        "{% macro x() %}NEW2{% endmacro %}{% set ns.f = x %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLD]", "[NEW]" }), results);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, StoredSelfRunsItsOldBlocks)
+{
+    const auto results = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% block b %}OLD{% endblock %}{% set ns.s = self %}",
+                                        "{% block b %}NEW{% endblock %}{% set ns.s = self %}",
+                                        "{% block b %}NEW2{% endblock %}{% set ns.s = self %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]OLD", "[OLD]NEW", "[NEW]NEW2" }), results);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopRunsItsOldBody)
+{
+    const std::string body = "{{ i }}{{ loop(i) if i is iterable and i is not string }}";
+    const auto results = CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f([[2],[3]]) }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% for i in [[1]] recursive %}{% if loop.depth == 1 %}{% set ns.f = loop %}{% endif %}" + body + "{% endfor %}",
+                                        "{% for i in [[1]] recursive %}{% if loop.depth == 1 %}{% set ns.f = loop %}{% endif %}A" + body + "{% endfor %}",
+                                        "{% for i in [[1]] recursive %}{% if loop.depth == 1 %}{% set ns.f = loop %}{% endif %}B" + body + "{% endfor %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[][1]1", "[[2]2[3]3]A[1]A1", "[A[2]A2A[3]A3]B[1]B1" }), results);
+}
+
+// A value a call stored from the template, text and containers of literals, outlives the tree it came from
+TEST_F(TemplateModuleChangingSourceTest, StoredLiteralsOutliveTheirTree)
+{
+    const auto results = CallWithLibs("{% set ns = namespace(s=none, l=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s }}{{ ns.l|join(',') }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% set ns.s = 'one literal long enough to leave small string storage' %}{% set ns.l = ['a1', 'b1'] %}",
+                                        "{% set ns.s = 'two literal long enough to leave small string storage' %}{% set ns.l = ['a2', 'b2'] %}",
+                                        "{% set ns.s = 'three literal long enough to leave small string storage' %}{% set ns.l = ['a3', 'b3'] %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[one literal long enough to leave small string storagea1,b1]", "[two literal long enough to leave small string storagea2,b2]" }), results);
+}
+
+// A call block's caller, stored, views the tree of the template it was written in
+TEST_F(TemplateModuleChangingSourceTest, StoredCallerRunsItsOldTree)
+{
+    const auto results = CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% macro w() %}{% set ns.f = caller %}{% endmacro %}{% call w() %}OLD{% endcall %}",
+                                        "{% macro w() %}{% set ns.f = caller %}{% endmacro %}{% call w() %}NEW{% endcall %}",
+                                        "{% macro w() %}{% set ns.f = caller %}{% endmacro %}{% call w() %}NEW2{% endcall %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLD]", "[NEW]" }), results);
+}
+
+// A macro of a module imported with context ends with the call, as before: the changing source does not change that
+TEST_F(TemplateModuleChangingSourceTest, MacroStoredAcrossCallsStillExpires)
+{
+    AddFile("lib", "{% macro x() %}OLD{% endmacro %}");
+    auto module = Make("{% set ns = namespace() %}"
+                       "{% macro keep() %}{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}{% endmacro %}"
+                       "{% macro use() %}{{ ns.f() }}{% endmacro %}");
+    EXPECT_EQ("OLD", Call(module.exports["keep"]).AsString());
+    AddFile("lib", "{% macro x() %}NEW{% endmacro %}");
+    try
+    {
+        Call(module.exports["use"]);
+        FAIL() << "expected TemplateExpired";
+    }
+    catch (const jinja2::BadResultAccess<>& failure)
+    {
+        EXPECT_EQ(jinja2::ErrorCode::TemplateExpired, failure.error().GetCode());
+    }
+    EXPECT_EQ("NEW", Call(module.exports["keep"]).AsString());
+}
+
+// Imports and includes of the changing template in one call each see its current text
+TEST_F(TemplateModuleChangingSourceTest, ImportsSeeEachChange)
+{
+    const auto results = CallWithLibs("{% macro m() %}{% import 'lib' as l with context %}{% from 'lib' import x %}{{ l.x() }}{{ x() }}{% include 'lib' %}{% endmacro %}",
+                                      { "{% macro x() %}1{% endmacro %}", "{% macro x() %}2{% endmacro %}", "{% macro x() %}3{% endmacro %}" });
+    EXPECT_EQ((std::vector<std::string>{ "11", "22", "33" }), results);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, WideStoredMacroRunsItsOldTree)
+{
+    AddFile("lib", "{% macro x() %}OLD{% endmacro %}{% set ns.f = x %}");
+    jinja2::TemplateW tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load(L"{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}"));
+    auto module = tpl.MakeModule().value();
+    std::vector<std::wstring> results;
+    for (const char* text : { "OLD", "NEW", "NEW2" })
+    {
+        AddFile("lib", std::string("{% macro x() %}") + text + "{% endmacro %}{% set ns.f = x %}");
+        results.push_back(Call(module.exports["m"]).AsWString());
+    }
+    EXPECT_EQ((std::vector<std::wstring>{ L"[]", L"[OLD]", L"[NEW]" }), results);
+}
+
 // A host callable that calls the module again: the inner call ends only what it imported
 TEST_F(TemplateModuleTest, NestedCallEndsItsOwnModules)
 {
