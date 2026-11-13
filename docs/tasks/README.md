@@ -540,7 +540,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0476](0476-class-attribute-of-values.md) | `x.__class__` of the engine's values | parity | low | done |
 | [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | done |
 | [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | done |
-| [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | open |
+| [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | done |
 | [0480](0480-module-call-export-self-holding-leak.md) | A self-holding container a module's call hands a host leaks when the host keeps it | robustness | low | open |
 | [0481](0481-nested-render-macro-in-shared-global-use-after-free.md) | A macro a nested render writes into a shared global is called after its template is gone | lifetime | high | done |
 | [0482](0482-module-tree-keep-alives.md) | End the trees a module replaced on a source change | robustness | low | open |
@@ -560,4 +560,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0496](0496-dict-view-leftovers.md) | What dict views still lack after 0489 | parity | low | open |
 | [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | open |
 | [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | open |
+| [0499](0499-stopped-macro-rollback-into-a-sink.md) | A macro that stops after its output reached the sink keeps the RuntimeError | parity | low | open |
+| [0500](0500-stopiteration-in-gettext-and-format.md) | A StopIteration out of gettext or str.format is undefined in Jinja2 | parity | low | open |
+| [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | open |
 | [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
