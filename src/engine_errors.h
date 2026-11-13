@@ -124,9 +124,14 @@ public:
     {
     }
     [[nodiscard]] const std::exception_ptr& Exception() const noexcept { return m_exception; }
+    // Set where Jinja2 applies the callable inside a generator (the item filter of map and select, the filter of
+    // a loop), which makes a StopIteration a RuntimeError, not an undefined call (call_stop.h)
+    void SealStop() noexcept { m_stopSealed = true; }
+    [[nodiscard]] bool StopSealed() const noexcept { return m_stopSealed; }
 
 private:
     std::exception_ptr m_exception;
+    bool m_stopSealed = false;
 };
 
 // A mix-in of a host's own exception type that no catch of the engine absorbs: Python's

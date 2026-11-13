@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -48,8 +49,24 @@ public:
     template<typename CharT>
     [[nodiscard]] BasicErrorInfo<CharT> ErrorAs() const;
 
+    // Set by the body of an included or imported template, a block, `self.b()` or `super()`: Jinja2 renders
+    // those through generators, so a StopIteration out of them is a RuntimeError, not an undefined call
+    // (call_stop.h)
+    void SealStop() noexcept { m_stopSealed = true; }
+    // The error's code and the exception it keeps, for the classifier of a stop (call_stop.h)
+    [[nodiscard]] ErrorCode Code() const
+    {
+        return std::visit([](const auto& error) { return error.GetCode(); }, m_error);
+    }
+    [[nodiscard]] const std::exception_ptr& KeptException() const
+    {
+        return std::visit([](const auto& error) -> const std::exception_ptr& { return error.GetException(); }, m_error);
+    }
+    [[nodiscard]] bool StopSealed() const noexcept { return m_stopSealed; }
+
 private:
     std::variant<ErrorInfo, ErrorInfoW> m_error;
+    bool m_stopSealed = false;
 };
 
 // Keeps the exception being handled for ThrowRenderFailure. Call it from a catch handler

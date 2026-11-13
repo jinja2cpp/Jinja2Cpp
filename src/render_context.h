@@ -2195,6 +2195,46 @@ public:
         HomeCallSaved m_saved;
     };
 
+    // What Restore records, applied on demand: a call that stops (docs/tasks/0479) leaves the scopes and views its
+    // body pushed and its loop control, which the render goes on from. The template frame and the autoescape modes
+    // the body changed are put back by the guards the exception unwinds (TemplateFrameGuard, AutoescapeGuard), and
+    // the epoch by Undo itself. Records two words, which every call pays for, and never applies them unless Undo
+    // is called
+    class Snapshot
+    {
+    public:
+        explicit Snapshot(RenderContext& context)
+            : m_context(context)
+            , m_scopes(context.m_scopes.size())
+            , m_loopControl(context.m_loopControl)
+        {
+        }
+        Snapshot(const Snapshot&) = delete;
+        Snapshot(Snapshot&&) = delete;
+        Snapshot& operator=(const Snapshot&) = delete;
+        Snapshot& operator=(Snapshot&&) = delete;
+        ~Snapshot() = default;
+
+        void Undo()
+        {
+            HomeCallSaved saved;
+            saved.scopes = m_scopes;
+            // A new epoch forgets the cached lookups of the scopes the body had
+            saved.epoch = m_context.m_epoch;
+            saved.bodyEpoch = m_context.m_epoch;
+            saved.templateFrame = m_context.m_templateFrame;
+            saved.loopControl = m_loopControl;
+            saved.autoescape = m_context.m_autoescapeModes;
+            Leave(m_context, saved);
+            m_context.NewEpoch();
+        }
+
+    private:
+        RenderContext& m_context;
+        size_t m_scopes;
+        LoopControl m_loopControl;
+    };
+
     // Where the body runs
     [[nodiscard]] RenderContext& Context() const { return *m_context; }
     // The link of the body's scope, pushed on Context() (RenderContext::PushFrameView):

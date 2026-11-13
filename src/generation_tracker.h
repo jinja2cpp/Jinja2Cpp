@@ -52,9 +52,12 @@ public:
     explicit GenerationFreeze(RenderContext& context)
         : m_tracker(context.GetRendererCallback()->GetGenerationTracker())
     {
-        if (m_tracker && m_tracker->frozen++ == 0)
+        if (m_tracker)
         {
-            m_tracker->frozenAt = m_tracker->RootPos();
+            if (m_tracker->frozen++ == 0)
+            {
+                m_tracker->frozenAt = m_tracker->RootPos();
+            }
         }
     }
     GenerationFreeze(const GenerationFreeze&) = delete;
