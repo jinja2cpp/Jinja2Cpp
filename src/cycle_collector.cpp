@@ -104,8 +104,7 @@ void CycleCollector::Finish() noexcept
     }
     try
     {
-        // The outer render's walk reaches what this one noted: it keeps the trees those values
-        // run in too
+        // The values this render kept trees for may outlive it in the outer render too
         for (auto& tree : m_notes->trees)
         {
             m_outer->KeepTree(tree);
@@ -124,8 +123,6 @@ void CycleCollector::Finish() noexcept
         // What the outer one did not take is collected here: the render that made it ended
         Collect();
     }
-    // Last: the values of this render that the walk may reach are gone or handed over
-    DropTreesUnlessWritten();
 }
 
 void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
@@ -151,41 +148,6 @@ void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
     {
         notes.treeSet.erase(tree.get());
         throw;
-    }
-}
-
-void CycleCollector::KeepTreesIn(CycleCollector& keeper, std::size_t mark, const void* snapshot)
-{
-    if (!m_notes)
-    {
-        m_notes = std::make_unique<Notes>();
-    }
-    m_notes->treeKeeper = &keeper;
-    m_notes->treeMark = mark;
-    m_notes->treeSnapshot = snapshot;
-}
-
-void CycleCollector::DropTreesUnlessWritten() noexcept
-{
-    auto* keeper = m_notes->treeKeeper;
-    if (!keeper || !keeper->m_notes)
-    {
-        return;
-    }
-    // This render's entry is gone: the chain is of the renders it ran inside, the keeper's last
-    for (const auto* running = RenderWorkspace::ForThisThread().Running(); running; running = running->outer)
-    {
-        const auto* collector = running->collector;
-        if (collector && running->owner && running->owner->get() == m_notes->treeSnapshot && collector->m_notes && collector->m_notes->cells.HasCells())
-        {
-            return;
-        }
-    }
-    auto& notes = *keeper->m_notes;
-    while (notes.trees.size() > m_notes->treeMark)
-    {
-        notes.treeSet.erase(notes.trees.back().get());
-        notes.trees.pop_back();
     }
 }
 

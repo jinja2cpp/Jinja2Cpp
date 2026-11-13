@@ -1761,6 +1761,48 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplateAcrossAnotherEnvir
     }
 }
 
+TEST(BorrowedCellsSingle, NestedRenderValueCopiedOutThroughALentMacro)
+{
+    // 0481: the innermost render writes `g` first, in its own registry (another environment, or
+    // none, runs in between), and calls back a macro of the outermost render, lent through the
+    // host, which copies its value into a list of the outermost render. Its template goes before
+    // that render calls the value: the outermost render keeps it all the same (advisor, round 3)
+    for (const bool withEnv : { true, false })
+    {
+        for (const char* stored : { "m", "{'f': m}" })
+        {
+            TemplateEnv env;
+            env.AddGlobal("g", ValuesList{});
+            TemplateEnv otherEnv;
+            Value lent;
+            ValuesMap params;
+            params["h2"] = UserCallable(
+                [&](const UserCallableParams&) {
+                    auto tpl = std::make_unique<Template>(&env);
+                    EXPECT_TRUE(!!tpl->Load(std::string("{% macro m() %}hi{% endmacro %}{% set _ = g.append(") + stored + ") %}{{ cb() }}"));
+                    auto result = tpl->RenderAsString({ { "cb", lent } });
+                    EXPECT_TRUE(!!result) << (result ? std::string() : result.error().ToString());
+                    return Value(std::string());
+                },
+                {});
+            params["h1"] = UserCallable(
+                [&](const UserCallableParams& p) {
+                    lent = p["s"];
+                    auto tpl = std::make_unique<Template>(withEnv ? &otherEnv : nullptr);
+                    EXPECT_TRUE(!!tpl->Load("{{ h2() }}"));
+                    auto result = tpl->RenderAsString(params);
+                    EXPECT_TRUE(!!result) << (result ? std::string() : result.error().ToString());
+                    lent = Value();
+                    return Value(std::string());
+                },
+                { ArgInfo{ "s" } });
+            const std::string call = std::string(stored) == "m" ? "l[0]()" : "l[0].f()";
+            EXPECT_EQ("[hi]", Render("{% set l = [] %}{% macro store() %}{% set _ = l.append(g[-1]) %}{% endmacro %}{{ h1(store) }}[{{ " + call + " }}]", params, &env))
+                << withEnv << stored;
+        }
+    }
+}
+
 TEST(BorrowedCellsSingle, WideNestedRenderMacroOutlivesItsTemplate)
 {
     // 0481 for wide templates

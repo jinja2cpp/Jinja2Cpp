@@ -565,20 +565,15 @@ public:
     // RenderCore of a render started inside another one: the collector of the outermost render that
     // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
     // again as copies of `params` (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
-    // `own`: this render's collector, which gives the trees back when it ends unless a global was
-    // written in place (CycleCollector::KeepTreesIn)
     template<typename ParamsMap>
-    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace, const GlobalsSnapshot& globals, const ParamsMap& params, InternalValueMap& intParams, CycleCollector& own) const
+    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace, const GlobalsSnapshot& globals, const ParamsMap& params, InternalValueMap& intParams) const
     {
         auto* keeper = SharedSnapshotKeeper(workspace, &globals);
         if (!keeper)
         {
             return nullptr;
         }
-        // The keeper's registry first: an enclosing render's is the older one (tla/CellTrace.tla, Enclosing)
-        const auto mark = keeper->KeptTrees();
         keeper->KeepTree(this->weak_from_this().lock());
-        own.KeepTreesIn(*keeper, mark, &globals);
         if constexpr (std::is_same_v<ParamsMap, GenericMap>)
         {
             for (auto& name : params.GetKeys())
@@ -676,7 +671,7 @@ public:
             CycleCollector* keeper = nullptr;
             if (JINJA2CPP_CELL_UNLIKELY(maps.Workspace().Running() != nullptr) && globals)
             {
-                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, intParams, cycles);
+                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, intParams);
             }
             RendererCallback callback(this);
             callback.SetGlobals(maps.Workspace(), globals, cycles);
