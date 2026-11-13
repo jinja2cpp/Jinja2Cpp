@@ -560,3 +560,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0496](0496-dict-view-leftovers.md) | What dict views still lack after 0489 | parity | low | open |
 | [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | open |
 | [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | open |
+| [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
