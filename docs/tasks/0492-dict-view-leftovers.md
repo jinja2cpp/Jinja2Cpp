@@ -22,7 +22,12 @@ shares: [test/parity/cases/operators.py, test/parity/divergences/operators.txt]
 4. `d.keys() | indent` fails with `'dict_keys' object has no attribute 'splitlines'`; Python's
    message is `unsupported operand type(s) for +=: 'dict_keys' and 'str'` (a list extends by the
    string first). Message only, which the corpus does not compare.
-5. In the Python module a host dict's `keys()` is Python's own `dict_keys`, while a literal's is
+5. A view is a snapshot of its dict, not a live view: `{% set k = d.keys() %}{% do d.update({'z': 1}) %}{{ k }}`
+   misses `z`, and a dict changed while a loop walks its view raises `dictionary changed size
+   during iteration` in Python but not here. A view in a reference cycle prints the inner list's
+   `[...]` where Python prints `...`. `isdisjoint` and set comparison build the lookup per call
+   (linear, but rebuilt in a loop), and keys views have no `-`, `|`, `&`, `^` (Jinja2 sets).
+6. In the Python module a host dict's `keys()` is Python's own `dict_keys`, while a literal's is
    the engine's view, which goes to Python as a list: `d.keys() == {'a': 0}.keys()` is `False`
    (`operators.dict_view_eq_set` in python/tests/parity/module-divergences.txt), and `random` of a
    host `dict_keys` picks an item where Python fails (`operators.dict_view_random`). Ordering of

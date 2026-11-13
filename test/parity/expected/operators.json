@@ -4561,6 +4561,54 @@
    }
   },
   {
+   "id": "operators.dict_items_unhashable",
+   "template": "{{ {d.items(): 1} }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'dict_items'"
+   }
+  },
+  {
+   "id": "operators.dict_values_hashable",
+   "template": "{{ ({d.values(): 1} | length) }}|{{ d.values() in d }}|{{ d.keys().isdisjoint([d.values()]) }}|{% set v = d.values() %}{{ [v, v] | unique | list | length }}|{{ [d.values(), d.values()] | unique | list | length }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1|False|True|1|2"
+  },
+  {
    "id": "operators.dict_view_isdisjoint",
    "template": "{{ d.keys().isdisjoint(['x']) }}|{{ d.keys().isdisjoint(['a']) }}|{{ d.items().isdisjoint([('a', 1)]) }}|{{ d.items().isdisjoint([('a', 2), 'zz', [1]]) }}|{{ d.keys().isdisjoint('xyz') }}",
    "context": {
@@ -4703,6 +4751,28 @@
     "type": "TypeError",
     "message": "'dict_keys' object is not subscriptable"
    }
+  },
+  {
+   "id": "operators.dict_view_random_empty",
+   "template": "{{ {}.keys() | random }}|{{ {}.items() | random }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "|"
   },
   {
    "id": "operators.dict_view_tojson",

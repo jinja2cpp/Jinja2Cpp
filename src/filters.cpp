@@ -1324,7 +1324,8 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 throw TemplateRuntimeError("object of type '"s + iterator + "' has no len()");
             }
             // A dict view has len() and reversed() but no items to pick (docs/tasks/0489)
-            if (const char* view = m_mode == RandomMode ? DictViewTypeName(iterated->GetIteratorKind()) : nullptr)
+            // An empty one fails in random.choice before the subscript, which Jinja2 makes undefined
+            if (const char* view = m_mode == RandomMode && iterated->GetSize().value_or(0) != 0 ? DictViewTypeName(iterated->GetIteratorKind()) : nullptr)
             {
                 throw TemplateRuntimeError("'"s + view + "' object is not subscriptable");
             }
