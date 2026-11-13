@@ -3151,7 +3151,7 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
         list = ListAdapter::CreateAdapter(InternalValueList{});
         isConverted = true;
     }
-    else if (!isConverted && !templateNames.IsUndefined() && !GetAsSameString(std::string(), templateNames))
+    else if (!isConverted && !templateNames.IsUndefined() && !IsStringValue(templateNames) && !IsStringView(templateNames))
     {
         CheckIterable(templateNames);
     }
