@@ -22,11 +22,9 @@ FLAGS = ["-timeout=25", "-rss_limit_mb=2560", "-runs=1"]
 
 
 def classify(log):
-    # libFuzzer's RSS thread may print its ERROR line before the "Running:" line the log is cut at,
-    # so its SUMMARY line, which comes last, counts too
-    if "ERROR: libFuzzer: timeout" in log or "SUMMARY: libFuzzer: timeout" in log:
+    if "ERROR: libFuzzer: timeout" in log:
         return "timeout"
-    if "ERROR: libFuzzer: out-of-memory" in log or "SUMMARY: libFuzzer: out-of-memory" in log:
+    if "ERROR: libFuzzer: out-of-memory" in log:
         return "oom"
     return "crash"
 
