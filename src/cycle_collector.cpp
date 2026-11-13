@@ -202,7 +202,7 @@ void CycleCollector::CollectExport(std::vector<ValueObjectPtr> roots) noexcept
     CollectFrom(std::move(roots));
 }
 
-bool DroppedExports::Hand(InternalValue&& container) noexcept
+bool DroppedExports::Hand(InternalValue& container) noexcept
 {
     const std::scoped_lock lock(m_mutex);
     if (m_closed)

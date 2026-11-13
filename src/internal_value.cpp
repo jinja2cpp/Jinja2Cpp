@@ -1584,8 +1584,10 @@ Value ExportItem(const Value& item, const std::shared_ptr<const void>& owner)
 Value CallExportItem(const CallExports& exports, const InternalValue& item);
 
 // The host lets go of a view of the list or dict `container` that a template module's call made
-// (CallListView, CallMapView): it may hold itself, or reach a container that does (docs/tasks/0480)
-void LetGoOfExport(const CallExports& exports, InternalValue&& container) noexcept;
+// (CallListView, CallMapView): it may hold itself, or reach a container that does (docs/tasks/0480).
+// `whileModuleLives` false: only once the module has gone, for the storage of a module's cell, which
+// the module's own walk reaches while it lives
+void LetGoOfExport(const CallExports& exports, InternalValue& container, bool whileModuleLives = true) noexcept;
 
 class CallListView final : public IListItemAccessor
     , public IIndexBasedAccessor
@@ -1634,7 +1636,7 @@ public:
     CallListView(CallListView&&) = delete;
     CallListView& operator=(const CallListView&) = delete;
     CallListView& operator=(CallListView&&) = delete;
-    ~CallListView() override { LetGoOfExport(m_exports, std::move(m_container)); }
+    ~CallListView() override { LetGoOfExport(m_exports, m_container); }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override
     {
@@ -1720,7 +1722,7 @@ public:
     CallMapView(CallMapView&&) = delete;
     CallMapView& operator=(const CallMapView&) = delete;
     CallMapView& operator=(CallMapView&&) = delete;
-    ~CallMapView() override { LetGoOfExport(m_exports, std::move(m_container)); }
+    ~CallMapView() override { LetGoOfExport(m_exports, m_container); }
 
     [[nodiscard]] size_t GetSize() const override
     {
@@ -2947,14 +2949,14 @@ bool OwnsExportAlone(const InternalValue& container, const ValueObject& object)
     if (const auto list = AsList(container))
     {
         const auto* accessor = list->GetAccessor();
-        return accessor && accessor == &object && accessor->OwnsMutableItemsAlone();
+        return accessor != nullptr && accessor == &object && accessor->OwnsMutableItemsAlone();
     }
     const auto map = AsMap(container);
     const auto* accessor = map ? map->GetAccessor() : nullptr;
-    return accessor && accessor == &object && accessor->OwnsMutableItemsAlone();
+    return accessor != nullptr && accessor == &object && accessor->OwnsMutableItemsAlone();
 }
 
-void LetGoOfExport(const CallExports& exports, InternalValue&& container) noexcept
+void LetGoOfExport(const CallExports& exports, InternalValue& container, bool whileModuleLives) noexcept
 {
     const auto* object = detail::InternalValueAccess::Object(container);
     if (!object || !object->IsTraversable())
@@ -2971,19 +2973,22 @@ void LetGoOfExport(const CallExports& exports, InternalValue&& container) noexce
             return;
         }
         roots.clear();
-        // While the module lives, its later calls may write the container, on another thread:
-        // its next call walks from it, or the module when it goes
         auto dropped = exports.Dropped().lock();
-        if (dropped && dropped->Hand(std::move(container)))
+        if (dropped)
         {
-            return;
+            // While the module lives, its later calls may write the container, on another thread:
+            // its next call walks from it, or the module when it goes
+            if (!whileModuleLives || dropped->Hand(container))
+            {
+                return;
+            }
         }
-        // A module that has gone writes nothing any more: as a render's host copy (HostCopy)
-        if (!dropped && !CycleCollector::IsToken(exports.Dropped()))
+        else if (!CycleCollector::IsToken(exports.Dropped()))
         {
             // Not a module's: nothing walks it
             return;
         }
+        // A module that has gone writes nothing any more: as a render's host copy (HostCopy)
         AddContainerItems(container, roots);
     }
     catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the walk starts from the roots found; a cycle through the others leaks
@@ -2996,7 +3001,8 @@ void LetGoOfExport(const CallExports& exports, InternalValue&& container) noexce
 
 CallExports::~CallExports()
 {
-    // The module's cell may hold itself through the storage the host's views read last; the
+    // The module's cell may hold itself through the storage the host's views read last, which
+    // nothing walks once the module has gone; while it lives, its own walk reaches the cell. The
     // sources a failed call kept are the host's data (docs/tasks/0480)
     if (m_failed)
     {
@@ -3004,7 +3010,7 @@ CallExports::~CallExports()
     }
     for (auto& pin : m_pins)
     {
-        LetGoOfExport(*this, std::move(pin.storage));
+        LetGoOfExport(*this, pin.storage, false);
     }
 }
 
