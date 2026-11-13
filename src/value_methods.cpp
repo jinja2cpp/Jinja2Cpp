@@ -2984,7 +2984,14 @@ InternalValue DictViewIsDisjoint(const InternalValue& self, const CallParams& pa
     {
         Raise("'" + TypeName(params.posParams[0]) + "' object is not iterable");
     }
-    const DictViewLookup lookup(*AsList(self));
+    const auto view = *AsList(self);
+    // Python walks the smaller of two set-like views and looks its items up in the larger one
+    if (const auto kind = other.GetIteratorKind(); (kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems) && other.GetSize().value_or(0) > view.GetSize().value_or(0))
+    {
+        const DictViewLookup lookup(other.Ref());
+        return std::none_of(view.begin(), view.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
+    }
+    const DictViewLookup lookup(view);
     return std::none_of(other.begin(), other.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
 }
 

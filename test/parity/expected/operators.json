@@ -4657,6 +4657,54 @@
    }
   },
   {
+   "id": "operators.dict_view_isdisjoint_views",
+   "template": "{{ {'a': 1}.keys().isdisjoint({'a': [], 'b': []}.items()) }}|{{ {'a': [], 'b': []}.items().isdisjoint({'a': 1}.keys()) }}|{{ d.keys().isdisjoint({'a': 0, 'b': 0}.keys()) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True|False"
+  },
+  {
+   "id": "operators.dict_view_isdisjoint_views_unhashable",
+   "template": "{{ {'a': 1, 'b': 2}.keys().isdisjoint({'a': []}.items()) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
    "id": "operators.dict_values_isdisjoint",
    "template": "{{ d.values().isdisjoint([1]) }}",
    "context": {

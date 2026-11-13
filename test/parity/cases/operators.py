@@ -215,6 +215,8 @@ CASES = [
     ('dict_values_hashable', "{{ ({d.values(): 1} | length) }}|{{ d.values() in d }}|{{ d.keys().isdisjoint([d.values()]) }}|{% set v = d.values() %}{{ [v, v] | unique | list | length }}|{{ [d.values(), d.values()] | unique | list | length }}"),
     ('dict_view_isdisjoint', "{{ d.keys().isdisjoint(['x']) }}|{{ d.keys().isdisjoint(['a']) }}|{{ d.items().isdisjoint([('a', 1)]) }}|{{ d.items().isdisjoint([('a', 2), 'zz', [1]]) }}|{{ d.keys().isdisjoint('xyz') }}"),
     ('dict_view_isdisjoint_unhashable', "{{ d.keys().isdisjoint([[1]]) }}"),
+    ('dict_view_isdisjoint_views', "{{ {'a': 1}.keys().isdisjoint({'a': [], 'b': []}.items()) }}|{{ {'a': [], 'b': []}.items().isdisjoint({'a': 1}.keys()) }}|{{ d.keys().isdisjoint({'a': 0, 'b': 0}.keys()) }}"),
+    ('dict_view_isdisjoint_views_unhashable', "{{ {'a': 1, 'b': 2}.keys().isdisjoint({'a': []}.items()) }}"),
     ('dict_values_isdisjoint', "{{ d.values().isdisjoint([1]) }}"),
     ('dict_view_sequence_ops', "{{ d.keys() | length }}|{{ d.items() | count }}|{{ d.keys() | first }}|{{ d.values() | last }}|{{ d.keys() | reverse | list }}|{{ 'a' in d.keys() }}|{{ ('a', 1) in d.items() }}|{{ d.keys() is sequence }}|{{ d.keys() is iterable }}|{{ d.values() | list }}"),
     ('dict_view_loop', "{% for k, v in d.items() %}{{ loop.length }}{{ k }}{{ v }}{% endfor %}"),
