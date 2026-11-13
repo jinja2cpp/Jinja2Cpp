@@ -208,6 +208,14 @@ public:
     }
     // The registry a promotion adds its cell to, made on the first one; null outside a render
     static BorrowedCells* CellsForWrite();
+    // CurrentCells and CellsForWrite for an adapter of a global (ValueObject::IsGlobalData): the
+    // registry of the outermost render running on this thread whose snapshot of the globals the
+    // running one shares (docs/tasks/0324). A global that a render started inside another one
+    // writes first gets its cell there, so the outer render sees the write once the inner one has
+    // ended, as Python's renders share the globals' objects (docs/tasks/0463); the cell's links
+    // detach when that outer render ends. Else the running render's own
+    [[nodiscard]] static BorrowedCells* GlobalCells() noexcept;
+    static BorrowedCells* GlobalCellsForWrite();
     // Holds `object` until the render running on this thread ends, and releases it before the
     // walk, so that what only it held is freed rather than counted as held from outside: the
     // names a closure keeps of its ended frames (ClosureCapture), which the closure reaches
@@ -220,6 +228,13 @@ public:
     static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     // The collector of the render running on this thread, or null
     [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
+    // Holds `tree` (a template, what a render of it loaded) until this render ends, after its
+    // cells and its walk: a render started inside this one that shares its snapshot of the
+    // globals can store a value of its own in a global this render reads afterwards (docs/tasks/
+    // 0324, 0463), a macro or `caller` that runs in that tree, a `self` or loop that names it,
+    // a param it views. The host may destroy the nested template once its render has returned,
+    // so this render keeps it (docs/tasks/0481). A tree is kept once. Throws std::bad_alloc
+    void KeepTree(std::shared_ptr<const void> tree);
     // What a container the render running on this thread hands the host keeps, so that the host's
     // copy can tell when it goes whether that render has ended: then nothing walks the container
     // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
@@ -290,6 +305,8 @@ private:
     friend struct detail::RenderThreadState;
 
     void Finish() noexcept;
+    // The collector of the render whose registry GlobalCells finds, or null for the running one's
+    [[nodiscard]] static CycleCollector* SnapshotOwner() noexcept;
     void Add(ValueObjectPtr object);
     void NoteDroppedInCall(const InternalValue& value);
     // Drops the candidates nothing else holds; false when there were none
@@ -305,6 +322,9 @@ private:
     // What a render noted, made on the first note: most renders store no container in another
     struct Notes
     {
+        // KeepTree's: first, so that it goes last, after every value of the render
+        std::vector<std::shared_ptr<const void>> trees;
+        std::unordered_set<const void*> treeSet;
         // The receiving containers, held until the render ends
         std::vector<ValueObjectPtr> candidates;
         std::unordered_set<const void*> noted;

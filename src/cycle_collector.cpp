@@ -2,6 +2,7 @@
 
 #include "internal_value.h"
 #include "recursion_guard.h"
+#include "render_workspace.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -96,6 +97,11 @@ void CycleCollector::Finish() noexcept
     }
     try
     {
+        // The values this render kept trees for may outlive it in the outer render too
+        for (auto& tree : m_notes->trees)
+        {
+            m_outer->KeepTree(tree);
+        }
         for (const auto& candidate : m_notes->candidates)
         {
             m_outer->Add(candidate);
@@ -109,6 +115,32 @@ void CycleCollector::Finish() noexcept
     {
         // What the outer one did not take is collected here: the render that made it ended
         Collect();
+    }
+}
+
+void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
+{
+    if (!tree)
+    {
+        return;
+    }
+    if (!m_notes)
+    {
+        m_notes = std::make_unique<Notes>();
+    }
+    auto& notes = *m_notes;
+    if (!notes.treeSet.insert(tree.get()).second)
+    {
+        return;
+    }
+    try
+    {
+        notes.trees.push_back(std::move(tree));
+    }
+    catch (...)
+    {
+        notes.treeSet.erase(tree.get());
+        throw;
     }
 }
 
@@ -224,6 +256,53 @@ BorrowedCells* CycleCollector::CellsForWrite()
         collector->m_notes = std::make_unique<Notes>();
     }
     return &collector->m_notes->cells;
+}
+
+CycleCollector* CycleCollector::SnapshotOwner() noexcept
+{
+    auto* collector = s_current;
+    if (!collector || collector->m_module)
+    {
+        return nullptr;
+    }
+    // The chain starts at the running render's own entry: none for code of a module's call, or of
+    // a render called back from inside another one (Reentry)
+    const auto* running = RenderWorkspace::ForThisThread().Running();
+    if (!running || running->collector != collector || !running->owner || !*running->owner)
+    {
+        return nullptr;
+    }
+    const auto* snapshot = running->owner->get();
+    const auto* owner = running;
+    for (const auto* outer = running->outer; outer && outer->owner && outer->owner->get() == snapshot; outer = outer->outer)
+    {
+        owner = outer;
+    }
+    return owner != running && owner->collector && !owner->collector->m_module ? owner->collector : nullptr;
+}
+
+BorrowedCells* CycleCollector::GlobalCells() noexcept
+{
+    auto* owner = SnapshotOwner();
+    if (!owner)
+    {
+        return CurrentCells();
+    }
+    return owner->m_notes ? &owner->m_notes->cells : nullptr;
+}
+
+BorrowedCells* CycleCollector::GlobalCellsForWrite()
+{
+    auto* owner = SnapshotOwner();
+    if (!owner)
+    {
+        return CellsForWrite();
+    }
+    if (!owner->m_notes)
+    {
+        owner->m_notes = std::make_unique<Notes>();
+    }
+    return &owner->m_notes->cells;
 }
 
 void CycleCollector::NoteStore(const InternalValue& container)

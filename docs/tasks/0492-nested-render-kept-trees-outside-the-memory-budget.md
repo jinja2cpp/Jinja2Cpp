@@ -1,0 +1,36 @@
+---
+status: open
+priority: high
+area: robustness
+depends: [0481, 0459]
+touches: [src/cycle_collector.h, src/cycle_collector.cpp, src/template_impl.h]
+---
+# The trees an outer render keeps for its nested renders are outside the memory budget
+
+**Problem.** Found by the 0481 verifier. Since 0481 the outermost render that shares its globals
+with a render nested in it keeps the nested template, the templates it loaded and owned copies of
+its params until it ends (`CycleCollector::KeepTree`), unconditionally: two versions that gave them
+back when nothing could have escaped each had a use-after-free (0481 Resolution). A host callable
+that loads a new `Template` per call, called in a loop, makes the outer render hold one tree per
+call, and `maxRenderMemory` does not see them: 20000 nested renders of a 2 KB template took the
+process from about 45 to 122 MB; the verifier's 100000 went from 390 to 1007 MB with
+`maxRenderMemory` at the `UntrustedLimits` 256 MiB, and a 1 MiB budget failed the nested `Load`
+after about 18000 renders (about 57 B of budget per kept template leaks into the nested render's
+charge). The loop count is template text; the template per call is the host's pattern (templates
+loaded by name from the environment's cache are one tree and kept once). Also: a nested render
+that shares the snapshot copies its params (`OwnedArgument`) each time, O(size) per render, and
+converts them twice.
+
+A keeper nested in a template module's call hands its trees to the module's collector, which
+lives as long as the module (0481 verifier round 2, L1).
+
+**Proposal.** Charge a kept tree (its arena and source bytes) to the keeper's budget when it is
+kept and release it when it goes, under the outer render's limits rather than the nested one's;
+a keep past the budget fails with `ResourceLimitExceeded` like any other allocation. Find where
+the 57 B per nested render go. To give trees back early, use ownership rather than reachability: a value that names a tree
+(a macro's body, `caller`, loop recursion, `self`, a view of its text) holds a keep-alive when its
+render has a keeper, or a per-tree count of live callables is checked when the nested render
+ends; an architect plan first, and the perf gate. Copy params lazily on a store.
+
+**Done when.** The loop above under `UntrustedLimits` with a 1 MiB budget fails with
+`ResourceLimitExceeded` in the outer render, a budget that fits renders, and ASan stays clean.

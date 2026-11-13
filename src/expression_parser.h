@@ -39,6 +39,11 @@ struct FoldCandidate
     std::uint8_t fold = 0;
     // The whole value of an output: folds whatever its value, which is printed
     bool output = false;
+    // With StrictUndefined, whether its failing evaluation fails the Load: Jinja2's as_const of
+    // an arithmetic operator, a comparison, `not`, a subscript, a filter or a test turns the
+    // failure into Impossible, so it only does not fold; that of `and`, `or`, `~`, a conditional
+    // and an output lets the UndefinedError out (docs/tasks/0484)
+    bool failsLoad = true;
 };
 
 // The subscripts of one top-level expression and where it may fold; the error is the Load's
@@ -274,6 +279,7 @@ private:
             AddFoldCandidate(node, from, output);
         }
     }
+
     // In a top-level expression (FoldCheck): Parse's output, or a statement's ParseFullExpression,
     // which do not nest: the rest are nested in one (m_depth counts them)
     [[nodiscard]] bool InFoldRoot() const { return m_outputRoot || m_depth != 0; }
