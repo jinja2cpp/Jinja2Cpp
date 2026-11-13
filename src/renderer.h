@@ -53,6 +53,18 @@ using RendererPtr = std::shared_ptr<IRendererBase>;
 // A body: the arena keeps its children right after the node (NodeArena::MakeWithItems), so
 // rendering it reads no separate list, and after them where each child's tag starts in the
 // template's source, which only an error reads
+// What a node of a body is as a piece of generate()'s output (RenderOptions::writeEachPiece): a statement,
+// whose own bodies make its pieces; output Jinja2 evaluates at run time, a piece of its own even when empty;
+// or output Jinja2's compiler folds into one string with the folded output next to it (template text and
+// constant `{{ }}`, CodeGenerator.visit_Output)
+enum class PieceKind : unsigned char
+{
+    Statement,
+    Output,
+    Folded
+};
+PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values);
+
 class ComposedRenderer final : public IRendererBase
 {
 public:
@@ -107,15 +119,33 @@ private:
         // try costs nothing until something throws, and the handler needs nothing the loop
         // does not keep anyway
         bool failed = false;
+        // flushEach: what the node rendered last is (PieceOf)
+        [[maybe_unused]] PieceKind piece = PieceKind::Statement;
         try
         {
             for (; child != end; ++child)
             {
+                if constexpr (flushEach)
+                {
+                    piece = child == children.data() ? PieceOf(*child, values) : piece;
+                }
                 nodes[*child].Render(os, values);
                 if constexpr (flushEach)
                 {
-                    // Each node's output is a piece of its own
-                    os.Flush();
+                    // Each node's output is a piece of its own, but a run of folded output is one
+                    const auto next = child + 1 != end ? PieceOf(child[1], values) : PieceKind::Statement;
+                    if (piece != PieceKind::Folded || next != PieceKind::Folded)
+                    {
+                        if (piece == PieceKind::Statement)
+                        {
+                            os.FlushStatement();
+                        }
+                        else
+                        {
+                            os.FlushPiece();
+                        }
+                    }
+                    piece = next;
                 }
                 if (values.HasLoopControl())
                 {
@@ -202,6 +232,11 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override { values.Nodes()[m_expression].Render(os, values); }
 
+    // Whether the expression is a literal, which Jinja2 folds into the text around it (generate()'s pieces,
+    // PieceOf). Asked only by a render that writes each piece, so the tree keeps no flag for it. In volatile
+    // code a folded value is a StaticOutputRenderer, so what is left there does not fold
+    [[nodiscard]] bool IsLiteralAt(RenderContext& values) const;
+
 protected:
     // FinalizedExpressionRenderer derives from it
     ~ExpressionRenderer() = default;
@@ -240,13 +275,19 @@ public:
     FinalizedExpressionRenderer(NodeRef<Expression> expr, InternalValue finalize, Fold fold)
         : ExpressionRenderer(expr)
         , m_finalize(std::move(finalize))
-        , m_fold(fold)
+        , m_finalFold(fold)
     {
+    }
+
+    // Whether Jinja2 folds the value at compile time
+    [[nodiscard]] bool FoldsAt(RenderContext& values) const
+    {
+        return m_finalFold == Fold::Always || (m_finalFold == Fold::ByChoice && values.Nodes()[m_expression].IsFoldableAt(values));
     }
 
     void Render(OutStream& os, RenderContext& values) override
     {
-        const bool isFolded = m_fold == Fold::Always || (m_fold == Fold::ByChoice && values.Nodes()[m_expression].IsFoldableAt(values));
+        const bool isFolded = FoldsAt(values);
         auto value = values.Nodes()[m_expression].Evaluate(values);
         if (isFolded && values.IsStaticAutoescape())
         {
@@ -317,7 +358,7 @@ private:
     }
 
     InternalValue m_finalize;
-    Fold m_fold;
+    Fold m_finalFold;
 };
 
 // `{{ ... }}` of a value Jinja2 folds, in volatile code (RenderContext::IsVolatileAutoescape):
@@ -336,9 +377,12 @@ public:
     {
     }
 
+    // Whether Jinja2 folds the value at compile time
+    [[nodiscard]] bool FoldsAt(RenderContext& values) const { return !m_byChoice || values.Nodes()[m_expression].IsFoldableAt(values); }
+
     void Render(OutStream& os, RenderContext& values) override
     {
-        if (m_byChoice && !values.Nodes()[m_expression].IsFoldableAt(values))
+        if (!FoldsAt(values))
         {
             values.Nodes()[m_expression].Render(os, values);
             return;
@@ -400,7 +444,40 @@ inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<E
             return nodes.Make<StaticOutputRenderer>(expr, fold == FoldByChoice);
         }
     }
+    // Its fold only says how generate() splits the output, so a render that writes each piece checks
+    // for a literal then (ExpressionRenderer::IsLiteralAt): a walk of every `{{ }}` (PrepareFold) costs
+    // each Load about 3% on expression-heavy templates
     return nodes.Make<ExpressionRenderer>(expr);
+}
+
+inline bool ExpressionRenderer::IsLiteralAt(RenderContext& values) const
+{
+    const auto& nodes = values.Nodes();
+    return !values.IsVolatileAutoescape() && nodes[m_expression].ConstantAt(nodes) != nullptr;
+}
+
+inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
+{
+    const auto& nodes = values.Nodes();
+    switch (nodes[node].GetKind())
+    {
+    case NodeKind::RawText:
+        // Jinja2 folds no text in volatile code (TemplateData.as_const)
+        return values.IsVolatileAutoescape() ? PieceKind::Output : PieceKind::Folded;
+    case NodeKind::FinalizedText:
+    // A filter block and a call block write one value, the filtered output or the macro's (an empty one too)
+    case NodeKind::FilterStmt:
+    case NodeKind::MacroCallStmt:
+        return PieceKind::Output;
+    case NodeKind::ExprRenderer:
+        return nodes[nodes.As<ExpressionRenderer>(node)].IsLiteralAt(values) ? PieceKind::Folded : PieceKind::Output;
+    case NodeKind::FinalizedExprRenderer:
+        return nodes[nodes.As<FinalizedExpressionRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
+    case NodeKind::StaticExprRenderer:
+        return nodes[nodes.As<StaticOutputRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
+    default:
+        return PieceKind::Statement;
+    }
 }
 } // namespace v2
 } // namespace jinja2

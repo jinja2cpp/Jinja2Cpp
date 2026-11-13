@@ -54,7 +54,8 @@ public:
     {
         Unknown,
         TypeError,
-        ValueError
+        ValueError,
+        AttributeError
     };
 
     using std::runtime_error::runtime_error;
@@ -72,6 +73,8 @@ public:
             return "TypeError";
         case PythonClass::ValueError:
             return "ValueError";
+        case PythonClass::AttributeError:
+            return "AttributeError";
         case PythonClass::Unknown:
             break;
         }

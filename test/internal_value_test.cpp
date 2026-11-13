@@ -1,3 +1,4 @@
+#include "../src/cycle_collector.h"
 #include "../src/internal_value.h"
 #include "../src/span.h"
 #include "../src/template_dict.h"
@@ -433,5 +434,57 @@ TEST(TemplateDictTest, DictsCompareAsPythonDicts)
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ {1: 'a', (1, 2): 'b'} == {(1.0, 2): 'b', True: 'a'} }}|{{ {1: 'a'} == {'1': 'a'} }}|{{ 1 in {True: 0} }}").has_value());
     EXPECT_EQ("True|False|True", tpl.RenderAsString({}).value());
+}
+
+// The tables of the cycle walk (docs/tasks/0486): growing keeps what they hold, a repeat counts
+TEST(WalkTablesTest, GrowthKeepsTheNodesAndCountsRepeats)
+{
+    std::vector<InternalValue> lists;
+    for (int i = 0; i != 100; ++i)
+    {
+        lists.emplace_back(ListAdapter::CreateAdapter(InternalValueList{}));
+    }
+    WalkTables tables;
+    tables.Reserve(3);
+    EXPECT_GE(tables.Capacity(), 3U);
+    for (int pass = 0; pass != 2; ++pass)
+    {
+        for (const auto& list : lists)
+        {
+            tables.Count(OwnObjectOf(list).get());
+        }
+    }
+    ASSERT_EQ(lists.size(), tables.Size());
+    for (size_t i = 0; i != lists.size(); ++i)
+    {
+        EXPECT_EQ(OwnObjectOf(lists[i]).get(), tables.At(i).object);
+        EXPECT_EQ(2U, tables.At(i).refs);
+        EXPECT_EQ(i, tables.IndexOf(tables.At(i).object));
+    }
+    const auto other = InternalValue(ListAdapter::CreateAdapter(InternalValueList{}));
+    EXPECT_EQ(tables.Size(), tables.IndexOf(OwnObjectOf(other).get()));
+}
+
+// A walk empties a cycle nothing else holds, and leaves one a variable still holds. `marker` is held
+// by the cycle's list, and loses that reference when the list is emptied
+TEST(WalkTablesTest, CollectFromEmptiesOnlyGarbage)
+{
+    auto marker = ListAdapter::CreateAdapter(InternalValueList{});
+    auto list = ListAdapter::CreateAdapter(InternalValueList{});
+    list.GetMutableItems()->emplace_back(list);
+    list.GetMutableItems()->emplace_back(marker);
+    const auto markerRefs = OwnObjectOf(InternalValue(marker))->use_count();
+
+    std::vector<ValueObjectPtr> roots;
+    roots.push_back(OwnObjectOf(InternalValue(list)));
+    // `list` holds the cycle's list too: not garbage
+    CycleCollector::CollectFrom(roots);
+    EXPECT_EQ(2U, list.GetMutableItems()->size());
+    EXPECT_EQ(markerRefs, OwnObjectOf(InternalValue(marker))->use_count());
+
+    // Only the list's own item holds it now
+    list = ListAdapter::CreateAdapter(InternalValueList{});
+    CycleCollector::CollectFrom(std::move(roots));
+    EXPECT_EQ(markerRefs - 1, OwnObjectOf(InternalValue(marker))->use_count());
 }
 #endif

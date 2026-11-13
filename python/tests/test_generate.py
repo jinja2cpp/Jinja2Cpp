@@ -85,12 +85,23 @@ def test_stream_buffers_the_items(mode):
         "{% macro m() %}[{{ caller() }}]{% endmacro %}x{% call m() %}{{ x }}{% endcall %}y",
         "{% set s %}a{{ x }}b{% endset %}{{ s }}|{% filter upper %}a{{ x }}{% endfilter %}",
         "{% block b %}B{{ x }}{% endblock %}E{% include 'inc' %}|",
+        # docs/tasks/0456: folded constants, empty items, and calls whose value is one item however long
+        "a{{ 1 }}b{{ none }}{{ true }}{{ 1.5 }}c{# d #}e{% raw %}r{% endraw %}",
+        "a{{ y }}b{{ '' }}{% if 1 %}{% endif %}{{ x if not x }}",
+        "{% macro m() %}{% endmacro %}[{{ m() }}]{% filter upper %}{% endfilter %}{% macro c() %}{{ caller() }}{% endmacro %}{% call c() %}{% endcall %}",
+        "{% for i in [[1, [2]], 3] recursive %}({{ i if i is number else loop(i) }}){% endfor %}|{% for i in seq recursive %}{{ i }}{% endfor %}",
+        "{% block b %}A{{ 5 }}B{% endblock %}{{ self.b() }}",
+        "{% extends 'base' %}{% block b %}<{{ super() }}>{% endblock %}",
+        "{% macro m() %}{% for i in range(300) %}ab{{ i }}{% endfor %}{% endmacro %}{{ m() }}{{ m()|length }}",
+        "x" * 2000 + "{% if 1 %}" + "y" * 200 + "{{ 1 }}" + "z" * 200 + "{% endif %}{% set s = 'q' * 900 %}a{{ s }}b",
+        "{% for i in [] recursive %}{{ i }}{% endfor %}{% for i in seq recursive %}{% endfor %}x",
+        "{% autoescape y %}a{{ 1 }}b{{ 2 }}{{ 3 }}{% endautoescape %}{% autoescape true %}{{ '<' }}a{{ '<' }}{% endautoescape %}",
     ],
 )
 def test_items_are_jinja2s(source, mode):
     items = []
     for module in (jinja2, jinja2cpp):
-        env = module.Environment(loader=module.DictLoader({"inc": "I{{ x }}J"}))
+        env = module.Environment(loader=module.DictLoader({"inc": "I{{ x }}J", "base": "A{% block b %}P{{ x }}Q{% endblock %}Z"}))
         items.append(list(env.from_string(source).generate(seq=[0, 1], x=5)))
     assert items[1] == items[0]
 
@@ -106,7 +117,9 @@ ON_DEMAND = [
     "{% extends 'base' %}{% block b %}{{ f(1) }}{% endblock %}",
     "{% for i in range(3) %}{% if i %}{{ f(i) }}{% endif %}{{ i }}{% endfor %}",
     "{% macro m() %}<{{ caller() }}>{% endmacro %}{% call m() %}{{ f(1) }}{% endcall %}{{ f(2) }}",
-    # A recursive loop is one item in Jinja2 (task 0456), so its calls come before it there
+    # A recursive loop is one item in Jinja2 (task 0456), so its calls come before it
+    "{% for i in [1, 2] recursive %}{{ f(i) }}{% endfor %}{{ f(3) }}",
+    "{% block b %}{{ f(1) }}{% endblock %}{{ self.b() }}{{ f(2) }}",
 ]
 TEMPLATES = {"inc": "I{{ f(1) }}J{{ f(2) }}", "base": "<{% block b %}{% endblock %}>{{ f(2) }}"}
 

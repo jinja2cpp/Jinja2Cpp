@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0432]
@@ -31,3 +31,15 @@ TemplateRuntimeError (0432's contract, which knows TypeError and ValueError; add
 and map them in the module. Add the cases to test/includes_test.cpp and python/tests/test_errors.py.
 
 **Done when.** The cases raise Jinja2's classes and messages through the module.
+
+**Result (parity batch 7).** An include's TemplateNotFound marks a list of names with ExtraParams[1]
+`"list"` (TemplatesNotFound in the module, also for one name); `none` and `[]` select from an empty list
+("Tried to select from an empty list of templates.", skipped by `ignore missing`); a name that is neither
+a string nor iterable is TypeError `'int' object is not iterable` with or without `ignore missing`; an
+undefined name fails as used (for C++ embedders: a non-iterable name was ErrorCode::InvalidTemplateName,
+it is now TemplateRuntimeError with ExtraParams[1] "TypeError"). `dict()` raises Python's TypeError/ValueError messages (element index
+included, the arity too), takes a host sequence (a Python list) and raises UndefinedError for an undefined
+argument; `xmlattr` of a non-mapping (a host object too) is AttributeError
+(`TemplateRuntimeError::PythonClass::AttributeError`, new). A Python loader's own TemplateNotFound is
+kept by the module's SourceHandler and raised as is for that name (include and get_template). Left: an
+undefined name inside the list (0498), and names Jinja2 rejects with other classes (0494).

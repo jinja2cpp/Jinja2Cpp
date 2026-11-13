@@ -1041,6 +1041,11 @@ private:
                 // A generator or reversed() iterator is no list to json.dumps (docs/tasks/0387)
                 throw TemplateRuntimeError("Object of type "s + iterator + " is not JSON serializable");
             }
+            if (const char* viewType = DictViewTypeName(list->GetIteratorKind()))
+            {
+                // Nor is a dict view (docs/tasks/0489)
+                throw TemplateRuntimeError("Object of type "s + viewType + " is not JSON serializable");
+            }
             if (list->IsRange())
             {
                 // Nor is a range (docs/tasks/0401)
@@ -1747,11 +1752,22 @@ XmlAttrFilter::XmlAttrFilter(const FilterParams& params)
 
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    // Python's do_xmlattr calls d.items(): an undefined value fails whatever its policy, and
+    // anything that is not a mapping has no items
+    CheckUndefinedUse(baseVal, UndefinedUse::Call);
     auto map = AsMap(baseVal);
-    // An object such as namespace() has no items()
-    if (!map || map->GetObjectClass())
+    if (!map)
     {
-        context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
+    }
+    // An object such as namespace() (whose attribute error names only the attribute) or a host object
+    if (const auto* objectClass = map->GetObjectClass())
+    {
+        if (!map->IsHost() && std::string_view(objectClass) == "Namespace")
+        {
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "items");
+        }
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
     }
 
     auto escape = [](const std::string& str) { return EscapeHtml(std::string_view(str)); };

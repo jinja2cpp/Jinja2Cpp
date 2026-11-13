@@ -133,7 +133,9 @@ struct RenderOptions
      * A render to a sink (\ref BasicOutputSink) calls `Write` once for each piece of output the
      * template makes, in the order Jinja2's `Template.generate()` yields them: a run of template
      * text, the value of a `{{ }}`, a block or macro call's output where Jinja2 writes it as one
-     * item (an output longer than the 512-character buffer arrives in several pieces). False, the
+     * item, however long: a run of text and constant `{{ }}` values Jinja2's compiler folds into one string
+     * is one piece, and a value Jinja2 yields when it is empty (`{{ '' }}`, an empty macro call) is an empty
+     * `Write`, the only one a sink gets (docs/tasks/0456). False, the
      * default, gathers the pieces into chunks of up to 512 characters, which costs one call a
      * chunk. A render to a string ignores it.
      */
@@ -191,7 +193,8 @@ template<typename CharT>
 class BasicOutputSink
 {
 public:
-    //! `text` is never empty and is valid during the call only
+    //! `text` is valid during the call only, and never empty but for an empty piece of a render with
+    //! RenderOptions::writeEachPiece
     virtual void Write(std::basic_string_view<CharT> text) = 0;
 
 protected:

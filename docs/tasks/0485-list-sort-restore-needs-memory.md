@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
 priority: low
 area: robustness
 depends: [0256]
-touches: [src/value_methods.cpp, test/allocation_failure_test.cpp]
+touches: [src/value_methods.cpp, src/borrowed_cells.h, src/borrowed_cells.cpp, test/allocation_failure_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/882
 ---
 # A failed list.sort() loses the list's items when memory stays spent
 
@@ -28,3 +29,9 @@ again. Check `bench/count.py` for `sort` with a key; the spare is made only for 
 **Done when.** The allowance marked "task 0485" in
 `AllocationFailureTest.ModuleSortKeepsItsItemsWhenTheCopyFails` is removed and both
 `jinja2cpp_alloc_tests` runs pass.
+
+**Done.** `ListSort` makes an empty spare list before the key calls when it runs in a module call with a key function
+and the list is on a cell; the restore hands it to `BorrowedCell::UnshareWith` (noexcept), which takes it in place of
+the copy Unshare would allocate, so the items the host was handed stay as they are (D8) and the list gets its items
+back with memory spent. The allowance in `ModuleSortKeepsItsItemsWhenTheCopyFails` is gone. One empty list per such
+sort; `bench/count.py` unchanged.

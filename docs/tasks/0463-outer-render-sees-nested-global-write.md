@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: low
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/878
 area: robustness

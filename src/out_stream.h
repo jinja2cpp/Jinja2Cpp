@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -106,6 +107,9 @@ public:
 
     // Appends the buffered output to the target string, or writes it to the sink
     void Flush();
+    // The end of a piece Jinja2's generate() yields (RenderOptions::writeEachPiece): what is buffered goes to
+    // the sink as one Write, an empty one too, as Jinja2 yields '' for `{{ '' }}` or an empty macro call
+    void FlushPiece();
     // Whether the output goes to a host's sink, which may run a render on this thread while
     // the stream still needs a fragment: such fragments must not live in a per-thread
     // scratch buffer that the render reuses (the HTML-escape buffer, WriteEscaped)
@@ -131,10 +135,23 @@ public:
     // Each piece of output goes to the sink on its own (RenderOptions::writeEachPiece): a body flushes the
     // stream after each of its nodes. Only the render's own stream is set; a stream that gathers a part of
     // the output (a `{% set %}` block, a macro's result) never is
-    void WriteEachPiece() noexcept { m_eachPiece = true; }
+    class HeldPiece;
+    struct HeldPieceDelete
+    {
+        void operator()(HeldPiece* held) const noexcept;
+    };
+    // The piece a render that writes each piece gathers: the render keeps it while the stream writes
+    using HeldPieceOwner = std::unique_ptr<HeldPiece, HeldPieceDelete>;
+    [[nodiscard]] HeldPieceOwner WriteEachPiece();
+    // The end of a body's statement in a render that writes each piece: Flush, and the end of a piece unless
+    // one is held (PieceHold). Only such a render calls it, so Flush stays as the usual render has it
+    void FlushStatement();
+    // The end of a render that writes each piece: what is gathered goes to the sink
+    void EndPieces();
     [[nodiscard]] bool WritesEachPiece() const noexcept { return m_eachPiece; }
-    // A macro's output is one piece in Jinja2, as it is the value its call returns: the macro's body does not
-    // flush the stream while this lives
+    // A macro's output is one piece in Jinja2, as it is the value its call returns (so are super(), self.b()
+    // and a recursive loop, which Jinja2 buffers): the body does not flush the stream while this lives, and
+    // what overflows the buffer is held until the piece ends, so that the piece reaches the sink in one Write
     class PieceHold
     {
     public:
@@ -146,6 +163,7 @@ public:
             if (m_eachPiece)
             {
                 os.m_eachPiece = false;
+                os.m_holding = true;
             }
         }
         ~PieceHold()
@@ -153,6 +171,7 @@ public:
             if (m_eachPiece)
             {
                 m_os.m_eachPiece = true;
+                m_os.m_holding = false;
             }
         }
         PieceHold(const PieceHold&) = delete;
@@ -247,6 +266,7 @@ private:
     }
     void AppendToTarget(const void* ptr, size_t bytes);
     void WriteToSink(const void* ptr, size_t bytes);
+    void EndPiece(bool writeEmpty);
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
     template<typename CharT>
@@ -261,6 +281,11 @@ private:
     void* m_sink = nullptr;
     size_t m_sinkWritten = 0;
     size_t m_charSize = 1;
+    // A render that writes each piece gathers a piece in this sink, which stands in for the host's (m_sink) until
+    // the piece ends: the sink's path is the usual one, and tests nothing more
+    // Made by WriteEachPiece on a sink stream and owned by the render (HeldPieceOwner), so that a stream's
+    // destruction stays trivial: a stream that writes no piece pays one pointer
+    HeldPiece* m_held = nullptr;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer
@@ -269,6 +294,8 @@ private:
     unsigned char* m_end = m_buffer + BufferLength;
     // Last: before m_buffer it pads to the alignas, which MSVC reports (C4324)
     bool m_eachPiece = false;
+    // A PieceHold of a stream that writes each piece lives: a statement's end ends no piece
+    bool m_holding = false;
 };
 
 // Renders into a new string with `render(OutStream&)` and returns it

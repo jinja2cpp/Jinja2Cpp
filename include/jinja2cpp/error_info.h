@@ -34,7 +34,7 @@ enum class ErrorCode
     FileNotFound = 3,              //!< Requested file was not found. ExtraParams[0] contains name of the file
     ExtensionDisabled = 4,         //!< Particular jinja2 extension disabled in the settings
     TemplateEnvAbsent = 5,         //!< Template uses `extend`, `import`, `from` or `include` features but it's loaded without the template environment set
-    TemplateNotFound = 6,          //!< Template with the specified name was not found. ExtraParams[0] contains name of the file
+    TemplateNotFound = 6,          //!< Template with the specified name was not found. ExtraParams[0] contains name of the file; an include's error has the list of the names tried, and ExtraParams[1] `"list"` when the include selected from a list (an empty one and `none` included), Python's TemplatesNotFound (docs/tasks/0458)
     TemplateNotParsed = 7,         //!< Template was not parsed
     InvalidValueType = 8,          //!< Invalid type of the value in the particular context
     InvalidTemplateName = 9,       //!< Invalid name of the template. ExtraParams[0] contains the name
@@ -45,7 +45,7 @@ enum class ErrorCode
     UnknownTest = 14,              //!< The template names a test that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     UserCallableException = 15,    //!< A user callable (context or global value, filter, test, finalize, gettext) threw. ExtraParams[0] contains `what()`, GetException() the exception
     IntegerOutOfRange = 16,        //!< Python's OverflowError for an integer: template arithmetic whose result is outside the `int64_t` range and has no big-integer backend, or an integer too big for a size or an index. ExtraParams[0] contains the message
-    TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message, ExtraParams[1] (when the engine knows the Python class Jinja2 raises) its name: `"TypeError"` or `"ValueError"`
+    TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message, ExtraParams[1] (when the engine knows the Python class Jinja2 raises) its name: `"TypeError"`, `"ValueError"` or `"AttributeError"`
     ResourceLimitExceeded = 18,    //!< A limit was passed: one of Settings::Limits, a built-in cap or a host's budget. ExtraParams[0] contains the message, ExtraParams[1] (for Settings::Limits) the name of the limit (`"maxRenderSteps"`)
     TemplateExpired = 19,          //!< A macro of a \ref BasicTemplateModule called a macro an earlier call stored, whose module ended with that call (docs/tasks/0301). ExtraParams[0] contains the macro's name, ExtraParams[1] is "ended". A Load no longer ends a module (docs/tasks/0321). A macro or `caller` a host's call got as an argument and called after that call ended has ExtraParams[0] "lent" (docs/tasks/0300)
     DataReadError = 20,            //!< \ref ToValue could not read a JSON document: its JsonTraits reported an error. ExtraParams[0] contains the message, ExtraParams[1] the JSON path of the value

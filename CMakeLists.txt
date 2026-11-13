@@ -274,6 +274,7 @@ set(JINJA2CPP_SOURCES
     src/contracts.cpp
     src/node_arena.cpp
     src/out_stream.cpp
+    src/out_stream_pieces.cpp
     src/prompt_escape.cpp
     src/prompt_filters.cpp
     src/public_host_object.cpp
