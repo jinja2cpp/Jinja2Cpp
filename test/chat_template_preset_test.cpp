@@ -392,8 +392,9 @@ INSTANTIATE_TEST_SUITE_P(Rows, GenerationSpansTest, ::testing::Values(
     SpanCase{ "{% block x %}x{% generation %}yy{% endgeneration %}{% endblock %}{{ self.x() }}", { { 1, 3 }, { 3, 5 } } },
     SpanCase{ "ab{% include 'inc' %}c", { { 3, 5 } } },
     SpanCase{ "{% macro m() %}zz{% include 'inc' %}{% endmacro %}ab{{ m() }}", { { 2, 4 } } },
-    // A call that stops (docs/tasks/0479) drops the macro's output, and the blocks it held
-    SpanCase{ "{% macro m() %}xx{% generation %}yy{% endgeneration %}{{ 1|stop }}{% endmacro %}ab{{ m() }}c{% generation %}d{% endgeneration %}", { { 3, 4 } } },
+    // A call that stops (docs/tasks/0479) drops the macro's output but not the span of a block that ended before:
+    // transformers' AssistantTracker records the span when the generation block ends (emulated in spans_oracle)
+    SpanCase{ "{% macro m() %}xx{% generation %}yy{% endgeneration %}{{ 1|stop }}{% endmacro %}ab{{ m() }}c{% generation %}d{% endgeneration %}", { { 2, 4 }, { 3, 4 } } },
     SpanCase{ "{% extends 'base' %}{% block x %}x{% generation %}yy{% endgeneration %}{% endblock %}", { { 2, 4 } } },
     SpanCase{ "{% extends 'base2' %}{% block x %}q{{ super() }}{% endblock %}", { { 2, 3 } } },
     SpanCase{ "abc", {} }));

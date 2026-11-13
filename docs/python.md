@@ -162,9 +162,10 @@ engines on a Release build of the module.
   generator render does (PEP 479, 0477). A `StopIteration` inside a call the template makes (a macro,
   `caller()`, `loop(...)`) is undefined there too, as in Jinja2, whatever raised it in the body
   (a filter, test, `finalize`, a property); out of an included, imported or extended template, a block,
-  `self.b()` or `super()` it stays the `RuntimeError` (0479). A `generate()` or `stream()` whose macro had
-  already delivered more than 512 characters before it stopped keeps the `RuntimeError`: those
-  characters have left the buffer.
+  `self.b()` or `super()` it stays the `RuntimeError` (0479). A `generate()` or `stream()` keeps the
+  `RuntimeError` whenever the 512-character buffer reached the consumer since the stopped call began,
+  which depends on where the buffer boundary falls, not only on the macro's output (`{{ 'p' * 510 }}[{{ m() }}]`
+  with a two-character macro keeps it).
 - `pass_context`, `pass_eval_context` and `pass_environment` (`jinja2cpp.pass_context`, also in
   `jinja2cpp.utils`; a function marked by Jinja2's own decorators works too, the marker
   `jinja_pass_arg` is read by its name). They apply as in Jinja2 to filters, tests, globals,

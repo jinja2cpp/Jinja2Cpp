@@ -40,6 +40,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -1303,6 +1304,24 @@ struct LoopFrameReturn
     IntrusivePtr<LoopFrame>& frame;
 };
 
+// A loop that a stopped call leaves (docs/tasks/0479) does what the end of the loop does: a loop object kept past it
+// (`set ns.x = loop`) collects what it has not fetched, and the closures defined in its body keep the frame below it
+// (CaptureClosures). The order is the loop's own: the scopes, then the slots, as each end has it. Collecting runs the
+// filter of a filtered loop, which reads only the scopes below the loop's, as a peek from a macro does
+JINJA2CPP_NOINLINE_INLINE void KeepStoppedLoop(const IntrusivePtr<LoopFrame>& state, bool isFiltered, const InternalValue& loopVal, ListAdapter& loopItems)
+{
+    if (state->use_count() > 2)
+    {
+        try
+        {
+            KeepLoopState(*state, isFiltered, loopVal, std::move(loopItems));
+        }
+        catch (...) // NOLINT(bugprone-empty-catch): the rest of a loop that stopped is best effort, the stop goes on
+        {
+        }
+    }
+}
+
 } // namespace
 
 namespace
@@ -1534,35 +1553,56 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     auto bodyScope = values.EnterScope(std::move(state->bodyScope));
     auto& targetSlots = state->targetSlots;
     const auto target = values.Nodes()[m_target];
-    for (size_t itemIdx = 0; hasItem; ++itemIdx)
+    // The scopes of the loop's end, which a call that stops closes over as the end does
+    const size_t endScopes = values.GetScopesCount() - 1;
+    std::exception_ptr failure;
+    bool stopped = false;
+    try
     {
-        state->SetIndex(itemIdx);
-        state->isPeeked = false;
-        const auto& curValue = state->Item(itemIdx);
-
-        AssignLoopTarget(target, curValue, context, targetSlots, values);
-
-        values.Nodes()[m_mainBody].Render(os, values);
-        bodyScope.Clear();
-
-        // As in Jinja2, the `else` body is skipped only once a pass through the body has
-        // finished without `break` or `continue`
-        auto control = values.TakeLoopControl();
-        if (control == LoopControl::Break)
+        for (size_t itemIdx = 0; hasItem; ++itemIdx)
         {
-            break;
+            state->SetIndex(itemIdx);
+            state->isPeeked = false;
+            const auto& curValue = state->Item(itemIdx);
+
+            AssignLoopTarget(target, curValue, context, targetSlots, values);
+
+            values.Nodes()[m_mainBody].Render(os, values);
+            bodyScope.Clear();
+
+            // As in Jinja2, the `else` body is skipped only once a pass through the body has
+            // finished without `break` or `continue`
+            auto control = values.TakeLoopControl();
+            if (control == LoopControl::Break)
+            {
+                break;
+            }
+            if (control == LoopControl::None)
+            {
+                loopRendered = true;
+            }
+            // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
+            itemIdx = state->index0;
+            if (!state->isPeeked && FetchAfterBody(*state, itemIdx))
+            {
+                continue;
+            }
+            hasItem = !state->isLast;
         }
-        if (control == LoopControl::None)
+    }
+    catch (...)
+    {
+        failure = std::current_exception();
+        stopped = detail::IsStopBeingHandled();
+    }
+    if (failure)
+    {
+        if (stopped)
         {
-            loopRendered = true;
+            values.CaptureClosures(FrameEnd::Soft(endScopes));
+            KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
         }
-        // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
-        itemIdx = state->index0;
-        if (!state->isPeeked && FetchAfterBody(*state, itemIdx))
-        {
-            continue;
-        }
-        hasItem = !state->isLast;
+        std::rethrow_exception(std::move(failure));
     }
     // A closure defined in the body and kept past the loop sees the frame below it (0373)
     values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount() - 1));
@@ -1675,57 +1715,80 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     // Read once: the body may write to anything the arena holds, as far as the compiler knows
     auto* const rootSlot = root.isTuple ? nullptr : &slots[root.slot.value];
     const auto rootHash = root.hash;
-    for (size_t itemIdx = 0; hasItem; ++itemIdx)
+    // The scopes of the loop's end, which a call that stops closes over as the end does
+    const size_t endScopes = values.GetScopesCount();
+    std::exception_ptr failure;
+    bool stopped = false;
+    try
     {
-        state->SetIndex(itemIdx);
-        // The next item is fetched after the body, or when the body peeks (docs/tasks/0304)
-        state->isPeeked = false;
-        const auto& curValue = state->Item(itemIdx);
+        for (size_t itemIdx = 0; hasItem; ++itemIdx)
+        {
+            state->SetIndex(itemIdx);
+            // The next item is fetched after the body, or when the body peeks (docs/tasks/0304)
+            state->isPeeked = false;
+            const auto& curValue = state->Item(itemIdx);
 
-        if (!root.isTuple)
-        {
-            values.BindSlot(*rootSlot, rootHash, curValue);
-        }
-        else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
-        {
-            // `for k, v in d|dictsort` (or d.items()): no list of items to unpack through
-            values.BindSlot(slots[target[1].slot.value], target[1].hash, pair->key);
-            values.BindSlot(slots[target[2].slot.value], target[2].hash, pair->value);
-        }
-        else
-        {
-            AssignTo(target, curValue, sink, values);
-        }
-
-        values.Nodes()[m_mainBody].Render(os, values);
-        bodyScope.Clear();
-
-        // As in Jinja2, the `else` body is skipped only once a pass through the body has
-        // finished without `break` or `continue`
-        auto control = values.TakeLoopControl();
-        if (control == LoopControl::Break)
-        {
-            break;
-        }
-        if (control == LoopControl::None)
-        {
-            loopRendered = true;
-        }
-        // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
-        itemIdx = state->index0;
-        if (!state->isPeeked)
-        {
-            if (state->lazyFilter)
+            if (!root.isTuple)
             {
-                state->isLast = !fetchNext(state->Item(itemIdx + 1));
-                state->isPeeked = true;
+                values.BindSlot(*rootSlot, rootHash, curValue);
             }
-            else if (FetchAfterBody(*state, itemIdx))
+            else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
             {
-                continue;
+                // `for k, v in d|dictsort` (or d.items()): no list of items to unpack through
+                values.BindSlot(slots[target[1].slot.value], target[1].hash, pair->key);
+                values.BindSlot(slots[target[2].slot.value], target[2].hash, pair->value);
             }
+            else
+            {
+                AssignTo(target, curValue, sink, values);
+            }
+
+            values.Nodes()[m_mainBody].Render(os, values);
+            bodyScope.Clear();
+
+            // As in Jinja2, the `else` body is skipped only once a pass through the body has
+            // finished without `break` or `continue`
+            auto control = values.TakeLoopControl();
+            if (control == LoopControl::Break)
+            {
+                break;
+            }
+            if (control == LoopControl::None)
+            {
+                loopRendered = true;
+            }
+            // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
+            itemIdx = state->index0;
+            if (!state->isPeeked)
+            {
+                if (state->lazyFilter)
+                {
+                    state->isLast = !fetchNext(state->Item(itemIdx + 1));
+                    state->isPeeked = true;
+                }
+                else if (FetchAfterBody(*state, itemIdx))
+                {
+                    continue;
+                }
+            }
+            hasItem = !state->isLast;
         }
-        hasItem = !state->isLast;
+    }
+    catch (...)
+    {
+        failure = std::current_exception();
+        stopped = detail::IsStopBeingHandled();
+    }
+    if (failure)
+    {
+        if (stopped)
+        {
+            KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
+            // The end unbinds the slots before it closes over the frame
+            guard.Unbind();
+            values.CaptureClosures(FrameEnd::Soft(endScopes));
+        }
+        std::rethrow_exception(std::move(failure));
     }
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
@@ -1781,6 +1844,24 @@ uint64_t ForStatement::NewLoopId()
     return ++lastId;
 }
 
+namespace
+{
+// The filter of a loop (`for x in xs if cond`) as Jinja2 runs it, in a generator: a StopIteration out of the
+// condition is a RuntimeError, not a stopped call (call_stop.h). A call the condition makes is guarded on its own
+template<typename Node>
+bool EvaluateLoopFilter(Node& filter, RenderContext& values)
+{
+    try
+    {
+        return ConvertToBool(filter.Evaluate(values));
+    }
+    catch (...)
+    {
+        detail::RethrowSealed();
+    }
+}
+} // namespace
+
 ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values, InternalValue outerLoop) const
 {
     // Like the slotted one below, the filter may run while another template's code does
@@ -1811,7 +1892,7 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
                 throw;
             }
 
-            if (ConvertToBool(values.Nodes()[m_ifExpr].Evaluate(values)))
+            if (EvaluateLoopFilter(values.Nodes()[m_ifExpr], values))
             {
                 values.ExitScope();
                 return ResultType(std::move(curValue));
@@ -1851,7 +1932,7 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, Span<Slot> fram
         {
             auto& slot = *rootSlot;
             values.BindSlot(slot, rootHash, items.GetCurrent());
-            if (ConvertToBool(filter.Evaluate(values)))
+            if (EvaluateLoopFilter(filter, values))
             {
                 item = std::move(static_cast<InternalValue&>(slot));
                 isFound = true;
@@ -1861,7 +1942,7 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, Span<Slot> fram
         }
         auto curValue = items.GetCurrent();
         AssignTo(target, curValue, sink, values);
-        if (ConvertToBool(filter.Evaluate(values)))
+        if (EvaluateLoopFilter(filter, values))
         {
             item = std::move(curValue);
             isFound = true;
@@ -3851,6 +3932,35 @@ void BindMacroCall(const MacroArgBinder& binder, bool catchKwargs, bool catchVar
 } // namespace
 
 // Binds the call arguments the way Jinja2's Macro.__call__ does
+namespace
+{
+// Renders the body of a macro. A stop out of it (docs/tasks/0479) ends the frame as the end of the body does, before
+// the guards of the call let go of what the frame held: a closure made in it that something outside holds keeps the
+// names the frame had. The rethrow is outside the handler, as in the body loops (renderer.h)
+template<typename Body>
+void RenderMacroBody(RenderContext& context, size_t link, const Body& body)
+{
+    const size_t endScopes = context.GetScopesCount();
+    std::exception_ptr failure;
+    bool stopped = false;
+    try
+    {
+        body();
+        return;
+    }
+    catch (...)
+    {
+        failure = std::current_exception();
+        stopped = detail::IsStopBeingHandled();
+    }
+    if (stopped)
+    {
+        context.CaptureClosures(FrameEnd::Call(endScopes, link));
+    }
+    std::rethrow_exception(std::move(failure));
+}
+} // namespace
+
 void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context, size_t link) const
 {
     const RenderDepthGuard depthGuard;
@@ -3883,7 +3993,7 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
         BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
             scope.ForName(name) = std::forward<decltype(value)>(value);
         });
-        context.Nodes()[m_mainBody].Render(stream, context);
+        RenderMacroBody(context, link, [&] { context.Nodes()[m_mainBody].Render(stream, context); });
         // A macro defined in the body and kept past the call sees what the call had (0326)
         context.CaptureClosures(FrameEnd::Call(context.GetScopesCount(), link));
         if (isLinked)
@@ -3903,7 +4013,7 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
         context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });
-    context.Nodes()[m_mainBody].Render(stream, context);
+    RenderMacroBody(context, link, [&] { context.Nodes()[m_mainBody].Render(stream, context); });
     context.CaptureClosures(FrameEnd::Call(context.GetScopesCount(), link));
 
     guard.Unbind();
@@ -4003,7 +4113,6 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     {
         detail::RethrowKept();
     }
-    freeze.Discard();
     ThrowStoppedCallBlock(values, snapshot, true);
 }
 

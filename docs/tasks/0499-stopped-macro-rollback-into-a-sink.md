@@ -11,7 +11,9 @@ shares: [python/tests/test_values.py, docs/python.md]
 **Problem.** Left by 0479. A call the template makes that a StopIteration escapes gives undefined, and the call's
 output is rolled back (OutStream::RollbackTo). A sink stream (RenderTo, the module's generate() and stream()) can
 roll back only while nothing reached the sink since the call began, which is up to its 512-character buffer. A
-macro that wrote more before stopping keeps the failure, which the module reports as
+rollback fails whenever the stream's buffer reached the sink since the call began, which depends on where the
+buffer boundary falls, not only on the macro's own output length: `{{ 'p' * 510 }}[{{ m() }}]` with a macro of two
+characters fails. A macro that wrote more before stopping, or any call that crossed the boundary, keeps the failure, which the module reports as
 `RuntimeError: generator raised StopIteration`. Jinja2 buffers a macro's output, so it yields nothing of it:
 
 ```

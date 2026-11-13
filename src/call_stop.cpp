@@ -22,6 +22,13 @@ namespace
 // The exception KeepUnlessStop kept, between its handler and RethrowKept; one at a time per thread
 thread_local std::exception_ptr t_kept;
 
+HostCallableFailure SealedFailure(std::exception_ptr exception)
+{
+    HostCallableFailure failure(std::move(exception));
+    failure.SealStop();
+    return failure;
+}
+
 bool HoldsStop(const std::exception_ptr& exception)
 {
     if (!exception)
@@ -56,7 +63,7 @@ bool IsStop() noexcept
     }
     catch (const HostCallableFailure& failure)
     {
-        return HoldsStop(failure.Exception());
+        return !failure.StopSealed() && HoldsStop(failure.Exception());
     }
     catch (const StopIteration&)
     {
@@ -69,10 +76,38 @@ bool IsStop() noexcept
 }
 } // namespace
 
+bool IsStopBeingHandled() noexcept
+{
+    return IsStop();
+}
+
 bool KeepFailure() noexcept
 {
     t_kept = std::current_exception();
     return IsStop();
+}
+
+void RethrowSealed()
+{
+    try
+    {
+        throw;
+    }
+    catch (HostCallableFailure& failure)
+    {
+        failure.SealStop();
+        throw;
+    }
+    catch (RenderFailure& failure)
+    {
+        failure.SealStop();
+        throw;
+    }
+    catch (const StopIteration&)
+    {
+        // A host object's own exception: sealed in the failure that holds it
+        throw SealedFailure(std::current_exception());
+    }
 }
 
 void RethrowKept()

@@ -54,7 +54,6 @@ public:
     {
         if (m_tracker)
         {
-            m_spans = m_tracker->spans->size();
             if (m_tracker->frozen++ == 0)
             {
                 m_tracker->frozenAt = m_tracker->RootPos();
@@ -73,19 +72,8 @@ public:
         }
     }
 
-    // Drops the spans recorded since the freeze began: the call it covers stopped (docs/tasks/0479), and Jinja2
-    // drops what the call buffered
-    void Discard() const
-    {
-        if (m_tracker)
-        {
-            m_tracker->spans->resize(m_spans);
-        }
-    }
-
 private:
     GenerationTracker* m_tracker;
-    size_t m_spans = 0;
 };
 } // namespace detail
 } // namespace v2

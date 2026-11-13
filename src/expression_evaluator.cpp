@@ -1979,7 +1979,6 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
     }
     detail::DropKept();
     snapshot.Undo();
-    freeze.Discard();
     WriteOutput(stream, detail::MakeStopUndefined(values), values);
 }
 

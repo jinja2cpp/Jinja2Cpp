@@ -43,9 +43,12 @@ The host marks an exception with the public mix-in `jinja2::StopIteration` (exce
 `CallCallable`, which also cover `caller()`, `loop(...)` and host callables; `MacroCallStatement::Render`, which
 gives the 0362 `TemplateRuntimeError`) guard only the invocation, in the shape of the body loops (src/call_stop.h).
 A stop is a `RenderFailure` that no seal covers (`SealStop`, set by the body of an included, imported or extended
-template and by `RenderBlockAt`, which `self.b()`, `super()` and blocks go through), a `HostCallableFailure` or a raw
-exception that holds a marked one. The call then leaves its context as it found it (`HomeCall::Snapshot`), takes its
-output back (`OutStream::Mark`/`RollbackTo`, `GenerationFreeze::Discard`) and gives `MakeStopUndefined`. A sink that
+template and by `RenderBlockAt`, which `self.b()`, `super()` and blocks go through, and by `RethrowSealed` where Jinja2
+runs a generator: map, select, reject and their attribute forms, unique, the filter of a loop), a `HostCallableFailure`
+(also sealable) or a raw exception that holds a marked one. The call then closes the frames it left as their ends do
+(closures that something outside holds keep the frame, a kept `loop` collects its items), leaves its context as it
+found it (`HomeCall::Snapshot`), takes its output back (`OutStream::Mark`/`RollbackTo`) and gives `MakeStopUndefined`.
+The spans of a generation block that ended before the stop stay, as transformers' AssistantTracker keeps them. A sink that
 was given the output since the call began cannot take it back and the failure goes on. The module marks Python's
 `StopIteration` (`PyStopIteration`, `CallPython` and `ThrowPending`). Follow-ups: exact rollback for sinks (spill
 while a macro holds the piece), and gettext/ngettext/trans and the sandbox's format/format_map/wrap_str_format.

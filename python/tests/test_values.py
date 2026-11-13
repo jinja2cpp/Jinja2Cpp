@@ -424,6 +424,7 @@ def _stop_env(module, undefined=None, **kwargs):
     )
     env.filters["stop"] = _stop
     env.tests["stop"] = _stop
+    env.globals["stopfn"] = _stop
     env.globals["f"] = lambda *args: "F"
     env.globals["page"] = _Page()
     return env
@@ -461,6 +462,12 @@ _STOP_SAME = [
     "{% for i in [[1]] recursive %}<{% if i is iterable %}{{ loop(i) }}{% else %}{{ i|stop }}{% endif %}>{% endfor %}",
     "{% macro m() %}a{{ page.stopping }}b{% endmacro %}[{{ m() }}]",
     "{% macro m() %}a{{ page['k'] }}b{% endmacro %}[{{ m() }}]",
+    # Python's builtin map ends where the attribute raises StopIteration: sum and join keep what came before
+    "{% macro m() %}a{{ [{'stopping': 1}, page, {'stopping': 5}]|sum(attribute='stopping') }}b{% endmacro %}[{{ m() }}]",
+    "{% macro m() %}a{{ [{'stopping': 1}, page]|join(attribute='stopping') }}b{% endmacro %}[{{ m() }}]",
+    "{% macro m() %}a{{ [page]|sort(attribute='stopping') }}b{% endmacro %}[{{ m() }}]",
+    "{% macro m() %}a{{ [page]|max(attribute='stopping') }}b{% endmacro %}[{{ m() }}]",
+    "{% macro m() %}a{% for q in [1, 2] if stopfn() %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]",
     "{% import 'imp' as x %}[{{ x.y() }}]",
     "{% from 'imp' import y %}[{{ y() }}]",
     "{% macro m(x) %}{% set v = x %}{% for q in [1, 2] %}{{ q }}{{ 1|stop }}{% endfor %}{% endmacro %}"
@@ -497,10 +504,14 @@ def test_stop_iteration_out_of_a_long_macro_in_generate_keeps_the_runtime_error(
     assert _stop_outcome(jinja2cpp, source) == "[]"
 
 
-# What Jinja2 does not give undefined: the call is not Context.call, or a generator ends the render
+# What Jinja2 does not give undefined: the call is not Context.call, or a generator ends the render. Jinja2's
+# generators (map, select, reject and their attribute forms, unique, the filter of a loop) make a StopIteration out
+# of the filter, test or attribute they apply a RuntimeError, even inside a macro
 _STOP_ERRORS = [
     (_STOP_MACRO + "{{ m().x }}", "UndefinedError"),
-    (_STOP_MACRO + "[{% call m() %}x{% endcall %}]", "TypeError"),
+    # The call block's call stops: Jinja2 yields the undefined value into the output, a TypeError
+    ("{% macro m() %}{{ caller() }}{{ 1|stop }}{% endmacro %}[{% call m() %}x{% endcall %}]", "TypeError"),
+    ("[{% call stopfn() %}x{% endcall %}]", "TypeError"),
     ("{{ f(1|stop) }}", "RuntimeError"),
     ("{% macro m() %}a{% include 'inc' %}b{% endmacro %}[{{ m() }}]", "RuntimeError"),
     ("{% macro m() %}a{% import 'inc' as b %}b{% endmacro %}[{{ m() }}]", "RuntimeError"),
@@ -510,6 +521,18 @@ _STOP_ERRORS = [
         "{% macro m() %}x{{ self.b() }}y{% endmacro %}[{{ m() }}]",
         "RuntimeError",
     ),
+    ("{% macro m() %}{{ [1]|map('stop')|list }}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{{ [1]|map('stop')|join }}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{{ [1]|map('stop')|first }}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{{ [1]|select('stop')|list }}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{{ [1]|reject('stop')|list }}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{{ [page]|map(attribute='stopping')|list }}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{{ [page]|selectattr('stopping')|list }}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{{ [page]|unique(attribute='stopping')|list }}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{% for q in [1]|map('stop') %}{{ q }}{% endfor %}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{% for q in [1, 2] if q is stop %}{{ q }}{% endfor %}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{% for q in [1, 2] if q|stop %}{{ q }}{% endfor %}{% endmacro %}[{{ m() }}]", "RuntimeError"),
+    ("{% macro m() %}{% for q in [page] if q.stopping %}{{ q }}{% endfor %}{% endmacro %}[{{ m() }}]", "RuntimeError"),
 ]
 
 
@@ -517,7 +540,9 @@ _STOP_ERRORS = [
 def test_stop_iteration_where_jinja2_does_not_stop_the_call(source, error):
     for module in (jinja2cpp, jinja2):
         outcome = _stop_outcome(module, source)
-        assert type(outcome).__name__ == error, (module.__name__, source, outcome)
+        # Jinja2's TypeError is this module's TemplateRuntimeError (docs/python.md)
+        expected = "TemplateRuntimeError" if error == "TypeError" and module is jinja2cpp else error
+        assert type(outcome).__name__ == expected, (module.__name__, source, outcome)
         if error == "RuntimeError":
             assert str(outcome) == "generator raised StopIteration"
             assert isinstance(outcome.__cause__, StopIteration)

@@ -10,11 +10,14 @@
 #include <jinja2cpp/value.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 using namespace jinja2;
 
@@ -370,6 +373,31 @@ struct StopCase
     const char* expected;
 };
 
+// A host object whose attribute `p` is a number, or raises StopIteration for a negative one (a Python property)
+struct StopAccessor : IMapItemAccessor
+{
+    explicit StopAccessor(int64_t value)
+        : number(value)
+    {
+    }
+    [[nodiscard]] size_t GetSize() const override { return 1; }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return name == "p"; }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    {
+        if (name != "p")
+        {
+            return Value();
+        }
+        if (number < 0)
+        {
+            throw TestStop();
+        }
+        return number;
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "p" }; }
+    int64_t number;
+};
+
 void FillStopEnv(TemplateEnv& env)
 {
     auto files = std::make_shared<MemoryFileSystem>();
@@ -383,6 +411,13 @@ void FillStopEnv(TemplateEnv& env)
     env.AddTest("stop", MakeCallable([](const Value&) -> Value { throw TestStop(); }, ArgInfo{ "v" }));
     env.AddGlobal("f", MakeCallable([](const Value&) { return std::string("F"); }, ArgInfo{ "v" }));
     env.AddGlobal("stopfn", MakeCallable([]() -> Value { throw TestStop(); }));
+    // [P(1), P(None), P(5)], whose `p` is the number, or raises StopIteration for None
+    ValuesList items;
+    for (const int64_t number : { 1, -1, 5 })
+    {
+        items.emplace_back(GenericMap(std::make_shared<StopAccessor>(number)));
+    }
+    env.AddGlobal("os", Value(std::move(items)));
 }
 
 template<typename Tpl, typename CharT>
@@ -461,10 +496,16 @@ INSTANTIATE_TEST_SUITE_P(Jinja2Oracle, MacroStopTest, ::testing::Values(
     StopCase{ "{% macro c() %}<{{ caller() }}>{% endmacro %}{% call c() %}x{{ 1|stop }}{% endcall %}", UndefinedPolicy::Strict, "error: UndefinedError" },
     StopCase{ "{% macro c() %}<{{ caller() }}>{% endmacro %}{% call c() %}x{{ 1|stop }}{% endcall %}", UndefinedPolicy::Debug, "<{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}>" },
     StopCase{ "{% macro c() %}<{{ caller() }}>{% endmacro %}{% call c() %}x{{ 1|stop }}{% endcall %}", UndefinedPolicy::Chainable, "<>" },
-    StopCase{ "{% macro m() %}a{{ 1|stop }}b{% endmacro %}[{% call m() %}x{% endcall %}]", UndefinedPolicy::Default, "error: TemplateRuntimeError" },
-    StopCase{ "{% macro m() %}a{{ 1|stop }}b{% endmacro %}[{% call m() %}x{% endcall %}]", UndefinedPolicy::Strict, "error: TemplateRuntimeError" },
-    StopCase{ "{% macro m() %}a{{ 1|stop }}b{% endmacro %}[{% call m() %}x{% endcall %}]", UndefinedPolicy::Debug, "error: TemplateRuntimeError" },
-    StopCase{ "{% macro m() %}a{{ 1|stop }}b{% endmacro %}[{% call m() %}x{% endcall %}]", UndefinedPolicy::Chainable, "error: TemplateRuntimeError" },
+    // A call block whose call stops yields the undefined value into the output: Jinja2 raises TypeError there, this
+    // engine's TemplateRuntimeError as for any non-string call result (docs/tasks/0362)
+    StopCase{ "{% macro m() %}{{ caller() }}{{ 1|stop }}{% endmacro %}[{% call m() %}x{% endcall %}]", UndefinedPolicy::Default, "error: TemplateRuntimeError" },
+    StopCase{ "{% macro m() %}{{ caller() }}{{ 1|stop }}{% endmacro %}[{% call m() %}x{% endcall %}]", UndefinedPolicy::Strict, "error: TemplateRuntimeError" },
+    StopCase{ "{% macro m() %}{{ caller() }}{{ 1|stop }}{% endmacro %}[{% call m() %}x{% endcall %}]", UndefinedPolicy::Debug, "error: TemplateRuntimeError" },
+    StopCase{ "{% macro m() %}{{ caller() }}{{ 1|stop }}{% endmacro %}[{% call m() %}x{% endcall %}]", UndefinedPolicy::Chainable, "error: TemplateRuntimeError" },
+    StopCase{ "[{% call stopfn() %}x{% endcall %}]", UndefinedPolicy::Default, "error: TemplateRuntimeError" },
+    StopCase{ "[{% call stopfn() %}x{% endcall %}]", UndefinedPolicy::Strict, "error: TemplateRuntimeError" },
+    StopCase{ "[{% call stopfn() %}x{% endcall %}]", UndefinedPolicy::Debug, "error: TemplateRuntimeError" },
+    StopCase{ "[{% call stopfn() %}x{% endcall %}]", UndefinedPolicy::Chainable, "error: TemplateRuntimeError" },
     StopCase{ "{% macro d(a=1|stop) %}{{ a }}{% endmacro %}[{{ d() }}]", UndefinedPolicy::Default, "[]" },
     StopCase{ "{% macro d(a=1|stop) %}{{ a }}{% endmacro %}[{{ d() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
     StopCase{ "{% macro d(a=1|stop) %}{{ a }}{% endmacro %}[{{ d() }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
@@ -576,7 +617,138 @@ INSTANTIATE_TEST_SUITE_P(Jinja2Oracle, MacroStopTest, ::testing::Values(
     StopCase{ "{% autoescape true %}{% macro m() %}<b>{{ 1|stop }}{% endmacro %}[{{ m() }}]{% endautoescape %}", UndefinedPolicy::Default, "[]" },
     StopCase{ "{% autoescape true %}{% macro m() %}<b>{{ 1|stop }}{% endmacro %}[{{ m() }}]{% endautoescape %}", UndefinedPolicy::Strict, "error: UndefinedError" },
     StopCase{ "{% autoescape true %}{% macro m() %}<b>{{ 1|stop }}{% endmacro %}[{{ m() }}]{% endautoescape %}", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
-    StopCase{ "{% autoescape true %}{% macro m() %}<b>{{ 1|stop }}{% endmacro %}[{{ m() }}]{% endautoescape %}", UndefinedPolicy::Chainable, "[]" }));
+    StopCase{ "{% autoescape true %}{% macro m() %}<b>{{ 1|stop }}{% endmacro %}[{{ m() }}]{% endautoescape %}", UndefinedPolicy::Chainable, "[]" },
+    // A closure or a loop made in a call that stops, kept outside it, sees what the call had
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m() %}{% set v = 'V' %}{% macro inner() %}{{ v }}{% endmacro %}{% set ns.f = inner %}{{ 1|stop }}{% endmacro %}[{{ m() is defined }}]{{ ns.f() }}", UndefinedPolicy::Default, "[False]V" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m() %}{% set v = 'V' %}{% macro inner() %}{{ v }}{% endmacro %}{% set ns.f = inner %}{{ 1|stop }}{% endmacro %}[{{ m() is defined }}]{{ ns.f() }}", UndefinedPolicy::Strict, "[False]V" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m() %}{% set v = 'V' %}{% macro inner() %}{{ v }}{% endmacro %}{% set ns.f = inner %}{{ 1|stop }}{% endmacro %}[{{ m() is defined }}]{{ ns.f() }}", UndefinedPolicy::Debug, "[False]V" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m() %}{% set v = 'V' %}{% macro inner() %}{{ v }}{% endmacro %}{% set ns.f = inner %}{{ 1|stop }}{% endmacro %}[{{ m() is defined }}]{{ ns.f() }}", UndefinedPolicy::Chainable, "[False]V" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m() %}{% set v = 'V' %}{% macro inner() %}{{ v }}{% endmacro %}{% macro inner2() %}{{ inner() }}{{ v }}{% endmacro %}{% set ns.f = inner2 %}{{ 1|stop }}{% endmacro %}[{{ m() is defined }}]{{ ns.f() }}", UndefinedPolicy::Default, "[False]VV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m() %}{% set v = 'V' %}{% macro inner() %}{{ v }}{% endmacro %}{% macro inner2() %}{{ inner() }}{{ v }}{% endmacro %}{% set ns.f = inner2 %}{{ 1|stop }}{% endmacro %}[{{ m() is defined }}]{{ ns.f() }}", UndefinedPolicy::Strict, "[False]VV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m() %}{% set v = 'V' %}{% macro inner() %}{{ v }}{% endmacro %}{% macro inner2() %}{{ inner() }}{{ v }}{% endmacro %}{% set ns.f = inner2 %}{{ 1|stop }}{% endmacro %}[{{ m() is defined }}]{{ ns.f() }}", UndefinedPolicy::Debug, "[False]VV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m() %}{% set v = 'V' %}{% macro inner() %}{{ v }}{% endmacro %}{% macro inner2() %}{{ inner() }}{{ v }}{% endmacro %}{% set ns.f = inner2 %}{{ 1|stop }}{% endmacro %}[{{ m() is defined }}]{{ ns.f() }}", UndefinedPolicy::Chainable, "[False]VV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m(a) %}{% set v = 'V' %}{% macro inner() %}{{ a }}{{ v }}{% endmacro %}{% set ns.f = inner %}{{ 1|stop }}{% endmacro %}[{{ m('A') is defined }}]{{ ns.f() }}", UndefinedPolicy::Default, "[False]AV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m(a) %}{% set v = 'V' %}{% macro inner() %}{{ a }}{{ v }}{% endmacro %}{% set ns.f = inner %}{{ 1|stop }}{% endmacro %}[{{ m('A') is defined }}]{{ ns.f() }}", UndefinedPolicy::Strict, "[False]AV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m(a) %}{% set v = 'V' %}{% macro inner() %}{{ a }}{{ v }}{% endmacro %}{% set ns.f = inner %}{{ 1|stop }}{% endmacro %}[{{ m('A') is defined }}]{{ ns.f() }}", UndefinedPolicy::Debug, "[False]AV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m(a) %}{% set v = 'V' %}{% macro inner() %}{{ a }}{{ v }}{% endmacro %}{% set ns.f = inner %}{{ 1|stop }}{% endmacro %}[{{ m('A') is defined }}]{{ ns.f() }}", UndefinedPolicy::Chainable, "[False]AV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m(a) %}{% set v = 'V' %}{% for i in [1, 2] %}{% macro inner() %}{{ a }}{{ v }}{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ 1|stop }}{% endmacro %}[{{ m('A') is defined }}]{{ ns.f() }}", UndefinedPolicy::Default, "[False]AV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m(a) %}{% set v = 'V' %}{% for i in [1, 2] %}{% macro inner() %}{{ a }}{{ v }}{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ 1|stop }}{% endmacro %}[{{ m('A') is defined }}]{{ ns.f() }}", UndefinedPolicy::Strict, "[False]AV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m(a) %}{% set v = 'V' %}{% for i in [1, 2] %}{% macro inner() %}{{ a }}{{ v }}{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ 1|stop }}{% endmacro %}[{{ m('A') is defined }}]{{ ns.f() }}", UndefinedPolicy::Debug, "[False]AV" },
+    StopCase{ "{% set ns = namespace(f=none) %}{% macro m(a) %}{% set v = 'V' %}{% for i in [1, 2] %}{% macro inner() %}{{ a }}{{ v }}{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ 1|stop }}{% endmacro %}[{{ m('A') is defined }}]{{ ns.f() }}", UndefinedPolicy::Chainable, "[False]AV" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}{{ ns.l.index }}{{ ns.l.first }}", UndefinedPolicy::Default, "[False]False231True" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}{{ ns.l.index }}{{ ns.l.first }}", UndefinedPolicy::Strict, "[False]False231True" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}{{ ns.l.index }}{{ ns.l.first }}", UndefinedPolicy::Debug, "[False]False231True" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}{{ ns.l.index }}{{ ns.l.first }}", UndefinedPolicy::Chainable, "[False]False231True" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% set ns.l = loop %}{% if i == 2 %}{{ 1|stop }}{% endif %}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.previtem }}{{ ns.l.revindex }}", UndefinedPolicy::Default, "[False]False312" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% set ns.l = loop %}{% if i == 2 %}{{ 1|stop }}{% endif %}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.previtem }}{{ ns.l.revindex }}", UndefinedPolicy::Strict, "[False]False312" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% set ns.l = loop %}{% if i == 2 %}{{ 1|stop }}{% endif %}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.previtem }}{{ ns.l.revindex }}", UndefinedPolicy::Debug, "[False]False312" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% set ns.l = loop %}{% if i == 2 %}{{ 1|stop }}{% endif %}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.previtem }}{{ ns.l.revindex }}", UndefinedPolicy::Chainable, "[False]False312" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3, 4] if i != 2 %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}", UndefinedPolicy::Default, "[False]False33" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3, 4] if i != 2 %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}", UndefinedPolicy::Strict, "[False]False33" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3, 4] if i != 2 %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}", UndefinedPolicy::Debug, "[False]False33" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3, 4] if i != 2 %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}", UndefinedPolicy::Chainable, "[False]False33" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% for j in 'ab' %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}", UndefinedPolicy::Default, "[False]Falseb2" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% for j in 'ab' %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}", UndefinedPolicy::Strict, "[False]Falseb2" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% for j in 'ab' %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}", UndefinedPolicy::Debug, "[False]Falseb2" },
+    StopCase{ "{% set ns = namespace(l=none) %}{% macro m() %}{% for i in [1, 2, 3] %}{% for j in 'ab' %}{% set ns.l = loop %}{{ 1|stop }}{% endfor %}{% endfor %}{% endmacro %}[{{ m() is defined }}]{{ ns.l.last }}{{ ns.l.nextitem }}{{ ns.l.length }}", UndefinedPolicy::Chainable, "[False]Falseb2" },
+    // Jinja2 runs map, select, reject, unique and the filter of a loop in generators: a StopIteration out of what they
+    // apply is a RuntimeError, inside a macro too; sum and join take Python's builtin map, which ends there
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|join }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|join }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|join }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|join }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|first }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|first }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|first }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|map('stop')|first }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|select('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|select('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|select('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|select('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|reject('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|reject('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|reject('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|reject('stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|selectattr('x', 'stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|selectattr('x', 'stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|selectattr('x', 'stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ [1]|selectattr('x', 'stop')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|map(attribute='p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|map(attribute='p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|map(attribute='p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|map(attribute='p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|selectattr('p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|selectattr('p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|selectattr('p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|selectattr('p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|rejectattr('p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|rejectattr('p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|rejectattr('p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|rejectattr('p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|unique(attribute='p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|unique(attribute='p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|unique(attribute='p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{{ os|unique(attribute='p')|list }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1]|map('stop') %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1]|map('stop') %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1]|map('stop') %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1]|map('stop') %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if q is stop %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if q is stop %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if q is stop %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if q is stop %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if q|stop %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if q|stop %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if q|stop %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if q|stop %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in os if q.p %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in os if q.p %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in os if q.p %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in os if q.p %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "error: UserCallableException" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if stopfn() %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[ab]" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if stopfn() %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if stopfn() %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[ab]" },
+    StopCase{ "{% macro m() %}a{% for q in [1, 2] if stopfn() %}{{ q }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[ab]" },
+    StopCase{ "{% macro m() %}a{{ os|sum(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[a1b]" },
+    StopCase{ "{% macro m() %}a{{ os|sum(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "[a1b]" },
+    StopCase{ "{% macro m() %}a{{ os|sum(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[a1b]" },
+    StopCase{ "{% macro m() %}a{{ os|sum(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[a1b]" },
+    StopCase{ "{% macro m() %}a{{ os|join('-', attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[a1b]" },
+    StopCase{ "{% macro m() %}a{{ os|join('-', attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "[a1b]" },
+    StopCase{ "{% macro m() %}a{{ os|join('-', attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[a1b]" },
+    StopCase{ "{% macro m() %}a{{ os|join('-', attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[a1b]" },
+    StopCase{ "{% macro m() %}a{{ os|min(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "{% macro m() %}a{{ os|min(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
+    StopCase{ "{% macro m() %}a{{ os|min(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
+    StopCase{ "{% macro m() %}a{{ os|min(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[]" },
+    StopCase{ "{% macro m() %}a{{ os|sort(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "{% macro m() %}a{{ os|sort(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
+    StopCase{ "{% macro m() %}a{{ os|sort(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
+    StopCase{ "{% macro m() %}a{{ os|sort(attribute='p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[]" },
+    StopCase{ "{% macro m() %}a{{ os|groupby('p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "{% macro m() %}a{{ os|groupby('p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
+    StopCase{ "{% macro m() %}a{{ os|groupby('p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
+    StopCase{ "{% macro m() %}a{{ os|groupby('p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[]" },
+    StopCase{ "{% macro m() %}a{{ os|batch(2)|list|length }}{{ os|slice(2)|list|length }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[a22b]" },
+    StopCase{ "{% macro m() %}a{{ os|batch(2)|list|length }}{{ os|slice(2)|list|length }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "[a22b]" },
+    StopCase{ "{% macro m() %}a{{ os|batch(2)|list|length }}{{ os|slice(2)|list|length }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[a22b]" },
+    StopCase{ "{% macro m() %}a{{ os|batch(2)|list|length }}{{ os|slice(2)|list|length }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[a22b]" },
+    StopCase{ "{% macro m() %}a{{ os[1].p }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "{% macro m() %}a{{ os[1].p }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
+    StopCase{ "{% macro m() %}a{{ os[1].p }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
+    StopCase{ "{% macro m() %}a{{ os[1].p }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[]" },
+    StopCase{ "{% macro m() %}a{{ os[1]|attr('p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "{% macro m() %}a{{ os[1]|attr('p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
+    StopCase{ "{% macro m() %}a{{ os[1]|attr('p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
+    StopCase{ "{% macro m() %}a{{ os[1]|attr('p') }}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[]" },
+    StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
+    StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
+    StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[]" }));
 // clang-format on
 
 namespace

@@ -1,5 +1,6 @@
 #include "render_failure.h"
 
+#include "engine_errors.h"
 #include "error_boundary.h"
 #include "node_arena.h"
 #include "render_suspension.h"
@@ -151,6 +152,16 @@ RenderFailure Locate(const std::exception_ptr& failure, const TemplateOrigin* or
 
 namespace
 {
+// `failure`, sealed against a stop (call_stop.h) when `isSealed`
+RenderFailure Sealed(RenderFailure failure, bool isSealed)
+{
+    if (isSealed)
+    {
+        failure.SealStop();
+    }
+    return failure;
+}
+
 // The failure of the innermost body, between its handler and its throw; one at a time per thread
 thread_local std::exception_ptr t_failure;
 } // namespace
@@ -172,6 +183,8 @@ void ThrowRenderFailure(const ArenaView& nodes, const void* child, std::uint32_t
     // Each throw here is outside any handler, so that the error of a render the stack guard
     // stopped needs stack for one throw at a time
     bool passOn = false;
+    // A host failure sealed where Jinja2 runs a generator stays no stop in the located one (call_stop.h)
+    bool sealed = false;
     try
     {
         std::rethrow_exception(failure);
@@ -179,6 +192,10 @@ void ThrowRenderFailure(const ArenaView& nodes, const void* child, std::uint32_t
     catch (const std::bad_alloc&)
     {
         passOn = true;
+    }
+    catch (const HostCallableFailure& host)
+    {
+        sealed = host.StopSealed();
     }
     catch (const RenderFailure&)
     {
@@ -197,9 +214,9 @@ void ThrowRenderFailure(const ArenaView& nodes, const void* child, std::uint32_t
     const TemplateOrigin* origin = nodes.Holds(child) ? nodes.Origin() : nullptr;
     if (origin && origin->isWide)
     {
-        throw Locate<wchar_t>(failure, origin, offset);
+        throw Sealed(Locate<wchar_t>(failure, origin, offset), sealed);
     }
-    throw Locate<char>(failure, origin, offset);
+    throw Sealed(Locate<char>(failure, origin, offset), sealed);
 }
 } // namespace detail
 } // namespace v2

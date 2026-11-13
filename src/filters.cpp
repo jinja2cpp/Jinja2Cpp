@@ -2,6 +2,7 @@
 
 #include "engine_errors.h"
 #include "big_int.h"
+#include "call_stop.h"
 #include "decimal_number.h"
 
 #include "expression_evaluator.h"
@@ -417,8 +418,29 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         auto path = AttributePath(attrName);
         InternalValueList items;
         ReserveHint(items, values.GetSize().value_or(0));
+        // `map(attrgetter, value)` of Python's builtin ends where the attribute raises StopIteration: the items
+        // before it are joined
         values.ForEach([&](const InternalValue& item) {
-            items.push_back(GetAttributeByPath(item, path, InternalValue(), context));
+            bool failed = false;
+            bool stopped = false;
+            try
+            {
+                items.push_back(GetAttributeByPath(item, path, InternalValue(), context));
+            }
+            catch (...)
+            {
+                failed = true;
+                stopped = detail::KeepFailure();
+            }
+            if (failed)
+            {
+                if (!stopped)
+                {
+                    detail::RethrowKept();
+                }
+                detail::DropKept();
+                return false;
+            }
             return true;
         });
         values = ListAdapter::CreateAdapter(std::move(items));
@@ -900,7 +922,15 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         InternalValueList resultList;
         ReserveHint(resultList, list.GetSize().value_or(0));
         list.ForEach([&](const InternalValue& item) {
-            resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
+            // Jinja2's map is a generator: a StopIteration out of the attribute is a RuntimeError
+            try
+            {
+                resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
+            }
+            catch (...)
+            {
+                detail::RethrowSealed();
+            }
             return true;
         });
         return ListAdapter::CreateIterator(std::move(resultList), IteratorKind::MapGenerator);
@@ -950,7 +980,15 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         {
             throw TemplateRuntimeError(AsString(filterName) + "() " + argsError);
         }
-        resultList.push_back(filter->Filter(val, context));
+        // Jinja2's map is a generator: a StopIteration out of the filter is a RuntimeError
+        try
+        {
+            resultList.push_back(filter->Filter(val, context));
+        }
+        catch (...)
+        {
+            detail::RethrowSealed();
+        }
         return true;
     });
 
@@ -1157,7 +1195,36 @@ InternalValue Sum(const ListAdapter& list, const InternalValueList& path, std::o
     // Python's sum starts from 0, so a string item raises like `0 + 'h'`
     InternalValue resultVal = start ? std::move(*start) : InternalValue(static_cast<int64_t>(0));
     list.ForEach([&](InternalValue&& val) {
-        auto item = path.empty() ? std::move(val) : GetAttributeByPath(val, path, InternalValue(), context);
+        InternalValue item;
+        if (path.empty())
+        {
+            item = std::move(val);
+        }
+        else
+        {
+            // `sum(map(attrgetter, iterable))` of Python's builtin ends where the attribute raises StopIteration:
+            // the items before it are added
+            bool failed = false;
+            bool stopped = false;
+            try
+            {
+                item = GetAttributeByPath(val, path, InternalValue(), context);
+            }
+            catch (...)
+            {
+                failed = true;
+                stopped = detail::KeepFailure();
+            }
+            if (failed)
+            {
+                if (!stopped)
+                {
+                    detail::RethrowKept();
+                }
+                detail::DropKept();
+                return false;
+            }
+        }
         // An undefined item fails the addition as Python's __radd__ does (the sandbox's unsafe attribute among them)
         CheckUndefinedUse(item, UndefinedUse::Arithmetic);
         // An undefined start fails the first addition (docs/tasks/0310)
@@ -1225,7 +1292,24 @@ InternalValue Unique(const ListAdapter& list,
     std::vector<UniqueItem> items;
     int64_t idx = 0;
     list.ForEach([&](InternalValue&& v) {
-        items.push_back(UniqueItem{ path.empty() ? v : GetAttributeByPath(v, path, InternalValue(), context), idx++ });
+        InternalValue key;
+        if (path.empty())
+        {
+            key = v;
+        }
+        else
+        {
+            // Jinja2's unique is a generator: a StopIteration out of the attribute is a RuntimeError
+            try
+            {
+                key = GetAttributeByPath(v, path, InternalValue(), context);
+            }
+            catch (...)
+            {
+                detail::RethrowSealed();
+            }
+        }
+        items.push_back(UniqueItem{ std::move(key), idx++ });
         values.push_back(std::move(v));
         return true;
     });
@@ -1622,7 +1706,18 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         return (m_mode == SelectMode || m_mode == SelectAttrMode) ? result : !result;
     };
     list.ForEach([&](InternalValue&& val) {
-        if (isSelected(val))
+        // Jinja2's select and reject are generators: a StopIteration out of the attribute or the test is a
+        // RuntimeError
+        bool selected = false;
+        try
+        {
+            selected = isSelected(val);
+        }
+        catch (...)
+        {
+            detail::RethrowSealed();
+        }
+        if (selected)
         {
             resultList.push_back(std::move(val));
         }

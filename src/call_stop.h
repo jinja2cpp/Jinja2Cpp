@@ -29,6 +29,14 @@ namespace detail
 
 // Called from a catch handler: keeps the exception being handled for RethrowKept, and tells whether it is a stop
 [[nodiscard]] bool KeepFailure() noexcept;
+// Called from a catch handler where Jinja2 applies a callable inside a generator (the item filter or test or
+// attribute of map, select, reject and their attr forms, the filter of a loop): a StopIteration there is a
+// RuntimeError, so what is thrown is no stop for a call site around it. Rethrows the exception being handled,
+// sealed; one that is not a stop goes on unchanged
+[[noreturn]] void RethrowSealed();
+// Called from a catch handler: whether the exception being handled is a stop, without keeping it. For a frame that
+// ends as the exception passes it and rethrows the exception it holds, outside the handler
+[[nodiscard]] bool IsStopBeingHandled() noexcept;
 // Throws the exception KeepFailure kept, outside the handler
 [[noreturn]] void RethrowKept();
 // Forgets the exception KeepFailure kept
