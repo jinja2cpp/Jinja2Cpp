@@ -171,7 +171,7 @@ Outside the corpus:
 
 Corpus on master `04016279`: 3387 cases, 3350 match. The upstream pallets/jinja suite through
 the Python module (0355) passes 635 of 856 (#850 closed seven more for 0434; 0431, 0432 and 0434 are done).
-Its remaining divergences are filed as 0412, 0415, 0435, 0456, 0458, 0476 and 0479 (0433, 0434, 0436, 0457 and 0477 are done).
+Its remaining divergences are filed as 0412, 0415, 0435, 0456, 0458 and 0479 (0433, 0434, 0436, 0457, 0476 and 0477 are done).
 
 ## 6. Confirmed facts for this revision
 

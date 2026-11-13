@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0434]
 touches: [src/value_methods.cpp, src/internal_value.cpp]
 shares: [test/parity/cases/literals.py, test/parity/divergences/literals.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/874
 ---
 # `x.__class__` of the engine's values
 
