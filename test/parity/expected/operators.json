@@ -1,4158 +1,4158 @@
 {
-    "generator": "jinja2 3.1.6",
-    "area": "operators",
-    "cases": [
-        {
-            "id": "operators.add",
-            "template": "{{ 1 + 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "3"
-        },
-        {
-            "id": "operators.sub",
-            "template": "{{ 1 - 5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "-4"
-        },
-        {
-            "id": "operators.mul",
-            "template": "{{ 3 * 4 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "12"
-        },
-        {
-            "id": "operators.div",
-            "template": "{{ 10 / 4 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "2.5"
-        },
-        {
-            "id": "operators.div_exact",
-            "template": "{{ 10 / 5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "2.0"
-        },
-        {
-            "id": "operators.floordiv",
-            "template": "{{ 10 // 4 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "2"
-        },
-        {
-            "id": "operators.floordiv_negative",
-            "template": "{{ -7 // 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "-4"
-        },
-        {
-            "id": "operators.floordiv_float",
-            "template": "{{ 7.5 // 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "3.0"
-        },
-        {
-            "id": "operators.mod",
-            "template": "{{ 10 % 3 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "1"
-        },
-        {
-            "id": "operators.mod_negative",
-            "template": "{{ -7 % 3 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "2"
-        },
-        {
-            "id": "operators.mod_float",
-            "template": "{{ 7.5 % 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "1.5"
-        },
-        {
-            "id": "operators.pow",
-            "template": "{{ 2 ** 10 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "1024"
-        },
-        {
-            "id": "operators.pow_right_assoc",
-            "template": "{{ 2 ** 3 ** 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "64"
-        },
-        {
-            "id": "operators.pow_negative_exponent",
-            "template": "{{ 2 ** -1 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "0.5"
-        },
-        {
-            "id": "operators.pow_float",
-            "template": "{{ 4 ** 0.5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "2.0"
-        },
-        {
-            "id": "operators.precedence",
-            "template": "{{ 1 + 2 * 3 - 4 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "3"
-        },
-        {
-            "id": "operators.precedence_parens",
-            "template": "{{ (1 + 2) * 3 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "9"
-        },
-        {
-            "id": "operators.unary_minus_pow",
-            "template": "{{ -2 ** 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "4"
-        },
-        {
-            "id": "operators.unary_plus",
-            "template": "{{ +x }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "3"
-        },
-        {
-            "id": "operators.unary_minus_var",
-            "template": "{{ -x }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "-3"
-        },
-        {
-            "id": "operators.int_float_add",
-            "template": "{{ x + y }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "5.5"
-        },
-        {
-            "id": "operators.div_by_zero",
-            "template": "{{ 1 / 0 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "ZeroDivisionError",
-                "message": "division by zero"
-            }
-        },
-        {
-            "id": "operators.floordiv_by_zero",
-            "template": "{{ 1 // 0 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "ZeroDivisionError",
-                "message": "integer division or modulo by zero"
-            }
-        },
-        {
-            "id": "operators.mod_by_zero",
-            "template": "{{ 1 % 0 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "ZeroDivisionError",
-                "message": "integer modulo by zero"
-            }
-        },
-        {
-            "id": "operators.string_plus",
-            "template": "{{ 'a' + 'b' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "ab"
-        },
-        {
-            "id": "operators.string_plus_int",
-            "template": "{{ 'a' + 1 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "can only concatenate str (not \"int\") to str"
-            }
-        },
-        {
-            "id": "operators.string_times",
-            "template": "{{ 'ab' * 3 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "ababab"
-        },
-        {
-            "id": "operators.int_times_string",
-            "template": "{{ 3 * 'ab' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "ababab"
-        },
-        {
-            "id": "operators.list_plus",
-            "template": "{{ [1] + [2] }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "[1, 2]"
-        },
-        {
-            "id": "operators.list_times",
-            "template": "{{ [1, 2] * 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "[1, 2, 1, 2]"
-        },
-        {
-            "id": "operators.tilde",
-            "template": "{{ 'a' ~ 1 ~ 2.5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "a12.5"
-        },
-        {
-            "id": "operators.tilde_none",
-            "template": "{{ 'a' ~ none }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "aNone"
-        },
-        {
-            "id": "operators.eq",
-            "template": "{{ 'T' if 1 == 1 else 'F' }}|{{ 'T' if 1 == 2 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|F"
-        },
-        {
-            "id": "operators.eq_int_float",
-            "template": "{{ 'T' if 1 == 1.0 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.eq_dict_order_insensitive",
-            "template": "{{ 'T' if {'a': 1, 'b': 2} == {'b': 2, 'a': 1} else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.eq_string_int",
-            "template": "{{ 'T' if '1' == 1 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F"
-        },
-        {
-            "id": "operators.eq_list",
-            "template": "{{ 'T' if [1, 2] == [1, 2] else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.eq_dict",
-            "template": "{{ {'a': 1} == {'a': 1} }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "True"
-        },
-        {
-            "id": "operators.eq_same_list_nan",
-            "template": "{% set n = ('nan' if x else '')|float %}{% set l = [n] %}{{ l == l }}|{{ l != l }}|{{ l <= l }}|{{ [l] == [l] }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "True|False|True|True"
-        },
-        {
-            "id": "operators.eq_same_dict_nan",
-            "template": "{% set d = {'a': ('nan' if x else '')|float} %}{{ d == d }}|{{ {'k': d} == {'k': d} }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "True|True"
-        },
-        {
-            "id": "operators.eq_none",
-            "template": "{{ 'T' if n == none else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.ne",
-            "template": "{{ 'T' if 1 != 2 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.lt_gt",
-            "template": "{{ 'T' if 1 < 2 else 'F' }}{{ 'T' if 2 > 1 else 'F' }}{{ 'T' if 2 <= 2 else 'F' }}{{ 'T' if 3 >= 4 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "TTTF"
-        },
-        {
-            "id": "operators.compare_strings",
-            "template": "{{ 'T' if 'a' < 'b' else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.compare_lists",
-            "template": "{{ 'T' if [1, 2] < [1, 3] else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.compare_mixed_types",
-            "template": "{{ 'T' if 1 < 'a' else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "'<' not supported between instances of 'int' and 'str'"
-            }
-        },
-        {
-            "id": "operators.chained_compare",
-            "template": "{{ 'T' if 1 < 2 < 3 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.chained_compare_false",
-            "template": "{{ 'T' if 1 < 3 < 2 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F"
-        },
-        {
-            "id": "operators.chained_eq",
-            "template": "{{ 'T' if 1 == 1 == 1 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.in_list",
-            "template": "{{ 'T' if 2 in l else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.in_string",
-            "template": "{{ 'T' if 'ell' in s else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.in_dict",
-            "template": "{{ 'T' if 'a' in d else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.not_in",
-            "template": "{{ 'T' if 5 not in l else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.not_in_string",
-            "template": "{{ 'T' if 'z' not in s else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.and_value",
-            "template": "{{ x and 'yes' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "yes"
-        },
-        {
-            "id": "operators.and_falsy_value",
-            "template": "{{ z and 'yes' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "0"
-        },
-        {
-            "id": "operators.or_value",
-            "template": "{{ z or 'fallback' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "fallback"
-        },
-        {
-            "id": "operators.or_truthy_value",
-            "template": "{{ x or 'fallback' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "3"
-        },
-        {
-            "id": "operators.and_or_idiom",
-            "template": "{{ x and 'yes' or 'no' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "yes"
-        },
-        {
-            "id": "operators.or_empty_list",
-            "template": "{{ [] or 'empty' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "empty"
-        },
-        {
-            "id": "operators.not",
-            "template": "{{ 'T' if not x else 'F' }}|{{ 'T' if not z else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T"
-        },
-        {
-            "id": "operators.not_precedence",
-            "template": "{{ 'T' if not 1 == 2 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.and_short_circuit",
-            "template": "{{ 'T' if false and undefined_fn() else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F"
-        },
-        {
-            "id": "operators.or_short_circuit",
-            "template": "{{ 'T' if true or undefined_fn() else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.ternary",
-            "template": "{{ 'a' if x > 2 else 'b' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "a"
-        },
-        {
-            "id": "operators.ternary_no_else",
-            "template": "{{ 'a' if x > 5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": ""
-        },
-        {
-            "id": "operators.ternary_nested",
-            "template": "{{ 'a' if x > 5 else 'b' if x > 2 else 'c' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "b"
-        },
-        {
-            "id": "operators.truthiness_empty_string",
-            "template": "{% if '' %}t{% else %}f{% endif %}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "f"
-        },
-        {
-            "id": "operators.truthiness_zero_float",
-            "template": "{% if 0.0 %}t{% else %}f{% endif %}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "f"
-        },
-        {
-            "id": "operators.truthiness_empty_dict",
-            "template": "{% if {} %}t{% else %}f{% endif %}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "f"
-        },
-        {
-            "id": "operators.truthiness_none",
-            "template": "{% if n %}t{% else %}f{% endif %}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "f"
-        },
-        {
-            "id": "operators.int_overflow_mul",
-            "template": "{{ 9223372036854775807 * 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "18446744073709551614"
-        },
-        {
-            "id": "operators.int_big_pow",
-            "template": "{{ 2 ** 100 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "1267650600228229401496703205376"
-        },
-        {
-            "id": "operators.int_plus_bool",
-            "template": "{{ 1 + true }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "2"
-        },
-        {
-            "id": "operators.pow_precedence_over_add",
-            "template": "{{ 2 + 3 ** 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "11"
-        },
-        {
-            "id": "operators.pow_left_assoc",
-            "template": "{{ 2 ** 3 ** 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "64"
-        },
-        {
-            "id": "operators.pow_binds_tighter_than_minus",
-            "template": "{{ -2 ** 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "4"
-        },
-        {
-            "id": "operators.concat_precedence",
-            "template": "{{ 1 ~ 2 * 3 }}|{{ 'a' ~ 'b' == 'ab' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "16|True"
-        },
-        {
-            "id": "operators.not_before_filter",
-            "template": "{{ 'T' if not l|length else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F"
-        },
-        {
-            "id": "operators.unary_minus_before_filter",
-            "template": "{{ -3|abs }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "3"
-        },
-        {
-            "id": "operators.chained_compare_not_in",
-            "template": "{{ 'T' if 1 < 2 not in [3] else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T"
-        },
-        {
-            "id": "operators.chained_in",
-            "template": "{{ 'b' in 'abc' in ['True'] }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "False"
-        },
-        {
-            "id": "operators.test_then_and",
-            "template": "{{ x is eq 3 and true }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "True"
-        },
-        {
-            "id": "operators.test_then_filter",
-            "template": "{{ x is odd|tojson }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "true"
-        },
-        {
-            "id": "operators.test_arg_is_not_if",
-            "template": "{{ x is defined if 1 else 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "expected token 'end of print statement', got 'integer'"
-            }
-        },
-        {
-            "id": "operators.implicit_tuple",
-            "template": "{{ 1, 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "(1, 2)"
-        },
-        {
-            "id": "operators.floordiv_float_negative",
-            "template": "{{ -7.5 // 2 }}|{{ 7.5 // -2 }}|{{ -7.5 % 2 }}|{{ 7.5 % -2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "-4.0|-4.0|0.5|-0.5"
-        },
-        {
-            "id": "operators.mod_negative_divisor",
-            "template": "{{ 7 % -2 }}|{{ -7 % -2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "-1|-1"
-        },
-        {
-            "id": "operators.float_floordiv_by_zero",
-            "template": "{{ 1.5 // 0 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "ZeroDivisionError",
-                "message": "float floor division by zero"
-            }
-        },
-        {
-            "id": "operators.float_mod_by_zero",
-            "template": "{{ 1.5 % 0.0 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "ZeroDivisionError",
-                "message": "float modulo"
-            }
-        },
-        {
-            "id": "operators.pow_zero_negative_exponent",
-            "template": "{{ 0 ** -1 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "ZeroDivisionError",
-                "message": "0.0 cannot be raised to a negative power"
-            }
-        },
-        {
-            "id": "operators.int_max_no_overflow",
-            "template": "{{ 9223372036854775806 + 1 }}|{{ -9223372036854775807 - 1 }}|{{ 2 ** 62 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "9223372036854775807|-9223372036854775808|4611686018427387904"
-        },
-        {
-            "id": "operators.bool_arithmetic",
-            "template": "{{ true + true }}|{{ -true }}|{{ true * 3 }}|{{ 'ab' * true }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "2|-1|3|ab"
-        },
-        {
-            "id": "operators.float_equality_exact",
-            "template": "{{ 'T' if 0.1 + 0.2 == 0.3 else 'F' }}|{{ 'T' if 1 == 1.0 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T"
-        },
-        {
-            "id": "operators.int_float_compare_exact",
-            "template": "{{ 'T' if 9007199254740993 == 9007199254740992.0 else 'F' }}|{{ 'T' if 9007199254740993 > 9007199254740992.0 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T"
-        },
-        {
-            "id": "operators.ne_mixed_types",
-            "template": "{{ 'T' if x != 'a' else 'F' }}|{{ 'T' if x == 'a' else 'F' }}|{{ 'T' if n != 0 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|F|T"
-        },
-        {
-            "id": "operators.compare_none_raises",
-            "template": "{{ 'T' if n < 1 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "'<' not supported between instances of 'NoneType' and 'int'"
-            }
-        },
-        {
-            "id": "operators.unary_minus_string_raises",
-            "template": "{{ -s }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "bad operand type for unary -: 'str'"
-            }
-        },
-        {
-            "id": "operators.list_tuple_not_equal",
-            "template": "{{ 'T' if [1, 2] == (1, 2) else 'F' }}|{{ 'T' if (1, 2) == (1, 2) else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T"
-        },
-        {
-            "id": "operators.list_plus_tuple_raises",
-            "template": "{{ [1] + (2,) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "can only concatenate list (not \"tuple\") to list"
-            }
-        },
-        {
-            "id": "operators.list_times_negative",
-            "template": "{% for i in l * -1 %}{{ i }}{% endfor %}|{% for i in 2 * l %}{{ i }}{% endfor %}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "|312312"
-        },
-        {
-            "id": "operators.compare_lists_prefix",
-            "template": "{{ 'T' if [1, 2] < [1, 2, 0] else 'F' }}|{{ 'T' if [2] > [1, 9] else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|T"
-        },
-        {
-            "id": "operators.ne_dict",
-            "template": "{{ 'T' if {'a': 1} != {'a': 2} else 'F' }}|{{ 'T' if d == {'a': 1} else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|T"
-        },
-        {
-            "id": "operators.dict_lt_raises",
-            "template": "{{ 'T' if {} < {} else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "'<' not supported between instances of 'dict' and 'dict'"
-            }
-        },
-        {
-            "id": "operators.not_on_containers",
-            "template": "{{ 'T' if not l else 'F' }}|{{ 'T' if not [] else 'F' }}|{{ 'T' if not d else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T|F"
-        },
-        {
-            "id": "operators.truthiness_float",
-            "template": "{% if y %}t{% else %}f{% endif %}|{% if 1e-20 %}t{% else %}f{% endif %}|{{ 'T' if not 0.0 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "t|t|T"
-        },
-        {
-            "id": "operators.and_or_short_circuit_value",
-            "template": "{{ z and undefined_fn() }}|{{ x or undefined_fn() }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "0|3"
-        },
-        {
-            "id": "operators.in_dict_missing_key",
-            "template": "{{ 'T' if 'b' in d else 'F' }}|{{ 'T' if 'b' not in d else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T"
-        },
-        {
-            "id": "operators.int_min_guards",
-            "template": "{{ (-9223372036854775807 - 1) % -1 }}|{{ 'T' if -9223372036854775807 - 1 < -9223372036854775808.0 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "0|F"
-        },
-        {
-            "id": "operators.int_min_floordiv_overflow",
-            "template": "{{ (-9223372036854775807 - 1) // -1 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "9223372036854775808"
-        },
-        {
-            "id": "operators.empty_string_repeat_huge",
-            "template": "{{ ('' * 9223372036854775807)|length }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "0"
-        },
-        {
-            "id": "operators.precedence_or_and",
-            "template": "{{ 'T' if z and x or y else 'F' }}|{{ 'T' if x or z and z else 'F' }}|{{ 'T' if not z and x else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|T|T"
-        },
-        {
-            "id": "operators.precedence_not_compare_and",
-            "template": "{{ 'T' if not x == 3 and x else 'F' }}|{{ 'T' if not not x else 'F' }}|{{ 'T' if not x + 1 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T|F"
-        },
-        {
-            "id": "operators.precedence_arith_mix",
-            "template": "{{ 1 + 2 * 3 - 8 / 4 // 1 % 3 ** 2 }}|{{ 10 - 2 - 3 }}|{{ 64 / 4 / 2 }}|{{ 2 * 3 ** 2 * 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "5.0|5|8.0|36"
-        },
-        {
-            "id": "operators.precedence_concat_mix",
-            "template": "{{ s ~ 1 * 2 ~ y }}|{{ s + s ~ s }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "Hello22.5|HelloHelloHello"
-        },
-        {
-            "id": "operators.concat_chain_mixed",
-            "template": "{{ s + 'b' ~ x * 2 ~ y }}|{{ s ~ x ~ s | upper ~ n ~ l }}|{{ s ~ 'b' == 'Hellob' ~ '' }}|{{ not s ~ x }}|{{ 'a' ~ 'b' ~ s if x else 'd' }}|{{ (s ~ x) ~ (x ~ s) ~ nope ~ y }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "Hellob62.5|Hello3HELLONone[3, 1, 2]|True|False|abHello|Hello33Hello2.5"
-        },
-        {
-            "id": "operators.precedence_compare_operands",
-            "template": "{{ 'T' if x + 1 == 2 * 2 > x - 1 else 'F' }}|{{ 'T' if x - 3 not in l and 2 in l else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|T"
-        },
-        {
-            "id": "operators.precedence_unary_filter",
-            "template": "{{ -x|abs + 1 }}|{{ - - x }}|{{ 2 ** -x|abs }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "4|3|8"
-        },
-        {
-            "id": "operators.not_after_binary_operator",
-            "template": "{{ x + not z }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "compile",
-                "type": "TemplateSyntaxError",
-                "message": "expected token 'end of print statement', got 'z'"
-            }
-        },
-        {
-            "id": "operators.in_dict_non_string_key",
-            "template": "{{ 'T' if 1 in {1: 'a'} else 'F' }}|{{ 'T' if '1' in {1: 'a'} else 'F' }}|{{ 'T' if 1.0 in {1: 'a'} else 'F' }}|{{ 'T' if (1, 2) in {(1, 2): 'a'} else 'F' }}|{{ 'T' if none in {none: 'a'} else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|F|T|T|T"
-        },
-        {
-            "id": "operators.eq_dict_non_string_keys",
-            "template": "{{ 'T' if {1: 'a'} == {1.0: 'a'} else 'F' }}|{{ 'T' if {1: 'a'} == {'1': 'a'} else 'F' }}|{{ 'T' if {(1, 2): 3} == {(1.0, 2): 3} else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|F|T"
-        },
-        {
-            "id": "operators.in_dict_object_key",
-            "template": "{{ 'T' if nothing in {'': 1} else 'F' }}|{{ 'T' if namespace() in {'': 1} else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|F"
-        },
-        {
-            "id": "operators.not_in_dict_non_string_key",
-            "template": "{{ 'T' if 2 not in {1: 'a'} else 'F' }}|{{ 'T' if True in {1: 'a'} else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|T"
-        },
-        {
-            "id": "operators.int_big_compare_float",
-            "template": "{{ 'T' if 9223372036854775808 == 9223372036854775808.0 else 'F' }}|{{ 'T' if 9223372036854775809 > 9223372036854775808.0 else 'F' }}|{{ 'T' if 18446744073709551615 < 1e30 else 'F' }}|{{ 'T' if -18446744073709551615 < -1 else 'F' }}|{{ 'T' if 12345678901234567890 == 12345678901234567890 else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "T|T|T|T|T"
-        },
-        {
-            "id": "operators.int_big_true_div",
-            "template": "{{ 18446744073709551615 / 2 }}|{{ 18446744073709551615 + 0.5 }}|{{ 1.5 - 18446744073709551615 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "9.223372036854776e+18|1.8446744073709552e+19|-1.8446744073709552e+19"
-        },
-        {
-            "id": "operators.int_big_repeat",
-            "template": "{{ 'a' * 18446744073709551615 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "OverflowError",
-                "message": "cannot fit 'int' into an index-sized integer"
-            }
-        },
-        {
-            "id": "operators.in_none_raises",
-            "template": "{{ 1 in none }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "argument of type 'NoneType' is not iterable"
-            }
-        },
-        {
-            "id": "operators.not_in_none_raises",
-            "template": "{{ 1 not in n }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "argument of type 'NoneType' is not iterable"
-            }
-        },
-        {
-            "id": "operators.in_none_chained_raises",
-            "template": "{{ 0 < 1 in n }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "argument of type 'NoneType' is not iterable"
-            }
-        },
-        {
-            "id": "operators.in_test_none_raises",
-            "template": "{{ 1 is in none }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "argument of type 'NoneType' is not iterable"
-            }
-        },
-        {
-            "id": "operators.in_macro_raises",
-            "template": "{% macro m() %}{% endmacro %}{{ 1 in m }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "argument of type 'Macro' is not iterable"
-            }
-        },
-        {
-            "id": "operators.in_function_raises",
-            "template": "{{ 1 in lipsum }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "argument of type 'function' is not iterable"
-            }
-        },
-        {
-            "id": "operators.in_undefined_false",
-            "template": "{{ 'T' if 1 in nope else 'F' }}|{{ 'T' if 1 not in nope else 'F' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T"
-        },
-        {
-            "id": "operators.mod_undefined_no_conversion",
-            "template": "{{ 'xy' % nope }}|{{ s % nope }}|{{ ('xy'|safe) % nope }}|{{ 'x%%y' % nope }}|{{ 'x%sy' % nope }}|{{ ('x%sy'|safe) % nope }}|{{ 'x%ry' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "xy|Hello|xy|x%y|xy|xy|xUndefinedy"
-        },
-        {
-            "id": "operators.mod_undefined_key_raises",
-            "template": "{{ 'x%(a)sy' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.mod_undefined_int_raises",
-            "template": "{{ 'x%dy' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.mod_undefined_float_raises",
-            "template": "{{ 'x%fy' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.mod_undefined_hex_raises",
-            "template": "{{ 'x%xy' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "%x format: an integer is required, not Undefined"
-            }
-        },
-        {
-            "id": "operators.mod_undefined_two_args_raises",
-            "template": "{{ 'x%sy%sy' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "not enough arguments for format string"
-            }
-        },
-        {
-            "id": "operators.mod_undefined_in_tuple_raises",
-            "template": "{{ 'xy' % (nope,) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "not all arguments converted during string formatting"
-            }
-        },
-        {
-            "id": "operators.mod_undefined_int_left_raises",
-            "template": "{{ 5 % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.mod_undefined_strict",
-            "template": "{{ 'xy' % nope }}|{{ s % nope }}|{{ 'x%ry' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {
-                "undefined": "strict"
-            },
-            "templates": {},
-            "output": "xy|Hello|xUndefinedy"
-        },
-        {
-            "id": "operators.mod_undefined_strict_str_raises",
-            "template": "{{ 'x%sy' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {
-                "undefined": "strict"
-            },
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.mod_undefined_chainable_key",
-            "template": "{{ 'x%(a)sy' % nope }}|{{ 'x%(a)ry' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {
-                "undefined": "chainable"
-            },
-            "templates": {},
-            "output": "xy|xUndefinedy"
-        },
-        {
-            "id": "operators.mod_undefined_debug",
-            "template": "{{ 'x%sy' % nope }}|{{ 'xy' % nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {
-                "undefined": "debug"
-            },
-            "templates": {},
-            "output": "x{{ nope }}y|xy"
-        },
-        {
-            "id": "operators.undefined_plus_raises",
-            "template": "{{ 5 + nope }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.undefined_lt_raises",
-            "template": "{{ nope < 5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.undefined_chained_lt_raises",
-            "template": "{{ 0 < nope < 5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.undefined_pow_chainable_raises",
-            "template": "{{ nope ** 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {
-                "undefined": "chainable"
-            },
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "UndefinedError",
-                "message": "'nope' is undefined"
-            }
-        },
-        {
-            "id": "operators.undefined_eq_compares",
-            "template": "{{ 'T' if nope == 5 else 'F' }}|{{ 'T' if nope != 5 else 'F' }}|{{ 'T' if nope == nope else 'F' }}|{{ nope ~ 5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "F|T|T|5"
-        },
-        {
-            "id": "operators.bound_method_equals",
-            "template": "{{ 'a'.upper == 'a'.upper }}|{% set l = [1] %}{{ l.append == l.append }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "True|True"
-        },
-        {
-            "id": "operators.range_equals_list",
-            "template": "{{ range(3) == [0, 1, 2] }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "False"
-        },
-        {
-            "id": "operators.range_concat",
-            "template": "{{ range(3) + [1] }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "unsupported operand type(s) for +: 'range' and 'list'"
-            }
-        },
-        {
-            "id": "operators.range_equals_range",
-            "template": "{{ range(0) == range(2, 2) }}|{{ range(3) == range(0, 3, 1) }}|{{ range(1, 2) == range(1, 5, 9) }}|{{ range(3) != range(4) }}|{{ range(0, 4, 2) == range(0, 3, 2) }}|{{ range(3) == (0, 1, 2) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "True|True|True|True|True|False"
-        },
-        {
-            "id": "operators.list_concat_range",
-            "template": "{{ [1] + range(2) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "can only concatenate list (not \"range\") to list"
-            }
-        },
-        {
-            "id": "operators.tuple_concat_range",
-            "template": "{{ (1,) + range(2) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "can only concatenate tuple (not \"range\") to tuple"
-            }
-        },
-        {
-            "id": "operators.range_repeat",
-            "template": "{{ range(2) * 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "unsupported operand type(s) for *: 'range' and 'int'"
-            }
-        },
-        {
-            "id": "operators.range_ordering",
-            "template": "{{ range(3) < range(4) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "'<' not supported between instances of 'range' and 'range'"
-            }
-        },
-        {
-            "id": "operators.range_in_list",
-            "template": "{{ range(2) in [[0, 1]] }}|{{ range(2) in [range(0, 2)] }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "False|True"
-        },
-        {
-            "id": "operators.range_slice_is_range",
-            "template": "{{ range(3)[1:] }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "range(1, 3)"
-        },
-        {
-            "id": "operators.range_attributes",
-            "template": "{{ range(1, 9, 2).start }}|{{ range(1, 9, 2).stop }}|{{ range(1, 9, 2)|attr('step') }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "1|9|2"
-        },
-        {
-            "id": "operators.sequence_times_range",
-            "template": "{{ [1] * range(3) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "can't multiply sequence by non-int of type 'range'"
-            }
-        },
-        {
-            "id": "operators.max_of_ranges_message",
-            "template": "{{ [range(3), range(2)]|max }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "'>' not supported between instances of 'range' and 'range'"
-            }
-        },
-        {
-            "id": "operators.min_of_ranges_message",
-            "template": "{{ [range(3), range(2)]|min }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "'<' not supported between instances of 'range' and 'range'"
-            }
-        },
-        {
-            "id": "operators.range_slice_bounds",
-            "template": "{{ range(10)[1:6:2] }}|{{ range(10)[::-1] }}|{{ range(10)[::-3] }}|{{ range(0)[1:] }}|{{ range(3)[5:9] }}|{{ range(1, 9, 2)[1:].start }}|{{ range(3)[1:]|list }}|{{ range(3)[1:]|length }}|{{ range(3)[1:][0] }}|{{ range(3)[::2] == range(0, 3, 2) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "range(1, 6, 2)|range(9, -1, -1)|range(9, -1, -3)|range(0, 0)|range(3, 3)|3|[1, 2]|2|1|True"
-        },
-        {
-            "id": "operators.range_item_attributes",
-            "template": "{{ range(3)['start'] }}|{{ range(2, 5)['stop'] }}|{{ range(3)['nope'] is defined }}|{{ range(3).count(1) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "0|5|False|1"
-        },
-        {
-            "id": "operators.range_times_str",
-            "template": "{{ range(3) * 'a' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "can't multiply sequence by non-int of type 'range'"
-            }
-        },
-        {
-            "id": "operators.str_times_range",
-            "template": "{{ 'a' * range(3) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "can't multiply sequence by non-int of type 'range'"
-            }
-        },
-        {
-            "id": "operators.list_times_float",
-            "template": "{{ [1] * 1.5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "can't multiply sequence by non-int of type 'float'"
-            }
-        },
-        {
-            "id": "operators.format_field_range_attribute_item",
-            "template": "{{ '{0[start]}'.format(range(3)) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "range indices must be integers or slices, not str"
-            }
-        },
-        {
-            "id": "operators.format_field_list_str_key",
-            "template": "{{ '{0[count]}'.format([1]) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "list indices must be integers or slices, not str"
-            }
-        },
-        {
-            "id": "operators.format_field_str_str_key",
-            "template": "{{ '{0[a]}'.format('abc') }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "string indices must be integers, not 'str'"
-            }
-        },
-        {
-            "id": "operators.format_field_namedtuple_str_key",
-            "template": "{% for g in [{'a': 1}]|groupby('a') %}{{ '{0[grouper]}'.format(g) }}{% endfor %}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "tuple indices must be integers or slices, not str"
-            }
-        },
-        {
-            "id": "operators.format_field_sequence_index",
-            "template": "{{ '{0[1]}'.format(range(3)) }}|{{ '{0[0]}'.format('abc') }}|{{ '{0[a]}'.format({'a': 1}) }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "1|a|1"
-        },
-        {
-            "id": "operators.range_slice_step_int64_min",
-            "template": "{{ range(10)[::-9223372036854775808] }}|{{ range(10)[::-9223372036854775808].step }}|{{ range(10)[::-9223372036854775808]|list }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "range(9, -1, -9223372036854775808)|-9223372036854775808|[9]"
-        },
-        {
-            "id": "operators.markup_times_str",
-            "template": "{{ ('a'|safe) * 'b' }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "'str' object cannot be interpreted as an integer"
-            }
-        },
-        {
-            "id": "operators.markup_times_float",
-            "template": "{{ ('a'|safe) * 1.5 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "'float' object cannot be interpreted as an integer"
-            }
-        },
-        {
-            "id": "operators.markup_times_int",
-            "template": "{{ 2 * ('a'|safe) }}|{{ ('a'|safe) * true }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "output": "aa|a"
-        },
-        {
-            "id": "operators.dict_items_times_int",
-            "template": "{{ {'a': 1}.items() * 2 }}",
-            "context": {
-                "x": 3,
-                "y": 2.5,
-                "l": [
-                    3,
-                    1,
-                    2
-                ],
-                "s": "Hello",
-                "d": {
-                    "a": 1
-                },
-                "n": null,
-                "z": 0
-            },
-            "env": {},
-            "templates": {},
-            "error": {
-                "phase": "render",
-                "type": "TypeError",
-                "message": "unsupported operand type(s) for *: 'dict_items' and 'int'"
-            }
-        }
-    ]
+ "generator": "jinja2 3.1.6",
+ "area": "operators",
+ "cases": [
+  {
+   "id": "operators.add",
+   "template": "{{ 1 + 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "operators.sub",
+   "template": "{{ 1 - 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "-4"
+  },
+  {
+   "id": "operators.mul",
+   "template": "{{ 3 * 4 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "operators.div",
+   "template": "{{ 10 / 4 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "2.5"
+  },
+  {
+   "id": "operators.div_exact",
+   "template": "{{ 10 / 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "2.0"
+  },
+  {
+   "id": "operators.floordiv",
+   "template": "{{ 10 // 4 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "operators.floordiv_negative",
+   "template": "{{ -7 // 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "-4"
+  },
+  {
+   "id": "operators.floordiv_float",
+   "template": "{{ 7.5 // 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "3.0"
+  },
+  {
+   "id": "operators.mod",
+   "template": "{{ 10 % 3 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "operators.mod_negative",
+   "template": "{{ -7 % 3 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "operators.mod_float",
+   "template": "{{ 7.5 % 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1.5"
+  },
+  {
+   "id": "operators.pow",
+   "template": "{{ 2 ** 10 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1024"
+  },
+  {
+   "id": "operators.pow_right_assoc",
+   "template": "{{ 2 ** 3 ** 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "64"
+  },
+  {
+   "id": "operators.pow_negative_exponent",
+   "template": "{{ 2 ** -1 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "0.5"
+  },
+  {
+   "id": "operators.pow_float",
+   "template": "{{ 4 ** 0.5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "2.0"
+  },
+  {
+   "id": "operators.precedence",
+   "template": "{{ 1 + 2 * 3 - 4 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "operators.precedence_parens",
+   "template": "{{ (1 + 2) * 3 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "9"
+  },
+  {
+   "id": "operators.unary_minus_pow",
+   "template": "{{ -2 ** 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "4"
+  },
+  {
+   "id": "operators.unary_plus",
+   "template": "{{ +x }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "operators.unary_minus_var",
+   "template": "{{ -x }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "-3"
+  },
+  {
+   "id": "operators.int_float_add",
+   "template": "{{ x + y }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "5.5"
+  },
+  {
+   "id": "operators.div_by_zero",
+   "template": "{{ 1 / 0 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "operators.floordiv_by_zero",
+   "template": "{{ 1 // 0 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "integer division or modulo by zero"
+   }
+  },
+  {
+   "id": "operators.mod_by_zero",
+   "template": "{{ 1 % 0 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "integer modulo by zero"
+   }
+  },
+  {
+   "id": "operators.string_plus",
+   "template": "{{ 'a' + 'b' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "operators.string_plus_int",
+   "template": "{{ 'a' + 1 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate str (not \"int\") to str"
+   }
+  },
+  {
+   "id": "operators.string_times",
+   "template": "{{ 'ab' * 3 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "ababab"
+  },
+  {
+   "id": "operators.int_times_string",
+   "template": "{{ 3 * 'ab' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "ababab"
+  },
+  {
+   "id": "operators.list_plus",
+   "template": "{{ [1] + [2] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1, 2]"
+  },
+  {
+   "id": "operators.list_times",
+   "template": "{{ [1, 2] * 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1, 2, 1, 2]"
+  },
+  {
+   "id": "operators.tilde",
+   "template": "{{ 'a' ~ 1 ~ 2.5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "a12.5"
+  },
+  {
+   "id": "operators.tilde_none",
+   "template": "{{ 'a' ~ none }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "aNone"
+  },
+  {
+   "id": "operators.eq",
+   "template": "{{ 'T' if 1 == 1 else 'F' }}|{{ 'T' if 1 == 2 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|F"
+  },
+  {
+   "id": "operators.eq_int_float",
+   "template": "{{ 'T' if 1 == 1.0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.eq_dict_order_insensitive",
+   "template": "{{ 'T' if {'a': 1, 'b': 2} == {'b': 2, 'a': 1} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.eq_string_int",
+   "template": "{{ 'T' if '1' == 1 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "operators.eq_list",
+   "template": "{{ 'T' if [1, 2] == [1, 2] else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.eq_dict",
+   "template": "{{ {'a': 1} == {'a': 1} }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "operators.eq_same_list_nan",
+   "template": "{% set n = ('nan' if x else '')|float %}{% set l = [n] %}{{ l == l }}|{{ l != l }}|{{ l <= l }}|{{ [l] == [l] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|False|True|True"
+  },
+  {
+   "id": "operators.eq_same_dict_nan",
+   "template": "{% set d = {'a': ('nan' if x else '')|float} %}{{ d == d }}|{{ {'k': d} == {'k': d} }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True"
+  },
+  {
+   "id": "operators.eq_none",
+   "template": "{{ 'T' if n == none else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.ne",
+   "template": "{{ 'T' if 1 != 2 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.lt_gt",
+   "template": "{{ 'T' if 1 < 2 else 'F' }}{{ 'T' if 2 > 1 else 'F' }}{{ 'T' if 2 <= 2 else 'F' }}{{ 'T' if 3 >= 4 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTTF"
+  },
+  {
+   "id": "operators.compare_strings",
+   "template": "{{ 'T' if 'a' < 'b' else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.compare_lists",
+   "template": "{{ 'T' if [1, 2] < [1, 3] else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.compare_mixed_types",
+   "template": "{{ 'T' if 1 < 'a' else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'int' and 'str'"
+   }
+  },
+  {
+   "id": "operators.chained_compare",
+   "template": "{{ 'T' if 1 < 2 < 3 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.chained_compare_false",
+   "template": "{{ 'T' if 1 < 3 < 2 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "operators.chained_eq",
+   "template": "{{ 'T' if 1 == 1 == 1 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.in_list",
+   "template": "{{ 'T' if 2 in l else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.in_string",
+   "template": "{{ 'T' if 'ell' in s else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.in_dict",
+   "template": "{{ 'T' if 'a' in d else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.not_in",
+   "template": "{{ 'T' if 5 not in l else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.not_in_string",
+   "template": "{{ 'T' if 'z' not in s else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.and_value",
+   "template": "{{ x and 'yes' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "yes"
+  },
+  {
+   "id": "operators.and_falsy_value",
+   "template": "{{ z and 'yes' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "0"
+  },
+  {
+   "id": "operators.or_value",
+   "template": "{{ z or 'fallback' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "fallback"
+  },
+  {
+   "id": "operators.or_truthy_value",
+   "template": "{{ x or 'fallback' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "operators.and_or_idiom",
+   "template": "{{ x and 'yes' or 'no' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "yes"
+  },
+  {
+   "id": "operators.or_empty_list",
+   "template": "{{ [] or 'empty' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "empty"
+  },
+  {
+   "id": "operators.not",
+   "template": "{{ 'T' if not x else 'F' }}|{{ 'T' if not z else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.not_precedence",
+   "template": "{{ 'T' if not 1 == 2 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.and_short_circuit",
+   "template": "{{ 'T' if false and undefined_fn() else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "operators.or_short_circuit",
+   "template": "{{ 'T' if true or undefined_fn() else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.ternary",
+   "template": "{{ 'a' if x > 2 else 'b' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "a"
+  },
+  {
+   "id": "operators.ternary_no_else",
+   "template": "{{ 'a' if x > 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": ""
+  },
+  {
+   "id": "operators.ternary_nested",
+   "template": "{{ 'a' if x > 5 else 'b' if x > 2 else 'c' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "operators.truthiness_empty_string",
+   "template": "{% if '' %}t{% else %}f{% endif %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "f"
+  },
+  {
+   "id": "operators.truthiness_zero_float",
+   "template": "{% if 0.0 %}t{% else %}f{% endif %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "f"
+  },
+  {
+   "id": "operators.truthiness_empty_dict",
+   "template": "{% if {} %}t{% else %}f{% endif %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "f"
+  },
+  {
+   "id": "operators.truthiness_none",
+   "template": "{% if n %}t{% else %}f{% endif %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "f"
+  },
+  {
+   "id": "operators.int_overflow_mul",
+   "template": "{{ 9223372036854775807 * 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "18446744073709551614"
+  },
+  {
+   "id": "operators.int_big_pow",
+   "template": "{{ 2 ** 100 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1267650600228229401496703205376"
+  },
+  {
+   "id": "operators.int_plus_bool",
+   "template": "{{ 1 + true }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "operators.pow_precedence_over_add",
+   "template": "{{ 2 + 3 ** 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "11"
+  },
+  {
+   "id": "operators.pow_left_assoc",
+   "template": "{{ 2 ** 3 ** 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "64"
+  },
+  {
+   "id": "operators.pow_binds_tighter_than_minus",
+   "template": "{{ -2 ** 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "4"
+  },
+  {
+   "id": "operators.concat_precedence",
+   "template": "{{ 1 ~ 2 * 3 }}|{{ 'a' ~ 'b' == 'ab' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "16|True"
+  },
+  {
+   "id": "operators.not_before_filter",
+   "template": "{{ 'T' if not l|length else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "operators.unary_minus_before_filter",
+   "template": "{{ -3|abs }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "operators.chained_compare_not_in",
+   "template": "{{ 'T' if 1 < 2 not in [3] else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "operators.chained_in",
+   "template": "{{ 'b' in 'abc' in ['True'] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "operators.test_then_and",
+   "template": "{{ x is eq 3 and true }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "operators.test_then_filter",
+   "template": "{{ x is odd|tojson }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "true"
+  },
+  {
+   "id": "operators.test_arg_is_not_if",
+   "template": "{{ x is defined if 1 else 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'integer'"
+   }
+  },
+  {
+   "id": "operators.implicit_tuple",
+   "template": "{{ 1, 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "(1, 2)"
+  },
+  {
+   "id": "operators.floordiv_float_negative",
+   "template": "{{ -7.5 // 2 }}|{{ 7.5 // -2 }}|{{ -7.5 % 2 }}|{{ 7.5 % -2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "-4.0|-4.0|0.5|-0.5"
+  },
+  {
+   "id": "operators.mod_negative_divisor",
+   "template": "{{ 7 % -2 }}|{{ -7 % -2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "-1|-1"
+  },
+  {
+   "id": "operators.float_floordiv_by_zero",
+   "template": "{{ 1.5 // 0 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "float floor division by zero"
+   }
+  },
+  {
+   "id": "operators.float_mod_by_zero",
+   "template": "{{ 1.5 % 0.0 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "float modulo"
+   }
+  },
+  {
+   "id": "operators.pow_zero_negative_exponent",
+   "template": "{{ 0 ** -1 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "0.0 cannot be raised to a negative power"
+   }
+  },
+  {
+   "id": "operators.int_max_no_overflow",
+   "template": "{{ 9223372036854775806 + 1 }}|{{ -9223372036854775807 - 1 }}|{{ 2 ** 62 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "9223372036854775807|-9223372036854775808|4611686018427387904"
+  },
+  {
+   "id": "operators.bool_arithmetic",
+   "template": "{{ true + true }}|{{ -true }}|{{ true * 3 }}|{{ 'ab' * true }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "2|-1|3|ab"
+  },
+  {
+   "id": "operators.float_equality_exact",
+   "template": "{{ 'T' if 0.1 + 0.2 == 0.3 else 'F' }}|{{ 'T' if 1 == 1.0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.int_float_compare_exact",
+   "template": "{{ 'T' if 9007199254740993 == 9007199254740992.0 else 'F' }}|{{ 'T' if 9007199254740993 > 9007199254740992.0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.ne_mixed_types",
+   "template": "{{ 'T' if x != 'a' else 'F' }}|{{ 'T' if x == 'a' else 'F' }}|{{ 'T' if n != 0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|F|T"
+  },
+  {
+   "id": "operators.compare_none_raises",
+   "template": "{{ 'T' if n < 1 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'NoneType' and 'int'"
+   }
+  },
+  {
+   "id": "operators.unary_minus_string_raises",
+   "template": "{{ -s }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "bad operand type for unary -: 'str'"
+   }
+  },
+  {
+   "id": "operators.list_tuple_not_equal",
+   "template": "{{ 'T' if [1, 2] == (1, 2) else 'F' }}|{{ 'T' if (1, 2) == (1, 2) else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.list_plus_tuple_raises",
+   "template": "{{ [1] + (2,) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate list (not \"tuple\") to list"
+   }
+  },
+  {
+   "id": "operators.list_times_negative",
+   "template": "{% for i in l * -1 %}{{ i }}{% endfor %}|{% for i in 2 * l %}{{ i }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "|312312"
+  },
+  {
+   "id": "operators.compare_lists_prefix",
+   "template": "{{ 'T' if [1, 2] < [1, 2, 0] else 'F' }}|{{ 'T' if [2] > [1, 9] else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T"
+  },
+  {
+   "id": "operators.ne_dict",
+   "template": "{{ 'T' if {'a': 1} != {'a': 2} else 'F' }}|{{ 'T' if d == {'a': 1} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T"
+  },
+  {
+   "id": "operators.dict_lt_raises",
+   "template": "{{ 'T' if {} < {} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'dict' and 'dict'"
+   }
+  },
+  {
+   "id": "operators.not_on_containers",
+   "template": "{{ 'T' if not l else 'F' }}|{{ 'T' if not [] else 'F' }}|{{ 'T' if not d else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T|F"
+  },
+  {
+   "id": "operators.truthiness_float",
+   "template": "{% if y %}t{% else %}f{% endif %}|{% if 1e-20 %}t{% else %}f{% endif %}|{{ 'T' if not 0.0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "t|t|T"
+  },
+  {
+   "id": "operators.and_or_short_circuit_value",
+   "template": "{{ z and undefined_fn() }}|{{ x or undefined_fn() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "0|3"
+  },
+  {
+   "id": "operators.in_dict_missing_key",
+   "template": "{{ 'T' if 'b' in d else 'F' }}|{{ 'T' if 'b' not in d else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.int_min_guards",
+   "template": "{{ (-9223372036854775807 - 1) % -1 }}|{{ 'T' if -9223372036854775807 - 1 < -9223372036854775808.0 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "0|F"
+  },
+  {
+   "id": "operators.int_min_floordiv_overflow",
+   "template": "{{ (-9223372036854775807 - 1) // -1 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "9223372036854775808"
+  },
+  {
+   "id": "operators.empty_string_repeat_huge",
+   "template": "{{ ('' * 9223372036854775807)|length }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "0"
+  },
+  {
+   "id": "operators.precedence_or_and",
+   "template": "{{ 'T' if z and x or y else 'F' }}|{{ 'T' if x or z and z else 'F' }}|{{ 'T' if not z and x else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T|T"
+  },
+  {
+   "id": "operators.precedence_not_compare_and",
+   "template": "{{ 'T' if not x == 3 and x else 'F' }}|{{ 'T' if not not x else 'F' }}|{{ 'T' if not x + 1 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T|F"
+  },
+  {
+   "id": "operators.precedence_arith_mix",
+   "template": "{{ 1 + 2 * 3 - 8 / 4 // 1 % 3 ** 2 }}|{{ 10 - 2 - 3 }}|{{ 64 / 4 / 2 }}|{{ 2 * 3 ** 2 * 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "5.0|5|8.0|36"
+  },
+  {
+   "id": "operators.precedence_concat_mix",
+   "template": "{{ s ~ 1 * 2 ~ y }}|{{ s + s ~ s }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "Hello22.5|HelloHelloHello"
+  },
+  {
+   "id": "operators.concat_chain_mixed",
+   "template": "{{ s + 'b' ~ x * 2 ~ y }}|{{ s ~ x ~ s | upper ~ n ~ l }}|{{ s ~ 'b' == 'Hellob' ~ '' }}|{{ not s ~ x }}|{{ 'a' ~ 'b' ~ s if x else 'd' }}|{{ (s ~ x) ~ (x ~ s) ~ nope ~ y }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "Hellob62.5|Hello3HELLONone[3, 1, 2]|True|False|abHello|Hello33Hello2.5"
+  },
+  {
+   "id": "operators.precedence_compare_operands",
+   "template": "{{ 'T' if x + 1 == 2 * 2 > x - 1 else 'F' }}|{{ 'T' if x - 3 not in l and 2 in l else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T"
+  },
+  {
+   "id": "operators.precedence_unary_filter",
+   "template": "{{ -x|abs + 1 }}|{{ - - x }}|{{ 2 ** -x|abs }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "4|3|8"
+  },
+  {
+   "id": "operators.not_after_binary_operator",
+   "template": "{{ x + not z }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'z'"
+   }
+  },
+  {
+   "id": "operators.in_dict_non_string_key",
+   "template": "{{ 'T' if 1 in {1: 'a'} else 'F' }}|{{ 'T' if '1' in {1: 'a'} else 'F' }}|{{ 'T' if 1.0 in {1: 'a'} else 'F' }}|{{ 'T' if (1, 2) in {(1, 2): 'a'} else 'F' }}|{{ 'T' if none in {none: 'a'} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|F|T|T|T"
+  },
+  {
+   "id": "operators.eq_dict_non_string_keys",
+   "template": "{{ 'T' if {1: 'a'} == {1.0: 'a'} else 'F' }}|{{ 'T' if {1: 'a'} == {'1': 'a'} else 'F' }}|{{ 'T' if {(1, 2): 3} == {(1.0, 2): 3} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|F|T"
+  },
+  {
+   "id": "operators.in_dict_object_key",
+   "template": "{{ 'T' if nothing in {'': 1} else 'F' }}|{{ 'T' if namespace() in {'': 1} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|F"
+  },
+  {
+   "id": "operators.not_in_dict_non_string_key",
+   "template": "{{ 'T' if 2 not in {1: 'a'} else 'F' }}|{{ 'T' if True in {1: 'a'} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T"
+  },
+  {
+   "id": "operators.int_big_compare_float",
+   "template": "{{ 'T' if 9223372036854775808 == 9223372036854775808.0 else 'F' }}|{{ 'T' if 9223372036854775809 > 9223372036854775808.0 else 'F' }}|{{ 'T' if 18446744073709551615 < 1e30 else 'F' }}|{{ 'T' if -18446744073709551615 < -1 else 'F' }}|{{ 'T' if 12345678901234567890 == 12345678901234567890 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T|T|T|T"
+  },
+  {
+   "id": "operators.int_big_true_div",
+   "template": "{{ 18446744073709551615 / 2 }}|{{ 18446744073709551615 + 0.5 }}|{{ 1.5 - 18446744073709551615 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "9.223372036854776e+18|1.8446744073709552e+19|-1.8446744073709552e+19"
+  },
+  {
+   "id": "operators.int_big_repeat",
+   "template": "{{ 'a' * 18446744073709551615 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "OverflowError",
+    "message": "cannot fit 'int' into an index-sized integer"
+   }
+  },
+  {
+   "id": "operators.in_none_raises",
+   "template": "{{ 1 in none }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'NoneType' is not iterable"
+   }
+  },
+  {
+   "id": "operators.not_in_none_raises",
+   "template": "{{ 1 not in n }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'NoneType' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_none_chained_raises",
+   "template": "{{ 0 < 1 in n }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'NoneType' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_test_none_raises",
+   "template": "{{ 1 is in none }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'NoneType' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_macro_raises",
+   "template": "{% macro m() %}{% endmacro %}{{ 1 in m }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'Macro' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_function_raises",
+   "template": "{{ 1 in lipsum }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'function' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_undefined_false",
+   "template": "{{ 'T' if 1 in nope else 'F' }}|{{ 'T' if 1 not in nope else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.mod_undefined_no_conversion",
+   "template": "{{ 'xy' % nope }}|{{ s % nope }}|{{ ('xy'|safe) % nope }}|{{ 'x%%y' % nope }}|{{ 'x%sy' % nope }}|{{ ('x%sy'|safe) % nope }}|{{ 'x%ry' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "xy|Hello|xy|x%y|xy|xy|xUndefinedy"
+  },
+  {
+   "id": "operators.mod_undefined_key_raises",
+   "template": "{{ 'x%(a)sy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_int_raises",
+   "template": "{{ 'x%dy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_float_raises",
+   "template": "{{ 'x%fy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_hex_raises",
+   "template": "{{ 'x%xy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "%x format: an integer is required, not Undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_two_args_raises",
+   "template": "{{ 'x%sy%sy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not enough arguments for format string"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_in_tuple_raises",
+   "template": "{{ 'xy' % (nope,) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not all arguments converted during string formatting"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_int_left_raises",
+   "template": "{{ 5 % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_strict",
+   "template": "{{ 'xy' % nope }}|{{ s % nope }}|{{ 'x%ry' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "xy|Hello|xUndefinedy"
+  },
+  {
+   "id": "operators.mod_undefined_strict_str_raises",
+   "template": "{{ 'x%sy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_chainable_key",
+   "template": "{{ 'x%(a)sy' % nope }}|{{ 'x%(a)ry' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "xy|xUndefinedy"
+  },
+  {
+   "id": "operators.mod_undefined_debug",
+   "template": "{{ 'x%sy' % nope }}|{{ 'xy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "x{{ nope }}y|xy"
+  },
+  {
+   "id": "operators.undefined_plus_raises",
+   "template": "{{ 5 + nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.undefined_lt_raises",
+   "template": "{{ nope < 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.undefined_chained_lt_raises",
+   "template": "{{ 0 < nope < 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.undefined_pow_chainable_raises",
+   "template": "{{ nope ** 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.undefined_eq_compares",
+   "template": "{{ 'T' if nope == 5 else 'F' }}|{{ 'T' if nope != 5 else 'F' }}|{{ 'T' if nope == nope else 'F' }}|{{ nope ~ 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T|T|5"
+  },
+  {
+   "id": "operators.bound_method_equals",
+   "template": "{{ 'a'.upper == 'a'.upper }}|{% set l = [1] %}{{ l.append == l.append }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True"
+  },
+  {
+   "id": "operators.range_equals_list",
+   "template": "{{ range(3) == [0, 1, 2] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "operators.range_concat",
+   "template": "{{ range(3) + [1] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +: 'range' and 'list'"
+   }
+  },
+  {
+   "id": "operators.range_equals_range",
+   "template": "{{ range(0) == range(2, 2) }}|{{ range(3) == range(0, 3, 1) }}|{{ range(1, 2) == range(1, 5, 9) }}|{{ range(3) != range(4) }}|{{ range(0, 4, 2) == range(0, 3, 2) }}|{{ range(3) == (0, 1, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True|True|True|True|False"
+  },
+  {
+   "id": "operators.list_concat_range",
+   "template": "{{ [1] + range(2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate list (not \"range\") to list"
+   }
+  },
+  {
+   "id": "operators.tuple_concat_range",
+   "template": "{{ (1,) + range(2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate tuple (not \"range\") to tuple"
+   }
+  },
+  {
+   "id": "operators.range_repeat",
+   "template": "{{ range(2) * 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for *: 'range' and 'int'"
+   }
+  },
+  {
+   "id": "operators.range_ordering",
+   "template": "{{ range(3) < range(4) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'range' and 'range'"
+   }
+  },
+  {
+   "id": "operators.range_in_list",
+   "template": "{{ range(2) in [[0, 1]] }}|{{ range(2) in [range(0, 2)] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|True"
+  },
+  {
+   "id": "operators.range_slice_is_range",
+   "template": "{{ range(3)[1:] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "range(1, 3)"
+  },
+  {
+   "id": "operators.range_attributes",
+   "template": "{{ range(1, 9, 2).start }}|{{ range(1, 9, 2).stop }}|{{ range(1, 9, 2)|attr('step') }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1|9|2"
+  },
+  {
+   "id": "operators.sequence_times_range",
+   "template": "{{ [1] * range(3) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can't multiply sequence by non-int of type 'range'"
+   }
+  },
+  {
+   "id": "operators.max_of_ranges_message",
+   "template": "{{ [range(3), range(2)]|max }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'>' not supported between instances of 'range' and 'range'"
+   }
+  },
+  {
+   "id": "operators.min_of_ranges_message",
+   "template": "{{ [range(3), range(2)]|min }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'range' and 'range'"
+   }
+  },
+  {
+   "id": "operators.range_slice_bounds",
+   "template": "{{ range(10)[1:6:2] }}|{{ range(10)[::-1] }}|{{ range(10)[::-3] }}|{{ range(0)[1:] }}|{{ range(3)[5:9] }}|{{ range(1, 9, 2)[1:].start }}|{{ range(3)[1:]|list }}|{{ range(3)[1:]|length }}|{{ range(3)[1:][0] }}|{{ range(3)[::2] == range(0, 3, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "range(1, 6, 2)|range(9, -1, -1)|range(9, -1, -3)|range(0, 0)|range(3, 3)|3|[1, 2]|2|1|True"
+  },
+  {
+   "id": "operators.range_item_attributes",
+   "template": "{{ range(3)['start'] }}|{{ range(2, 5)['stop'] }}|{{ range(3)['nope'] is defined }}|{{ range(3).count(1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "0|5|False|1"
+  },
+  {
+   "id": "operators.range_times_str",
+   "template": "{{ range(3) * 'a' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can't multiply sequence by non-int of type 'range'"
+   }
+  },
+  {
+   "id": "operators.str_times_range",
+   "template": "{{ 'a' * range(3) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can't multiply sequence by non-int of type 'range'"
+   }
+  },
+  {
+   "id": "operators.list_times_float",
+   "template": "{{ [1] * 1.5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can't multiply sequence by non-int of type 'float'"
+   }
+  },
+  {
+   "id": "operators.format_field_range_attribute_item",
+   "template": "{{ '{0[start]}'.format(range(3)) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "range indices must be integers or slices, not str"
+   }
+  },
+  {
+   "id": "operators.format_field_list_str_key",
+   "template": "{{ '{0[count]}'.format([1]) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "list indices must be integers or slices, not str"
+   }
+  },
+  {
+   "id": "operators.format_field_str_str_key",
+   "template": "{{ '{0[a]}'.format('abc') }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "string indices must be integers, not 'str'"
+   }
+  },
+  {
+   "id": "operators.format_field_namedtuple_str_key",
+   "template": "{% for g in [{'a': 1}]|groupby('a') %}{{ '{0[grouper]}'.format(g) }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "tuple indices must be integers or slices, not str"
+   }
+  },
+  {
+   "id": "operators.format_field_sequence_index",
+   "template": "{{ '{0[1]}'.format(range(3)) }}|{{ '{0[0]}'.format('abc') }}|{{ '{0[a]}'.format({'a': 1}) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1|a|1"
+  },
+  {
+   "id": "operators.range_slice_step_int64_min",
+   "template": "{{ range(10)[::-9223372036854775808] }}|{{ range(10)[::-9223372036854775808].step }}|{{ range(10)[::-9223372036854775808]|list }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "range(9, -1, -9223372036854775808)|-9223372036854775808|[9]"
+  },
+  {
+   "id": "operators.markup_times_str",
+   "template": "{{ ('a'|safe) * 'b' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'str' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "operators.markup_times_float",
+   "template": "{{ ('a'|safe) * 1.5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'float' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "operators.markup_times_int",
+   "template": "{{ 2 * ('a'|safe) }}|{{ ('a'|safe) * true }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "aa|a"
+  },
+  {
+   "id": "operators.dict_items_times_int",
+   "template": "{{ {'a': 1}.items() * 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for *: 'dict_items' and 'int'"
+   }
+  }
+ ]
 }
