@@ -523,9 +523,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0453](0453-host-sequence-subclass-pprint.md) | pprint of a host list subclass that overrides `__iter__` | api | low | open |
 | [0454](0454-stack-canary-hot-frames.md) | Hot frames that gain a stack canary under -fstack-protector-strong | perf | medium | open |
 | [0455](0455-debug-checks-by-contract-level.md) | RenderContext's debug-only invariants follow the contract level, not NDEBUG | robustness | low | open |
-| [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | open |
+| [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | done |
 | [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | done |
-| [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
+| [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | done |
 | [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | done |
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | done |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
@@ -554,6 +554,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | open |
 | [0491](0491-nested-render-closure-and-self-after-its-end.md) | A nested render's closures and `self` stored in a shared global lose their frames | parity | low | open |
 | [0492](0492-nested-render-kept-trees-outside-the-memory-budget.md) | The trees an outer render keeps for its nested renders are outside the memory budget | robustness | high | open |
+| [0493](0493-generate-items-markup.md) | generate() items are str where Jinja2 yields Markup | parity | low | open |
+| [0494](0494-include-odd-names.md) | Include names Jinja2 rejects with other classes | parity | low | open |
 | [0495](0495-strict-undefined-compare-leftovers.md) | StrictUndefined in the tests and methods that compare | parity | low | open |
 | [0496](0496-dict-view-leftovers.md) | What dict views still lack after 0489 | parity | low | open |
 | [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | open |
+| [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | open |

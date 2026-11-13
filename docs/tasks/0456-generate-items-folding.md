@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0436]
 touches: [src/renderer.h, src/statements.cpp, src/template_parser.cpp]
 shares: [python/tests/test_generate.py]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/881
 ---
 # generate() items where Jinja2 folds output into one
 
