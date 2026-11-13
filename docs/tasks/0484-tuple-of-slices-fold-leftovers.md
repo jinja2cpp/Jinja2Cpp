@@ -72,7 +72,7 @@ does for the subscript itself; or keep the line and its use as the fallback samp
   parts (`visit_Output`), so under StrictUndefined the candidates inside it are not evaluated.
 - Comparing lists, tuples and dicts compares their items with `==`, and `in` its items, which a
   StrictUndefined refuses; lists of different lengths are unequal without their items being compared.
-- The Python module's `NOPARSE` sample is now `{% if [1][:, :]|sort|first %}{% endif %}` (0492).
+- The Python module's `NOPARSE` sample is now `{% if [1][:, :]|sort|first %}{% endif %}` (0497).
 
-Left for 0492: the fold of one step of a filter chain, the strict generator filters, the per-Load
+Left for 0497: the fold of one step of a filter chain, the strict generator filters, the per-Load
 cost under StrictUndefined and the per-render cost of a folded subscript.

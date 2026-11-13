@@ -1,4 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
-subscripts.tuple_of_slices_chain_step rejects 0492 Jinja2 folds each step of a filter chain, here [1][:, :]|sort, to a constant; the engine's fold candidate is the whole chain, whose value (an undefined) does not fold
+subscripts.tuple_of_slices_chain_step rejects 0497 Jinja2 folds each step of a filter chain, here [1][:, :]|sort, to a constant; the engine's fold candidate is the whole chain, whose value (an undefined) does not fold

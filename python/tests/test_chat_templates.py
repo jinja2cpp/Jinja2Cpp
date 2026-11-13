@@ -144,7 +144,7 @@ def test_patch_assistant_mask_uses_transformers(patched):
 
 
 def test_patch_hands_unloadable_templates_to_transformers(patched):
-    # A syntax jinja2cpp lacks (a tuple of slices a step of a filter chain folds, task 0492) compiles in
+    # A syntax jinja2cpp lacks (a tuple of slices a step of a filter chain folds, task 0497) compiles in
     # transformers' environment
     compiled = patched._compile_jinja_template("{{ 1 }}{% if [1][:, :]|sort|first %}{% endif %}{{ 2 }}")
     assert not isinstance(compiled, integration.ChatTemplate)

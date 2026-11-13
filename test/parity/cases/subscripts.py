@@ -148,6 +148,6 @@ CASES = [
     ("tuple_of_slices_strict_statement_filter", "{% set q = 1 if true else ()[:, :]|length %}[{{ q }}]", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_chainable_nested", "[{{ [1][:, :][:, :] is undefined }}|{{ [1][:, :].a[:, :] }}|{{ [1][:, :][:, :] }}]", {"env": {"undefined": "chainable"}}),
     ("tuple_of_slices_nested_default", "[{{ [1][:, :][:, :] is undefined }}]"),
-    # a step of a filter chain folds on its own; the engine's candidate is the whole chain (0492)
+    # a step of a filter chain folds on its own; the engine's candidate is the whole chain (0497)
     ("tuple_of_slices_chain_step", "[{% if [1][:, :]|sort|first %}y{% endif %}]"),
 ]
