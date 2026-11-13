@@ -370,6 +370,9 @@ namespace
 // Out of line, so that the int comparison below needs no frame of its own (docs/tasks/0286)
 JINJA2CPP_NOINLINE_INLINE bool IsInEqualByValue(const InternalValue& item, const InternalValue& value)
 {
+    // Python's `in` compares with ==, which a StrictUndefined refuses (docs/tasks/0484)
+    CheckUndefinedUse(item, UndefinedUse::Operator);
+    CheckUndefinedUse(value, UndefinedUse::Operator);
     if (visitors::IsNumber(item) && visitors::IsNumber(value))
     {
         return ConvertToBool(visitors::ApplyToNumbers(item, value, BinaryExpression::LogicalEq));

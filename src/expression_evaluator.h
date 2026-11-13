@@ -866,6 +866,7 @@ public:
     BinaryExpression& operator=(const BinaryExpression&) = delete;
     BinaryExpression& operator=(BinaryExpression&&) = delete;
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsLogical() const { return m_oper == LogicalAnd || m_oper == LogicalOr; }
     InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;

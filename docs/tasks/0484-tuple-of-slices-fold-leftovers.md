@@ -1,10 +1,11 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0471]
 touches: [src/expression_parser.cpp#ParseSubscript]
 shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt, python/tests/test_fallback.py]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pulls?q=head%3Aclaude%2Fproject-thread-xfcy8l
 ---
 # Tuple-of-slices folds the Load check still decides differently from Jinja2
 
@@ -56,3 +57,22 @@ does for the subscript itself; or keep the line and its use as the fallback samp
 
 **Done when.** The cases match in narrow and wide runs and its divergence lines are gone; then
 `NOPARSE` needs another syntax the engine lacks, or the tests that need one are dropped.
+
+**Resolution (parity batch 7).**
+
+- An item or attribute of the undefined a tuple of slices folds to is a plain subscript of it
+  (ParseSubscript no longer rejects it). Its evaluation fails as Jinja2's fold of it does, so the
+  Load's check (`FoldCheckPasses`) decides as for any candidate; under ChainableUndefined it is the
+  undefined itself, also a tuple of slices of it (`TupleSliceExpression::Evaluate`).
+- Every operator node (`and`/`or`, arithmetic, `~`, comparisons, `not`, unary `-`) is a fold
+  candidate, as in Jinja2's optimizer. With StrictUndefined a candidate's failure fails the Load only
+  where Jinja2's `as_const` lets the UndefinedError out (`and`, `or`, `~`, a conditional, an output);
+  an arithmetic operator, a comparison, `not`, a subscript, a filter or a test gives Impossible
+  (`FoldCandidate::failsLoad`). An output that folds is folded whole before the optimizer sees its
+  parts (`visit_Output`), so under StrictUndefined the candidates inside it are not evaluated.
+- Comparing lists, tuples and dicts compares their items with `==`, and `in` its items, which a
+  StrictUndefined refuses; lists of different lengths are unequal without their items being compared.
+- The Python module's `NOPARSE` sample is now `{% if [1][:, :]|sort|first %}{% endif %}` (0492).
+
+Left for 0492: the fold of one step of a filter chain, the strict generator filters, the per-Load
+cost under StrictUndefined and the per-render cost of a folded subscript.

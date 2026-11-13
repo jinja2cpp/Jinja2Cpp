@@ -137,4 +137,14 @@ CASES = [
     ("chainable_undefined_name_attr", "{{ foo.bar['baz']._undefined_name }}|{{ foo._undefined_name }}", {"env": {"undefined": "chainable"}, "ctx": {"foo": 42}}),
     ("chainable_undefined_name_item", "{{ foo.bar['baz']._undefined_name }}", {"env": {"undefined": "chainable"}, "ctx": {"foo": {"bar": 42}}}),
     ("chainable_undefined_name_list", "{{ foo.x[0]._undefined_name }}|{{ foo.x[0]._undefined_name is number }}", {"env": {"undefined": "chainable"}, "ctx": {"foo": {"x": []}}}),
+    # task 0484: a list, tuple or dict compares its items with ==, and `in` its items with ==,
+    # which StrictUndefined refuses; the first differing item or a length stops it first
+    ("strict_list_compare", "{{ [1, 2] == [1, nope] }}", STRICT),
+    ("strict_list_compare_ne", "{{ [nope] != [1] }}", STRICT),
+    ("strict_list_order", "{{ [1, nope] < [1, 2] }}", STRICT),
+    ("strict_dict_compare", "{{ {'a': nope} == {'a': 1} }}", STRICT),
+    ("strict_in_list", "{{ 1 in [nope] }}", STRICT),
+    ("strict_undefined_in_list", "{{ nope in [1] }}", STRICT),
+    ("strict_compare_stops_early", "{{ (1, nope) == (2, nope) }}|{{ [1] == [nope, nope] }}|{{ {'a': nope} == {'b': 1} }}|{{ 2 in [2, nope] }}", STRICT),
+    ("default_list_compare", "{{ [nope] == [1] }}|{{ [nope] == [nope2] }}|{{ 1 in [nope] }}|{{ {'a': nope} == {'a': 1} }}"),
 ]

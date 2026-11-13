@@ -3354,6 +3354,676 @@
     "type": "UndefinedError",
     "message": "tuple object has no element (slice(None, None, None), slice(None, None, None))"
    }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_operator_folds",
+   "template": "[{{ x or 'ab'[1:, 1] ~ ()[:, :] }}|{{ x == [1][:, :] ~ ()[:, :] }}|{{ x ~ ([1][:, :] == 1) }}|{{ x ~ (not [1][:, :]) }}|{{ x ~ ([1][:, :] or 2) }}|{{ x ~ ([1][:, :] is undefined or y) }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[|False|False|True|2|True]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_operator_fails",
+   "template": "[{{ x ~ ([1][:, :] + 1) }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 13)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_operator_unary_fails",
+   "template": "[{{ x ~ -[1][:, :] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 13)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_item_call",
+   "template": "[{{ [1][:, :].x() }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 12)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_item_call_not_evaluated",
+   "template": "[{{ true or [1][:, :].x() }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[True]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_item_test",
+   "template": "[{{ [1][:, :][0] is undefined }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 18)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_item_chainable",
+   "template": "[{{ [1][:, :][0].b is undefined }}|{{ x ~ [1][:, :].a }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 19)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_item_strict",
+   "template": "[{{ true or [1][:, :][0] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "[True]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_item_fails",
+   "template": "[{{ [1][:, :][0] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 12)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_operator_impossible",
+   "template": "[{{ true if 1 else ()[:, :] + 1 }}|{{ true if 1 else ()[:, :] == 1 }}|{{ true if 1 else not ()[:, :] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "[True|True|True]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_concat_inside",
+   "template": "{% set q = 1 if true else (()[:, :] ~ 'a') %}[{{ q }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "tuple object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_and",
+   "template": "[{{ 1 if true else (true and ()[:, :]) }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_output_first",
+   "template": "[{{ ()[:, :] ~ 1 if false else 2 }}|{{ 1 if true else (()[:, :] or 1) }}|{{ 1 or ()[:, :]|trim }}|{{ true if 1 else ()[:, :]|length }}|{{ true if 1 else ()[:, :][0] }}|{% print 1 if true else (()[:, :] and 1), 2 %}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "[2|1|1|True|True|12]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_statement_bottom_up",
+   "template": "{% set q = ()[:, :] ~ 1 if false else 2 %}[{{ q }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "tuple object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_output_bottom_up",
+   "template": "[{{ x ~ (()[:, :] ~ 1) }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "tuple object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_statement_filter",
+   "template": "{% set q = 1 if true else ()[:, :]|length %}[{{ q }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_chainable_nested",
+   "template": "[{{ [1][:, :][:, :] is undefined }}|{{ [1][:, :].a[:, :] }}|{{ [1][:, :][:, :] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "[True||]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_nested_default",
+   "template": "[{{ [1][:, :][:, :] is undefined }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 18)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_chain_step",
+   "template": "[{% if [1][:, :]|sort|first %}y{% endif %}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
   }
  ]
 }

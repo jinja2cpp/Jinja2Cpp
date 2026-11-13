@@ -1916,6 +1916,148 @@
    },
    "templates": {},
    "output": "0|True"
+  },
+  {
+   "id": "undefined.strict_list_compare",
+   "template": "{{ [1, 2] == [1, nope] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_list_compare_ne",
+   "template": "{{ [nope] != [1] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_list_order",
+   "template": "{{ [1, nope] < [1, 2] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_dict_compare",
+   "template": "{{ {'a': nope} == {'a': 1} }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_in_list",
+   "template": "{{ 1 in [nope] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_undefined_in_list",
+   "template": "{{ nope in [1] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_compare_stops_early",
+   "template": "{{ (1, nope) == (2, nope) }}|{{ [1] == [nope, nope] }}|{{ {'a': nope} == {'b': 1} }}|{{ 2 in [2, nope] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "False|False|False|True"
+  },
+  {
+   "id": "undefined.default_list_compare",
+   "template": "{{ [nope] == [1] }}|{{ [nope] == [nope2] }}|{{ 1 in [nope] }}|{{ {'a': nope} == {'a': 1} }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|True|False|False"
   }
  ]
 }

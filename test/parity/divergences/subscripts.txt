@@ -1,7 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
-subscripts.tuple_of_slices_item_not_evaluated rejects 0484 the parser rejects an item or attribute of a subscript by a tuple of slices, also where Jinja2 folds an expression around it without evaluating it
-subscripts.tuple_of_slices_chainable_item rejects 0484 under ChainableUndefined an attribute of the undefined such a subscript folds to folds too; the parser rejects any attribute or item of it
-subscripts.tuple_of_slices_strict_short_circuit accepts 0484 Jinja2's optimizer folds every expression of the tree, so a strict undefined fails inside an or that a folded test skips; the engine's candidates cover only the expressions it records
-subscripts.tuple_of_slices_strict_list_compare accepts 0484 comparing lists holding a strict undefined raises in Python; the engine compares them without using the undefined
+subscripts.tuple_of_slices_chain_step rejects 0492 Jinja2 folds each step of a filter chain, here [1][:, :]|sort, to a constant; the engine's fold candidate is the whole chain, whose value (an undefined) does not fold
