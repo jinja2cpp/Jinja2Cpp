@@ -4,6 +4,7 @@ priority: low
 area: robustness
 depends: [0424]
 touches: [src/internal_value.cpp, src/borrowed_cells.h, src/cycle_collector.h, src/cycle_collector.cpp, src/template_module.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/884
 shares: [test/template_module_test.cpp]
 ---
 # A self-holding container a module's call hands a host leaks when the host keeps it

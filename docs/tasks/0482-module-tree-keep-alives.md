@@ -4,6 +4,7 @@ priority: low
 area: robustness
 depends: [0313]
 touches: [src/template_impl.h, src/statements.cpp, src/statements.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/884
 shares: [src/template_module.cpp, src/template_slots.h, test/template_module_test.cpp, test/allocation_failure_test.cpp]
 ---
 # End the trees a module replaced on a source change
