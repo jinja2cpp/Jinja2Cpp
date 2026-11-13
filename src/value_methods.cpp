@@ -1808,7 +1808,7 @@ struct StrOps
         {
             // A sequence takes an index only: GetItem would fall back to its attributes ('{0[start]}' of a range, a
             // named tuple's field), which only the sandbox's formatter reaches through getitem (docs/tasks/0475)
-            const bool plainFormatter = IsStringValue(key) && !context.GetSandboxPolicy();
+            const bool plainFormatter = IsStringValue(key) && context.GetSandboxPolicy() == nullptr;
             if (plainFormatter)
             {
                 ThrowIfSequence(value);
