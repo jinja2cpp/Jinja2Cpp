@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_IMPL_H
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
+#include "borrowed_cells.h"
 #include "cycle_collector.h"
 #include "dialect.h"
 #include "error_boundary.h"
@@ -160,6 +161,27 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
     return cached;
 }
 
+// The collector of the outermost render running on this thread whose snapshot of the globals is
+// `globals`: a render that shares it (GetGlobalsSnapshot) keeps there what its values need, as a
+// value it stores in a global can outlive it there (CycleCollector::KeepTree, docs/tasks/0481).
+// Null for a render that runs inside no other one, or that reads globals of its own
+inline CycleCollector* SharedSnapshotKeeper(const RenderWorkspace& workspace, const GlobalsSnapshot* globals) noexcept
+{
+    CycleCollector* keeper = nullptr;
+    for (const auto* running = workspace.Running(); running; running = running->outer)
+    {
+        if (running->collector && running->owner && running->owner->get() == globals)
+        {
+            keeper = running->collector;
+        }
+    }
+    return keeper;
+}
+
+// A host Value as a value the template owns, copied and converted by value, so that a value it
+// is stored in never refers to the host's (template_module.cpp)
+InternalValue OwnedArgument(const Value& value);
+
 class ITemplateImpl
 {
 public:
@@ -275,7 +297,10 @@ template<typename CharT>
 struct TemplateModuleState;
 
 template<typename CharT>
-class TemplateImpl : public ITemplateImpl
+class TemplateImpl
+    : public ITemplateImpl
+    // A render nested in another one keeps its template alive past its end (CycleCollector::KeepTree)
+    , public std::enable_shared_from_this<TemplateImpl<CharT>>
 {
 public:
     using ThisType = TemplateImpl<CharT>;
@@ -537,6 +562,40 @@ public:
 
     // `hooks` (with hasHooks set) brings the render's own globals and poll (RenderHooks). A
     // separate instantiation, so that the ordinary Render pays nothing for them
+    // RenderCore of a render started inside another one: the collector of the outermost render that
+    // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
+    // again as copies of `params`, or of the values a GenericMap gave (`genericValues`), so that the host's
+    // accessor is not asked twice (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
+    template<typename ParamsMap>
+    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace,
+                                                          const GlobalsSnapshot& globals,
+                                                          [[maybe_unused]] const ParamsMap& params,
+                                                          [[maybe_unused]] const std::list<std::pair<std::string, Value>>& genericValues,
+                                                          InternalValueMap& intParams) const
+    {
+        auto* keeper = SharedSnapshotKeeper(workspace, &globals);
+        if (!keeper)
+        {
+            return nullptr;
+        }
+        keeper->KeepTree(this->weak_from_this().lock());
+        if constexpr (std::is_same_v<ParamsMap, GenericMap>)
+        {
+            for (const auto& [name, value] : genericValues)
+            {
+                intParams[name] = OwnedArgument(value);
+            }
+        }
+        else
+        {
+            for (const auto& [name, value] : params)
+            {
+                intParams[name] = OwnedArgument(value);
+            }
+        }
+        return keeper;
+    }
+
     template<bool hasHooks, typename Target, typename ParamsMap>
     std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const RenderHooks* hooks) const
     {
@@ -575,7 +634,7 @@ public:
         {
             // First, so that it ends last: when nothing of the render holds values any more
             // It also keeps the render's copies of the host's data (docs/tasks/0049)
-            const CycleCollector cycles;
+            CycleCollector cycles;
             // Before the limits, which start counting the steps to the first poll. Nothing at all for an ordinary render
             std::conditional_t<hasHooks, std::optional<HostPollScope>, NoPollScope> pollScope;
             const auto poll = InstallPoll(pollScope, hooks);
@@ -590,18 +649,19 @@ public:
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
             auto& intParams = maps.Params();
-
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
                 intParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
 
-            // A GenericMap returns values by copy; the context refers to them, so they live here
-            std::list<Value> genericValues;
+            // A GenericMap returns values by copy; the context refers to them, so they live here, each
+            // with its name, so that a keep converts them again without asking the host twice
+            std::list<std::pair<std::string, Value>> genericValues;
             if constexpr (std::is_same_v<ParamsMap, GenericMap>)
             {
                 for (auto& name : params.GetKeys())
                 {
-                    convertParam(name, genericValues.emplace_back(params.GetValueByName(name)));
+                    auto& entry = genericValues.emplace_back(name, params.GetValueByName(name));
+                    convertParam(entry.first, entry.second);
                 }
             }
             else
@@ -611,8 +671,21 @@ public:
                     convertParam(name, value);
                 }
             }
+            // A render started inside another one that shares its globals: a value it stores in a
+            // global outlives it in the outer render, which keeps this template and the params'
+            // copies alive until it ends, as the host may destroy both once this render returns
+            // (docs/tasks/0481). One compare for a render that runs inside no other one
+            CycleCollector* keeper = nullptr;
+            if (JINJA2CPP_CELL_UNLIKELY(maps.Workspace().Running() != nullptr) && globals)
+            {
+                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, genericValues, intParams);
+            }
             RendererCallback callback(this);
-            callback.SetGlobals(maps.Workspace(), globals);
+            callback.SetGlobals(maps.Workspace(), globals, cycles);
+            if (keeper)
+            {
+                callback.SetKeeper(keeper);
+            }
             const InternalValueMap& renderGlobals = hostGlobals ? *hostGlobals : globals ? globals->values
                                                                                          : noGlobals;
             RenderContext context(intParams,
@@ -1045,15 +1118,17 @@ private:
         // The render reads `globals` (null without an environment); the renders started inside it
         // find them here (GetGlobalsSnapshot, docs/tasks/0324). The callback is the render's own
         // object whose address the render hands out anyway, so naming them costs it no reloads
-        void SetGlobals(RenderWorkspace& workspace, const std::shared_ptr<const GlobalsSnapshot>& globals) noexcept
+        void SetGlobals(RenderWorkspace& workspace, const std::shared_ptr<const GlobalsSnapshot>& globals, CycleCollector& collector) noexcept
         {
             m_globals = globals.get();
             m_workspace = &workspace;
-            m_running = { &globals, workspace.Running() };
+            m_running = { &globals, workspace.Running(), &collector };
             workspace.SetRunning(&m_running);
         }
         // A module's callback outlives the call that made it, so it names its globals to no render
         void SetGlobals(const GlobalsSnapshot* globals) noexcept { m_globals = globals; }
+        // The outer render that keeps the templates this one loads (SharedSnapshotKeeper)
+        void SetKeeper(CycleCollector* keeper) noexcept { m_keeper = keeper; }
         RendererCallback(const RendererCallback&) = delete;
         RendererCallback(RendererCallback&&) = delete;
         RendererCallback& operator=(const RendererCallback&) = delete;
@@ -1080,7 +1155,10 @@ private:
             if (p == loaded.end())
             {
                 CountTemplateLoad();
-                auto& entry = loaded.emplace(fileName, LoadedTemplate{ m_host->LoadTemplate(fileName), nullptr }).first->second;
+                // Kept first: a keep that fails to allocate leaves nothing the next lookup finds unkept
+                auto result = m_host->LoadTemplate(fileName);
+                KeepLoaded(result);
+                auto& entry = loaded.emplace(fileName, LoadedTemplate{ std::move(result), nullptr }).first->second;
                 entry.latest = &entry.first;
                 return entry.first;
             }
@@ -1094,6 +1172,7 @@ private:
                 // tree per use when nothing caches the template (docs/tasks/0313)
                 if (!IsSameTemplate(result, *entry.latest))
                 {
+                    KeepLoaded(result);
                     entry.latest = &Loaded().replaced.emplace_back(std::move(result));
                 }
                 else
@@ -1318,6 +1397,28 @@ private:
             return *m_loaded;
         }
         mutable std::unique_ptr<LoadedTemplates> m_loaded;
+        // SetKeeper's: null but for a render nested in another one that shares its globals
+        CycleCollector* m_keeper = nullptr;
+        // A template this render loaded, which a value it stores in a shared global may run in or
+        // view once this render has ended (docs/tasks/0481). Throws std::bad_alloc
+        void KeepLoaded(const LoadTemplateResult& result) const
+        {
+            if (!m_keeper)
+            {
+                return;
+            }
+            std::visit(
+                [this](const auto& loaded) {
+                    if constexpr (!std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        if (loaded)
+                        {
+                            m_keeper->KeepTree(loaded.value());
+                        }
+                    }
+                },
+                result);
+        }
         // lipsum's generator: default-seeded, so each render draws the same text
         std::minstd_rand m_random;
         // The globals this render uses, which it keeps alive; only compared

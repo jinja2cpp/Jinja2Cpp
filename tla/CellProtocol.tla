@@ -37,6 +37,8 @@ CONSTANTS
     FixShareNested,       \* 0324: a render nested in another on the same thread reads its snapshot
                           \* of the globals, whose adapters stay attached to the outer render's
                           \* cells (supersedes FixNestedGlobal inside a render)
+    FixGlobalOuterCell,   \* 0463: such a render finds and promotes a global's cell in the outermost
+                          \* render's registry, so the outer render keeps what it writes first
     FixMarkOrder,         \* 5e37c24: the global-attached mark is cleared after the conversion
     FixSortMutableFirst,  \* 9c91ffc: sort gets MutableItems before it moves the restore values
     FixMarkerAfterCopy,   \* b3993a5: Unshare clears m_exportedIn only after the copy is in place
@@ -133,7 +135,7 @@ NoEx == [kind |-> "none", gen |-> 0, ad |-> 0, cell |-> 0, idn |-> "none", thr |
          cg |-> 0, alive |-> FALSE]
 EmptyReg == [tbl |-> [k \in Keys |-> 0], call |-> 0, last |-> 0]
 NoFlags == [uaf |-> FALSE, foreign |-> FALSE, stale |-> FALSE, undef |-> FALSE, late |-> FALSE,
-            lost |-> FALSE, torn |-> FALSE]
+            lost |-> FALSE, torn |-> FALSE, glost |-> FALSE]
 Objs == ({"a"} \X AdIds) \cup ({"c"} \X CellIds) \cup ({"g"} \X GenIds)
 
 NewAd(i, n, h) == [idn |-> i, inc |-> n, held |-> h, generic |-> FALSE, cell |-> 0, seen |-> 0,
@@ -168,6 +170,13 @@ Pop(t) == [fr EXCEPT ![t] = SubSeq(@, 1, Len(@) - 1)]
 \* The frames of t: 1..Depth(t), written so that Apalache sees a constant range
 Frames(t) == {i \in 1..MaxDepth : i <= Depth(t)}
 InModule(t) == \E i \in Frames(t) : fr[t][i].kind = "mod"
+\* The outermost frame of t that is a render: the one whose snapshot of the globals the renders
+\* nested in it read (FixShareNested)
+OuterRender(t) == CHOOSE i \in Frames(t) : fr[t][i].kind = "render" /\ \A j \in Frames(t) : j < i => fr[t][j].kind # "render"
+\* The registry where a's cell is found and promoted (CycleCollector::GlobalCells, 0463): for a
+\* global's adapter in a render, the outermost render's; else the running frame's
+AdReg(t, a) == IF FixGlobalOuterCell /\ FixShareNested /\ ad[a].held /\ Top(t).kind = "render"
+               THEN fr[t][OuterRender(t)].reg ELSE CurReg(t)
 \* Behaviours of at most MaxLevel states, GC steps included (TLC's BFS level). A guard of every
 \* action rather than a CONSTRAINT: TLC then does not compute the last level's successors
 InBound == TLCGet("level") < MaxLevel
@@ -292,12 +301,12 @@ GC ==
 (* CellLink::Get: the epoch compare, then Find and Link *)
 
 Key(a) == ad[a].idn
-WouldLink(t, a) == ad[a].seen # epoch /\ ad[a].cell = 0 /\ rg[CurReg(t)].tbl[Key(a)] # 0
+WouldLink(t, a) == ad[a].seen # epoch /\ ad[a].cell = 0 /\ rg[AdReg(t, a)].tbl[Key(a)] # 0
 
 \* @type: (Str, Int, Bool) => $get;
 GetR(t, a, f) ==
     LET A == ad[a]
-        e == rg[CurReg(t)].tbl[Key(a)]
+        e == rg[AdReg(t, a)].tbl[Key(a)]
     IN CASE A.seen = epoch -> [c |-> 0, A2 |-> A, link |-> 0, failed |-> FALSE]
          [] A.cell # 0 -> [c |-> A.cell, A2 |-> A, link |-> 0, failed |-> FALSE]
          [] e = 0 -> [c |-> 0, A2 |-> [A EXCEPT !.seen = epoch], link |-> 0, failed |-> FALSE]
@@ -399,7 +408,7 @@ WriteCell(t, a, f2, op, R) ==
 
 \* CellLink::Adopt with a new cell: the copy of the data, the write applied
 Adopt(t, a, op) ==
-    LET r == CurReg(t)
+    LET r == AdReg(t, a)
         c == nCell + 1
         g == nGen + 1
         hasChild == ad[a].idn = "P" /\ op # "drop"
@@ -460,11 +469,11 @@ Write(t, a, op) ==
         /\ LET R == GetR(t, a, f1) IN
            CASE R.failed -> LinkFailed(t, a, R)
              [] R.c # 0 -> WriteCell(t, a, f2, op, R)
-             [] rg[CurReg(t)].tbl[Key(a)] # 0 ->
+             [] rg[AdReg(t, a)].tbl[Key(a)] # 0 ->
                   \* Adopt finds the cell another adapter made: link to it, write it
-                  WriteCell(t, a, f2, op, [c |-> rg[CurReg(t)].tbl[Key(a)], link |-> rg[CurReg(t)].tbl[Key(a)],
+                  WriteCell(t, a, f2, op, [c |-> rg[AdReg(t, a)].tbl[Key(a)], link |-> rg[AdReg(t, a)].tbl[Key(a)],
                                             failed |-> FALSE,
-                                            A2 |-> [ad[a] EXCEPT !.cell = rg[CurReg(t)].tbl[Key(a)], !.seen = ATT]])
+                                            A2 |-> [ad[a] EXCEPT !.cell = rg[AdReg(t, a)].tbl[Key(a)], !.seen = ATT]])
              [] OTHER -> IF f2 THEN AdoptFailed ELSE Adopt(t, a, op)
 
 \* A read: what Get returns, or the host's data
@@ -483,7 +492,7 @@ Read(t, a) ==
                      !.foreign = @ \/ Foreign(t, a, R.c),
                      !.uaf = @ \/ (R.c # 0 /\ (~cl[R.c].alive \/ ~st[cl[R.c].stor].acc)),
                      \* An alias that reads the host's data while its render has a cell of it
-                     !.stale = @ \/ (R.c = 0 /\ rg[CurReg(t)].tbl[Key(a)] # 0)]
+                     !.stale = @ \/ (R.c = 0 /\ rg[AdReg(t, a)].tbl[Key(a)] # 0)]
                 /\ UNCHANGED <<epoch, live, nAd, nCell, st, nGen, rg, fr, ex, nEx, gsnap, ns, hkeep, lag,
                                lock, inc, fails, dirty, dirtyBy, pendDrop>>
 
@@ -692,11 +701,16 @@ FinishFreeze(t) ==
           /\ rg' = [rg EXCEPT ![r] = EmptyReg]
           /\ live' = live - Cardinality(RC)
           /\ epoch' = IF RC # {} THEN NextEp(epoch) ELSE epoch
+    \* 0463: a render nested in another one that froze a global's cell leaves the outer render
+    \* reading the environment's data again, without the write
+    /\ flag' = [flag EXCEPT !.glost = @ \/ (FixShareNested /\ Top(t).kind = "render"
+                                            /\ (\E i \in Frames(t) : i < Depth(t) /\ fr[t][i].kind = "render")
+                                            /\ \E c \in RegCells(CurReg(t)) : cl[c].idn = "G")]
     /\ ex' = Snap(t, Depth(t), TRUE)
     /\ fr' = Pop(t)
     /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ UNCHANGED <<nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc, fails,
-                   pendDrop, flag>>
+                   pendDrop>>
 
 -----------------------------------------------------------------------------
 (* The items of a global (0346): ValuesListAdapter<ByHeldRef>::LendNested lends a list's item
@@ -972,6 +986,9 @@ ExportKeepsCallState == ~flag.late
 
 \* 0336: no cell is dropped while its data can be lent again (its writes would be lost)
 NoLostWrites == ~flag.lost
+
+\* 0463: a render nested in another on the same thread writes a global in the outer one's cell
+NestedGlobalKept == ~flag.glost
 
 \* 0338 step D: a step that runs out of memory changes nothing the step after it reads, but
 \* the cleanup its caller runs (the teardown of a failed call, the restore guard of sort)

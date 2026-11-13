@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
 priority: low
 area: robustness
 depends: [0256]
-touches: [src/cycle_collector.h, src/cycle_collector.cpp, test/allocation_failure_test.cpp]
+touches: [src/cycle_collector.h, src/cycle_collector.cpp, test/allocation_failure_test.cpp, test/internal_value_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/882
 ---
 # Reference cycles leak when memory stays spent at the end of a render
 
@@ -26,3 +27,10 @@ of a hash set. Measure with `bench/count.py`: the note path runs on every contai
 
 **Done when.** `Case::makesCycles` in test/allocation_failure_test.cpp is gone (the exhausted
 mode leak-checks every row) and `jinja2cpp_alloc_tests_exhausted` passes under ASan.
+
+**Done.** `WalkTables` (dense nodes in the order found, an open-addressing index, the marking stack) is reserved in the
+collector's notes as candidates and roots are noted, where a failure is a plain `std::bad_alloc`. The walk itself never
+throws: when it finds more objects than the tables hold and cannot grow them it saturates, leaving the rest untracked,
+which is conservative (an untracked object's references make what it reaches look held from outside). The garbage is
+held by references taken on its nodes, with no vector. A module call's live roots still allocate; when they cannot,
+that walk is skipped as before. `Case::makesCycles` is gone and `jinja2cpp_alloc_tests_exhausted` passes under ASan.

@@ -36,9 +36,17 @@ namespace detail
 {
 IntrusivePtr<BigIntObject> BigIntObject::Make(std::string_view decimal)
 {
-    ChargeRenderMemory(Bytes(decimal.size()));
+    const bool counted = RenderMemoryCounted();
+    if (counted)
+    {
+        ChargeRenderMemory(Bytes(decimal.size()));
+    }
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
     IntrusivePtr<BigIntObject> obj(new (CharCount{ decimal.size() }) BigIntObject(decimal.size()));
+    if (counted)
+    {
+        obj->MarkCharged();
+    }
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the object
     std::copy(decimal.begin(), decimal.end(), reinterpret_cast<char*>(obj.get()) + sizeof(BigIntObject));
     return obj;

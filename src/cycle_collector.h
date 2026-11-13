@@ -20,6 +20,65 @@ namespace detail
 struct RenderThreadState;
 } // namespace detail
 
+// The tables of one cycle walk (docs/tasks/0486): the objects found, in the order found, with the
+// references the walk counted to each, an open-addressing index over them and the stack of the
+// marking pass. The collector reserves them as it notes candidates, where running out of memory is a
+// plain std::bad_alloc, so that the walk at the end of a render has what it needs. A walk that
+// finds more objects than that tries to grow them, and when it cannot it saturates: the objects
+// not yet found stay untracked, which is safe, as an untracked object's reference to a tracked one
+// is not counted and the tracked one then looks held from outside. Only a cycle through an
+// untracked object is missed
+class WalkTables
+{
+public:
+    struct Node
+    {
+        const ValueObject* object = nullptr;
+        // References from the other nodes (ValueObject::Traverse) and from the walk's roots
+        unsigned refs = 0;
+        bool reachable = false;
+    };
+
+    WalkTables() noexcept = default;
+    WalkTables(WalkTables&& other) noexcept;
+    WalkTables(const WalkTables&) = delete;
+    WalkTables& operator=(const WalkTables&) = delete;
+    WalkTables& operator=(WalkTables&&) = delete;
+    ~WalkTables() = default;
+
+    [[nodiscard]] size_t Capacity() const noexcept { return m_capacity; }
+    // Room for `nodes` nodes at least, at least doubling. Throws std::bad_alloc and then changes
+    // nothing
+    void Reserve(size_t nodes);
+    // Empties the tables for a walk, keeping their room
+    void Reset() noexcept;
+    // Counts a reference to `object`, adding it when new, unless the walk is saturated
+    void Count(const ValueObject* object) noexcept;
+    [[nodiscard]] size_t Size() const noexcept { return m_size; }
+    // The nodes in the order found, which grows while the walk goes on
+    [[nodiscard]] Node& At(size_t index) noexcept { return m_nodes[index]; }
+    // The index of `object`, or Size() when it is not tracked
+    [[nodiscard]] size_t IndexOf(const ValueObject* object) const noexcept;
+    // The marking pass's stack: at most one entry for each node
+    void Push(size_t index) noexcept { m_pending[m_pendingSize++] = static_cast<uint32_t>(index); }
+    [[nodiscard]] bool Pop(size_t& index) noexcept;
+
+private:
+    static constexpr size_t MinCapacity = 16;
+
+    [[nodiscard]] size_t Probe(const ValueObject* object) const noexcept;
+
+    std::unique_ptr<Node[]> m_nodes;
+    // Node index + 1, 0 for an empty slot; a power of two slots, at least twice the capacity
+    std::unique_ptr<uint32_t[]> m_slots;
+    std::unique_ptr<uint32_t[]> m_pending;
+    size_t m_capacity = 0;
+    size_t m_slotMask = 0;
+    size_t m_size = 0;
+    size_t m_pendingSize = 0;
+    bool m_saturated = false;
+};
+
 // What CycleCollector::KeepUntilEnd holds, each object with the owner it is of use to: released
 // once its owner has expired, or all at once
 class KeptObjects
@@ -149,6 +208,14 @@ public:
     }
     // The registry a promotion adds its cell to, made on the first one; null outside a render
     static BorrowedCells* CellsForWrite();
+    // CurrentCells and CellsForWrite for an adapter of a global (ValueObject::IsGlobalData): the
+    // registry of the outermost render running on this thread whose snapshot of the globals the
+    // running one shares (docs/tasks/0324). A global that a render started inside another one
+    // writes first gets its cell there, so the outer render sees the write once the inner one has
+    // ended, as Python's renders share the globals' objects (docs/tasks/0463); the cell's links
+    // detach when that outer render ends. Else the running render's own
+    [[nodiscard]] static BorrowedCells* GlobalCells() noexcept;
+    static BorrowedCells* GlobalCellsForWrite();
     // Holds `object` until the render running on this thread ends, and releases it before the
     // walk, so that what only it held is freed rather than counted as held from outside: the
     // names a closure keeps of its ended frames (ClosureCapture), which the closure reaches
@@ -161,6 +228,13 @@ public:
     static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     // The collector of the render running on this thread, or null
     [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
+    // Holds `tree` (a template, what a render of it loaded) until this render ends, after its
+    // cells and its walk: a render started inside this one that shares its snapshot of the
+    // globals can store a value of its own in a global this render reads afterwards (docs/tasks/
+    // 0324, 0463), a macro or `caller` that runs in that tree, a `self` or loop that names it,
+    // a param it views. The host may destroy the nested template once its render has returned,
+    // so this render keeps it (docs/tasks/0481). A tree is kept once. Throws std::bad_alloc
+    void KeepTree(std::shared_ptr<const void> tree);
     // What a container the render running on this thread hands the host keeps, so that the host's
     // copy can tell when it goes whether that render has ended: then nothing walks the container
     // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
@@ -231,13 +305,16 @@ private:
     friend struct detail::RenderThreadState;
 
     void Finish() noexcept;
+    // The collector of the render whose registry GlobalCells finds, or null for the running one's
+    [[nodiscard]] static CycleCollector* SnapshotOwner() noexcept;
     void Add(ValueObjectPtr object);
     void NoteDroppedInCall(const InternalValue& value);
     // Drops the candidates nothing else holds; false when there were none
     bool DropUnshared();
+    // The walk at the end of the render. It allocates nothing that can fail but the module's live
+    // roots (ModuleScope::LiveRootsFn): when those cannot be made the walk is skipped and the cycles
+    // not broken leak (docs/tasks/0283)
     void Collect() noexcept;
-    // One walk; throws std::bad_alloc when its tables cannot be allocated
-    void CollectOnce();
 
     // The collector of the render running on this thread, or null
     static inline thread_local CycleCollector* s_current = nullptr;
@@ -245,6 +322,9 @@ private:
     // What a render noted, made on the first note: most renders store no container in another
     struct Notes
     {
+        // KeepTree's: first, so that it goes last, after every value of the render
+        std::vector<std::shared_ptr<const void>> trees;
+        std::unordered_set<const void*> treeSet;
         // The receiving containers, held until the render ends
         std::vector<ValueObjectPtr> candidates;
         std::unordered_set<const void*> noted;
@@ -255,6 +335,17 @@ private:
         bool walkFromEvery = false;
         // NoteRoot: walked, never dropped before the walk
         std::vector<ValueObjectPtr> roots;
+        // The tables of the walk, reserved as candidates and roots are noted (WalkTables)
+        WalkTables walk;
+        // Room in `walk` for one more candidate or root. Throws std::bad_alloc
+        void ReserveWalk()
+        {
+            const size_t nodes = candidates.size() + roots.size() + 1;
+            if (nodes > walk.Capacity())
+            {
+                walk.Reserve(nodes);
+            }
+        }
         // What KeepUntilEnd holds
         KeptObjects kept;
         // The render's copies of the host's data, released before the walk: detaching them

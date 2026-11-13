@@ -1,13 +1,17 @@
 #include "cycle_collector.h"
 
 #include "internal_value.h"
+#include "recursion_guard.h"
+#include "render_workspace.h"
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <new>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -15,17 +19,6 @@ namespace jinja2
 {
 inline namespace v2
 {
-
-namespace
-{
-struct Node
-{
-    const ValueObject* object = nullptr;
-    // References from the other nodes (ValueObject::Traverse) and from the collector's candidates
-    size_t internalRefs = 0;
-    bool reachable = false;
-};
-} // namespace
 
 namespace
 {
@@ -45,7 +38,8 @@ std::mutex& ExportWalks()
 class ExportWalk
 {
 public:
-    ExportWalk()
+    // Out of line: inlined, GCC's -Wdangling-pointer cannot see that the destructor clears s_held
+    JINJA2CPP_NOINLINE ExportWalk()
     {
         if (!s_held)
         {
@@ -103,6 +97,11 @@ void CycleCollector::Finish() noexcept
     }
     try
     {
+        // The values this render kept trees for may outlive it in the outer render too
+        for (auto& tree : m_notes->trees)
+        {
+            m_outer->KeepTree(tree);
+        }
         for (const auto& candidate : m_notes->candidates)
         {
             m_outer->Add(candidate);
@@ -116,6 +115,32 @@ void CycleCollector::Finish() noexcept
     {
         // What the outer one did not take is collected here: the render that made it ended
         Collect();
+    }
+}
+
+void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
+{
+    if (!tree)
+    {
+        return;
+    }
+    if (!m_notes)
+    {
+        m_notes = std::make_unique<Notes>();
+    }
+    auto& notes = *m_notes;
+    if (!notes.treeSet.insert(tree.get()).second)
+    {
+        return;
+    }
+    try
+    {
+        notes.trees.push_back(std::move(tree));
+    }
+    catch (...)
+    {
+        notes.treeSet.erase(tree.get());
+        throw;
     }
 }
 
@@ -233,6 +258,53 @@ BorrowedCells* CycleCollector::CellsForWrite()
     return &collector->m_notes->cells;
 }
 
+CycleCollector* CycleCollector::SnapshotOwner() noexcept
+{
+    auto* collector = s_current;
+    if (!collector || collector->m_module)
+    {
+        return nullptr;
+    }
+    // The chain starts at the running render's own entry: none for code of a module's call, or of
+    // a render called back from inside another one (Reentry)
+    const auto* running = RenderWorkspace::ForThisThread().Running();
+    if (!running || running->collector != collector || !running->owner || !*running->owner)
+    {
+        return nullptr;
+    }
+    const auto* snapshot = running->owner->get();
+    const auto* owner = running;
+    for (const auto* outer = running->outer; outer && outer->owner && outer->owner->get() == snapshot; outer = outer->outer)
+    {
+        owner = outer;
+    }
+    return owner != running && owner->collector && !owner->collector->m_module ? owner->collector : nullptr;
+}
+
+BorrowedCells* CycleCollector::GlobalCells() noexcept
+{
+    auto* owner = SnapshotOwner();
+    if (!owner)
+    {
+        return CurrentCells();
+    }
+    return owner->m_notes ? &owner->m_notes->cells : nullptr;
+}
+
+BorrowedCells* CycleCollector::GlobalCellsForWrite()
+{
+    auto* owner = SnapshotOwner();
+    if (!owner)
+    {
+        return CellsForWrite();
+    }
+    if (!owner->m_notes)
+    {
+        owner->m_notes = std::make_unique<Notes>();
+    }
+    return &owner->m_notes->cells;
+}
+
 void CycleCollector::NoteStore(const InternalValue& container)
 {
     auto* collector = s_current;
@@ -261,6 +333,8 @@ void CycleCollector::NoteRoot(ValueObjectPtr cell)
     {
         m_notes = std::make_unique<Notes>();
     }
+    // Room for the walk first, so that a note that fails to allocate fails here (docs/tasks/0486)
+    m_notes->ReserveWalk();
     m_notes->roots.push_back(std::move(cell));
 }
 
@@ -274,8 +348,9 @@ void CycleCollector::Add(ValueObjectPtr object)
     {
         return;
     }
-    // Pushed first, so that a failed insert leaves nothing marked noted that is not a
+    // Room for the walk first (docs/tasks/0486), then pushed, so that a failed insert leaves nothing marked noted that is not a
     // candidate, which a later note of it would skip (docs/tasks/0283)
+    m_notes->ReserveWalk();
     auto& candidates = m_notes->candidates;
     candidates.push_back(std::move(object));
     const auto* noted = candidates.back().get();
@@ -320,28 +395,6 @@ bool CycleCollector::DropUnshared()
     return true;
 }
 
-void CycleCollector::Collect() noexcept
-{
-    // A walk that runs out of memory frees its tables when it unwinds, so a second one has
-    // what the first held. At the end of a render its scopes are gone too, so a single
-    // failed allocation (the allocation-failure sweep) does not stop the second walk. When
-    // memory stays exhausted the cycles not broken leak (docs/tasks/0283)
-    for (int attempt = 0; attempt != 2; ++attempt)
-    {
-        try
-        {
-            CollectOnce();
-            break;
-        }
-        catch (...) // NOLINT(bugprone-empty-catch): retried once, then the comment above says what is lost
-        {
-        }
-    }
-    m_notes->candidates.clear();
-    m_notes->noted.clear();
-    m_notes->roots.clear();
-}
-
 namespace
 {
 // Whether `object` is one of `live`, sorted: held by what outlives the walk (ModuleScope::LiveRootsFn)
@@ -350,29 +403,81 @@ bool IsLive(const std::vector<const ValueObject*>& live, const ValueObject* obje
     return !live.empty() && std::binary_search(live.begin(), live.end(), object);
 }
 
-// The walk of CollectOnce from `candidates` and `roots`, which it empties, or, with `keepRoots`,
-// leaves with the roots that are not garbage: the garbage among what they reach is emptied, which
-// breaks its cycles. The objects in `live` (sorted) are held from outside and are not walked into:
-// none of what they reach is garbage, and what the walk finds that only they hold counts as held
-// from outside, which it is. Throws std::bad_alloc, and then changes nothing
-void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots, bool keepRoots = false, const std::vector<const ValueObject*>& live = {})
+// Marks the nodes held from outside the walk, and every node they reach: a node with more references than the
+// walk counted is held from outside. Untracked objects (a saturated walk) are skipped
+void MarkHeldFromOutside(WalkTables& tables, const std::vector<const ValueObject*>& live) noexcept
 {
-    std::unordered_map<const ValueObject*, Node> nodes;
-    // In the order found: `order` grows while it is walked
-    std::vector<Node*> order;
-    auto visit = [&nodes, &order, &live](const ValueObject* object) {
-        // Strings, numbers and host adapters hold no template value
+    for (size_t index = 0; index != tables.Size(); ++index)
+    {
+        auto& node = tables.At(index);
+        if (node.object->use_count() > node.refs)
+        {
+            node.reachable = true;
+            tables.Push(index);
+        }
+    }
+    auto markReachable = [&tables, &live](const ValueObject* object) {
         if (!object->IsTraversable() || IsLive(live, object))
         {
             return;
         }
-        auto [p, isNew] = nodes.try_emplace(object);
-        if (isNew)
+        // Not tracked: the walk saturated before it found this object
+        const auto index = tables.IndexOf(object);
+        if (index == tables.Size())
         {
-            p->second.object = object;
-            order.push_back(&p->second);
+            return;
         }
-        ++p->second.internalRefs;
+        auto& child = tables.At(index);
+        if (!child.reachable)
+        {
+            child.reachable = true;
+            tables.Push(index);
+        }
+    };
+    size_t index = 0;
+    while (tables.Pop(index))
+    {
+        tables.At(index).object->Traverse(markReachable);
+    }
+}
+
+// Empties the garbage (the nodes not marked) while it is held, then lets go of it
+void ClearGarbage(WalkTables& tables) noexcept
+{
+    // The tables are the walk's own, and what they name that is garbage is held: emptying an object
+    // may free others and start a render, but nothing else reads the tables
+    for (size_t i = 0; i != tables.Size(); ++i)
+    {
+        if (!tables.At(i).reachable)
+        {
+            tables.At(i).object->Clear();
+        }
+    }
+    for (size_t i = 0; i != tables.Size(); ++i)
+    {
+        if (!tables.At(i).reachable)
+        {
+            // Adopts the reference taken above and lets it go
+            const ValueObjectPtr release(tables.At(i).object, false);
+        }
+    }
+}
+
+// The walk from `candidates` and `roots`, which it empties, or, with `keepRoots`, leaves with the
+// roots that are not garbage: the garbage among what they reach is emptied, which breaks its
+// cycles. The objects in `live` (sorted) are held from outside and are not walked into: none of what
+// they reach is garbage, and what the walk finds that only they hold counts as held from outside,
+// which it is. Allocates only to grow `tables`, and when that fails the walk saturates
+// (WalkTables): it frees less, never more
+void WalkAndClear(WalkTables& tables, std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots, bool keepRoots = false, const std::vector<const ValueObject*>& live = {}) noexcept
+{
+    tables.Reset();
+    auto visit = [&tables, &live](const ValueObject* object) {
+        // Strings, numbers and host adapters hold no template value
+        if (object->IsTraversable() && !IsLive(live, object))
+        {
+            tables.Count(object);
+        }
     };
 
     for (const auto& candidate : candidates)
@@ -383,60 +488,31 @@ void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObje
     {
         visit(root.get());
     }
-    // NOLINTNEXTLINE(modernize-loop-convert): Traverse appends to `order`, which a range-for would not see
-    for (size_t next = 0; next != order.size(); ++next)
+    // The nodes are in the order found, and the walk finds more while it goes. Read by index: growing
+    // moves them
+    for (size_t next = 0; next != tables.Size(); ++next)
     {
-        order[next]->object->Traverse(visit);
+        tables.At(next).object->Traverse(visit);
     }
 
-    // A node with more references than the walk found is held from outside, and so is
-    // every node it reaches
-    std::vector<const Node*> pending;
-    for (auto* node : order)
-    {
-        if (node->object->use_count() > node->internalRefs)
-        {
-            node->reachable = true;
-            pending.push_back(node);
-        }
-    }
-    auto markReachable = [&nodes, &pending, &live](const ValueObject* object) {
-        if (!object->IsTraversable() || IsLive(live, object))
-        {
-            return;
-        }
-        auto& child = nodes.at(object);
-        if (!child.reachable)
-        {
-            child.reachable = true;
-            pending.push_back(&child);
-        }
-    };
-    while (!pending.empty())
-    {
-        const auto* node = pending.back();
-        pending.pop_back();
-        node->object->Traverse(markReachable);
-    }
+    MarkHeldFromOutside(tables, live);
 
-    // The garbage is held here while it is emptied, so that emptying one object frees none
-    // that is still to be emptied; letting go of it then frees all of it
-    std::vector<ValueObjectPtr> garbage;
-    for (const auto* node : order)
+    // The garbage is held while it is emptied, so that emptying one object frees none that is
+    // still to be emptied; letting go of it then frees all of it. A reference taken here needs no
+    // storage
+    for (size_t i = 0; i != tables.Size(); ++i)
     {
-        if (!node->reachable)
+        if (!tables.At(i).reachable)
         {
-            garbage.emplace_back(node->object);
+            intrusive_ptr_add_ref(tables.At(i).object);
         }
     }
-    // Nothing below allocates. The tables are not read again: emptying may free what they name
-    candidates.clear();
     if (keepRoots)
     {
         // The garbage holds the roots it takes
-        roots.erase(std::remove_if(roots.begin(), roots.end(), [&nodes](const ValueObjectPtr& root) {
-                        const auto node = nodes.find(root.get());
-                        return node != nodes.end() && !node->second.reachable;
+        roots.erase(std::remove_if(roots.begin(), roots.end(), [&tables](const ValueObjectPtr& root) {
+                        const auto node = tables.IndexOf(root.get());
+                        return node != tables.Size() && !tables.At(node).reachable;
                     }),
                     roots.end());
     }
@@ -444,41 +520,12 @@ void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObje
     {
         roots.clear();
     }
-    for (const auto& object : garbage)
-    {
-        object->Clear();
-    }
+    candidates.clear();
+    ClearGarbage(tables);
 }
 } // namespace
 
-void CycleCollector::CollectKeeping(std::vector<ValueObjectPtr>& roots) noexcept
-{
-    std::vector<ValueObjectPtr> none;
-    try
-    {
-        WalkAndClear(none, roots, true);
-    }
-    catch (...) // NOLINT(bugprone-empty-catch): the roots stay as they were, for the next walk
-    {
-    }
-}
-
-void CycleCollector::CollectFrom(std::vector<ValueObjectPtr> roots) noexcept
-{
-    std::vector<ValueObjectPtr> none;
-    for (int attempt = 0; attempt != 2 && !roots.empty(); ++attempt)
-    {
-        try
-        {
-            WalkAndClear(none, roots);
-        }
-        catch (...) // NOLINT(bugprone-empty-catch): retried once, then the cycles not broken leak (docs/tasks/0283)
-        {
-        }
-    }
-}
-
-void CycleCollector::CollectOnce()
+void CycleCollector::Collect() noexcept
 {
     // Most of what a render noted is garbage by now with no cycle in it (a list built and
     // printed): releasing it frees it, and what only it held, without a walk
@@ -488,17 +535,170 @@ void CycleCollector::CollectOnce()
     }
     auto& candidates = m_notes->candidates;
     auto& roots = m_notes->roots;
-    if (candidates.empty() && roots.empty())
+    if (!candidates.empty() || !roots.empty())
+    {
+        std::vector<const ValueObject*> live;
+        bool known = true;
+        if (m_module && m_module->liveRoots)
+        {
+            try
+            {
+                m_module->liveRoots(m_module->state, live);
+                std::sort(live.begin(), live.end());
+            }
+            catch (...) // NOLINT(bugprone-empty-catch): the comment below says what is lost
+            {
+                // Out of memory: without the live roots a walk could free what outlives it, so there is none
+                // and the cycles not broken leak (docs/tasks/0283)
+                known = false;
+            }
+        }
+        if (known)
+        {
+            // Out of the notes first: a release during the walk can start a render that hands notes here
+            WalkTables tables = std::move(m_notes->walk);
+            WalkAndClear(tables, candidates, roots, false, live);
+        }
+    }
+    m_notes->candidates.clear();
+    m_notes->noted.clear();
+    m_notes->roots.clear();
+}
+
+void CycleCollector::CollectKeeping(std::vector<ValueObjectPtr>& roots) noexcept
+{
+    std::vector<ValueObjectPtr> none;
+    WalkTables tables;
+    WalkAndClear(tables, none, roots, true);
+}
+
+void CycleCollector::CollectFrom(std::vector<ValueObjectPtr> roots) noexcept
+{
+    if (roots.empty())
     {
         return;
     }
-    std::vector<const ValueObject*> live;
-    if (m_module && m_module->liveRoots)
+    std::vector<ValueObjectPtr> none;
+    WalkTables tables;
+    WalkAndClear(tables, none, roots);
+}
+
+WalkTables::WalkTables(WalkTables&& other) noexcept
+    : m_nodes(std::move(other.m_nodes))
+    , m_slots(std::move(other.m_slots))
+    , m_pending(std::move(other.m_pending))
+    , m_capacity(std::exchange(other.m_capacity, 0))
+    , m_slotMask(std::exchange(other.m_slotMask, 0))
+    , m_size(std::exchange(other.m_size, 0))
+    , m_pendingSize(std::exchange(other.m_pendingSize, 0))
+    , m_saturated(std::exchange(other.m_saturated, false))
+{
+}
+
+size_t WalkTables::Probe(const ValueObject* object) const noexcept
+{
+    // Fibonacci hashing: pointers are aligned, so their low bits say little
+    const uint64_t hash = static_cast<uint64_t>(std::hash<const ValueObject*>()(object)) * 0x9E3779B97F4A7C15ULL;
+    size_t slot = static_cast<size_t>(hash >> 32) & m_slotMask;
+    // At most half the slots are used, so the probe ends
+    while (m_slots[slot] != 0 && m_nodes[m_slots[slot] - 1].object != object)
     {
-        m_module->liveRoots(m_module->state, live);
-        std::sort(live.begin(), live.end());
+        slot = (slot + 1) & m_slotMask;
     }
-    WalkAndClear(candidates, roots, false, live);
+    return slot;
+}
+
+void WalkTables::Reserve(size_t nodes)
+{
+    if (nodes <= m_capacity)
+    {
+        return;
+    }
+    const size_t capacity = std::max({ nodes, 2 * m_capacity, MinCapacity });
+    // Indices are 32 bits, and the slots twice the nodes
+    if (capacity > std::numeric_limits<uint32_t>::max() / 4)
+    {
+        throw std::bad_alloc();
+    }
+    size_t slotCount = 2 * MinCapacity;
+    while (slotCount < 2 * capacity)
+    {
+        slotCount *= 2;
+    }
+    // Everything allocated before anything changes
+    auto nodeTable = std::make_unique<Node[]>(capacity);
+    auto slots = std::make_unique<uint32_t[]>(slotCount);
+    auto pending = std::make_unique<uint32_t[]>(capacity);
+    std::copy_n(m_nodes.get(), m_size, nodeTable.get());
+    std::copy_n(m_pending.get(), m_pendingSize, pending.get());
+    m_nodes = std::move(nodeTable);
+    m_slots = std::move(slots);
+    m_pending = std::move(pending);
+    m_capacity = capacity;
+    m_slotMask = slotCount - 1;
+    for (size_t index = 0; index != m_size; ++index)
+    {
+        m_slots[Probe(m_nodes[index].object)] = static_cast<uint32_t>(index + 1);
+    }
+}
+
+void WalkTables::Reset() noexcept
+{
+    std::fill_n(m_slots.get(), m_capacity ? m_slotMask + 1 : 0, 0U);
+    m_size = 0;
+    m_pendingSize = 0;
+    m_saturated = false;
+}
+
+void WalkTables::Count(const ValueObject* object) noexcept
+{
+    if (m_capacity != 0)
+    {
+        if (const auto slot = Probe(object); m_slots[slot] != 0)
+        {
+            ++m_nodes[m_slots[slot] - 1].refs;
+            return;
+        }
+    }
+    if (m_saturated)
+    {
+        return;
+    }
+    if (m_size == m_capacity)
+    {
+        try
+        {
+            Reserve(m_size + 1);
+        }
+        catch (const std::bad_alloc&)
+        {
+            m_saturated = true;
+            return;
+        }
+    }
+    m_nodes[m_size] = Node{ object, 1, false };
+    m_slots[Probe(object)] = static_cast<uint32_t>(m_size + 1);
+    ++m_size;
+}
+
+size_t WalkTables::IndexOf(const ValueObject* object) const noexcept
+{
+    if (m_capacity == 0)
+    {
+        return m_size;
+    }
+    const auto slot = Probe(object);
+    return m_slots[slot] != 0 ? m_slots[slot] - 1 : m_size;
+}
+
+bool WalkTables::Pop(size_t& index) noexcept
+{
+    if (m_pendingSize == 0)
+    {
+        return false;
+    }
+    index = m_pending[--m_pendingSize];
+    return true;
 }
 
 } // namespace v2
