@@ -213,8 +213,16 @@ private:
     // flag (docs/tasks/0483), which a move takes along with the entries
     KeyTableHolder m_keys;
 };
-// The flag adds no member
-static_assert(sizeof(TemplateDict) == sizeof(InternalDict) + sizeof(void*), "TemplateDict grew");
+// The flag adds no member: the dict is its entries and one pointer, as before docs/tasks/0483
+namespace detail
+{
+struct TemplateDictLayout
+{
+    InternalDict items;
+    void* keys;
+};
+} // namespace detail
+static_assert(sizeof(TemplateDict) == sizeof(detail::TemplateDictLayout), "TemplateDict grew");
 
 } // namespace v2
 } // namespace jinja2
