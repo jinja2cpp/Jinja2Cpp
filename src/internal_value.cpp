@@ -4605,8 +4605,8 @@ const PythonClass* FindPythonClass(std::string_view name)
     return found == std::end(PythonClasses) ? nullptr : found;
 }
 
-// A class: <class 'str'>, with __name__, __qualname__ and __module__, which equals only itself. Each read
-// makes its own adapter; the identity is the class's entry, so that every copy is the same object
+// A class: <class 'str'>, with __name__, __qualname__ and __module__, which equals only itself: one per class
+// (MakeNamedClassObject), whose identity is the class's entry
 class ClassObjectAdapter final : public ObjectMapAdapter
 {
 public:
@@ -4678,7 +4678,20 @@ std::optional<InternalValue> MakeNamedClassObject(std::string_view className)
     {
         return global;
     }
-    return InternalValue(MapAdapter(MakeRef<ClassObjectAdapter>(*cls)));
+    // Made once for every render, as the globals are: immutable (a method that changes it changes a copy, MakeMutable),
+    // so that a read per item (map(attribute='__class__')) allocates nothing
+    static const auto objects = [] {
+        // Made once, maybe in a render with a memory budget, for every render after it
+        const UncountedMemoryScope uncounted;
+        std::vector<InternalValue> result;
+        result.reserve(std::size(PythonClasses));
+        for (const auto& entry : PythonClasses)
+        {
+            result.emplace_back(MapAdapter(MakeRef<ClassObjectAdapter>(entry)));
+        }
+        return result;
+    }();
+    return objects[static_cast<size_t>(cls - std::begin(PythonClasses))];
 }
 
 std::optional<InternalValue> MakeClassObject(const InternalValue& value)

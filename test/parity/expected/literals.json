@@ -939,6 +939,14 @@
    "env": {},
    "templates": {},
    "output": "True|True|1|True|True|{'a': 1}|dict|jinja2.utils"
+  },
+  {
+   "id": "literals.class_call_before_dict_item",
+   "template": "{{ {'__class__': 1}.__class__(a=2) }}|{{ {'__class__': 1}['__class__'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'a': 2}|1"
   }
  ]
 }

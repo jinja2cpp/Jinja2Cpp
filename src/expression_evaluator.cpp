@@ -1744,6 +1744,15 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
     if (!method)
     {
+        // x.__class__(...) is the class, before a dict's own `__class__` item (docs/tasks/0476)
+        if (*name == "__class__")
+        {
+            if (auto cls = methods::ClassAttribute(receiver, *name, &values))
+            {
+                callee = std::move(*cls);
+                return false;
+            }
+        }
         callee = Subscript(receiver, *name, &values);
         if (receiver.ShouldExtendLifetime())
         {
@@ -1754,15 +1763,6 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
             if (auto replacement = methods::SandboxedSyntheticAttribute(&values, receiver, *name))
             {
                 callee = std::move(*replacement);
-                return false;
-            }
-        }
-        // x.__class__(...): a class that is a global (dict, range, ...) calls it (docs/tasks/0476)
-        if (callee.IsUndefined() && !GetUndefinedInfo(callee))
-        {
-            if (auto cls = methods::ClassAttribute(receiver, *name, &values))
-            {
-                callee = std::move(*cls);
                 return false;
             }
         }

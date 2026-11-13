@@ -115,4 +115,5 @@ CASES = [
     ("class_format_item_of_none", "{{ '{0[__class__]}'.format(none) }}"),
     # Codex on #874: a class that is a global is that global
     ("class_is_the_global", "{{ {}.__class__ == dict }}|{{ range(1).__class__ is sameas range }}|{{ {dict: 1}[{}.__class__] }}|{{ namespace().__class__ == namespace }}|{{ {}.__class__ is callable }}|{{ {}.__class__(a=1) }}|{{ dict.__name__ }}|{{ cycler(1).__class__.__module__ }}"),
+    ("class_call_before_dict_item", "{{ {'__class__': 1}.__class__(a=2) }}|{{ {'__class__': 1}['__class__'] }}"),
 ]
