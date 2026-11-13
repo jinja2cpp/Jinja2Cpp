@@ -1,10 +1,13 @@
 // Settings::Limits (docs/tasks/0262): every limit fails the render with
 // ErrorCode::ResourceLimitExceeded and names its field, the depth limits keep
 // ErrorCode::RecursionLimitExceeded, and every template here renders with the default limits.
+#include "test_tools.h"
+// The internals are in the static library only (FreeingUncountedObjectsGivesNoBudget)
+#ifndef JINJA2CPP_LINK_AS_SHARED
 #include "../src/internal_value.h"
 #include "../src/recursion_guard.h"
 #include "../src/template_dict.h"
-#include "test_tools.h"
+#endif
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
@@ -722,6 +725,7 @@ TEST(LimitsCachesTest, DroppedReloadGivesNoBudget)
     EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
 }
 
+#ifndef JINJA2CPP_LINK_AS_SHARED
 // Freeing an object the render was not charged for gives the budget nothing (docs/tasks/0483): a string, list or dict
 // made before the render (the host's data, a cache's), by a render without a budget or under UncountedMemoryScope.
 // The loop frees such objects again and again while the budget keeps its own; each free once raised memoryLeft
@@ -770,6 +774,7 @@ TEST(LimitsCachesTest, FreeingUncountedObjectsGivesNoBudget)
     grown = InternalValue();
     EXPECT_EQ(afterGrowth, t_renderLimits.memoryLeft);
 }
+#endif
 
 // UntrustedLimits() bounds what a render keeps: the template of docs/tasks/0459 kept about 1 GB before the step
 // limit stopped it, and now stops on the memory budget

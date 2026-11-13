@@ -158,13 +158,13 @@ public:
     ValueObject& operator=(const ValueObject& other) noexcept
     {
         m_flags = other.m_flags;
-        SetBorrowedBit(other.m_bits & BorrowedBit);
+        SetBorrowedBit(static_cast<uint8_t>(other.m_bits & BorrowedBit));
         return *this;
     }
     ValueObject& operator=(ValueObject&& other) noexcept
     {
         m_flags = other.m_flags;
-        SetBorrowedBit(other.m_bits & BorrowedBit);
+        SetBorrowedBit(static_cast<uint8_t>(other.m_bits & BorrowedBit));
         return *this;
     }
     // Tells operator delete, which has no object to read, whether the render's budget counted this one. Without a

@@ -3,7 +3,7 @@ status: done
 priority: low
 area: robustness
 depends: [0478]
-touches: [src/recursion_guard.h, src/internal_value.h, src/internal_value.cpp]
+touches: [src/recursion_guard.h, src/internal_value.h, src/internal_value.cpp, src/template_dict.h, src/template_dict.cpp, src/value_methods.cpp]
 shares: [test/limits_test.cpp, docs/security.md]
 ---
 # Give the render memory budget back only what it was charged

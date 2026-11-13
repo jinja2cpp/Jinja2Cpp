@@ -2627,7 +2627,16 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     const std::uint64_t replacedCapacity = (takenCharged ? takenCapacity : 0) + (itemsCharged ? items.capacity() : 0);
     items = std::move(sorted);
     const std::uint64_t keptCapacity = itemsCharged ? items.capacity() : 0;
-    ReleaseRenderMemory((replacedCapacity > keptCapacity ? replacedCapacity - keptCapacity : 0) * sizeof(InternalValue));
+    if (replacedCapacity >= keptCapacity)
+    {
+        ReleaseRenderMemory((replacedCapacity - keptCapacity) * sizeof(InternalValue));
+    }
+    else
+    {
+        // A counted copy (D8) of a list whose storage was not counted now holds the sorted buffer, which it gives
+        // back when it goes: charged here, where nothing may throw any more (an overdraft fails the next step)
+        ChargeObjectMemory((keptCapacity - replacedCapacity) * sizeof(InternalValue));
+    }
     if (modified)
     {
         Raise("list modified during sort");

@@ -435,7 +435,6 @@ TEST(TemplateDictTest, DictsCompareAsPythonDicts)
     ASSERT_TRUE(tpl.Load("{{ {1: 'a', (1, 2): 'b'} == {(1.0, 2): 'b', True: 'a'} }}|{{ {1: 'a'} == {'1': 'a'} }}|{{ 1 in {True: 0} }}").has_value());
     EXPECT_EQ("True|False|True", tpl.RenderAsString({}).value());
 }
-#endif
 
 // The tables of the cycle walk (docs/tasks/0486): growing keeps what they hold, a repeat counts
 TEST(WalkTablesTest, GrowthKeepsTheNodesAndCountsRepeats)
@@ -488,3 +487,4 @@ TEST(WalkTablesTest, CollectFromEmptiesOnlyGarbage)
     CycleCollector::CollectFrom(std::move(roots));
     EXPECT_EQ(markerRefs - 1, OwnObjectOf(InternalValue(marker))->use_count());
 }
+#endif
