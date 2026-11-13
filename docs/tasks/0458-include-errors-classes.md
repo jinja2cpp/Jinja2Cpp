@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0432]
 touches: [src/statements.cpp, python/src/errors.cpp, python/jinja2cpp/loaders.py]
 shares: [test/includes_test.cpp, python/tests/test_errors.py]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/881
 ---
 # Include and constructor errors with Jinja2's classes
 
