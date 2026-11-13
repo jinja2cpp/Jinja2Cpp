@@ -3958,6 +3958,44 @@
    "output": "[True||]"
   },
   {
+   "id": "subscripts.tuple_of_slices_chainable_failing_part",
+   "template": "[{{ [1][:, :][:, 1 / 0] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 12)"
+   }
+  },
+  {
    "id": "subscripts.tuple_of_slices_nested_default",
    "template": "[{{ [1][:, :][:, :] is undefined }}]",
    "context": {

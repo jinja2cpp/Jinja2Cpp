@@ -147,6 +147,8 @@ CASES = [
     ("tuple_of_slices_strict_output_bottom_up", "[{{ x ~ (()[:, :] ~ 1) }}]", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_statement_filter", "{% set q = 1 if true else ()[:, :]|length %}[{{ q }}]", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_chainable_nested", "[{{ [1][:, :][:, :] is undefined }}|{{ [1][:, :].a[:, :] }}|{{ [1][:, :][:, :] }}]", {"env": {"undefined": "chainable"}}),
+    # the parts of a tuple of slices of a ChainableUndefined are evaluated (Codex on #880)
+    ("tuple_of_slices_chainable_failing_part", "[{{ [1][:, :][:, 1 / 0] }}]", {"env": {"undefined": "chainable"}}),
     ("tuple_of_slices_nested_default", "[{{ [1][:, :][:, :] is undefined }}]"),
     # a step of a filter chain folds on its own; the engine's candidate is the whole chain (0497)
     ("tuple_of_slices_chain_step", "[{% if [1][:, :]|sort|first %}y{% endif %}]"),
