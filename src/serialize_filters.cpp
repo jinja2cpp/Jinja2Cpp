@@ -1041,6 +1041,11 @@ private:
                 // A generator or reversed() iterator is no list to json.dumps (docs/tasks/0387)
                 throw TemplateRuntimeError("Object of type "s + iterator + " is not JSON serializable");
             }
+            if (const char* viewType = DictViewTypeName(list->GetIteratorKind()))
+            {
+                // Nor is a dict view (docs/tasks/0489)
+                throw TemplateRuntimeError("Object of type "s + viewType + " is not JSON serializable");
+            }
             if (list->IsRange())
             {
                 // Nor is a range (docs/tasks/0401)

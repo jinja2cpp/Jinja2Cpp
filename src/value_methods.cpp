@@ -1,6 +1,7 @@
 #include "value_methods.h"
 
 #include "big_int.h"
+#include "borrowed_cells.h"
 #include "case_mapping.h"
 #include "cycle_collector.h"
 #include "dialect.h"
@@ -2370,6 +2371,23 @@ InternalValueList& MutableItems(const InternalValue& self)
     return *items;
 }
 
+// The cell of the module's data `self` reads, if it has one
+const BorrowedCell* ListCell(const InternalValue& self) noexcept
+{
+    try
+    {
+        const auto list = AsList(self);
+        const auto* accessor = list ? list->GetAccessor() : nullptr;
+        const auto* link = accessor ? accessor->GetCellLink() : nullptr;
+        return link ? link->Get(*accessor) : nullptr;
+    }
+    catch (...)
+    {
+        // A link that cannot allocate finds no cell: the restore then copies as before
+        return nullptr;
+    }
+}
+
 InternalValue ListIndex(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "index", 1, 3);
@@ -2414,8 +2432,9 @@ InternalValue ListAppend(const InternalValue& self, const CallParams& params, Re
 InternalValue ListExtend(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "extend", 1, 1);
+    // Any iterable: a string's characters, a dict's keys (docs/tasks/0489)
     bool isConverted = false;
-    auto other = ConvertToList(params.posParams[0], isConverted);
+    auto other = ConvertToList(params.posParams[0], isConverted, false);
     if (!isConverted)
     {
         Raise("'" + TypeName(params.posParams[0]) + "' object is not iterable");
@@ -2515,9 +2534,20 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     }
 
     InternalValueList values;
-    values.swap(MutableItems(self));
-    // The render's memory budget counted the buffer taken here (docs/tasks/0459)
+    // A key call's module call can hand the list to the host, and the restore below then needs a
+    // copy of the list to write into (D8). It is made here, before anything changes, so that the
+    // restore does not allocate and a list whose key call failed is as it was (docs/tasks/0485)
+    auto& taken = MutableItems(self);
+    InternalValue spare;
+    if (keyFn && CycleCollector::InModuleCall() && ListCell(self))
+    {
+        spare = InternalValue(ListAdapter::CreateAdapter(InternalValueList{}));
+    }
+    values.swap(taken);
+    // The render's memory budget counted the buffer taken here (docs/tasks/0459) if the list's storage was counted
+    // (docs/tasks/0483)
     const std::uint64_t takenCapacity = values.capacity();
+    const bool takenCharged = ListOf(self).ItemsCharged();
     // The items are found again after the key calls: a module call a key function makes can hand
     // the list's items to the host and give the list new ones (docs/tasks/0331, D8), and the
     // items the host was handed are never written again
@@ -2525,9 +2555,11 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     {
         const InternalValue& self;
         InternalValueList& values;
-        Restore(const InternalValue& list, InternalValueList& taken)
+        InternalValue& spare;
+        Restore(const InternalValue& list, InternalValueList& taken, InternalValue& spareList)
             : self(list)
             , values(taken)
+            , spare(spareList)
         {
         }
         Restore(const Restore&) = delete;
@@ -2543,13 +2575,18 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
             }
             try
             {
+                // The items the host was handed stay as they are; the list moves to the spare
+                if (const auto* cell = AsList(spare) ? ListCell(self) : nullptr)
+                {
+                    cell->UnshareWith(spare);
+                }
                 MutableItems(self).swap(values);
             }
             catch (...) // NOLINT(bugprone-empty-catch): out of memory copying the list's items; it keeps what the key calls left
             {
             }
         }
-    } restore{ self, values };
+    } restore{ self, values, spare };
 
     InternalValueList keys;
     if (keyFn)
@@ -2585,10 +2622,22 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     }
     values.clear();
     // The taken buffer, and any a key call grew meanwhile, are freed for one that fits the items: the budget gives
-    // back the difference
-    const std::uint64_t replacedCapacity = takenCapacity + items.capacity();
+    // back the difference, of the buffers that were counted. The new buffer is not counted, and a counted storage
+    // gives it back with the rest when it is freed, so it is taken off here
+    const bool itemsCharged = ListOf(self).ItemsCharged();
+    const std::uint64_t replacedCapacity = (takenCharged ? takenCapacity : 0) + (itemsCharged ? items.capacity() : 0);
     items = std::move(sorted);
-    ReleaseRenderMemory((replacedCapacity - items.capacity()) * sizeof(InternalValue));
+    const std::uint64_t keptCapacity = itemsCharged ? items.capacity() : 0;
+    if (replacedCapacity >= keptCapacity)
+    {
+        ReleaseRenderMemory((replacedCapacity - keptCapacity) * sizeof(InternalValue));
+    }
+    else
+    {
+        // A counted copy (D8) of a list whose storage was not counted now holds the sorted buffer, which it gives
+        // back when it goes: charged here, where nothing may throw any more (an overdraft fails the next step)
+        ChargeObjectMemory((keptCapacity - replacedCapacity) * sizeof(InternalValue));
+    }
     if (modified)
     {
         Raise("list modified during sort");
@@ -2676,7 +2725,8 @@ TemplateDict& MutableDict(const InternalValue& self)
 InternalValue DictKeys(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "keys", 0, 0);
-    return ListAdapter::CreateAdapter(MapOf(self).GetKeyValues());
+    // The views are lists marked with their kind (docs/tasks/0489)
+    return ListAdapter::CreateIterator(MapOf(self).GetKeyValues(), IteratorKind::DictKeys);
 }
 
 InternalValue DictValues(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -2688,7 +2738,7 @@ InternalValue DictValues(const InternalValue& self, const CallParams& params, Re
     {
         result.push_back(std::move(entry.value));
     }
-    InternalValue list = ListAdapter::CreateAdapter(std::move(result));
+    InternalValue list = ListAdapter::CreateIterator(std::move(result), IteratorKind::DictValues);
     if (self.ShouldExtendLifetime())
     {
         list.SetParentData(self);
@@ -2705,7 +2755,7 @@ InternalValue DictItems(const InternalValue& self, const CallParams& params, Ren
     {
         result.push_back(MakeTuple({ std::move(entry.key), std::move(entry.value) }));
     }
-    InternalValue list = ListAdapter::CreateAdapter(std::move(result));
+    InternalValue list = ListAdapter::CreateIterator(std::move(result), IteratorKind::DictItems);
     if (self.ShouldExtendLifetime())
     {
         list.SetParentData(self);
@@ -2904,6 +2954,99 @@ InternalValue DictClear(const InternalValue& self, const CallParams& params, Ren
     items.Clear();
     return InternalValue(NoneValue());
 }
+
+// The key and value of an item of a dict_items view: a 2-tuple, as dictitems_contains asks
+bool ViewItemParts(const InternalValue& item, InternalValue& key, InternalValue& value)
+{
+    if (const auto* pair = GetIf<KeyValuePair>(&item))
+    {
+        key = pair->key;
+        value = pair->value;
+        return true;
+    }
+    const auto list = AsList(item);
+    if (!list || !list->IsTuple() || list->GetSize() != std::optional<size_t>(2))
+    {
+        return false;
+    }
+    key = list->GetValueByIndex(0);
+    value = list->GetValueByIndex(1);
+    return true;
+}
+
+// `in` of a dict_keys or dict_items view as Python's is: one lookup of the item's key, not a
+// walk of the view (docs/tasks/0489). The view's keys are held by their tokens
+class DictViewLookup
+{
+public:
+    explicit DictViewLookup(const ListRef& view)
+        : m_isItems(view.GetIteratorKind() == IteratorKind::DictItems)
+    {
+        for (const auto& entry : view)
+        {
+            InternalValue key = entry;
+            InternalValue value;
+            if (m_isItems && !ViewItemParts(entry, key, value))
+            {
+                continue;
+            }
+            // The keys of a view hash: they come from a dict
+            if (auto token = MakeDictKey(key))
+            {
+                m_entries.emplace(std::move(*token), std::move(value));
+            }
+        }
+    }
+
+    // An unhashable key is Python's TypeError; an item that is no 2-tuple is in no dict_items
+    [[nodiscard]] bool Contains(const InternalValue& item) const
+    {
+        InternalValue key = item;
+        InternalValue value;
+        if (m_isItems && !ViewItemParts(item, key, value))
+        {
+            return false;
+        }
+        const char* unhashable = nullptr;
+        const auto token = MakeDictKey(key, &unhashable);
+        if (!token)
+        {
+            ThrowUnhashable(unhashable);
+        }
+        const auto found = m_entries.find(*token);
+        return found != m_entries.end() && (!m_isItems || Equals(value, found->second));
+    }
+
+private:
+    InternalDict m_entries;
+    bool m_isItems;
+};
+
+InternalValue DictViewIsDisjoint(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "isdisjoint", 1, 1);
+    // Any iterable: a string's characters, a dict's keys
+    bool isConverted = false;
+    auto other = ConvertToList(params.posParams[0], isConverted, false);
+    if (!isConverted)
+    {
+        Raise("'" + TypeName(params.posParams[0]) + "' object is not iterable");
+    }
+    const auto view = *AsList(self);
+    // Python walks the smaller of two set-like views and looks its items up in the larger one
+    if (const auto kind = other.GetIteratorKind(); (kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems) && other.GetSize().value_or(0) > view.GetSize().value_or(0))
+    {
+        const DictViewLookup lookup(other.Ref());
+        return std::none_of(view.begin(), view.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
+    }
+    const DictViewLookup lookup(view);
+    return std::none_of(other.begin(), other.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
+}
+
+// The methods of dict_keys and dict_items; dict_values has none (docs/tasks/0489)
+const MethodInfo DictViewMethods[] = {
+    { "isdisjoint", DictViewIsDisjoint, false },
+};
 
 const MethodInfo DictMethods[] = {
     { "keys", DictKeys, false },
@@ -3124,9 +3267,9 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
         if (auto list = AsList(self))
         {
             // An iterator (a lazy filter's generator) has none of a list's methods (docs/tasks/0383)
-            if (list->GetIteratorKind() != IteratorKind::None)
+            if (const auto kind = list->GetIteratorKind(); kind != IteratorKind::None)
             {
-                return nullptr;
+                return kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems ? FindIn(DictViewMethods, name) : nullptr;
             }
             return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
         }
@@ -3167,6 +3310,7 @@ bool IsMethodName(std::string_view name)
         add(StrMethods);
         add(ListMethods);
         add(DictMethods);
+        add(DictViewMethods);
         add(IntMethods);
         add(FloatMethods);
         // The data attributes take the same getattr path
@@ -3515,5 +3659,11 @@ void ThrowNoAttribute(const InternalValue& obj, const std::string& name)
 }
 
 } // namespace methods
+
+bool AllInDictView(const ListRef& items, const ListRef& view)
+{
+    const methods::DictViewLookup lookup(view);
+    return std::all_of(items.begin(), items.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
+}
 } // namespace v2
 } // namespace jinja2

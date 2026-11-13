@@ -530,7 +530,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | done |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
 | [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
-| [0463](0463-outer-render-sees-nested-global-write.md) | The outer render does not see a global a nested render changed first | robustness | low | open |
+| [0463](0463-outer-render-sees-nested-global-write.md) | The outer render does not see a global a nested render changed first | robustness | low | done |
 | [0464](0464-lower-upper-tests-cased-letters.md) | `lower` and `upper` tests: a string with no cased letter is neither | parity | medium | done |
 | [0465](0465-dotted-filter-test-names.md) | Dotted filter and test names (`x|ns.f`, `x is ns.t`) | parity | low | done |
 | [0466](0466-python-format-map-native-attribute.md) | The Python module answers format_map from NativeAttribute, which the engine now has | python | low | done |
@@ -542,13 +542,18 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | done |
 | [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | open |
 | [0480](0480-module-call-export-self-holding-leak.md) | A self-holding container a module's call hands a host leaks when the host keeps it | robustness | low | open |
-| [0481](0481-nested-render-macro-in-shared-global-use-after-free.md) | A macro a nested render writes into a shared global is called after its template is gone | lifetime | high | open |
+| [0481](0481-nested-render-macro-in-shared-global-use-after-free.md) | A macro a nested render writes into a shared global is called after its template is gone | lifetime | high | done |
 | [0482](0482-module-tree-keep-alives.md) | End the trees a module replaced on a source change | robustness | low | open |
-| [0483](0483-render-memory-uncharged-release.md) | Give the render memory budget back only what it was charged | robustness | low | open |
-| [0484](0484-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds the Load check still decides differently from Jinja2 | parity | low | open |
-| [0485](0485-list-sort-restore-needs-memory.md) | A failed list.sort() loses the list's items when memory stays spent | robustness | low | open |
-| [0486](0486-cycle-walk-needs-memory.md) | Reference cycles leak when memory stays spent at the end of a render | robustness | low | open |
+| [0483](0483-render-memory-uncharged-release.md) | Give the render memory budget back only what it was charged | robustness | low | done |
+| [0484](0484-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds the Load check still decides differently from Jinja2 | parity | low | done |
+| [0485](0485-list-sort-restore-needs-memory.md) | A failed list.sort() loses the list's items when memory stays spent | robustness | low | done |
+| [0486](0486-cycle-walk-needs-memory.md) | Reference cycles leak when memory stays spent at the end of a render | robustness | low | done |
 | [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | open |
 | [0488](0488-upstream-reports-and-recipes.md) | Report our fixes upstream and update the package recipes | release | low | open |
-| [0489](0489-dict-views-type.md) | `d.items()`, `d.keys()` and `d.values()` are lists, not dict views | parity | low | open |
+| [0489](0489-dict-views-type.md) | `d.items()`, `d.keys()` and `d.values()` are lists, not dict views | parity | low | done |
 | [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | open |
+| [0491](0491-nested-render-closure-and-self-after-its-end.md) | A nested render's closures and `self` stored in a shared global lose their frames | parity | low | open |
+| [0492](0492-nested-render-kept-trees-outside-the-memory-budget.md) | The trees an outer render keeps for its nested renders are outside the memory budget | robustness | high | open |
+| [0495](0495-strict-undefined-compare-leftovers.md) | StrictUndefined in the tests and methods that compare | parity | low | open |
+| [0496](0496-dict-view-leftovers.md) | What dict views still lack after 0489 | parity | low | open |
+| [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | open |

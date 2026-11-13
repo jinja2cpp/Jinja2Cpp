@@ -1496,6 +1496,60 @@
    "output": "[1, 2, 1, 2]"
   },
   {
+   "id": "methods.list_extend_iterables",
+   "template": "{% set x = [] %}{% do x.extend('ab') %}{% do x.extend({'k': 1}) %}{% do x.extend({'v': 2}.values()) %}{% do x.extend(range(2)) %}{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "['a', 'b', 'k', 2, 0, 1]"
+  },
+  {
+   "id": "methods.list_extend_int",
+   "template": "{% set x = [] %}{% do x.extend(1) %}{{ x }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
    "id": "methods.list_pop_chain",
    "template": "{{ l.pop().bit_length() }}{{ l }}",
    "context": {

@@ -2,6 +2,12 @@
 // ErrorCode::ResourceLimitExceeded and names its field, the depth limits keep
 // ErrorCode::RecursionLimitExceeded, and every template here renders with the default limits.
 #include "test_tools.h"
+// The internals are in the static library only (FreeingUncountedObjectsGivesNoBudget)
+#ifndef JINJA2CPP_LINK_AS_SHARED
+#include "../src/internal_value.h"
+#include "../src/recursion_guard.h"
+#include "../src/template_dict.h"
+#endif
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
@@ -23,6 +29,7 @@
 #include <streambuf>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
@@ -717,6 +724,60 @@ TEST(LimitsCachesTest, DroppedReloadGivesNoBudget)
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
 }
+
+#ifndef JINJA2CPP_LINK_AS_SHARED
+// Freeing an object the render was not charged for gives the budget nothing (docs/tasks/0483): a string, list or dict
+// made before the render (the host's data, a cache's), by a render without a budget or under UncountedMemoryScope.
+// The loop frees such objects again and again while the budget keeps its own; each free once raised memoryLeft
+TEST(LimitsCachesTest, FreeingUncountedObjectsGivesNoBudget)
+{
+    using detail::t_renderLimits;
+    const auto makeObjects = [] {
+        std::vector<InternalValue> objects;
+        for (int n = 0; n != 50; ++n)
+        {
+            objects.emplace_back(std::string(1000, 'u'));
+            objects.emplace_back(ListAdapter::CreateAdapter(InternalValueList(100, InternalValue(int64_t{ n }))));
+            TemplateDict dict;
+            dict.SetString("key" + std::to_string(n), InternalValue(int64_t{ n }));
+            objects.emplace_back(CreateMapAdapter(std::move(dict)));
+        }
+        return objects;
+    };
+    // Without a budget, and under a scope that stops counting
+    auto bare = makeObjects();
+    Settings::Limits limits;
+    limits.maxRenderMemory = 1 << 20;
+    RenderLimitsScope scope(&limits, nullptr);
+    auto scoped = [&] {
+        const UncountedMemoryScope uncounted;
+        return makeObjects();
+    }();
+    // The budget's own objects are counted, and giving them back is the one thing that raises memoryLeft
+    auto counted = makeObjects();
+    const std::uint64_t held = t_renderLimits.memoryLeft;
+    ASSERT_LT(held, t_renderLimits.memoryBudget);
+    bare.clear();
+    scoped.clear();
+    // The list and dict adapters are generic objects, credited by their own size (about 150 bytes each, 100 here);
+    // the contents (3 KB a list) never are
+    EXPECT_LE(t_renderLimits.memoryLeft, held + std::uint64_t{ 25600 });
+    counted.clear();
+    EXPECT_EQ(t_renderLimits.memoryBudget, t_renderLimits.memoryLeft);
+
+    // A list that was made without a budget and that the render grows keeps the growth counted
+    InternalValue grown = [&] {
+        const UncountedMemoryScope uncounted;
+        return InternalValue(ListAdapter::CreateAdapter(InternalValueList{}));
+    }();
+    ReserveCounted(*AsList(grown).value().GetMutableItems(), 1000);
+    const std::uint64_t afterGrowth = t_renderLimits.memoryLeft;
+    EXPECT_LT(afterGrowth, t_renderLimits.memoryBudget);
+    grown = InternalValue();
+    // The adapter's own size comes back, the 32 KB the render added does not
+    EXPECT_LE(t_renderLimits.memoryLeft, afterGrowth + 256);
+}
+#endif
 
 // UntrustedLimits() bounds what a render keeps: the template of docs/tasks/0459 kept about 1 GB before the step
 // limit stopped it, and now stops on the memory budget

@@ -307,6 +307,11 @@ public:
     // Whether the render that made the cell ended: the values that outlived it read the cell, and
     // nothing writes it (docs/tasks/0331)
     [[nodiscard]] bool IsFrozen() const noexcept { return m_frozen; }
+    // Unshare for a list, with `spare` (an empty list a caller made earlier) as the copy, so that it
+    // cannot run out of memory: what the cell holds now is dropped, which suits a caller about to
+    // replace the items (list.sort(), docs/tasks/0485). False for a frozen cell, whose items nothing
+    // writes. `spare` is left as it was when no copy is needed
+    bool UnshareWith(InternalValue& spare) const noexcept;
 
 private:
     friend class CellLink;

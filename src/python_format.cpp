@@ -78,6 +78,10 @@ const char* TypeName(const InternalValue& val)
         {
             return iterator;
         }
+        if (const char* view = DictViewTypeName(list->GetIteratorKind()))
+        {
+            return view;
+        }
         return list->IsTuple() ? "tuple" : "list";
     }
     return "str";

@@ -218,6 +218,35 @@ bool BorrowedCell::Unshare() const
     return true;
 }
 
+bool BorrowedCell::UnshareWith(InternalValue& spare) const noexcept
+{
+    if (m_frozen)
+    {
+        JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 1), Trace::Num("exp", m_shared ? -1 : 0), Trace::Num("call", 0),
+                                   Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
+        return false;
+    }
+    if (!m_shared)
+    {
+        return true;
+    }
+    if (OwnsItemsAlone())
+    {
+        JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 3), Trace::Num("exp", -1), Trace::Num("call", m_registry->m_call),
+                                   Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
+        m_shared = false;
+        return true;
+    }
+    // As the copy of Unshare, with the caller's empty list in its place
+    JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 4), Trace::Num("exp", -1), Trace::Num("call", m_registry->m_call),
+                               Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
+    m_retired = std::exchange(m_storage, std::move(spare));
+    Bind();
+    m_shared = false;
+    JINJA2CPP_CELL_TRACE_EVENT("copied", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Ptr("g", Trace::Space::NewGen, TraceGen()));
+    return true;
+}
+
 const BorrowedCell* CellLink::Find(const IListAccessor& self) const
 {
     return Find(self.GetIdentity(), true, self.IsGlobalData(), self.IsInSnapshot());
