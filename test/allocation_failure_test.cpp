@@ -260,47 +260,10 @@ protected:
     }
 };
 
-// Stops LeakSanitizer reporting what this thread allocates while it lives, when `pause` is set
-class LeakCheckPause
-{
-public:
-    explicit LeakCheckPause([[maybe_unused]] bool pause)
-#ifdef JINJA2CPP_ALLOC_TESTS_LEAK_CHECK
-        : m_paused(pause)
-    {
-        if (m_paused)
-        {
-            __lsan_disable();
-        }
-    }
-    ~LeakCheckPause()
-    {
-        if (m_paused)
-        {
-            __lsan_enable();
-        }
-    }
-#else
-    {
-    }
-    ~LeakCheckPause() = default;
-#endif
-    LeakCheckPause(const LeakCheckPause&) = delete;
-    LeakCheckPause& operator=(const LeakCheckPause&) = delete;
-
-private:
-#ifdef JINJA2CPP_ALLOC_TESTS_LEAK_CHECK
-    bool m_paused;
-#endif
-};
-
 struct Case
 {
     std::string source;
     std::string expected;
-    // Makes reference cycles: when memory stays spent, the walk at the end of the render that breaks them cannot
-    // allocate its tables and they leak (known gap, task 0486), so the exhausted mode does not leak-check its Render
-    bool makesCycles = false;
 };
 
 // The sources and outputs are ASCII: a wide row widens each character
@@ -413,7 +376,6 @@ protected:
             bool fired = false;
             Result<std::basic_string<CharT>, CharT> result;
             OnFreshThread([&] {
-                const LeakCheckPause pause(g_exhausted && param.makesCycles);
                 Injection injection(n);
                 try
                 {
@@ -944,10 +906,7 @@ TEST_F(AllocationFailureTest, ModuleSortKeepsItsItemsWhenTheCopyFails)
         const auto shown = call("show");
         if (threw)
         {
-            // Known gap (task 0485): with memory spent, the copy the restore needs fails too, and the list is left
-            // empty. Remove the allowance when 0485 lands
-            const bool known = g_exhausted && shown == "[]";
-            ASSERT_TRUE(shown == "[[3], [1], [2]]" || shown == "[[1], [2], [3]]" || known) << shown << " at allocation " << n;
+            ASSERT_TRUE(shown == "[[3], [1], [2]]" || shown == "[[1], [2], [3]]") << shown << " at allocation " << n;
         }
         else
         {
@@ -1229,14 +1188,12 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                          // allocation fails (docs/tasks/0283, LeakSanitizer in the sanitizer job)
                                          Case{ "{% set ns = namespace(l=[]) %}{% set ns.self = ns %}{% set l = [1] %}{{ l.append(l) or '' }}"
                                                "{% set ns.c = cycler(ns) %}{% set ns.f = ns.l.append %}{{ l|length }}",
-                                               "2",
-                                               true },
+                                               "2" },
                                          // Writes to the host's data through its aliases, and a cycle through
                                          // its cell (docs/tasks/0049)
                                          Case{ "{% set y = items %}{% set r = user.roles %}{{ y.append(6) or '' }}{{ r.append('ops') or '' }}"
                                                "{% set f = user.update %}{{ f(x=1) or '' }}{{ items.append(items) or '' }}{{ items|length }}{{ user.roles|length }}{{ user.x }}",
-                                               "731",
-                                               true },
+                                               "731" },
                                          // The i18n extension: {% trans %} with a variable and a plural, and the
                                          // gettext globals (task 0256)
                                          Case{ "{% trans name=user.name %}Hello {{ name }}!{% endtrans %}|{% trans n=items|length %}{{ n }} item"

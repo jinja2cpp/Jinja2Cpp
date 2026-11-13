@@ -1,6 +1,7 @@
 #include "value_methods.h"
 
 #include "big_int.h"
+#include "borrowed_cells.h"
 #include "case_mapping.h"
 #include "cycle_collector.h"
 #include "dialect.h"
@@ -2370,6 +2371,23 @@ InternalValueList& MutableItems(const InternalValue& self)
     return *items;
 }
 
+// The cell of the module's data `self` reads, if it has one
+const BorrowedCell* ListCell(const InternalValue& self) noexcept
+{
+    try
+    {
+        const auto list = AsList(self);
+        const auto* accessor = list ? list->GetAccessor() : nullptr;
+        const auto* link = accessor ? accessor->GetCellLink() : nullptr;
+        return link ? link->Get(*accessor) : nullptr;
+    }
+    catch (...)
+    {
+        // A link that cannot allocate finds no cell: the restore then copies as before
+        return nullptr;
+    }
+}
+
 InternalValue ListIndex(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "index", 1, 3);
@@ -2516,9 +2534,20 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     }
 
     InternalValueList values;
-    values.swap(MutableItems(self));
-    // The render's memory budget counted the buffer taken here (docs/tasks/0459)
+    // A key call's module call can hand the list to the host, and the restore below then needs a
+    // copy of the list to write into (D8). It is made here, before anything changes, so that the
+    // restore does not allocate and a list whose key call failed is as it was (docs/tasks/0485)
+    auto& taken = MutableItems(self);
+    InternalValue spare;
+    if (keyFn && CycleCollector::InModuleCall() && ListCell(self))
+    {
+        spare = InternalValue(ListAdapter::CreateAdapter(InternalValueList{}));
+    }
+    values.swap(taken);
+    // The render's memory budget counted the buffer taken here (docs/tasks/0459) if the list's storage was counted
+    // (docs/tasks/0483)
     const std::uint64_t takenCapacity = values.capacity();
+    const bool takenCharged = ListOf(self).ItemsCharged();
     // The items are found again after the key calls: a module call a key function makes can hand
     // the list's items to the host and give the list new ones (docs/tasks/0331, D8), and the
     // items the host was handed are never written again
@@ -2526,9 +2555,11 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     {
         const InternalValue& self;
         InternalValueList& values;
-        Restore(const InternalValue& list, InternalValueList& taken)
+        InternalValue& spare;
+        Restore(const InternalValue& list, InternalValueList& taken, InternalValue& spareList)
             : self(list)
             , values(taken)
+            , spare(spareList)
         {
         }
         Restore(const Restore&) = delete;
@@ -2544,13 +2575,18 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
             }
             try
             {
+                // The items the host was handed stay as they are; the list moves to the spare
+                if (const auto* cell = AsList(spare) ? ListCell(self) : nullptr)
+                {
+                    cell->UnshareWith(spare);
+                }
                 MutableItems(self).swap(values);
             }
             catch (...) // NOLINT(bugprone-empty-catch): out of memory copying the list's items; it keeps what the key calls left
             {
             }
         }
-    } restore{ self, values };
+    } restore{ self, values, spare };
 
     InternalValueList keys;
     if (keyFn)
@@ -2586,10 +2622,22 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     }
     values.clear();
     // The taken buffer, and any a key call grew meanwhile, are freed for one that fits the items: the budget gives
-    // back the difference
-    const std::uint64_t replacedCapacity = takenCapacity + items.capacity();
+    // back the difference, of the buffers that were counted. The new buffer is not counted, and a counted storage
+    // gives it back with the rest when it is freed, so it is taken off here
+    const bool itemsCharged = ListOf(self).ItemsCharged();
+    const std::uint64_t replacedCapacity = (takenCharged ? takenCapacity : 0) + (itemsCharged ? items.capacity() : 0);
     items = std::move(sorted);
-    ReleaseRenderMemory((replacedCapacity - items.capacity()) * sizeof(InternalValue));
+    const std::uint64_t keptCapacity = itemsCharged ? items.capacity() : 0;
+    if (replacedCapacity >= keptCapacity)
+    {
+        ReleaseRenderMemory((replacedCapacity - keptCapacity) * sizeof(InternalValue));
+    }
+    else
+    {
+        // A counted copy (D8) of a list whose storage was not counted now holds the sorted buffer, which it gives
+        // back when it goes: charged here, where nothing may throw any more (an overdraft fails the next step)
+        ChargeObjectMemory((keptCapacity - replacedCapacity) * sizeof(InternalValue));
+    }
     if (modified)
     {
         Raise("list modified during sort");

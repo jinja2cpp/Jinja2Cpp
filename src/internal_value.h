@@ -149,27 +149,27 @@ class ValueObject
 {
 public:
     ValueObject() = default;
-    // A copy is a new object: its count starts at zero
+    // A copy is a new object: its count starts at zero, and it is not charged, whatever the original was
     ValueObject(const ValueObject& other) noexcept
         : m_flags(other.m_flags)
-        , m_isBorrowed(other.m_isBorrowed)
+        , m_bits(static_cast<uint8_t>(other.m_bits & BorrowedBit))
     {
     }
     ValueObject(ValueObject&& other) noexcept
         : m_flags(other.m_flags)
-        , m_isBorrowed(other.m_isBorrowed)
+        , m_bits(static_cast<uint8_t>(other.m_bits & BorrowedBit))
     {
     }
     ValueObject& operator=(const ValueObject& other) noexcept
     {
         m_flags = other.m_flags;
-        m_isBorrowed = other.m_isBorrowed;
+        SetBorrowedBit(static_cast<uint8_t>(other.m_bits & BorrowedBit));
         return *this;
     }
     ValueObject& operator=(ValueObject&& other) noexcept
     {
         m_flags = other.m_flags;
-        m_isBorrowed = other.m_isBorrowed;
+        SetBorrowedBit(static_cast<uint8_t>(other.m_bits & BorrowedBit));
         return *this;
     }
     virtual ~ValueObject() = default;
@@ -206,10 +206,15 @@ public:
     [[nodiscard]] IteratorKind GetIteratorKind() const noexcept { return static_cast<IteratorKind>((m_flags & IteratorMask) >> IteratorShift); }
     // Whether the object is the list accessor of a range() (IListAccessor::GetRangeInfo), so that
     // an operator on two lists tells a range without a virtual call (docs/tasks/0401)
-    [[nodiscard]] bool IsRange() const noexcept { return m_isRange; }
+    [[nodiscard]] bool IsRange() const noexcept { return (m_bits & RangeBit) != 0; }
     // Whether the object is a list adapter of the host's data (IListAccessor::IsBorrowed), so that a host's call tells
     // the host's list from the template's own without a virtual call
-    [[nodiscard]] bool IsBorrowedList() const noexcept { return m_isBorrowed; }
+    [[nodiscard]] bool IsBorrowedList() const noexcept { return (m_bits & BorrowedBit) != 0; }
+    // Whether the maker counted the object's variable part against a render's memory budget, so that freeing it gives
+    // the bytes back (docs/tasks/0483): a string, a big integer or a list's storage made while a budget was active
+    // (MarkCharged), not one made without a budget or under UncountedMemoryScope. Never copied, and no constructor
+    // reads the budget: the maker marks the object where it charges
+    [[nodiscard]] bool IsCharged() const noexcept { return (m_bits & ChargedBit) != 0; }
     // The thread's snapshot of the globals reaches the object: a global's own adapter, or an item
     // in the block of item adapters such an adapter reads now, whose link to a cell is listed in
     // the cell (CellLink, docs/tasks/0346). Set before the object is shared; cleared on the
@@ -249,9 +254,11 @@ protected:
     // Set by the constructor, before anything shares the object
     void SetIteratorKind(IteratorKind kind) noexcept { m_flags = static_cast<uint8_t>((m_flags & ~IteratorMask) | (static_cast<uint8_t>(kind) << IteratorShift)); }
     // Set by the constructor of a range()'s accessor
-    void SetRange() noexcept { m_isRange = true; }
+    void SetRange() noexcept { m_bits |= RangeBit; }
     // Set by the constructor of a list adapter of the host's data
-    void SetBorrowed() noexcept { m_isBorrowed = true; }
+    void SetBorrowed() noexcept { m_bits |= BorrowedBit; }
+    // Set by the maker, in the branch that charged the object's memory (docs/tasks/0483)
+    void MarkCharged() noexcept { m_bits |= ChargedBit; }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
@@ -260,14 +267,18 @@ private:
     static constexpr uint8_t GlobalFlag = 8;
     static constexpr uint8_t IteratorShift = 4;
     static constexpr uint8_t IteratorMask = 0xF0;
+    static constexpr uint8_t RangeBit = 1;
+    static constexpr uint8_t BorrowedBit = 2;
+    static constexpr uint8_t ChargedBit = 4;
+    void SetBorrowedBit(uint8_t bit) noexcept { m_bits = static_cast<uint8_t>((m_bits & ~BorrowedBit) | bit); }
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
     // In the padding after m_flags, so that the object keeps its size
     mutable bool m_inSnapshot = false;
-    bool m_isRange = false;
-    bool m_isBorrowed = false;
+    // RangeBit, BorrowedBit and ChargedBit
+    uint8_t m_bits = 0;
 };
-// The flags and m_isRange share the padding after the count: every value's object stays this size
+// The flags and bits share the padding after the count: every value's object stays this size
 static_assert(sizeof(ValueObject) <= sizeof(void*) + sizeof(unsigned) + 4, "ValueObject grew");
 
 using ValueObjectPtr = IntrusivePtr<const ValueObject>;
@@ -702,6 +713,9 @@ struct IListAccessor : ValueObject
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)
     [[nodiscard]] virtual InternalValueList* GetMutableItems() const { return nullptr; }
+    // Whether a budget counted the storage GetMutableItems returns when it was made, so that its buffer is given back
+    // when it is replaced (docs/tasks/0483)
+    [[nodiscard]] virtual bool ItemsCharged() const { return false; }
     // Whether len() can change while the render runs: a list the template owns (GetMutableItems),
     // or a host's list that the template changes through the host's own methods (a Python
     // list's append). Then loop.length is len() at its first read, as Jinja2's (docs/tasks/0390)
@@ -855,6 +869,7 @@ public:
     [[nodiscard]] bool IsRange() const noexcept { return m_accessor != nullptr && m_accessor->IsRange(); }
     [[nodiscard]] IteratorKind GetIteratorKind() const { return m_accessor ? m_accessor->GetIteratorKind() : IteratorKind::None; }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
+    [[nodiscard]] bool ItemsCharged() const { return m_accessor != nullptr && m_accessor->ItemsCharged(); }
     [[nodiscard]] bool HasLiveSize() const { return m_accessor != nullptr && m_accessor->HasLiveSize(); }
     [[nodiscard]] GenericList CreateGenericList() const { return m_accessor ? m_accessor->CreateGenericList() : GenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
@@ -974,6 +989,7 @@ public:
     [[nodiscard]] bool IsRange() const noexcept { return Ref().IsRange(); }
     [[nodiscard]] IteratorKind GetIteratorKind() const { return Ref().GetIteratorKind(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return Ref().GetMutableItems(); }
+    [[nodiscard]] bool ItemsCharged() const { return Ref().ItemsCharged(); }
     [[nodiscard]] GenericList CreateGenericList() const { return Ref().CreateGenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const { return Ref().GetEnumerator(); }
     void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const { Ref().RebindEnumerator(enumerator); }
@@ -1123,9 +1139,18 @@ struct StringObject final : ValueObject
     // The caller writes them before it shares the object
     static IntrusivePtr<StringObject> Make(size_t size)
     {
-        ChargeRenderMemory(Bytes(size));
+        const bool counted = RenderMemoryCounted();
+        if (counted)
+        {
+            ChargeRenderMemory(Bytes(size));
+        }
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-        return IntrusivePtr<StringObject>(new (CharCount{ size }) StringObject(size));
+        IntrusivePtr<StringObject> obj(new (CharCount{ size }) StringObject(size));
+        if (counted)
+        {
+            obj->MarkCharged();
+        }
+        return obj;
     }
 
     // The room the characters take after the object
@@ -1152,7 +1177,14 @@ struct StringObject final : ValueObject
     StringObject(StringObject&&) = delete;
     StringObject& operator=(const StringObject&) = delete;
     StringObject& operator=(StringObject&&) = delete;
-    ~StringObject() override { ReleaseRenderMemory(Bytes(m_size)); }
+    // Counted by Make when a budget was active, which marked the object charged
+    ~StringObject() override
+    {
+        if (IsCharged())
+        {
+            ReleaseRenderMemory(Bytes(m_size));
+        }
+    }
 
 private:
     explicit StringObject(size_t size) noexcept
@@ -1190,7 +1222,13 @@ struct BigIntObject final : ValueObject
     BigIntObject& operator=(const BigIntObject&) = delete;
     BigIntObject& operator=(BigIntObject&&) = delete;
     // Make counted the object and its digits against the render's memory budget (docs/tasks/0478)
-    ~BigIntObject() override { ReleaseRenderMemory(Bytes(m_size)); }
+    ~BigIntObject() override
+    {
+        if (IsCharged())
+        {
+            ReleaseRenderMemory(Bytes(m_size));
+        }
+    }
 
     [[nodiscard]] static constexpr std::uint64_t Bytes(size_t digits) noexcept { return std::uint64_t{ sizeof(BigIntObject) } + digits; }
 
@@ -1589,7 +1627,9 @@ private:
 static_assert(sizeof(InternalValue) == 32, "docs/tasks/0140");
 
 // The items a generated list reads (a lambda's capture, ListAdapter::CreateAdapter(size, fn)), counted against the
-// render's memory budget as a list's storage is (docs/tasks/0459): each copy is counted, and a move leaves none behind
+// render's memory budget as a list's storage is (docs/tasks/0459): each copy is counted, and a move leaves none behind.
+// Carries no flag, to keep its size (docs/tasks/0483): a generated list is made and freed by renders, and one made
+// without a budget that a counted render frees credits its items once
 class CountedItems
 {
 public:

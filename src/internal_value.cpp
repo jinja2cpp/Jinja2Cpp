@@ -1344,6 +1344,8 @@ public:
     [[nodiscard]] bool ShouldExtendLifetime() const { return false; }
     // Whether this holder alone keeps the storage
     [[nodiscard]] bool IsUnique() const { return m_val->use_count() == 1; }
+    // Whether a budget counted the storage when it was made
+    [[nodiscard]] bool IsCharged() const { return m_val->IsCharged(); }
 
     bool operator==(const BySharedMutable<T>& other) const { return Get() == other.Get(); }
     bool operator!=(const BySharedMutable<T>& other) const { return !(*this == other); }
@@ -1351,16 +1353,34 @@ public:
 private:
     struct Storage final : ValueObject
     {
+        // Counted once, by the constructor (Bytes includes the object), and given back by the destructor only if it
+        // was: not through ValueObject's own functions, which would credit the size of one that was never counted
+        // (docs/tasks/0483)
+        static void* operator new(std::size_t size) { return ::operator new(size); }
+        static void operator delete(void* ptr, std::size_t /*size*/) noexcept { ::operator delete(ptr); }
+
         explicit Storage(T&& val)
             : items(std::move(val))
         {
-            ChargeRenderMemory(Bytes());
+            if (RenderMemoryCounted())
+            {
+                ChargeRenderMemory(Bytes());
+                MarkCharged();
+            }
         }
         Storage(const Storage&) = delete;
         Storage(Storage&&) = delete;
         Storage& operator=(const Storage&) = delete;
         Storage& operator=(Storage&&) = delete;
-        ~Storage() override { ReleaseRenderMemory(Bytes()); }
+        // A storage made without a budget gives nothing back, and what a render grows it by stays counted
+        // (docs/tasks/0483)
+        ~Storage() override
+        {
+            if (IsCharged())
+            {
+                ReleaseRenderMemory(Bytes());
+            }
+        }
 
         // What the render's memory budget counts (docs/tasks/0459): the object, and a list's slots; a
         // dict counts its entries itself (TemplateDict)
@@ -2292,6 +2312,11 @@ public:
         const auto* cell = m_link.Get(*this);
         return cell ? cell->MutableItems() : nullptr;
     }
+    [[nodiscard]] bool ItemsCharged() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell && cell->List().ItemsCharged();
+    }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
     {
         // A global's data is the host's, whatever holds it
@@ -2728,6 +2753,11 @@ public:
         const auto* cell = m_link.Get(*this);
         return cell ? cell->MutableItems() : nullptr;
     }
+    [[nodiscard]] bool ItemsCharged() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell && cell->List().ItemsCharged();
+    }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), AdaptersOwner(m_values)); }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
@@ -2989,6 +3019,7 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
         [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
         [[nodiscard]] InternalValueList* GetMutableItems() const override { return &m_values.Get(); }
+        [[nodiscard]] bool ItemsCharged() const override { return m_values.IsCharged(); }
         [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
@@ -3412,6 +3443,7 @@ public:
     [[nodiscard]] const void* GetIdentity() const override { return m_items.GetIdentity(); }
     [[nodiscard]] const RangeInfo* GetRangeInfo() const override { return m_items.GetRangeInfo(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const override { return m_items.GetMutableItems(); }
+    [[nodiscard]] bool ItemsCharged() const override { return m_items.ItemsCharged(); }
     [[nodiscard]] const std::vector<std::string>* GetFieldNames() const override { return m_fieldNames.get(); }
     void Traverse(const TraverseFn& fn) const override
     {
