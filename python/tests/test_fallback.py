@@ -19,9 +19,10 @@ from jinja2cpp.nativetypes import NativeEnvironment
 
 # A syntax of Jinja2 the engine does not parse: a subscript of a literal by a tuple of slices whose
 # fold Jinja2 finds in a step of a filter chain, where the engine checks only the whole chain (task
-# 0497); the `if` renders "" whatever the environment (unfolded, it compiles to invalid Python). A
+# 0497); `default` folds also with StrictUndefined, and the `if` renders "" whatever the environment
+# (unfolded, it compiles to invalid Python). A
 # template with NOPARSE in it goes to Jinja2; test_candidate_is_unparsable checks it
-NOPARSE = "{% if [1][:, :]|sort|first %}{% endif %}"
+NOPARSE = '{% if [1][:, :]|default([])|map("string") %}{% endif %}'
 UNPARSABLE = "a" + NOPARSE + "{{ 1 }}b"
 UNPARSABLE_RESULT = "a1b"
 

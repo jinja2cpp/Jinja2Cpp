@@ -2,3 +2,4 @@
 # Format and kinds: test/parity/README.md.
 
 subscripts.tuple_of_slices_chain_step rejects 0497 Jinja2 folds each step of a filter chain, here [1][:, :]|sort, to a constant; the engine's fold candidate is the whole chain, whose value (an undefined) does not fold
+subscripts.tuple_of_slices_chain_step_strict rejects 0497 as tuple_of_slices_chain_step: [1][:, :]|default([]) folds to [] also with StrictUndefined, the map step does not (pass_context)

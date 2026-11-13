@@ -150,4 +150,5 @@ CASES = [
     ("tuple_of_slices_nested_default", "[{{ [1][:, :][:, :] is undefined }}]"),
     # a step of a filter chain folds on its own; the engine's candidate is the whole chain (0497)
     ("tuple_of_slices_chain_step", "[{% if [1][:, :]|sort|first %}y{% endif %}]"),
+    ("tuple_of_slices_chain_step_strict", "[{% if [1][:, :]|default([])|map('string') %}y{% endif %}]", {"env": {"undefined": "strict"}}),
 ]
