@@ -5,7 +5,7 @@ area: parity
 depends: [0471]
 touches: [src/expression_parser.cpp#ParseSubscript]
 shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt, python/tests/test_fallback.py]
-pr: https://github.com/jinja2cpp/Jinja2Cpp/pulls?q=head%3Aclaude%2Fproject-thread-xfcy8l
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/880
 ---
 # Tuple-of-slices folds the Load check still decides differently from Jinja2
 
