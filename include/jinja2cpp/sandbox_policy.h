@@ -49,6 +49,8 @@ public:
      * method, or an undefined value when there is none), or the value the template reads instead. A refused name
      * is usually `MakeUndefined` with `security` set, whose use fails with \ref ErrorCode::SecurityError; a value
      * the engine lacks (a method of Python's `str`) may be any value, a \ref UserCallable among them.
+     * The engine answers `__class__` of its own values with their Python class (`<class 'str'>`): a policy that
+     * leaves the name alone lets the template read it, where Jinja2 refuses every name with an underscore.
      *
      * @param obj   The value, as a host callable gets it: `loop` and a namespace as a snapshot of their
      *              attributes (\ref GenericMap::GetObjectClass names their class), a macro, `caller` or a

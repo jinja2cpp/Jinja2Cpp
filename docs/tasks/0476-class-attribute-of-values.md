@@ -34,5 +34,6 @@ are equal, `sameas` and the same dict key, and it equals nothing else. `x.__clas
 while `d.__class__` is the class, as in Python. Not covered: host objects (their own attribute), maps
 whose keys come first (reflected structs), a value whose Python class the engine does not name,
 dict views (0489, `list` here), and calling a class (`'a'.__class__()`, Python's constructor; it
-fails as calling a missing attribute). With a sandbox policy the policy judges the name first, as
+fails as calling a missing attribute); these and the verifier's other findings are 0490. Attribute paths
+(`map(attribute='__class__.__name__')`, `selectattr`, `unique`, `sort`) reach it too. With a sandbox policy the policy judges the name first, as
 for any attribute (public_sandbox_policy_test.cpp). Cases: `literals.class_*`.

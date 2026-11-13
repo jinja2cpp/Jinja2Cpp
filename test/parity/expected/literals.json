@@ -899,6 +899,38 @@
     "type": "TypeError",
     "message": "'type' object is not iterable"
    }
+  },
+  {
+   "id": "literals.class_through_attribute_paths",
+   "template": "{{ [1, 'a', 2.5, none]|map(attribute='__class__.__name__')|join(',') }}|{{ [1, 'a']|selectattr('__class__')|list }}|{{ [1, 'a', 2]|unique(attribute='__class__')|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "int,str,float,NoneType|[1, 'a']|[1, 'a']"
+  },
+  {
+   "id": "literals.class_sort_key",
+   "template": "{{ [1, 'a']|sort(attribute='__class__')|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'type' and 'type'"
+   }
+  },
+  {
+   "id": "literals.class_format_item_of_none",
+   "template": "{{ '{0[__class__]}'.format(none) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not subscriptable"
+   }
   }
  ]
 }

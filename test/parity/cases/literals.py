@@ -110,4 +110,7 @@ CASES = [
     ("class_of_strict_undefined", "{{ x.__class__.__name__ }}", {"env": {"undefined": "strict"}}),
     ("class_tojson", "{{ 'a'.__class__|tojson }}"),
     ("class_not_iterable", "{{ 'a'.__class__|list }}"),
+    ("class_through_attribute_paths", "{{ [1, 'a', 2.5, none]|map(attribute='__class__.__name__')|join(',') }}|{{ [1, 'a']|selectattr('__class__')|list }}|{{ [1, 'a', 2]|unique(attribute='__class__')|list }}"),
+    ("class_sort_key", "{{ [1, 'a']|sort(attribute='__class__')|list }}"),
+    ("class_format_item_of_none", "{{ '{0[__class__]}'.format(none) }}"),
 ]

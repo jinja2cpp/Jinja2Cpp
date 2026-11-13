@@ -1808,11 +1808,13 @@ struct StrOps
         {
             // A sequence takes an index only: GetItem would fall back to its attributes ('{0[start]}' of a range, a
             // named tuple's field), which only the sandbox's formatter reaches through getitem (docs/tasks/0475)
-            if (IsStringValue(key) && !context.GetSandboxPolicy())
+            const bool plainFormatter = IsStringValue(key) && !context.GetSandboxPolicy();
+            if (plainFormatter)
             {
                 ThrowIfSequence(value);
             }
-            result = GetItem(value, key, &context);
+            // Nor is __class__ an item of anything that has items ('{0[__class__]}' of None fails)
+            result = plainFormatter && AsString(key) == "__class__" ? Subscript(value, key, &context) : GetItem(value, key, &context);
         }
         if (!result || (result->IsUndefined() && !HasItem(value, key)))
         {

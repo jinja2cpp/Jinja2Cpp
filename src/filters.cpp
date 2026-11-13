@@ -181,6 +181,10 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
             {
                 next = std::move(*attr);
             }
+            else if (auto cls = methods::ClassAttribute(result, AsString(part), &context))
+            {
+                next = std::move(*cls);
+            }
         }
         if (next.IsUndefined() && !GetUndefinedInfo(next))
         {
