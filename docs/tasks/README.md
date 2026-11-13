@@ -526,7 +526,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | open |
 | [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | done |
 | [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
-| [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | in-progress |
+| [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | done |
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | done |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
 | [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
