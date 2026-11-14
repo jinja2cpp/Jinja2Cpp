@@ -55,7 +55,9 @@ unseeded and never rehashes a crowded group, where robin_hood re-rolled its mult
 review of #891 found names chosen offline to share one group made each set or lookup about 90x slower
 per step under `UntrustedSettings`. The key is drawn on the first hash and xored in before one odd
 multiply. The hash is out of line, with names past 16 bytes and the first draw in functions of their
-own so that the short path saves no registers: inline it changed what GCC inlined into the parser,
+own so that the short path saves no registers; names past 144 bytes are hashed in 144-byte pieces chained through
+the key, because past that hash_bytes chains its lanes and a name can zero one (the review's second round found
+149-byte identifiers colliding that way whatever the key): inline it changed what GCC inlined into the parser,
 +1% to +2.6% on every Load. Its cost over the unkeyed hash, measured: Loads +0.1% to +0.8%,
 `Render/config_file` +0.48% (to +1.08% over master), other renders within noise. Collisions of the
 unkeyed hash itself are 0507, the memory budget's uncounted scope maps 0508.

@@ -61,13 +61,27 @@ JINJA2CPP_NOINLINE std::size_t HashNameDrawingKey(const void* data, std::size_t 
     {
         key = drawn;
     }
-    return Finish(ankerl::unordered_dense::detail::hash_bytes(data, size), key);
+    return HashName(data, size);
 }
+
+// The longest piece hash_bytes hashes in independent blocks. Past it, it chains lanes through its
+// state, and a name can steer a lane to zero and drop eight bytes of its own, whatever key is
+// applied after: 149-byte identifiers that collide that way were found in seconds (security
+// review of #891). Longer names are hashed in pieces of this size, chained through the key
+constexpr std::size_t MaxBlockedBytes = 144;
 
 // Names past 16 bytes. Apart, so that HashName, which the short names take, saves no registers
 JINJA2CPP_NOINLINE std::size_t HashLongName(const void* data, std::size_t size, std::uint64_t key) noexcept
 {
-    return Finish(ankerl::unordered_dense::detail::hash_bytes(data, size), key);
+    const auto* bytes = static_cast<const unsigned char*>(data);
+    std::uint64_t state = key;
+    while (size > MaxBlockedBytes)
+    {
+        state = Finish(ankerl::unordered_dense::detail::hash_bytes(bytes, MaxBlockedBytes), state);
+        bytes += MaxBlockedBytes; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        size -= MaxBlockedBytes;
+    }
+    return Finish(ankerl::unordered_dense::detail::hash_bytes(bytes, size), state);
 }
 } // namespace
 

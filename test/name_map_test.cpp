@@ -118,3 +118,20 @@ TEST(NameMapTest, NameHashIsKeyedPerProcess)
     EXPECT_EQ(HashedName::Hash(name), HashedName::Hash(std::string(name)));
     EXPECT_NE(HashedName::Hash(name), static_cast<std::size_t>(detail::ankerl::unordered_dense::detail::hash_bytes(name.data(), name.size())));
 }
+
+// Past 144 bytes hash_bytes chains its lanes, and these two identifiers steer one to zero: the
+// unkeyed hash drops the eight bytes they differ in, whatever key is applied to it after. Long
+// names are hashed in pieces of 144 bytes chained through the key (security review of #891)
+TEST(NameMapTest, LongNamesThatCollideUnkeyedHashApart)
+{
+    const std::string a = "uVgtkYqDRLAFZmngABCDEFGHIJKLMNOPQRSTUVWXYZabcdefaaaaaaaawQjjBIAJtail_tai"
+                          "l_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_";
+    const std::string b = "uVgtkYqDRLAFZmngABCDEFGHIJKLMNOPQRSTUVWXYZabcdefbaaaaaaawQjjBIAJtail_tai"
+                          "l_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_tail_";
+    ASSERT_EQ(detail::ankerl::unordered_dense::detail::hash_bytes(a.data(), a.size()),
+              detail::ankerl::unordered_dense::detail::hash_bytes(b.data(), b.size()));
+    EXPECT_NE(HashedName::Hash(a), HashedName::Hash(b));
+    // A name of exactly one piece and one just past it hash as names of their own
+    const std::string piece(144, 'x');
+    EXPECT_NE(HashedName::Hash(piece), HashedName::Hash(piece + "x"));
+}
