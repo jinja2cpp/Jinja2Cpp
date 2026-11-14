@@ -233,9 +233,14 @@ TEST(SlotFrameTest, EraseForgetsTheLookupOfTheMovedValue)
     RenderContext context(ext, globals, nullptr);
     context.SetLookupCache(&LookupCache::ForThisThread());
     const HashedName first{ "first", HashedName::Hash("first") };
-    const HashedName last{ "last", HashedName::Hash("last") };
-    // Apart, so that forgetting `first` alone would keep the lookup of `last`
-    ASSERT_NE(LookupCache::BucketOf(first.hash), LookupCache::BucketOf(last.hash));
+    // Apart, so that forgetting `first` alone would keep the lookup of `last`. The name hash is
+    // keyed per process, so the name is found here
+    std::string lastName = "last";
+    while (LookupCache::BucketOf(HashedName::Hash(lastName)) == LookupCache::BucketOf(first.hash))
+    {
+        lastName += "t";
+    }
+    const HashedName last{ lastName, HashedName::Hash(lastName) };
     auto scope = context.EnterScope();
     scope.ForName(first) = InternalValue(int64_t{ 1 });
     scope.ForName(last) = InternalValue(int64_t{ 2 });

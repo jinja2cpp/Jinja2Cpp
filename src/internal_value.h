@@ -1743,7 +1743,7 @@ struct HashedName
     std::string_view name;
     size_t hash;
 
-    static size_t Hash(std::string_view name) noexcept { return detail::HashBytes(name.data(), name.size()); }
+    static size_t Hash(std::string_view name) noexcept { return detail::HashName(name.data(), name.size()); }
     // The key a scope keeps for the name (ScopeRef)
     explicit operator std::string() const { return std::string(name); }
 };

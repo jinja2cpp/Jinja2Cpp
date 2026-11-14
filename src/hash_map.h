@@ -7,6 +7,8 @@
 
 #include "ankerl/unordered_dense.h"
 
+#include <jinja2cpp/config.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -32,10 +34,24 @@ struct ankerl::unordered_dense::detail::key_compare_is_call<std::string> : std::
 {
 };
 
-// The library's hash of a byte string: 64 bits, avalanching
-inline std::size_t HashBytes(const void* data, std::size_t size) noexcept
+// The key of the name hash, drawn once per process (hash_map.cpp). The hash of
+// unordered_dense is unseeded and its index never rehashes a crowded group, so without a
+// key names found offline to share one group cost each set or lookup a scan of all of them,
+// in every process (security review of #891, docs/tasks/0231). Out of line and exported, so
+// that a test linked to the shared library hashes as the library does
+JINJA2CPP_EXPORT std::uint64_t NameHashKey() noexcept;
+
+// The library's hash of a name: 64 bits, avalanching, keyed per process. The keyed
+// finalizer is bijective, so names that differ in the unkeyed hash still differ
+inline std::size_t HashName(const void* data, std::size_t size) noexcept
 {
-    return static_cast<std::size_t>(ankerl::unordered_dense::detail::hash_bytes(data, size));
+    auto x = ankerl::unordered_dense::detail::hash_bytes(data, size) ^ NameHashKey();
+    x ^= x >> 32;
+    x *= UINT64_C(0xd6e8feb86659fd93);
+    x ^= x >> 32;
+    x *= UINT64_C(0xd6e8feb86659fd93);
+    x ^= x >> 32;
+    return static_cast<std::size_t>(x);
 }
 
 // The index of the lowest set bit of a nonzero `bits`

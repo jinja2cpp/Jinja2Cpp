@@ -107,3 +107,14 @@ TEST(NameMapTest, EraseMovesOnlyTheLastValue)
     EXPECT_EQ(map.end(), map.find(std::string("name5")));
     EXPECT_EQ(9U, map.size());
 }
+
+// The name hash is keyed per process: the key stays put while the process runs, and the hash
+// is not unordered_dense's unkeyed one, whose groups names can be chosen offline to crowd
+// (security review of #891)
+TEST(NameMapTest, NameHashIsKeyedPerProcess)
+{
+    EXPECT_EQ(detail::NameHashKey(), detail::NameHashKey());
+    const std::string_view name = "name";
+    EXPECT_EQ(HashedName::Hash(name), HashedName::Hash(std::string(name)));
+    EXPECT_NE(HashedName::Hash(name), static_cast<std::size_t>(detail::ankerl::unordered_dense::detail::hash_bytes(name.data(), name.size())));
+}

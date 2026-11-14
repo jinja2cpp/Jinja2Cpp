@@ -260,6 +260,7 @@ set(JINJA2CPP_SOURCES
     src/expression_parser.cpp
     src/filesystem_handler.cpp
     src/filter_factories.cpp
+    src/hash_map.cpp
     src/filters.cpp
     src/function_base.cpp
     src/json_reader.cpp
