@@ -1,6 +1,6 @@
 #include "hash_map.h"
 
-#include <atomic>
+#include <cstddef>
 #include <chrono>
 #include <cstdint>
 #include <exception>
@@ -39,19 +39,14 @@ std::uint64_t MakeNameHashKey() noexcept
 }
 } // namespace
 
-std::atomic<std::uint64_t> NameHashKeyValue{ 0 }; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-
-std::uint64_t DrawNameHashKey() noexcept
+std::size_t HashName(const void* data, std::size_t size) noexcept
 {
-    // Never zero, which means not drawn yet. Threads that draw at once agree on the first
-    // key stored
-    const auto drawn = MakeNameHashKey() | 1U;
-    std::uint64_t expected = 0;
-    if (NameHashKeyValue.compare_exchange_strong(expected, drawn, std::memory_order_relaxed))
-    {
-        return drawn;
-    }
-    return expected;
+    static const std::uint64_t key = MakeNameHashKey();
+    // Multiplying the keyed hash by an odd constant is a bijection, and folding the high half
+    // down makes the low byte (the group's fingerprint) depend on all of it
+    auto x = (ankerl::unordered_dense::detail::hash_bytes(data, size) ^ key) * UINT64_C(0xd6e8feb86659fd93);
+    x ^= x >> 32;
+    return static_cast<std::size_t>(x);
 }
 } // namespace detail
 } // namespace v2

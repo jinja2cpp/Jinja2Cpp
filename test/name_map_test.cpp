@@ -113,7 +113,7 @@ TEST(NameMapTest, EraseMovesOnlyTheLastValue)
 // (security review of #891)
 TEST(NameMapTest, NameHashIsKeyedPerProcess)
 {
-    EXPECT_EQ(detail::NameHashKey(), detail::NameHashKey());
+    EXPECT_EQ(HashedName::Hash("name"), HashedName::Hash("name"));
     const std::string_view name = "name";
     EXPECT_EQ(HashedName::Hash(name), HashedName::Hash(std::string(name)));
     EXPECT_NE(HashedName::Hash(name), static_cast<std::size_t>(detail::ankerl::unordered_dense::detail::hash_bytes(name.data(), name.size())));

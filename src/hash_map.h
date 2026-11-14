@@ -9,7 +9,6 @@
 
 #include <jinja2cpp/config.h>
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -35,30 +34,14 @@ struct ankerl::unordered_dense::detail::key_compare_is_call<std::string> : std::
 {
 };
 
-// The key of the name hash, drawn once per process. The hash of unordered_dense is unseeded
-// and its index never rehashes a crowded group, so without a key names found offline to share
-// one group cost each set or lookup a scan of all of them, in every process (security review
-// of #891, docs/tasks/0231). Zero until drawn: the first hash draws it (hash_map.cpp), whichever
-// thread and static initializer that is. Exported, so that a test linked to the shared library
-// hashes as the library does
-extern JINJA2CPP_EXPORT std::atomic<std::uint64_t> NameHashKeyValue; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-JINJA2CPP_EXPORT std::uint64_t DrawNameHashKey() noexcept;
-
-inline std::uint64_t NameHashKey() noexcept
-{
-    const auto key = NameHashKeyValue.load(std::memory_order_relaxed);
-    return key != 0 ? key : DrawNameHashKey();
-}
-
-// The library's hash of a name: 64 bits, avalanching, keyed per process. Multiplying the keyed
-// hash by an odd constant is a bijection, and folding the high half down makes the low byte
-// (the group's fingerprint) depend on all of it
-inline std::size_t HashName(const void* data, std::size_t size) noexcept
-{
-    auto x = (ankerl::unordered_dense::detail::hash_bytes(data, size) ^ NameHashKey()) * UINT64_C(0xd6e8feb86659fd93);
-    x ^= x >> 32;
-    return static_cast<std::size_t>(x);
-}
+// The library's hash of a name: 64 bits, avalanching, keyed per process (hash_map.cpp). The
+// hash of unordered_dense is unseeded and its index never rehashes a crowded group, so without
+// a key names found offline to share one group cost each set or lookup a scan of all of them,
+// in every process (security review of #891, docs/tasks/0231). Out of line: names are hashed
+// when a template is parsed, and inline the hash grew every parser function that hashes enough
+// to change what GCC inlines into it (+1% to +2.6% on every Load, even of plain text). Exported,
+// so that a test linked to the shared library hashes as the library does
+JINJA2CPP_EXPORT std::size_t HashName(const void* data, std::size_t size) noexcept;
 
 // The index of the lowest set bit of a nonzero `bits`
 inline unsigned CountTrailingZeros(std::uint32_t bits) noexcept
