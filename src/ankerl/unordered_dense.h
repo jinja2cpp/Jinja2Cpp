@@ -30,8 +30,9 @@
 // jinja2::v2::detail::ankerl rather than in a global ankerl, so that a program that links its
 // own unordered_dense next to the static library shares no symbol with this copy, and the
 // specializations src/hash_map.h makes stay this copy's. Its std::erase_if overload is removed:
-// nothing here uses it, and it would be a global name again. Carry both forward when this file
-// is updated.
+// nothing here uses it, and it would be a global name again. segmented_vector's constructors that
+// copy or move element by element release what they made when that throws (construct_from). Carry
+// all three forward when this file is updated.
 
 #ifndef ANKERL_UNORDERED_DENSE_H
 #define ANKERL_UNORDERED_DENSE_H
@@ -1267,6 +1268,24 @@ private:
         }
     }
 
+    // Jinja2C++ local change (Codex review of jinja2cpp#891): append_everything_from() in a
+    // constructor. When it throws the destructor never runs, so the elements and blocks made so far
+    // are released here before the exception leaves.
+    template <typename Other>
+    void construct_from(Other&& other) {
+#ifdef __cpp_exceptions
+        try {
+            append_everything_from(std::forward<Other>(other));
+        } catch (...) {
+            clear();
+            dealloc();
+            throw;
+        }
+#else
+        append_everything_from(std::forward<Other>(other));
+#endif
+    }
+
     // Last block first, like destroy_tail() below.
     void dealloc() {
         auto ba = Allocator(m_blocks.get_allocator());
@@ -1314,13 +1333,13 @@ public:
             m_blocks = std::move(other.m_blocks);
             m_size = std::exchange(other.m_size, {});
         } else {
-            append_everything_from(std::move(other));
+            construct_from(std::move(other));
         }
     }
 
     segmented_vector(segmented_vector const& other, Allocator alloc)
         : m_blocks(vec_alloc(alloc)) {
-        append_everything_from(other);
+        construct_from(other);
     }
 
     segmented_vector(segmented_vector&& other) noexcept
@@ -1328,7 +1347,7 @@ public:
 
     segmented_vector(segmented_vector const& other)
         : m_blocks(vec_alloc_traits::select_on_container_copy_construction(other.m_blocks.get_allocator())) {
-        append_everything_from(other);
+        construct_from(other);
     }
 
     auto operator=(segmented_vector const& other) -> segmented_vector& {
