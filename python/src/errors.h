@@ -4,11 +4,27 @@
 #include "common.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/exception.h>
 
 #include <string>
+#include <utility>
 
 namespace jinja2cpp_py
 {
+// A StopIteration a Python callable raised, marked for the engine: a call the template makes that it escapes gives
+// undefined, as Jinja2's Context.call makes it (docs/tasks/0479). Elsewhere it is the python_error it was, which
+// ends the render as 0477 has it
+class PyStopIteration final
+    : public nb::python_error
+    , public jinja2::StopIteration
+{
+public:
+    explicit PyStopIteration(nb::python_error&& error) noexcept
+        : nb::python_error(std::move(error))
+    {
+    }
+};
+
 // Where a failed template came from, for TemplateSyntaxError's attributes: None when unknown
 struct ErrorSource
 {
@@ -42,7 +58,9 @@ extern const char* const kIncludedSyntaxNote;
 [[noreturn]] void RaiseTemplateNotFound(nb::handle name);
 // Jinja2's exception for templates not found: TemplatesNotFound for several names, and the search path of
 // a FileSystemLoader of `environment` (None when unknown) in the message (jinja2cpp.loaders._not_found)
-[[noreturn]] void RaiseTemplateNotFound(nb::handle environment, nb::handle names);
+[[noreturn]] void RaiseTemplateNotFound(nb::handle environment, nb::handle names, bool selected = false);
+// The TemplateNotFound the loader of `environment` (a jinja2cpp.Environment, or None) raised for `name`, or None
+nb::object LoaderNotFoundOf(nb::handle environment, const std::string& name);
 
 // Jinja2's message of the error, without the engine's location prefix
 std::string ErrorMessage(const jinja2::ErrorInfo& error);

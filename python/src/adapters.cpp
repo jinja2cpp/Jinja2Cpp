@@ -63,6 +63,12 @@ bool ClearTypeError()
 
 [[noreturn]] void ThrowPending()
 {
+    // A StopIteration out of a host object's attribute or item in a call the template makes gives undefined
+    // (docs/tasks/0479)
+    if (PyErr_ExceptionMatches(PyExc_StopIteration))
+    {
+        throw PyStopIteration(nb::python_error());
+    }
     throw nb::python_error();
 }
 
@@ -873,6 +879,11 @@ jinja2::Value CallPython(PyObject* callable, const jinja2::UserCallableParams& p
     }
     catch (nb::python_error& error)
     {
+        if (error.matches(PyExc_StopIteration))
+        {
+            // Marked for the engine: a call the template makes it escapes gives undefined (docs/tasks/0479)
+            throw PyStopIteration(std::move(error));
+        }
         if (!error.matches(PyExc_Exception))
         {
             // KeyboardInterrupt, SystemExit: noted for the render, which raises it even where the engine absorbs

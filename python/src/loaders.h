@@ -33,6 +33,11 @@ public:
     // The name, filename and source of a template it gives, for TemplateSyntaxError; without `withSource`
     // the source is not read (a Python loader's get_source is not called again)
     [[nodiscard]] virtual ErrorSource SourceOf(const std::string& name, bool withSource) const = 0;
+    // The TemplateNotFound a Python loader raised when `name` was last not found, or None: Jinja2 lets
+    // the loader's own exception through, with its message
+    [[nodiscard]] virtual nb::object NotFound(const std::string& /*name*/) const { return nb::none(); }
+    // Drops the exception NotFound would give
+    virtual void ForgetMissed() const noexcept {}
 };
 using LoaderPtr = std::shared_ptr<const Loader>;
 

@@ -79,6 +79,8 @@ public:
     [[nodiscard]] std::uint64_t MaxSequenceSize() const noexcept { return m_settings.limits.maxSequenceSize != 0 ? m_settings.limits.maxSequenceSize : std::uint64_t{ 1 } << 26; }
     // Where a template the loader gives came from, for its errors and Template.filename
     ErrorSource SourceOf(const std::string& name, bool withSource = true) const;
+    // The TemplateNotFound the loader raised for `name`, or None (Loader::NotFound)
+    [[nodiscard]] nb::object LoaderNotFound(const std::string& name) const;
     void CheckAlive() const;
 
     int Traverse(visitproc visit, void* arg) const;

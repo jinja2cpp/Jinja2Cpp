@@ -3,6 +3,7 @@
 // `sorted(k for k in vars(m) if not k.startswith('__'))`, `str(m)` and `m.name(...)`.
 #include "test_tools.h"
 
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -19,9 +20,11 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -148,6 +151,38 @@ TEST_F(TemplateModuleTest, MacroCalls)
     EXPECT_EQ("[1|4|{}|()]", Call(m, {}, { { "a", 1 }, { "b", 4 } }).AsString());
     EXPECT_EQ("[1|2|{}|(3,)]", Call(m, { 1, 2, 3 }).AsString());
     EXPECT_EQ("[|2|{}|()]", Call(m).AsString());
+}
+
+namespace
+{
+struct ModuleStop
+    : std::runtime_error
+    , jinja2::StopIteration
+{
+    ModuleStop()
+        : std::runtime_error("stop")
+    {
+    }
+};
+} // namespace
+
+// Only a call the template makes stops (docs/tasks/0479): a host's call of a module's macro fails with the exception kept
+TEST_F(TemplateModuleTest, MacroStoppedByAHostException)
+{
+    m_env.AddFilter("stop", jinja2::MakeCallable([](const jinja2::Value&) -> jinja2::Value { throw ModuleStop(); }, jinja2::ArgInfo{ "v" }));
+    auto module = Make("{% macro m() %}a{{ 1|stop }}{% endmacro %}{% macro o() %}[{{ m() }}]{% endmacro %}");
+    try
+    {
+        Call(module.exports["m"]);
+        ADD_FAILURE() << "the call did not fail";
+    }
+    catch (const jinja2::BadResultAccess<char>& failure)
+    {
+        EXPECT_EQ(jinja2::ErrorCode::UserCallableException, failure.error().GetCode());
+        EXPECT_THROW(std::rethrow_exception(failure.error().GetException()), ModuleStop);
+    }
+    // The template's own call of it gives undefined
+    EXPECT_EQ("[]", Call(module.exports["o"]).AsString());
 }
 
 TEST_F(TemplateModuleTest, MacroAttributes)

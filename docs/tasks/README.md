@@ -523,9 +523,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0453](0453-host-sequence-subclass-pprint.md) | pprint of a host list subclass that overrides `__iter__` | api | low | open |
 | [0454](0454-stack-canary-hot-frames.md) | Hot frames that gain a stack canary under -fstack-protector-strong | perf | medium | open |
 | [0455](0455-debug-checks-by-contract-level.md) | RenderContext's debug-only invariants follow the contract level, not NDEBUG | robustness | low | open |
-| [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | open |
+| [0456](0456-generate-items-folding.md) | generate() items where Jinja2 folds output into one | parity | low | done |
 | [0457](0457-python-generate-on-demand.md) | `Template.generate` renders on demand, on the caller's thread | parity | medium | done |
-| [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | open |
+| [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | done |
 | [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | done |
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | done |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
@@ -540,7 +540,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0476](0476-class-attribute-of-values.md) | `x.__class__` of the engine's values | parity | low | done |
 | [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | done |
 | [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | done |
-| [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | open |
+| [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | done |
 | [0480](0480-module-call-export-self-holding-leak.md) | A self-holding container a module's call hands a host leaks when the host keeps it | robustness | low | open |
 | [0481](0481-nested-render-macro-in-shared-global-use-after-free.md) | A macro a nested render writes into a shared global is called after its template is gone | lifetime | high | done |
 | [0482](0482-module-tree-keep-alives.md) | End the trees a module replaced on a source change | robustness | low | open |
@@ -554,6 +554,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | open |
 | [0491](0491-nested-render-closure-and-self-after-its-end.md) | A nested render's closures and `self` stored in a shared global lose their frames | parity | low | open |
 | [0492](0492-nested-render-kept-trees-outside-the-memory-budget.md) | The trees an outer render keeps for its nested renders are outside the memory budget | robustness | high | open |
+| [0493](0493-generate-items-markup.md) | generate() items are str where Jinja2 yields Markup | parity | low | open |
+| [0494](0494-include-odd-names.md) | Include names Jinja2 rejects with other classes | parity | low | open |
 | [0495](0495-strict-undefined-compare-leftovers.md) | StrictUndefined in the tests and methods that compare | parity | low | open |
 | [0496](0496-dict-view-leftovers.md) | What dict views still lack after 0489 | parity | low | open |
 | [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | open |
+| [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | open |
+| [0499](0499-stopped-macro-rollback-into-a-sink.md) | A macro that stops after its output reached the sink keeps the RuntimeError | parity | low | open |
+| [0500](0500-stopiteration-in-gettext-and-format.md) | A StopIteration out of gettext or str.format is undefined in Jinja2 | parity | low | open |
+| [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | open |
+| [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |

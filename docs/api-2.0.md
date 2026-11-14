@@ -181,6 +181,22 @@ locations), 0255 (engine runtime errors).
   marker in `extraParams[1]`). `UnexpectedException` (1) now means "an exception the
   engine did not raise and could not attribute", with location and `GetException()`.
 
+**`jinja2::StopIteration` (task 0479; approved by Ruslan 2026-11-13, before G1).** A mix-in of
+`exception.h` for a host exception that stops a call as Python's `StopIteration` does: a call the
+template makes (a macro, `caller()`, `loop(...)`, a callable) that such an exception escapes gives the
+render's undefined value, as Jinja2's `Context.call` does. Elsewhere (an argument, a top-level filter,
+test or finalize, an included, imported or extended template, a block, `self.b()`, `super()`) it fails
+the render as any host exception does (`UserCallableException`, exception kept), as Jinja2's generator
+render raises `RuntimeError`. A host type derives from it next to its own base
+(`struct MyStop : std::runtime_error, jinja2::StopIteration`); it is not a `std::exception`, has a
+protected default constructor and one out-of-line virtual destructor (a key function: one typeinfo
+across shared libraries). Purely additive. A stopped call's output is taken back from a string target
+in full. A sink target (`RenderTo`, the module's `generate()` and `stream()`) takes it back only while
+the stream's buffer has not reached the sink since the call began; if it has, the render fails as it did
+before. That depends on where the 512-character buffer boundary falls, not only on how much the macro
+wrote: `{{ 'p' * 510 }}[{{ m() }}]` with a two-character macro fails, the same macro after 100
+characters does not. The Python module marks Python's `StopIteration` with it.
+
 **Against Python.** Same: syntax, undefined and not-found errors keep their codes, with
 location; `MemoryError` propagates as `bad_alloc` does. Different: errors arrive as `Result`,
 not raised; host exceptions are wrapped, not propagated (`std::rethrow_exception(e.GetException())`
@@ -322,10 +338,13 @@ the task was done by 0357 S2c; only the docs changed.
 **Jinja2's error classes and generate items (tasks 0432, 0436, before G1).** `ErrorCode` gains
 `TemplateSyntaxError = 1023` and `TemplateAssertionError = 1024` (additive; `ExtraParams[0]` is
 Jinja2's message). `UnexpectedStatement` keeps the tag in `ExtraParams[0]` and adds Jinja2's sentence
-as `ExtraParams[1]`; `TemplateRuntimeError` adds the Python class (`"TypeError"`, `"ValueError"`) as
-`ExtraParams[1]` where the engine knows it. `RenderOptions` grows by `bool writeEachPiece`: a sink
+as `ExtraParams[1]`; `TemplateRuntimeError` adds the Python class (`"TypeError"`, `"ValueError"`, and since 0458
+`"AttributeError"`) as `ExtraParams[1]` where the engine knows it; an include's `TemplateNotFound`
+adds `"list"` as `ExtraParams[1]` when it selected from a list, and an include name that is neither a
+string nor iterable is `TemplateRuntimeError` (`"TypeError"`) where it was `InvalidTemplateName` (0458). `RenderOptions` grows by `bool writeEachPiece`: a sink
 gets one `Write` per piece Jinja2's `generate()` yields (text run, `{{ }}` value, macro or call
-output up to the 512-character buffer), so the Python module's `generate()` yields Jinja2's items.
+output, one piece however long since 0456; a run Jinja2 folds is one piece, and an empty item is an
+empty `Write`), so the Python module's `generate()` yields Jinja2's items.
 Considered: a separate sink callback per piece (a second sink interface for one flag) and
 splitting in the module (the module cannot see node boundaries). Like `generationSpans`, the growth
 of `RenderOptions` must land before G1.

@@ -1,7 +1,9 @@
 #include "statements.h"
 
+#include "call_stop.h"
 #include "contracts.h"
 #include "cycle_collector.h"
+#include "render_failure.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generation_tracker.h"
@@ -38,8 +40,10 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -62,9 +66,18 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 
     if (m_isRecursive)
     {
-        // Jinja2 renders a recursive loop into a buffer: loop(x) is a call of a macro
+        // Jinja2 renders a recursive loop into a buffer: loop(x) is a call of a macro, and generate()
+        // yields the whole loop as one item
         const detail::GenerationFreeze freeze(values);
-        RenderLoop(loopVal, os, values, 0);
+        {
+            const OutStream::PieceHold pieceHold(os);
+            RenderLoop(loopVal, os, values, 0);
+        }
+        // An item even when empty: Jinja2 yields the loop's buffer
+        if (os.WritesEachPiece())
+        {
+            os.FlushPiece();
+        }
         return;
     }
     RenderLoop(loopVal, os, values, 0);
@@ -1305,6 +1318,29 @@ struct LoopFrameReturn
     IntrusivePtr<LoopFrame>& frame;
 };
 
+// A loop that a stopped call leaves (docs/tasks/0479) does what the end of the loop does: a loop object kept past it
+// (`set ns.x = loop`) collects what it has not fetched, and the closures defined in its body keep the frame below it
+// (CaptureClosures). The order is the loop's own: the scopes, then the slots, as each end has it. Collecting runs the
+// filter of a filtered loop, which reads only the scopes below the loop's, as a peek from a macro does
+JINJA2CPP_NOINLINE_INLINE void KeepStoppedLoop(const IntrusivePtr<LoopFrame>& state, bool isFiltered, const InternalValue& loopVal, ListAdapter& loopItems)
+{
+    if (state->use_count() > 2)
+    {
+        try
+        {
+            KeepLoopState(*state, isFiltered, loopVal, std::move(loopItems));
+        }
+        catch (const std::bad_alloc&)
+        {
+            // Out of memory ends the render, as everywhere else: the stop does not hide it
+            throw;
+        }
+        catch (...) // NOLINT(bugprone-empty-catch): the rest of a loop that stopped is best effort, the stop goes on
+        {
+        }
+    }
+}
+
 } // namespace
 
 namespace
@@ -1543,38 +1579,61 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     auto bodyScope = values.EnterScope(std::move(state->bodyScope));
     auto& targetSlots = state->targetSlots;
     const auto target = values.Nodes()[m_target];
-    for (size_t itemIdx = 0; hasItem; ++itemIdx)
+    // The scopes of the loop's end, which a call that stops closes over as the end does
+    const size_t endScopes = values.GetScopesCount() - 1;
+    bool failed = false;
+    try
     {
-        state->SetIndex(itemIdx);
-        state->isPeeked = false;
-        const auto& curValue = state->Item(itemIdx);
-
-        AssignLoopTarget(target, curValue, context, targetSlots, values);
-
-        values.Nodes()[m_mainBody].Render(os, values);
-        bodyScope.Clear();
-
-        // As in Jinja2, the `else` body is skipped only once a pass through the body has
-        // finished without `break` or `continue`
-        auto control = values.TakeLoopControl();
-        if (control == LoopControl::Break)
+        for (size_t itemIdx = 0; hasItem; ++itemIdx)
         {
-            break;
+            state->SetIndex(itemIdx);
+            state->isPeeked = false;
+            const auto& curValue = state->Item(itemIdx);
+
+            AssignLoopTarget(target, curValue, context, targetSlots, values);
+
+            values.Nodes()[m_mainBody].Render(os, values);
+            bodyScope.Clear();
+
+            // As in Jinja2, the `else` body is skipped only once a pass through the body has
+            // finished without `break` or `continue`
+            auto control = values.TakeLoopControl();
+            if (control == LoopControl::Break)
+            {
+                break;
+            }
+            if (control == LoopControl::None)
+            {
+                loopRendered = true;
+            }
+            // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
+            itemIdx = state->index0;
+            if (!state->isPeeked && FetchAfterBody(*state, itemIdx))
+            {
+                continue;
+            }
+            hasItem = !state->isLast;
         }
-        if (control == LoopControl::None)
+    }
+    catch (...)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        // Taken: the collecting below may run calls that are guarded in turn
+        auto failure = detail::TakeKept();
+        if (detail::IsStop(failure))
         {
-            loopRendered = true;
+            values.CaptureClosures(FrameEnd::Soft(endScopes));
+            KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
         }
-        // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
-        itemIdx = state->index0;
-        if (!state->isPeeked && FetchAfterBody(*state, itemIdx))
-        {
-            continue;
-        }
-        hasItem = !state->isLast;
+        std::rethrow_exception(std::move(failure));
     }
     // A closure defined in the body and kept past the loop sees the frame below it (0373)
-    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount() - 1));
+    JINJA2CPP_ASSERT(values.GetScopesCount() - 1 == endScopes);
+    values.CaptureClosures(FrameEnd::Soft(endScopes));
     values.ExitScope(state->bodyScope);
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
@@ -1684,57 +1743,81 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     // Read once: the body may write to anything the arena holds, as far as the compiler knows
     auto* const rootSlot = root.isTuple ? nullptr : &slots[root.slot.value];
     const auto rootHash = root.hash;
-    for (size_t itemIdx = 0; hasItem; ++itemIdx)
+    // The scopes of the loop's end, which a call that stops closes over as the end does
+    const size_t endScopes = values.GetScopesCount();
+    bool failed = false;
+    try
     {
-        state->SetIndex(itemIdx);
-        // The next item is fetched after the body, or when the body peeks (docs/tasks/0304)
-        state->isPeeked = false;
-        const auto& curValue = state->Item(itemIdx);
+        for (size_t itemIdx = 0; hasItem; ++itemIdx)
+        {
+            state->SetIndex(itemIdx);
+            // The next item is fetched after the body, or when the body peeks (docs/tasks/0304)
+            state->isPeeked = false;
+            const auto& curValue = state->Item(itemIdx);
 
-        if (!root.isTuple)
-        {
-            values.BindSlot(*rootSlot, rootHash, curValue);
-        }
-        else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
-        {
-            // `for k, v in d|dictsort` (or d.items()): no list of items to unpack through
-            values.BindSlot(slots[target[1].slot.value], target[1].hash, pair->key);
-            values.BindSlot(slots[target[2].slot.value], target[2].hash, pair->value);
-        }
-        else
-        {
-            AssignTo(target, curValue, sink, values);
-        }
-
-        values.Nodes()[m_mainBody].Render(os, values);
-        bodyScope.Clear();
-
-        // As in Jinja2, the `else` body is skipped only once a pass through the body has
-        // finished without `break` or `continue`
-        auto control = values.TakeLoopControl();
-        if (control == LoopControl::Break)
-        {
-            break;
-        }
-        if (control == LoopControl::None)
-        {
-            loopRendered = true;
-        }
-        // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
-        itemIdx = state->index0;
-        if (!state->isPeeked)
-        {
-            if (state->lazyFilter)
+            if (!root.isTuple)
             {
-                state->isLast = !fetchNext(state->Item(itemIdx + 1));
-                state->isPeeked = true;
+                values.BindSlot(*rootSlot, rootHash, curValue);
             }
-            else if (FetchAfterBody(*state, itemIdx))
+            else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
             {
-                continue;
+                // `for k, v in d|dictsort` (or d.items()): no list of items to unpack through
+                values.BindSlot(slots[target[1].slot.value], target[1].hash, pair->key);
+                values.BindSlot(slots[target[2].slot.value], target[2].hash, pair->value);
             }
+            else
+            {
+                AssignTo(target, curValue, sink, values);
+            }
+
+            values.Nodes()[m_mainBody].Render(os, values);
+            bodyScope.Clear();
+
+            // As in Jinja2, the `else` body is skipped only once a pass through the body has
+            // finished without `break` or `continue`
+            auto control = values.TakeLoopControl();
+            if (control == LoopControl::Break)
+            {
+                break;
+            }
+            if (control == LoopControl::None)
+            {
+                loopRendered = true;
+            }
+            // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
+            itemIdx = state->index0;
+            if (!state->isPeeked)
+            {
+                if (state->lazyFilter)
+                {
+                    state->isLast = !fetchNext(state->Item(itemIdx + 1));
+                    state->isPeeked = true;
+                }
+                else if (FetchAfterBody(*state, itemIdx))
+                {
+                    continue;
+                }
+            }
+            hasItem = !state->isLast;
         }
-        hasItem = !state->isLast;
+    }
+    catch (...)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        // Taken: the collecting below may run calls that are guarded in turn
+        auto failure = detail::TakeKept();
+        if (detail::IsStop(failure))
+        {
+            KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
+            // The end unbinds the slots before it closes over the frame
+            guard.Unbind();
+            values.CaptureClosures(FrameEnd::Soft(endScopes));
+        }
+        std::rethrow_exception(std::move(failure));
     }
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
@@ -1754,7 +1837,8 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     state->lazyFilter = nullptr;
 
     guard.Unbind();
-    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount()));
+    JINJA2CPP_ASSERT(values.GetScopesCount() == endScopes);
+    values.CaptureClosures(FrameEnd::Soft(endScopes));
     values.PopFrameView();
     values.ExitScope(state->bodyScope);
     if (!loopRendered && m_elseBody)
@@ -1807,24 +1891,40 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
             return ResultType();
         }
         auto& e = *eo;
-        for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
+        // Jinja2 filters a loop in a generator: a StopIteration out of the condition is a RuntimeError, not a
+        // stopped call (call_stop.h), so what fails here is sealed. One guard around the loop, outside the
+        // per-item path; sealed after the handler (MSVC)
+        bool failed = false;
+        try
         {
-            auto curValue = e->GetCurrent();
-            try
+            for (bool finish = !e->MoveNext(); !finish; finish = !e->MoveNext())
             {
-                AssignTo(values.Nodes()[m_target], curValue, tempContext, values);
-            }
-            catch (...)
-            {
-                values.ExitScope();
-                throw;
-            }
+                auto curValue = e->GetCurrent();
+                try
+                {
+                    AssignTo(values.Nodes()[m_target], curValue, tempContext, values);
+                }
+                catch (...)
+                {
+                    values.ExitScope();
+                    throw;
+                }
 
-            if (ConvertToBool(values.Nodes()[m_ifExpr].Evaluate(values)))
-            {
-                values.ExitScope();
-                return ResultType(std::move(curValue));
+                if (ConvertToBool(values.Nodes()[m_ifExpr].Evaluate(values)))
+                {
+                    values.ExitScope();
+                    return ResultType(std::move(curValue));
+                }
             }
+        }
+        catch (...)
+        {
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            detail::RethrowKeptSealed();
         }
         values.ExitScope();
 
@@ -1848,34 +1948,50 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, Span<Slot> fram
     auto* const rootSlot = root.isTuple ? nullptr : &sink.slots[root.slot.value + sink.shift];
     const auto rootHash = root.hash;
     bool isFound = false;
-    while (items.MoveNext())
+    // Jinja2 filters a loop in a generator: a StopIteration out of the condition is a RuntimeError, not a stopped
+    // call (call_stop.h), so what fails here is sealed. One guard around the loop, outside the per-item path;
+    // sealed after the handler (MSVC)
+    bool failed = false;
+    try
     {
-        // The items the filter skips render no body, and a plain name or constant checks nothing: each item is a
-        // render step here (Settings::Limits::maxRenderSteps), and reaches a host's poll (RenderOptions::poll) in a
-        // template loaded without limits too
-        CheckStack();
-        // A plain name, the common case, takes the item into its slot and gives it back when
-        // it is kept, without a copy
-        if (rootSlot)
+        while (items.MoveNext())
         {
-            auto& slot = *rootSlot;
-            values.BindSlot(slot, rootHash, items.GetCurrent());
+            // The items the filter skips render no body, and a plain name or constant checks nothing: each item is a
+            // render step here (Settings::Limits::maxRenderSteps), and reaches a host's poll (RenderOptions::poll) in a
+            // template loaded without limits too
+            CheckStack();
+            // A plain name, the common case, takes the item into its slot and gives it back when
+            // it is kept, without a copy
+            if (rootSlot)
+            {
+                auto& slot = *rootSlot;
+                values.BindSlot(slot, rootHash, items.GetCurrent());
+                if (ConvertToBool(filter.Evaluate(values)))
+                {
+                    item = std::move(static_cast<InternalValue&>(slot));
+                    isFound = true;
+                    break;
+                }
+                continue;
+            }
+            auto curValue = items.GetCurrent();
+            AssignTo(target, curValue, sink, values);
             if (ConvertToBool(filter.Evaluate(values)))
             {
-                item = std::move(static_cast<InternalValue&>(slot));
+                item = std::move(curValue);
                 isFound = true;
                 break;
             }
-            continue;
         }
-        auto curValue = items.GetCurrent();
-        AssignTo(target, curValue, sink, values);
-        if (ConvertToBool(filter.Evaluate(values)))
-        {
-            item = std::move(curValue);
-            isFound = true;
-            break;
-        }
+    }
+    catch (...)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        detail::RethrowKeptSealed();
     }
     guard.Unbind();
     values.PopFrameView();
@@ -2020,7 +2136,23 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
     const auto block = blockContext.GetRendererCallback()->Templates().Resolve(p->second[depth]);
     blockContext.PassOverEntryBindings();
     const ArenaSwitch nodesSwitch(blockContext, block.nodes);
-    block.node.RenderBody(os, blockContext, depth);
+    // Jinja2 renders a block through a generator: a StopIteration out of it is a RuntimeError, not a stopped call
+    // Sealed outside the handler: MSVC runs a handler on top of the stack of the throw, and a rethrow from it
+    // would keep that stack through every template boundary the failure passes
+    bool failed = false;
+    try
+    {
+        block.node.RenderBody(os, blockContext, depth);
+    }
+    catch (const detail::RenderFailure&)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        detail::RethrowKeptSealed();
+    }
 }
 
 class TemplateFrameGuard
@@ -2160,6 +2292,8 @@ struct SelfBlockCall
             frame = curFrame;
         }
         blockContext.SetTemplateFrame(frame);
+        // self.b() returns the block's output: one item of generate(), as a macro's output is
+        const OutStream::PieceHold pieceHold(stream);
         RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
     }
 };
@@ -2708,7 +2842,22 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
         innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
         const UnitCall unitCall(innerContext, m_unitLayout);
-        values.Nodes()[m_mainBody].Render(os, innerContext);
+        // Sealed outside the handler: MSVC runs a handler on top of the stack of the throw, and a rethrow from it
+        // would keep that stack through every template boundary the failure passes
+        bool failed = false;
+        try
+        {
+            values.Nodes()[m_mainBody].Render(os, innerContext);
+        }
+        catch (const detail::RenderFailure&)
+        {
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            detail::RethrowKeptSealed();
+        }
         return;
     }
 
@@ -2755,6 +2904,8 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             // The parent block sees the scopes below this block's, wherever super() is called
             // from (a macro the block passes it to): a context on them in the block's own
             parentBlock.emplace(Callable::Macro, [owner = stack->self, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
+                // The value of the call, one item of generate() as a macro's output is
+                const OutStream::PieceHold pieceHold(stream);
                 const auto home = site.Resolve(context);
                 RenderContext superContext(*home.context, home.link);
                 RenderBlockAt(owner->live ? *owner->live : owner->ended, name, depth + 1, stream, superContext);
@@ -2868,29 +3019,46 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     frame.childSelf = asParent ? asParent->childSelf : nullptr;
     TemplateFrameGuard frameGuard(values, &frame);
 
-    if (!m_hasExtends)
+    // A template renders through a generator in Jinja2: a StopIteration out of an included, imported or extended
+    // one is a RuntimeError, not a stopped call (call_stop.h)
+    // Sealed outside the handler: MSVC runs a handler on top of the stack of the throw, and a rethrow from it
+    // would keep that stack through every template boundary the failure passes
+    bool failed = false;
+    try
     {
+        if (!m_hasExtends)
+        {
+            values.Nodes()[m_body].Render(os, values);
+            if (stack && values.KeepsClosures())
+            {
+                KeepEndedSelf(values, frame);
+            }
+            return;
+        }
+        // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
+        // an include or a call block writes there comes out before the parent's, as in Jinja2
         values.Nodes()[m_body].Render(os, values);
-        if (stack && values.KeepsClosures())
+        if (frame.parent)
+        {
+            const auto parent = values.GetRendererCallback()->Templates().Resolve(frame.parent);
+            const ArenaSwitch nodesSwitch(values, parent.nodes);
+            // A template that extends another has a stack of its own
+            JINJA2CPP_ASSERT(stack);
+            parent.node.RenderAsParent(os, values, *stack, name);
+        }
+        if (values.KeepsClosures())
         {
             KeepEndedSelf(values, frame);
         }
-        return;
     }
-    // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
-    // an include or a call block writes there comes out before the parent's, as in Jinja2
-    values.Nodes()[m_body].Render(os, values);
-    if (frame.parent)
+    catch (const detail::RenderFailure&)
     {
-        const auto parent = values.GetRendererCallback()->Templates().Resolve(frame.parent);
-        const ArenaSwitch nodesSwitch(values, parent.nodes);
-        // A template that extends another has a stack of its own
-        JINJA2CPP_ASSERT(stack);
-        parent.node.RenderAsParent(os, values, *stack, name);
+        failed = true;
+        detail::KeepFailure();
     }
-    if (values.KeepsClosures())
+    if (failed)
     {
-        KeepEndedSelf(values, frame);
+        detail::RethrowKeptSealed();
     }
 }
 
@@ -3136,12 +3304,24 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
 {
     auto* callback = values.GetRendererCallback();
     auto templateNames = values.Nodes()[m_expr].Evaluate(values);
+    // Python's get_or_select_template: an undefined name fails as it is used, whatever its policy
+    CheckUndefinedUse(templateNames, UndefinedUse::Call);
     bool isConverted = false;
     ListAdapter list = ConvertToList(templateNames, isConverted);
     // A host sequence is stored as a map and iterates: Python's select_template takes any iterable
     if (!isConverted && AsMap(templateNames))
     {
         list = ConvertToList(templateNames, isConverted, false);
+    }
+    // None selects from an empty list; what is neither a name nor iterable fails, `ignore missing` or not
+    if (!isConverted && templateNames.IsNone())
+    {
+        list = ListAdapter::CreateAdapter(InternalValueList{});
+        isConverted = true;
+    }
+    else if (!isConverted && !templateNames.IsUndefined() && !IsStringValue(templateNames) && !IsStringView(templateNames))
+    {
+        CheckIterable(templateNames);
     }
 
     bool rendered = false;
@@ -3178,7 +3358,9 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
         ValuesList extraParams;
         if (isConverted)
         {
+            // A list of names is Python's select_template, which raises TemplatesNotFound
             extraParams.push_back(IntValue2Value(ListAdapter::CreateAdapter(std::move(tried))));
+            extraParams.emplace_back(std::string("list"));
         }
         else
         {
@@ -3844,6 +4026,38 @@ void BindMacroCall(const MacroArgBinder& binder, bool catchKwargs, bool catchVar
 } // namespace
 
 // Binds the call arguments the way Jinja2's Macro.__call__ does
+namespace
+{
+// Renders the body of a macro. A stop out of it (docs/tasks/0479) ends the frame as the end of the body does, before
+// the guards of the call let go of what the frame held: a closure made in it that something outside holds keeps the
+// names the frame had. The rethrow is outside the handler, as in the body loops (renderer.h)
+// The end of a body that failed: a stop is closed over as the end of the body is
+[[noreturn]] JINJA2CPP_NOINLINE void EndFailedMacroBody(RenderContext& context, size_t link, size_t endScopes)
+{
+    auto failure = detail::TakeKept();
+    if (detail::IsStop(failure))
+    {
+        context.CaptureClosures(FrameEnd::Call(endScopes, link));
+    }
+    std::rethrow_exception(std::move(failure));
+}
+
+template<typename Body>
+void RenderMacroBody(RenderContext& context, size_t link, size_t endScopes, const Body& body)
+{
+    try
+    {
+        body();
+        return;
+    }
+    catch (...)
+    {
+        detail::KeepFailure();
+    }
+    EndFailedMacroBody(context, link, endScopes);
+}
+} // namespace
+
 void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context, size_t link) const
 {
     const RenderDepthGuard depthGuard;
@@ -3864,6 +4078,8 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     // view left by an exception is dropped by the HomeCall. A link that hides no scope is
     // harmless on the view of the arguments, which is pushed anyway
     auto scope = context.EnterScope();
+    // The scopes of the body's end, which the call closes over, also when a stop leaves the body
+    const size_t endScopes = context.GetScopesCount();
     const UnitCall unitCall(context, m_unitLayout);
     if (m_slotNames.empty())
     {
@@ -3876,9 +4092,10 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
         BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
             scope.ForName(name) = std::forward<decltype(value)>(value);
         });
-        context.Nodes()[m_mainBody].Render(stream, context);
+        RenderMacroBody(context, link, endScopes, [&] { context.Nodes()[m_mainBody].Render(stream, context); });
         // A macro defined in the body and kept past the call sees what the call had (0326)
-        context.CaptureClosures(FrameEnd::Call(context.GetScopesCount(), link));
+        JINJA2CPP_ASSERT(context.GetScopesCount() == endScopes);
+        context.CaptureClosures(FrameEnd::Call(endScopes, link));
         if (isLinked)
         {
             context.PopFrameView();
@@ -3896,13 +4113,31 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
     BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
         context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });
-    context.Nodes()[m_mainBody].Render(stream, context);
-    context.CaptureClosures(FrameEnd::Call(context.GetScopesCount(), link));
+    RenderMacroBody(context, link, endScopes, [&] { context.Nodes()[m_mainBody].Render(stream, context); });
+    JINJA2CPP_ASSERT(context.GetScopesCount() == endScopes);
+    context.CaptureClosures(FrameEnd::Call(endScopes, link));
 
     guard.Unbind();
     context.PopFrameView();
     context.ExitScope();
 }
+
+namespace
+{
+// A call block whose call stopped (docs/tasks/0479): Jinja2 yields the undefined value the call gives, which the
+// output cannot join (docs/tasks/0362). A failure that is no stop goes on
+[[noreturn]] void ThrowStoppedCallBlock(RenderContext& values, HomeCall::Snapshot& snapshot, bool stopped)
+{
+    if (!stopped)
+    {
+        detail::RethrowKept();
+    }
+    detail::DropKept();
+    snapshot.Undo();
+    const auto undefined = detail::MakeStopUndefined(values);
+    throw TemplateRuntimeError("expected str instance, "s + Apply<visitors::PythonTypeNameGetter>(undefined) + " found");
+}
+} // namespace
 
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
@@ -3937,7 +4172,22 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         // else is the TypeError of joining the output (docs/tasks/0362). A plain string is
         // escaped under autoescape, where Jinja2 writes it raw: a deliberate divergence that
         // keeps a callable's data escaped (Ruslan, 2026-11-02); Markup, as a macro's, is not
-        const auto result = callable->GetExpressionCallable()(callParams, values);
+        InternalValue result;
+        bool failed = false;
+        HomeCall::Snapshot snapshot(values);
+        try
+        {
+            result = callable->GetExpressionCallable()(callParams, values);
+        }
+        catch (...)
+        {
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            ThrowStoppedCallBlock(values, snapshot, detail::KeptIsStop());
+        }
         if (!IsStringValue(result))
         {
             throw TemplateRuntimeError("expected str instance, "s + Apply<visitors::PythonTypeNameGetter>(result) + " found");
@@ -3947,7 +4197,22 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     }
     // A call block's caller runs into a buffer in Jinja2
     const detail::GenerationFreeze freeze(values);
-    callable->GetStatementCallable()(callParams, os, values);
+    const auto mark = os.GetMark(); // NOLINT(clang-analyzer-deadcode.DeadStores): read on the failure path
+    HomeCall::Snapshot snapshot(values);
+    try
+    {
+        callable->GetStatementCallable()(callParams, os, values);
+        return;
+    }
+    catch (...)
+    {
+        detail::KeepFailure();
+    }
+    if (!detail::KeptIsStop() || !os.RollbackTo(mark))
+    {
+        detail::RethrowKept();
+    }
+    ThrowStoppedCallBlock(values, snapshot, true);
 }
 
 void DoStatement::Render(OutStream& /*os*/, RenderContext& values)

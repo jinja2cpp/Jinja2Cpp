@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/885
 priority: low
 area: parity
 depends: [0477]
-touches: [src/statements.cpp, python/src/adapters.cpp, python/src/environment.cpp]
+touches: [include/jinja2cpp/exception.h, include/jinja2cpp/fwd.h, src/error_info.cpp, src/call_stop.h, src/call_stop.cpp, src/render_failure.h, src/out_stream.h, src/out_stream.cpp, src/generation_tracker.h, src/render_context.h, src/expression_evaluator.cpp, src/statements.cpp, CMakeLists.txt, python/src/errors.h, python/src/adapters.cpp, test/macro_test.cpp, test/template_module_test.cpp, test/chat_template_preset_test.cpp, docs/api-2.0.md]
 shares: [python/tests/test_values.py, docs/python.md]
 ---
 # A StopIteration out of a macro the template calls is undefined in Jinja2
@@ -35,3 +36,20 @@ ends the render as 0477 has it, and that `{{ m().x }}` raises UndefinedError as 
 
 **Done when.** The template above renders `[]` through the module and the test asserts it for both
 engines.
+
+## Implementation
+
+The host marks an exception with the public mix-in `jinja2::StopIteration` (exception.h; approved by Ruslan
+2026-11-13, recorded in docs/api-2.0.md 2.1). The engine's call sites (`CallExpression::RenderCallable` and
+`CallCallable`, which also cover `caller()`, `loop(...)` and host callables; `MacroCallStatement::Render`, which
+gives the 0362 `TemplateRuntimeError`) guard only the invocation, in the shape of the body loops (src/call_stop.h).
+A stop is a `RenderFailure` that no seal covers (`SealStop`, set by the body of an included, imported or extended
+template and by `RenderBlockAt`, which `self.b()`, `super()` and blocks go through, and by `RethrowSealed` where Jinja2
+runs a generator: map, select, reject and their attribute forms, unique, the filter of a loop), a `HostCallableFailure`
+(also sealable) or a raw exception that holds a marked one. The call then closes the frames it left as their ends do
+(closures that something outside holds keep the frame, a kept `loop` collects its items), leaves its context as it
+found it (`HomeCall::Snapshot`), takes its output back (`OutStream::Mark`/`RollbackTo`) and gives `MakeStopUndefined`.
+The spans of a generation block that ended before the stop stay, as transformers' AssistantTracker keeps them. A sink that
+was given the output since the call began cannot take it back and the failure goes on. The module marks Python's
+`StopIteration` (`PyStopIteration`, `CallPython` and `ThrowPending`). Follow-ups: exact rollback for sinks (spill
+while a macro holds the piece), and gettext/ngettext/trans and the sandbox's format/format_map/wrap_str_format.

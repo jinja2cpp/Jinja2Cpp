@@ -59,6 +59,8 @@ public:
     // The value of a template literal, else null. A virtual, as parse-time dynamic_casts
     // show up in Load
     [[nodiscard]] virtual const InternalValue* GetConstant(const NodeArena& /*nodes*/) const { return nullptr; }
+    // The same in a sealed tree, for a render that asks (a render that writes each piece, PieceOf)
+    [[nodiscard]] virtual const InternalValue* ConstantAt(const ArenaView& /*nodes*/) const { return nullptr; }
     // Jinja2's optimizer evaluates it when the template is compiled (as_const): literals and
     // operators, subscripts and the filters that do not need the context, on such
     // operands. A `~` chain of these is joined with str(), which drops Markup
@@ -339,6 +341,7 @@ public:
     LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? values.Nodes()[m_expression].EvaluateRef(values) : LookupResult(); }
     [[nodiscard]] bool IsPure(const NodeArena& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
     [[nodiscard]] const InternalValue* GetConstant(const NodeArena& nodes) const override { return m_expression && !m_tester ? nodes[m_expression].GetConstant(nodes) : nullptr; }
+    [[nodiscard]] const InternalValue* ConstantAt(const ArenaView& nodes) const override { return m_expression && !m_tester ? nodes[m_expression].ConstantAt(nodes) : nullptr; }
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
     std::uint8_t PrepareFold(const NodeArena& nodes) override;
     [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
@@ -585,6 +588,7 @@ public:
     LookupResult EvaluateRef(RenderContext&) override { return LookupResult(m_constant); }
     [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
     [[nodiscard]] const InternalValue* GetConstant(const NodeArena& /*nodes*/) const override { return &m_constant; }
+    [[nodiscard]] const InternalValue* ConstantAt(const ArenaView& /*nodes*/) const override { return &m_constant; }
     [[nodiscard]] bool IsFoldable(const NodeArena& /*nodes*/) const override { return true; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 private:
@@ -651,6 +655,7 @@ public:
     LookupResult EvaluateRef(RenderContext&) override { return LookupResult(m_constant.Get()); }
     [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
     [[nodiscard]] const InternalValue* GetConstant(const NodeArena& /*nodes*/) const override { return &m_constant.Get(); }
+    [[nodiscard]] const InternalValue* ConstantAt(const ArenaView& /*nodes*/) const override { return &m_constant.Get(); }
     [[nodiscard]] bool IsFoldable(const NodeArena& /*nodes*/) const override { return true; }
 
 private:

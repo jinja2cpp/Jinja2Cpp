@@ -159,8 +159,13 @@ engines on a Release build of the module.
   a `StopIteration`: a call in the template makes it undefined (Jinja2's `Context.call`), and out of
   a filter, test or `finalize` it ends `render`, `generate`, `stream` and `module` as
   `RuntimeError: generator raised StopIteration` with the `StopIteration` as its cause, as Jinja2's
-  generator render does (PEP 479, 0477). Out of a macro the template calls Jinja2 gives undefined
-  and the module the `RuntimeError` (0479).
+  generator render does (PEP 479, 0477). A `StopIteration` inside a call the template makes (a macro,
+  `caller()`, `loop(...)`) is undefined there too, as in Jinja2, whatever raised it in the body
+  (a filter, test, `finalize`, a property); out of an included, imported or extended template, a block,
+  `self.b()` or `super()` it stays the `RuntimeError` (0479). A `generate()` or `stream()` keeps the
+  `RuntimeError` whenever the 512-character buffer reached the consumer since the stopped call began,
+  which depends on where the buffer boundary falls, not only on the macro's output (`{{ 'p' * 510 }}[{{ m() }}]`
+  with a two-character macro keeps it).
 - `pass_context`, `pass_eval_context` and `pass_environment` (`jinja2cpp.pass_context`, also in
   `jinja2cpp.utils`; a function marked by Jinja2's own decorators works too, the marker
   `jinja_pass_arg` is read by its name). They apply as in Jinja2 to filters, tests, globals,
@@ -486,9 +491,10 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   a thread), on CPython 3.14.0 and versions after 3.15 (not yet checked), on platforms other than
   Windows and x86-64 or AArch64 Linux, macOS and the BSDs, under a CET or GCS shadow stack, past 8
   generators nested in each other's callables on a thread, or when no stack can be reserved.
-- Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here three), and
-  yields `super()`, `self.block()` and a recursive loop's call as one item, a macro's output of
-  more than 512 characters as one item, and an empty `{{ }}` as `''` (0456).
+- `generate()` yields `str` items where Jinja2 yields the `Markup` an autoescaped value becomes
+  (`{{ x }}` under autoescape); the text of each item is Jinja2's (0493). Jinja2 folds a constant
+  expression that is not a literal (`a{{ 1 + 2 }}b`) into the text around it, one item; here it is
+  an item of its own (0456).
 - A Python loader's `get_source` runs again when a template it gave fails to compile, to show
   the line of the error (twice more with the default fallback, which loads it through Jinja2);
   Jinja2 calls it once.

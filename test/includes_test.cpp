@@ -9,6 +9,7 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
@@ -144,13 +145,79 @@ TEST_F(IncludeTest, TestMissingIncludesError2)
     const auto& error = renderResult.error();
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
-    ASSERT_EQ(1ULL, extraParams.size());
+    // A list of names is marked as one (0458): Python's select_template raises TemplatesNotFound
+    ASSERT_EQ(2ULL, extraParams.size());
     const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].GetData());
     EXPECT_NE(nullptr, filesList);
     EXPECT_EQ(2ULL, filesList->GetSize().value());
+    EXPECT_EQ("list", extraParams[1].AsString());
     auto params_iter = filesList->begin();
     EXPECT_EQ("missing", (*params_iter++).AsString());
     EXPECT_EQ("missing2", (*params_iter++).AsString());
+}
+
+// 0458: the names of an include as Python's get_or_select_template takes them
+TEST_F(IncludeTest, NamesAsSelectTemplateTakesThem)
+{
+    auto render = [this](const std::string& source) {
+        jinja2::Template tpl(&m_env);
+        EXPECT_TRUE(tpl.Load(source).has_value()) << source;
+        return tpl.RenderAsString({});
+    };
+    auto expectNotFound = [](const auto& result, size_t names, bool selected, const std::string& source) {
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, result.error().GetCode()) << source;
+        const auto& extraParams = result.error().GetExtraParams();
+        ASSERT_EQ(selected ? 2ULL : 1ULL, extraParams.size()) << source;
+        const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].GetData());
+        ASSERT_NE(nullptr, filesList) << source;
+        EXPECT_EQ(names, filesList->GetSize().value()) << source;
+        if (selected)
+        {
+            EXPECT_EQ("list", extraParams[1].AsString()) << source;
+        }
+    };
+    // A list of one name, an empty list and none select (TemplatesNotFound); a string does not
+    expectNotFound(render("{% include ['missing'] %}"), 1, true, "list of one");
+    expectNotFound(render("{% include ('missing',) %}"), 1, true, "tuple of one");
+    expectNotFound(render("{% include [] %}"), 0, true, "empty list");
+    expectNotFound(render("{% include none %}"), 0, true, "none");
+    expectNotFound(render("{% include 'missing' %}"), 1, false, "string");
+    EXPECT_EQ("", render("{% include none ignore missing %}").value());
+    EXPECT_EQ("", render("{% include [] ignore missing %}").value());
+
+    // What is neither a name nor iterable is Python's TypeError, `ignore missing` or not
+    for (const std::string source : { "{% include 5 %}", "{% include 5 ignore missing %}", "{% include 1.5 %}", "{% include true %}" })
+    {
+        auto result = render(source);
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(jinja2::ErrorCode::TemplateRuntimeError, result.error().GetCode()) << source;
+        ASSERT_EQ(2ULL, result.error().GetExtraParams().size()) << source;
+        EXPECT_EQ("TypeError", result.error().GetExtraParams()[1].AsString()) << source;
+    }
+    auto number = render("{% include 5 %}");
+    ASSERT_FALSE(number.has_value());
+    EXPECT_EQ("'int' object is not iterable", number.error().GetExtraParams()[0].AsString());
+
+    // A name the caller's values hold, as a string, a list item or a map item, is a name
+    jinja2::Template byValue(&m_env);
+    ASSERT_TRUE(byValue.Load("{% include n %}|{% include l %}|{% include d.k %}|{% for i in l %}{% include i %}{% endfor %}").has_value());
+    const jinja2::ValuesMap values{ { "foo", 1 },
+                                    { "bar", 2 },
+                                    { "n", "header" },
+                                    { "l", jinja2::ValuesList{ "header" } },
+                                    { "d", jinja2::ValuesMap{ { "k", std::string("header") } } } };
+    const auto byValueResult = byValue.RenderAsString(values);
+    ASSERT_TRUE(byValueResult.has_value()) << byValueResult.error().ToString();
+    EXPECT_EQ("[1|2]|[1|2]|[1|2]|[1|2]", byValueResult.value());
+
+    // An undefined name fails as it is used, whatever its policy (UndefinedError)
+    for (const std::string source : { "{% include nope %}", "{% include nope ignore missing %}" })
+    {
+        auto result = render(source);
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(jinja2::ErrorCode::UndefinedError, result.error().GetCode()) << source;
+    }
 }
 
 // RealFileSystem names follow Python's FileSystemLoader: a ".." piece is not found

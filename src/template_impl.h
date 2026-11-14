@@ -701,11 +701,13 @@ public:
             [[maybe_unused]] std::conditional_t<hasHooks, detail::GenerationTracker, std::monostate> tracker;
             // After limitsScope, and gone before it
             [[maybe_unused]] std::conditional_t<hasHooks, std::optional<EachPieceScope>, std::monostate> eachPieceScope;
+            // The piece the stream gathers, which the stream only points to
+            [[maybe_unused]] std::conditional_t<hasHooks, OutStream::HeldPieceOwner, std::monostate> heldPiece;
             if constexpr (hasHooks)
             {
                 if (hooks->writeEachPiece)
                 {
-                    outStream.WriteEachPiece();
+                    heldPiece = outStream.WriteEachPiece();
                     eachPieceScope.emplace();
                 }
                 if (hooks->generationSpans)
@@ -722,6 +724,13 @@ public:
             }
             m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             outStream.Flush();
+            if constexpr (hasHooks)
+            {
+                if (hooks->writeEachPiece)
+                {
+                    outStream.EndPieces();
+                }
+            }
             if (m_settings->hasRenderLimits)
             {
                 CheckRenderOutput();

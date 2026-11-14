@@ -16,6 +16,7 @@ inline namespace v2
 {
 class Value;
 class Exception;
+class StopIteration;
 class GenericList;
 class GenericMap;
 class TemplateEnv;

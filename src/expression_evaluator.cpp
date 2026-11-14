@@ -1,5 +1,6 @@
 #include "expression_evaluator.h"
 
+#include "call_stop.h"
 #include "engine_errors.h"
 #include "filters.h"
 #include "generation_tracker.h"
@@ -1890,27 +1891,94 @@ void CallExpression::Render(OutStream& stream, RenderContext& values)
     RenderCallable(stream, values, *callable);
 }
 
+namespace
+{
+// The value of a call that failed, from its handler: the failure was not a stop (it is thrown again), or the
+// call left its context as it was (HomeCall::Snapshot) and gives the undefined value
+InternalValue StopResult(RenderContext& values, HomeCall::Snapshot& snapshot, bool stopped)
+{
+    if (!stopped)
+    {
+        detail::RethrowKept();
+    }
+    detail::DropKept();
+    snapshot.Undo();
+    return detail::MakeStopUndefined(values);
+}
+} // namespace
+
 void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, const Callable& callable)
 {
     auto callParams = helpers::EvaluateCallParams(m_params, values);
 
+    // A call that raises a StopIteration gives undefined (Context.call, docs/tasks/0479): only the invocation is
+    // guarded, not the arguments or the write of the result
+    bool failed = false;
     if (callable.GetType() == Callable::Type::Expression)
     {
-        WriteOutput(stream, callable.GetExpressionCallable()(callParams, values), values);
+        InternalValue result;
+        HomeCall::Snapshot snapshot(values);
+        try
+        {
+            result = callable.GetExpressionCallable()(callParams, values);
+        }
+        catch (...)
+        {
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            result = StopResult(values, snapshot, detail::KeptIsStop());
+        }
+        WriteOutput(stream, result, values);
+        return;
     }
-    else if (callable.GetKind() == Callable::Macro && values.IsOutputAutoescape() && !values.IsAutoescape())
+    if (callable.GetKind() == Callable::Macro && values.IsOutputAutoescape() && !values.IsAutoescape())
     {
         // Autoescape off at run time but on where the code is written: the result is a plain
         // string, which the output escapes (InvokeCallable)
-        InternalValue result(RenderToString(values.GetRendererCallback(), [&](OutStream& out) { callable.GetStatementCallable()(callParams, out, values); }));
+        InternalValue result;
+        HomeCall::Snapshot snapshot(values);
+        try
+        {
+            result = InternalValue(RenderToString(values.GetRendererCallback(), [&](OutStream& out) { callable.GetStatementCallable()(callParams, out, values); }));
+        }
+        catch (...)
+        {
+            failed = true;
+            detail::KeepFailure();
+        }
+        if (failed)
+        {
+            result = StopResult(values, snapshot, detail::KeptIsStop());
+        }
         WriteOutput(stream, result, values);
+        return;
     }
-    else
+    // Jinja2 renders a macro into a buffer that the call then yields
+    const detail::GenerationFreeze freeze(values);
+    const auto mark = stream.GetMark(); // NOLINT(clang-analyzer-deadcode.DeadStores): read on the failure path
+    HomeCall::Snapshot snapshot(values);
+    try
     {
-        // Jinja2 renders a macro into a buffer that the call then yields
-        const detail::GenerationFreeze freeze(values);
         callable.GetStatementCallable()(callParams, stream, values);
+        return;
     }
+    catch (...)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    // The macro's output so far is dropped as Jinja2's buffer is; a stream that has passed it on cannot (0477's
+    // RuntimeError stays)
+    if (!detail::KeptIsStop() || !stream.RollbackTo(mark))
+    {
+        detail::RethrowKept();
+    }
+    detail::DropKept();
+    snapshot.Undo();
+    WriteOutput(stream, detail::MakeStopUndefined(values), values);
 }
 
 namespace
@@ -1976,7 +2044,17 @@ InternalValue CallExpression::CallCallable(RenderContext& values, const Callable
     {
         return InternalValue();
     }
-    return InvokeCallable(values, callable, helpers::EvaluateCallParams(m_params, values));
+    const auto callParams = helpers::EvaluateCallParams(m_params, values);
+    HomeCall::Snapshot snapshot(values);
+    try
+    {
+        return InvokeCallable(values, callable, callParams);
+    }
+    catch (...)
+    {
+        detail::KeepFailure();
+    }
+    return StopResult(values, snapshot, detail::KeptIsStop());
 }
 
 InternalValue CallExpression::CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params)

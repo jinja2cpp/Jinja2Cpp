@@ -25,6 +25,43 @@ void OutStream::Flush()
     }
 }
 
+bool OutStream::RollbackTo(const Mark& mark)
+{
+    if (m_writer)
+    {
+        return false;
+    }
+    if (m_sink)
+    {
+        // Nothing reached the sink since: the buffer still holds what it held, up to the mark
+        if (m_sinkWritten != mark.base)
+        {
+            return false;
+        }
+        m_cur = mark.cur;
+        return true;
+    }
+    // The buffer was appended to the target whole (FlushBuffer, WriteLong) if the target grew since the mark: its
+    // part before the mark is then at the end of what the target held, and the buffer starts anew
+    const size_t size = TargetSize();
+    if (size == mark.base)
+    {
+        m_cur = mark.cur;
+        return true;
+    }
+    const size_t kept = static_cast<size_t>(mark.cur - m_buffer) / m_charSize;
+    if (m_charSize == 1)
+    {
+        static_cast<std::string*>(m_target)->resize(mark.base + kept);
+    }
+    else
+    {
+        static_cast<std::wstring*>(m_target)->resize(mark.base + kept);
+    }
+    m_cur = m_buffer;
+    return true;
+}
+
 void OutStream::FlushBuffer()
 {
     if (m_cur != m_buffer)

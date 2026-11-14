@@ -254,6 +254,7 @@ set(JINJA2CPP_SOURCES
     src/big_int.cpp
     src/big_int_builtin.cpp
     src/borrowed_cells.cpp
+    src/call_stop.cpp
     src/cell_trace.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp
@@ -273,6 +274,7 @@ set(JINJA2CPP_SOURCES
     src/contracts.cpp
     src/node_arena.cpp
     src/out_stream.cpp
+    src/out_stream_pieces.cpp
     src/prompt_escape.cpp
     src/prompt_filters.cpp
     src/public_host_object.cpp

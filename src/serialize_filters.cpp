@@ -1752,11 +1752,22 @@ XmlAttrFilter::XmlAttrFilter(const FilterParams& params)
 
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    // Python's do_xmlattr calls d.items(): an undefined value fails whatever its policy, and
+    // anything that is not a mapping has no items
+    CheckUndefinedUse(baseVal, UndefinedUse::Call);
     auto map = AsMap(baseVal);
-    // An object such as namespace() has no items()
-    if (!map || map->GetObjectClass())
+    if (!map)
     {
-        context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
+    }
+    // An object such as namespace() (whose attribute error names only the attribute) or a host object
+    if (const auto* objectClass = map->GetObjectClass())
+    {
+        if (!map->IsHost() && std::string_view(objectClass) == "Namespace")
+        {
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "items");
+        }
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
     }
 
     auto escape = [](const std::string& str) { return EscapeHtml(std::string_view(str)); };
