@@ -304,7 +304,12 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     class Callback final : public Impl::RendererCallback
     {
     public:
-        using Impl::RendererCallback::RendererCallback;
+        explicit Callback(const Impl* host)
+            : Impl::RendererCallback(host)
+        {
+            // The trees its calls replace are freed once nothing of a call reaches them (docs/tasks/0482)
+            this->SetKeepsTreesByValue();
+        }
 
         // The modules a call imports with context end with it (CallScope), but those a module
         // shared without context imports, which live as long as it does
@@ -378,7 +383,15 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             m_callback.sharedDepth = m_sharedDepth;
             const auto& owner = m_callback;
             m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
+            // A call that failed leaves what its error views as it is (docs/tasks/0482)
+            if (m_succeeded && m_callback.calls == 0 && m_callback.HasReplaced())
+            {
+                m_callback.PruneReplaced();
+            }
         }
+
+        // The call returns its result: the trees a source change replaced may go
+        void Succeeded() noexcept { m_succeeded = true; }
 
     private:
         Callback& m_callback;
@@ -386,11 +399,15 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         // A call made from a shared module's top level (a host callable there) imports for
         // itself: its modules end with it
         std::size_t m_sharedDepth;
+        // Set by Succeeded
+        bool m_succeeded = false;
     };
 
     explicit TemplateModuleState(std::shared_ptr<const Impl> tpl)
         : impl(std::move(tpl))
+        , dropped(std::make_shared<DroppedExports>())
     {
+        cells.SetDroppedExports(dropped);
     }
     TemplateModuleState(const TemplateModuleState&) = delete;
     TemplateModuleState(TemplateModuleState&&) = delete;
@@ -433,6 +450,19 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         cycles.WalkFromEveryNote();
         module.reset();
         callback.reset();
+        // What the host let go of during the walk: nothing writes it any more
+        CollectDroppedExports(dropped->Close());
+    }
+
+    // Notes to the collector running on this thread the containers of the module's calls that the
+    // host let go of since (DroppedExports): its walk frees a cycle among them. When noting one
+    // cannot allocate, a cycle through it and the rest leaks
+    void NoteDropped() noexcept
+    {
+        if (dropped->MayHoldAny())
+        {
+            NoteDroppedExports(dropped->Take());
+        }
     }
 
     [[nodiscard]] RenderLimitsScope MakeLimitsScope() const
@@ -530,8 +560,11 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         {
             // First, so that it ends last: when nothing of the call holds values any more
             ModuleCallCollector cycles(cells, kept, &LiveRoots, this);
+            // The containers of earlier calls the host let go of: this call's walk frees a cycle
+            // among them (docs/tasks/0480)
+            NoteDropped();
             // Then what the call loads, which its collector sees go
-            const CallScope callScope(*callback);
+            CallScope callScope(*callback);
             // Then the module's context as the call found it, which a failed call would leave
             // with its scopes pushed
             const HomeCall::Restore restore(module->Context());
@@ -571,6 +604,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
                 detail::PollDeadline();
             }
             cycles.Complete();
+            callScope.Succeeded();
             return result;
         }
         catch (const std::bad_alloc&)
@@ -636,6 +670,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     KeptObjects kept;
     // Calls of the exports take turns: the context is not shared by concurrent calls
     std::recursive_mutex mutex;
+    // The containers its calls handed out that the host let go of (docs/tasks/0480); the views
+    // hold it weakly. Closed by the destructor
+    std::shared_ptr<DroppedExports> dropped;
 };
 
 namespace

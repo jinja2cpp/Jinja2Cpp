@@ -4,9 +4,11 @@
 #include "borrowed_cells.h"
 #include "internal_value.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <unordered_set>
 #include <vector>
@@ -104,6 +106,34 @@ private:
     static constexpr size_t MinPruneAt = 64;
     std::vector<Entry> m_kept;
     size_t m_pruneAt = MinPruneAt;
+};
+
+// The lists, dicts and namespaces a template module's calls made and handed the host, which the
+// host let go of while the module lives. Each may hold itself, and then nothing else frees it, as
+// a render frees the containers a host's copy shared once it lets go (docs/tasks/0424). Unlike a
+// render's, the module's later calls may write it, on another thread, so the host's thread does
+// not walk it: the module's next call does, or the module when it goes (docs/tasks/0480). Its own
+// lock, so that a host never waits for a call to end
+class DroppedExports
+{
+public:
+    // Takes `container` (moves from it), unless the module has gone (Close): false then, and the
+    // caller walks it, as nothing writes it any more. When noting it cannot allocate, it is let go of here: a cycle
+    // it closes leaks
+    bool Hand(InternalValue& container) noexcept;
+    // Whether Take may find a container: a call that finds none takes no lock
+    [[nodiscard]] bool MayHoldAny() const noexcept { return m_any.load(std::memory_order_acquire); }
+    // What the host let go of since the last call
+    std::vector<InternalValue> Take() noexcept;
+    // The module goes: what is left, and Hand refuses from now on
+    std::vector<InternalValue> Close() noexcept;
+
+private:
+    std::mutex m_mutex;
+    std::vector<InternalValue> m_dropped;
+    // Whether m_dropped may hold a container: a call that finds none takes no lock
+    std::atomic<bool> m_any{ false };
+    bool m_closed = false;
 };
 
 // What the calls of a template module share with its collector: its cells, what KeepUntilEnd

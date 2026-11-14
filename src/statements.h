@@ -164,7 +164,14 @@ public:
 
     // The loop(...) callable of a recursive loop at depth0 `level`, whose outermost level
     // runs at `site`
-    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape, bool isVolatile);
+    // `treeOwner` keeps `nodes` alive in a module that frees replaced trees (RenderContext::TreeOwner)
+    static Callable MakeLoopRecursion(ForStatement* statement,
+                                      const ArenaView& nodes,
+                                      int level,
+                                      const ClosureSite& site,
+                                      bool autoescape,
+                                      bool isVolatile,
+                                      std::shared_ptr<const void> treeOwner);
 
     [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
     [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
@@ -622,8 +629,12 @@ public:
     [[nodiscard]] InternalValue MakeObject(InternalValueMap&& exports) const;
     // The context the module's macros run in
     [[nodiscard]] RenderContext& Context() { return m_context; }
+    // Keeps the tree the module's template runs in alive, while a module frees replaced trees (docs/tasks/0482)
+    void SetTreeOwner(std::shared_ptr<const void> owner) { m_treeOwner = std::move(owner); }
 
 private:
+    // Declared first, so that it goes last: the module's names and macros view the tree it keeps
+    std::shared_ptr<const void> m_treeOwner;
     // The importer's names, the external scope of the module's context
     InternalValueMap m_importerNames;
     BlocksStack m_blocks;

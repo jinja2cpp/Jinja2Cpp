@@ -1,9 +1,10 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0313]
 touches: [src/template_impl.h, src/statements.cpp, src/statements.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/884
 shares: [src/template_module.cpp, src/template_slots.h, test/template_module_test.cpp, test/allocation_failure_test.cpp]
 ---
 # End the trees a module replaced on a source change
@@ -21,6 +22,8 @@ callback's `TreeOwner(ArenaView)`, null in a plain render), and at the end of an
 callback drops each replaced result that is not the latest for its name, not a shared module's key, not in
 `bySite` and holds no slot. Full analysis, oracle rows and cost estimate: project file `0313/plan.md`. Needs a
 recorded decision (cross-module, adds a member to macro bodies) and `bench/count.py`.
+
+**Decision.** 2026-11-13, Ruslan: keep-alives as Python does (option c of the plan).
 
 **Done when** a module called after N source changes of an included, imported (with context) or from-imported
 template holds a bounded number of trees (`ModuleCallTest.EveryUseReloadsStayFlat` with a changing source), the

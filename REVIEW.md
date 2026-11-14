@@ -74,6 +74,9 @@ are what this codebase has actually got wrong.
   exception paths, failed reloads, cache eviction, includes/imports, inheritance and
   templates outliving their environment. Check mutation of a container during its
   own traversal and iterator invalidation from callbacks.
+  A template module frees the trees a source change replaced (0482): a new kind of value
+  that views a tree (an `ArenaView`, a statement pointer, a `string_view` into it) and can
+  outlive a module call must hold the tree's owner (`RenderContext::TreeOwner`).
 - **Loaders.** The loader trust boundary is still being settled (task 0224). Do not
   assume a root folder confines template names, and flag a change that makes name
   handling more permissive or adds file access outside the FileSystem handlers. Once

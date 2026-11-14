@@ -1244,8 +1244,8 @@ private:
         // Ends what the call that took `mark` added: the modules it imported, but those shared
         // without context, which see nothing of the call and stay for the module's life, as
         // Jinja2 keeps a template's default module, and those `isKept` names, which such a module's
-        // top level imported. The trees stay too: what a module's macro
-        // stored views its tree. What still refers to an ended module does so through its
+        // top level imported. The trees stay too, until PruneReplaced: what a module's macro
+        // stored holds the owner of its own. What still refers to an ended module does so through its
         // anchor (ClosureSite), which a module made in the call marks as ending with it
         template<typename IsKept>
         void EndCall(const CallMark& mark, const IsKept& isKept) noexcept
@@ -1285,6 +1285,117 @@ private:
             while (invalid.size() > mark.invalidNames)
             {
                 invalid.pop_back();
+            }
+        }
+
+        // The owner of the template whose tree is `nodes`: the rendered one or one this render loaded (docs/tasks/0482)
+        [[nodiscard]] std::shared_ptr<const void> TreeOwner(const ArenaView& nodes) const override
+        {
+            if (m_host->Nodes() == nodes)
+            {
+                return m_host->weak_from_this().lock();
+            }
+            if (!m_loaded)
+            {
+                return nullptr;
+            }
+            // The trees a render runs are the latest of their names, or kept by a slot or a module: look there first
+            for (const auto& [name, entry] : m_loaded->byName)
+            {
+                if (auto owner = OwnerIfTree(*entry.latest, nodes))
+                {
+                    return owner;
+                }
+                if (auto owner = OwnerIfTree(entry.first, nodes))
+                {
+                    return owner;
+                }
+            }
+            for (const auto& result : m_loaded->replaced)
+            {
+                if (auto owner = OwnerIfTree(result, nodes))
+                {
+                    return owner;
+                }
+            }
+            // A tree PruneReplaced let go of that a value still keeps: a stored macro of it makes a
+            // new one (Codex review of #884). A live tree's address is not reused
+            for (const auto& [view, weak] : m_loaded->released)
+            {
+                if (view == nodes)
+                {
+                    return weak.lock();
+                }
+            }
+            return nullptr;
+        }
+
+        // Whether a source change replaced a tree this render loaded (PruneReplaced)
+        [[nodiscard]] bool HasReplaced() const noexcept { return m_loaded && !m_loaded->replaced.empty(); }
+        // Ends the trees a source change replaced that nothing of the render's own reaches: not the latest of their
+        // name, a shared module's template, a statement's `bySite` result or a tree with a slot, which handles
+        // link to. What else views one (a macro, a recursive loop, an imported module) holds its owner
+        // (docs/tasks/0482). Called when the outermost call of a module ends
+        void PruneReplaced() noexcept
+        {
+            if (!HasReplaced())
+            {
+                return;
+            }
+            auto& loaded = *m_loaded;
+            // Freed uncounted, as the dropped reload of LoadTemplate: they were made uncounted
+            const UncountedMemoryScope uncounted;
+            // The results something names, sorted once: a pass is O(n log n) in the loads, not O(n^2)
+            std::vector<const LoadTemplateResult*> named;
+            try
+            {
+                named.reserve(loaded.byName.size() + loaded.sharedModules.size() + loaded.bySite.size());
+            }
+            catch (const std::bad_alloc&)
+            {
+                // The trees stay until a later call's pass
+                return;
+            }
+            for (const auto& entry : loaded.byName)
+            {
+                named.push_back(entry.second.latest);
+            }
+            for (const auto& entry : loaded.sharedModules)
+            {
+                named.push_back(entry.first);
+            }
+            for (const auto& entry : loaded.bySite)
+            {
+                named.push_back(entry.second);
+            }
+            std::sort(named.begin(), named.end(), std::less<>());
+            // The released trees that went since
+            loaded.released.erase(std::remove_if(loaded.released.begin(), loaded.released.end(), [](const auto& entry) { return entry.second.expired(); }),
+                                  loaded.released.end());
+            for (auto p = loaded.replaced.begin(); p != loaded.replaced.end();)
+            {
+                const LoadTemplateResult* result = &*p;
+                if (std::binary_search(named.begin(), named.end(), result, std::less<>()) || HoldsSlot(*result, loaded.templates))
+                {
+                    ++p;
+                    continue;
+                }
+                // A tree a value still keeps alive stays findable by TreeOwner while it lives (an
+                // entry of a tree nothing keeps expires with the erase); when noting it cannot
+                // allocate, the tree stays in `replaced` until a later pass
+                if (auto [nodes, owner] = TreeOf(*p); owner)
+                {
+                    try
+                    {
+                        loaded.released.emplace_back(nodes, owner);
+                    }
+                    catch (const std::bad_alloc&)
+                    {
+                        ++p;
+                        continue;
+                    }
+                }
+                p = loaded.replaced.erase(p);
             }
         }
 
@@ -1370,6 +1481,58 @@ private:
                 },
                 lhs);
         }
+        // The tree of `result`'s template and its owner, both empty for a failed load
+        static std::pair<ArenaView, std::shared_ptr<const void>> TreeOf(const LoadTemplateResult& result)
+        {
+            return std::visit(
+                [](const auto& loaded) -> std::pair<ArenaView, std::shared_ptr<const void>> {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        return {};
+                    }
+                    else
+                    {
+                        if (!loaded)
+                        {
+                            return {};
+                        }
+                        return { loaded.value()->Nodes(), std::shared_ptr<const void>(loaded.value()) };
+                    }
+                },
+                result);
+        }
+        // The owner of `result`'s template when its tree is `nodes`
+        static std::shared_ptr<const void> OwnerIfTree(const LoadTemplateResult& result, const ArenaView& nodes)
+        {
+            return std::visit(
+                [&nodes](const auto& loaded) -> std::shared_ptr<const void> {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        return nullptr;
+                    }
+                    else
+                    {
+                        return loaded && loaded.value()->Nodes() == nodes ? std::shared_ptr<const void>(loaded.value()) : nullptr;
+                    }
+                },
+                result);
+        }
+        // Whether `templates` has a slot for the tree of `result`
+        static bool HoldsSlot(const LoadTemplateResult& result, const TemplateSlots& templates)
+        {
+            return std::visit(
+                [&templates](const auto& loaded) {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        return false;
+                    }
+                    else
+                    {
+                        return loaded && templates.Holds(loaded.value()->Nodes());
+                    }
+                },
+                result);
+        }
         struct LoadedTemplates
         {
             LoadedTemplates() = default;
@@ -1383,6 +1546,8 @@ private:
             std::unordered_map<std::string, LoadedTemplate> byName;
             // Results that are not the first for their name: templates reloaded during the render
             std::list<LoadTemplateResult> replaced;
+            // The trees PruneReplaced took out of `replaced` that a value still kept alive (TreeOwner)
+            std::vector<std::pair<ArenaView, std::weak_ptr<const void>>> released;
             // The errors of names that are not strings, which no statement keeps past its throw
             std::list<LoadTemplateResult> invalidNames;
             // The trees of the templates above, and of the rendered one, that handles link to
