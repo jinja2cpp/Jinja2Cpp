@@ -202,7 +202,7 @@
       "purl": "pkg:github/martinus/unordered_dense@5.3.3",
       "delivery": "vendored",
       "files": ["src/ankerl/unordered_dense.h", "src/ankerl/stl.h"],
-      "modified": "Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); documented at the top of src/ankerl/unordered_dense.h",
+      "modified": "Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); segmented_vector constructors free their blocks when an element copy throws (0231); documented at the top of src/ankerl/unordered_dense.h",
       "role": "mandatory",
       "phases": ["build"],
       "exposure": "internal",
