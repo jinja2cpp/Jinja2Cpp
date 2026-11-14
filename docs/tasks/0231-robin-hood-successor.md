@@ -49,3 +49,9 @@ was not measured: it moves values on insert, so it is not a candidate for the sc
 leaving the core (0230). The two robin_hood local additions are not needed: unordered_dense has a
 transparent `try_emplace` and allocates through `std::allocator`; its inserts keep a table valid when an
 allocation or a constructor throws (test/allocation_failure_test.cpp passes).
+
+The name hash is keyed per process (`detail::HashName`, src/hash_map.h). unordered_dense hashes
+unseeded and never rehashes a crowded group, where robin_hood re-rolled its multiplier: the security
+review of #891 found names chosen offline to share one group made each set or lookup about 90x slower
+per step under `UntrustedSettings`. The key is drawn on the first hash and xored in before one odd
+multiply; collisions of the unkeyed hash itself are 0507, the memory budget's uncounted scope maps 0508.
