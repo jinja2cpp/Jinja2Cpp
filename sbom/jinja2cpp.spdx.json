@@ -188,19 +188,13 @@
       "comment": "role: alternative; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: component jinja2cpp::nlohmann_json, found when a consumer requests it; fetched whenever JINJA2CPP_BUILD_TESTS is ON (the default JINJA2CPP_TEST_BINDINGS, tests, parity corpus and bench read JSON with it); also-roles: test; used-for: Opt-in component jinja2cpp::nlohmann_json (bindings/nlohmann_json/include/jinja2cpp/binding/nlohmann_json.h); test data (tojson, metadata, parity corpus) and bench case files; why: Header-only JSON binding, the one the default CI jobs test; the test suite's JSON reader; lighten: Header-only, no link cost; tests and adapter only; conan: nlohmann_json/3.12.0"
     },
     {
-      "SPDXID": "SPDXRef-Package-robin-hood-hashing",
-      "name": "robin-hood-hashing",
-      "versionInfo": "3.11.5",
-      "supplier": "Organization: Martin Ankerl",
+      "SPDXID": "SPDXRef-Package-unordered-dense",
+      "name": "unordered_dense",
+      "versionInfo": "5.3.3",
+      "supplier": "Organization: Martin Leitner-Ankerl",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA256",
-          "checksumValue": "1db6cd776ccc6e0c83889be9d52eccd67384e8b695b8e9a58ed6e5267aa7b09f"
-        }
-      ],
-      "homepage": "https://github.com/martinus/robin-hood-hashing",
+      "homepage": "https://github.com/martinus/unordered_dense",
       "licenseConcluded": "NOASSERTION",
       "licenseDeclared": "MIT",
       "copyrightText": "NOASSERTION",
@@ -208,11 +202,11 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:github/martinus/robin-hood-hashing@3.11.5"
+          "referenceLocator": "pkg:github/martinus/unordered_dense@5.3.3"
         }
       ],
       "primaryPackagePurpose": "SOURCE",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: InternalValueMap and scope tables (internal_value.h:1345, render_context.h), robin_hood::hash_bytes; why: Flat open-addressing map, measurably faster than std::unordered_map on the render paths; lighten: Upstream is archived and recommends its successor ankerl::unordered_dense (MIT); boost::unordered_flat_map is the other candidate while Boost stays. Not a size issue, a maintenance one (docs/tasks/0231); modified: try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); exception safety of inserts, growth and copies (0253); documented at src/robin_hood.h:41-51; file: src/robin_hood.h sha256:1db6cd776ccc6e0c83889be9d52eccd67384e8b695b8e9a58ed6e5267aa7b09f"
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: InternalValueMap and the scope tables (detail::StableMap), the borrowed-cell tables and the name hash, all through src/hash_map.h; why: Successor of the archived robin_hood by the same author: value-stable segmented map with a SIMD group index, faster than robin_hood on the render paths (docs/tasks/0231); lighten: Header-only and internal; an update is a copy of the two files plus the recorded namespace change; modified: Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); segmented_vector constructors free their blocks when an element copy throws (0231); documented at the top of src/ankerl/unordered_dense.h; file: src/ankerl/unordered_dense.h sha256:3db9c9cceffbc54ed2ec7923d6dfc1df9665bdf55d762147dc491fbd057dd487; file: src/ankerl/stl.h sha256:6ae137a72fd9f6c197e92103500090b3eea9057db046c9defcc41840b855f134"
     },
     {
       "SPDXID": "SPDXRef-Package-lexertk",
@@ -223,7 +217,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "5325613ea9f7aa41e269b9bb416b6b1e4ba21cbc97fcf52f1e3117535c13f81c"
+          "checksumValue": "0e6cd4cf19c84e80dd997bade5dd449a9fbd8e27c61b2a8d92701554d693985d"
         }
       ],
       "homepage": "https://www.partow.net/programming/lexertk/index.html",
@@ -238,7 +232,7 @@
         }
       ],
       "primaryPackagePurpose": "SOURCE",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: Expression tokenizer behind src/lexer.h, renderer.h and template_parser.h; why: Ready-made C-like tokenizer the expression parser was built on; lighten: Small and internal; keep. Long term it is effectively forked code and could be absorbed as project code with its notice kept; modified: Modified by Flex Ferrum (2018), changes not recorded (src/lexertk.h:6); upstream version not recorded; file: src/lexertk.h sha256:5325613ea9f7aa41e269b9bb416b6b1e4ba21cbc97fcf52f1e3117535c13f81c"
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: Expression tokenizer behind src/lexer.h, renderer.h and template_parser.h; why: Ready-made C-like tokenizer the expression parser was built on; lighten: Small and internal; keep. Long term it is effectively forked code and could be absorbed as project code with its notice kept; modified: Modified by Flex Ferrum (2018), changes not recorded (src/lexertk.h:6); upstream version not recorded; file: src/lexertk.h sha256:0e6cd4cf19c84e80dd997bade5dd449a9fbd8e27c61b2a8d92701554d693985d"
     },
     {
       "SPDXID": "SPDXRef-Package-value-types",
@@ -349,7 +343,7 @@
     {
       "spdxElementId": "SPDXRef-Package-jinja2cpp",
       "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-robin-hood-hashing"
+      "relatedSpdxElement": "SPDXRef-Package-unordered-dense"
     },
     {
       "spdxElementId": "SPDXRef-Package-jinja2cpp",
@@ -372,5 +366,5 @@
       "relatedSpdxElement": "SPDXRef-Package-html-entities"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-078f88e71554df47"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-47b9724da0773a02"
 }

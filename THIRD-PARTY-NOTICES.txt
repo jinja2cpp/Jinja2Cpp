@@ -9,14 +9,14 @@ benchmarks and tooling bring further components that are never installed; they a
 listed in sbom/components.json and docs/dependencies.md.
 
 ------------------------------------------------------------------------------
-robin-hood-hashing
-Version: 3.11.5, vendored and modified
-Source: src/robin_hood.h
+unordered_dense (ankerl::unordered_dense)
+Version: 5.3.3, vendored and modified
+Source: src/ankerl/unordered_dense.h, src/ankerl/stl.h
 Used: Compiled into the library (every build); in the source archive
 
-Licensed under the MIT License <http://opensource.org/licenses/MIT>.
-SPDX-License-Identifier: MIT
-Copyright (c) 2018-2021 Martin Ankerl <http://martin.ankerl.com>
+MIT License
+
+Copyright (c) 2022 Martin Leitner-Ankerl
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -2,8 +2,9 @@
 #   cmake -DNM=<nm> -DLIBRARY=<libjinja2cpp.a|.so|.dylib> -P test/abi_symbols.cmake
 # Every mangled jinja2:: name must start jinja2::v2:: (`6jinja22v2`), and the vendored
 # polymorphic/indirect types must not be left in a global `xyz`, where a user's own copy of
-# the upstream headers would collide with them. scripts/abi_namespace.py keeps the sources
-# in that shape; this checks what the compiler actually emitted.
+# the upstream headers would collide with them; nor may the vendored hash map and lexer keep
+# their global `ankerl`, `robin_hood` or `lexertk` (docs/tasks/0259). scripts/abi_namespace.py
+# keeps the sources in that shape; this checks what the compiler actually emitted.
 foreach (_var NM LIBRARY)
     if (NOT ${_var})
         message(FATAL_ERROR "${_var} is required")
@@ -24,13 +25,13 @@ list(FILTER _tagged INCLUDE REGEX "(^|[^0-9])6jinja22v2")
 list(LENGTH _tagged _tagged)
 set(_rest ${_syms})
 list(TRANSFORM _rest REPLACE "(^|[^0-9])6jinja22v2" "\\1")
-list(FILTER _rest INCLUDE REGEX "(^|[^0-9])6jinja2|^_ZN?K?3xyz")
+list(FILTER _rest INCLUDE REGEX "(^|[^0-9])6jinja2|^_ZN?K?(3xyz|6ankerl|10robin_hood|7lexertk)")
 # report the symbols as nm printed them
 set(_bad "")
 if (_rest)
     foreach (_sym IN LISTS _syms)
         string(REGEX REPLACE "(^|[^0-9])6jinja22v2" "\\1" _stripped "${_sym}")
-        if (_stripped MATCHES "(^|[^0-9])6jinja2|^_ZN?K?3xyz")
+        if (_stripped MATCHES "(^|[^0-9])6jinja2|^_ZN?K?(3xyz|6ankerl|10robin_hood|7lexertk)")
             list(APPEND _bad "${_sym}")
         endif ()
     endforeach ()

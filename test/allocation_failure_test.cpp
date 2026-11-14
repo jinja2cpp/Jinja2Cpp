@@ -23,6 +23,7 @@
 #include <gtest/gtest.h>
 
 #include "binding/toy_json.h"
+#include "../src/hash_map.h"
 
 #if defined(__linux__) && defined(__SANITIZE_ADDRESS__)
 #define JINJA2CPP_ALLOC_TESTS_LEAK_CHECK 1
@@ -42,6 +43,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <functional>
 #include <map>
 #include <memory>
 #include <new>
@@ -1236,4 +1238,40 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                          Case{ "{{ _('Hello %(name)s!', name=user.name) }}|{{ ngettext('%(num)d apple', '%(num)d apples', 3) }}|"
                                                "{{ pgettext('menu', 'Open') }}|{{ gettext('%(n)s item', n=1) }}",
                                                "Hallo Ann!|3 apples|menu:Open|1 Ding" }));
+// A scope map whose copy runs out of memory frees the segments it had made: unordered_dense's
+// segmented vector did not, as its copy constructor never completed (Codex review of #891)
+TEST_F(AllocationFailureTest, FailedStableMapCopyFreesItsSegments)
+{
+    using Map = jinja2::detail::StableMap<std::string, std::string, jinja2::detail::ankerl::unordered_dense::hash<std::string>, std::equal_to<>>;
+    Map map;
+    for (int i = 0; i != 200; ++i)
+    {
+        map.try_emplace("a name long enough to be on the heap " + std::to_string(i), "and a value long enough as well");
+    }
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        const long live = g_live.load(std::memory_order_relaxed);
+        bool fired = false;
+        {
+            const Injection injection(n);
+            try
+            {
+                const Map copy(map); // NOLINT(performance-unnecessary-copy-initialization): the copy is what is checked
+                EXPECT_EQ(map.size(), copy.size());
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed copy is one of the outcomes checked
+            {
+            }
+            fired = Injection::Fired();
+        }
+        ASSERT_EQ(live, g_live.load(std::memory_order_relaxed)) << "allocation " << n;
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n);
+    EXPECT_LT(n, maxAllocations);
+}
 } // namespace
