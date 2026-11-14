@@ -1,5 +1,6 @@
 #include "hash_map.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <exception>
