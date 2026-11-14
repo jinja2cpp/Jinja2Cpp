@@ -224,6 +224,32 @@ TEST(SlotFrameTest, BindingAndUnbindingStartLookupEpochs)
     context.ExitScope();
 }
 
+// Erasing a name moves the scope's last value into its place: the cached lookup of that value's
+// name is forgotten with the erased one's (ScopeRef::Erase, docs/tasks/0231)
+TEST(SlotFrameTest, EraseForgetsTheLookupOfTheMovedValue)
+{
+    const InternalValueMap ext;
+    const InternalValueMap globals;
+    RenderContext context(ext, globals, nullptr);
+    context.SetLookupCache(&LookupCache::ForThisThread());
+    const HashedName first{ "first", HashedName::Hash("first") };
+    const HashedName last{ "last", HashedName::Hash("last") };
+    // Apart, so that forgetting `first` alone would keep the lookup of `last`
+    ASSERT_NE(LookupCache::BucketOf(first.hash), LookupCache::BucketOf(last.hash));
+    auto scope = context.EnterScope();
+    scope.ForName(first) = InternalValue(int64_t{ 1 });
+    scope.ForName(last) = InternalValue(int64_t{ 2 });
+
+    int key = 0;
+    const auto cacheSlot = LookupCache::NewSlot(last.hash);
+    EXPECT_EQ(2, IntOf(context.FindValueCached(&key, cacheSlot, last)));
+    scope.Erase("first");
+    const auto found = context.FindValueCached(&key, cacheSlot, last);
+    EXPECT_TRUE(found.IsSame(context.FindValue(last)));
+    EXPECT_EQ(2, IntOf(found));
+    context.ExitScope();
+}
+
 TEST(SlotFrameTest, FrameGivenBackCannotBeResolved)
 {
     RenderWorkspace workspace;
@@ -272,7 +298,7 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     EXPECT_NE(&outer, &inner);
     EXPECT_TRUE(inner.params.empty());
     workspace.ReturnMaps(inner);
-    const auto mask = outer.params.mask();
+    const auto buckets = outer.params.bucket_count();
     workspace.ReturnMaps(outer);
 
     // Emptied, with the table kept for the next render
@@ -280,18 +306,18 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     EXPECT_EQ(&outer, &again);
     EXPECT_TRUE(again.params.empty());
     EXPECT_TRUE(again.topScope.empty());
-    EXPECT_EQ(mask, again.params.mask());
+    EXPECT_EQ(buckets, again.params.bucket_count());
 
     // A table too big to keep on the thread is let go
     for (int idx = 0; idx != 2000; ++idx)
     {
         again.topScope["n" + std::to_string(idx)] = InternalValue(int64_t{ idx });
     }
-    EXPECT_GT(again.topScope.mask(), RenderWorkspace::MaxMapMask);
+    EXPECT_GT(again.topScope.bucket_count(), RenderWorkspace::MaxMapBuckets);
     workspace.ReturnMaps(again);
     auto& last = workspace.LendMaps();
-    EXPECT_EQ(0u, last.topScope.mask());
-    EXPECT_NE(0u, last.params.mask());
+    EXPECT_EQ(0u, last.topScope.bucket_count());
+    EXPECT_NE(0u, last.params.bucket_count());
     workspace.ReturnMaps(last);
 
     // The renders nested past MaxKeptMaps keep no tables
@@ -305,8 +331,8 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     {
         workspace.ReturnMaps(**it);
     }
-    EXPECT_EQ(0u, nested.back()->params.mask());
-    EXPECT_NE(0u, nested.front()->params.mask());
+    EXPECT_EQ(0u, nested.back()->params.bucket_count());
+    EXPECT_NE(0u, nested.front()->params.bucket_count());
 }
 
 // Where a closure's call runs (docs/tasks/0165): on the caller when it is the defining

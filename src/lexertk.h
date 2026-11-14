@@ -60,6 +60,15 @@
 #include <vector>
 
 
+// Jinja2C++ local change (docs/tasks/0259): lexertk lives in jinja2::v2::detail rather than in
+// a global namespace, so that a program linking its own lexertk or ExprTk next to the static
+// library shares no symbol with this copy
+namespace jinja2
+{
+inline namespace v2
+{
+namespace detail
+{
 namespace lexertk
 {
     template<typename CharT>
@@ -1969,5 +1978,8 @@ namespace lexertk
    };
 #endif
 } // namespace lexertk
+} // namespace detail
+} // namespace v2
+} // namespace jinja2
 
 #endif

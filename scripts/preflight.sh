@@ -38,7 +38,7 @@ fmt=clang-format-18; have $fmt || fmt=clang-format
 # The default build tests the nlohmann_json binding only, so the Boost components have no
 # include path (docs/tasks/0311); test/big_int_test.cpp covers the big-integer adapter (0272)
 tidy_excludes=(':!bindings/boost_*' ':!test/binding/boost_json*'
-  ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h'
+  ':!include/jinja2cpp/polymorphic_value/*' ':!src/ankerl/*' ':!src/lexertk.h'
   ':!src/unicode_tables.h'
   # Generated test data, included by a test; the installed-package consumers, which
   # check_package.cmake builds outside this build's compile database; the 1.x migration

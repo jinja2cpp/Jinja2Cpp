@@ -108,9 +108,9 @@ void RenderWorkspace::EmptyMaps(RenderMaps& maps, bool keepTables) noexcept
 {
     for (auto* map : { &maps.params, &maps.topScope })
     {
-        if (!keepTables || map->mask() > MaxMapMask)
+        if (!keepTables || map->bucket_count() > MaxMapBuckets)
         {
-            // Moving out takes the table and nodes; assigning an empty map would keep them
+            // Moving out takes the index and segments; assigning an empty map would keep them
             const InternalValueMap dropped(std::move(*map));
         }
         else

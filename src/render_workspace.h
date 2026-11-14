@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_RENDER_WORKSPACE_H
 #define JINJA2CPP_SRC_RENDER_WORKSPACE_H
 
+#include "hash_map.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 #include "slot_frame.h"
@@ -121,7 +122,7 @@ public:
         InternalValueMap params;
         InternalValueMap topScope;
     };
-    // Empty maps for a render, lent until ReturnMaps: with the tables and nodes an earlier
+    // Empty maps for a render, lent until ReturnMaps: with the storage an earlier
     // render left in them, so that a steady render allocates nothing for them. A render
     // started inside this one is lent the next pair
     RenderMaps& LendMaps()
@@ -133,13 +134,13 @@ public:
         return LendNewMaps();
     }
     // Takes back the maps lent last and empties them
-    void ReturnMaps(RenderMaps& maps) noexcept
+    JINJA2CPP_HOT_INLINE void ReturnMaps(RenderMaps& maps) noexcept
     {
         assert(m_lentMaps != 0 && m_maps[m_lentMaps - 1].get() == &maps);
         // A render that set no name and got no params has nothing to empty. The maps stay lent
         // while they are emptied: a destructor of a value in them may call ReleaseCaches
         const std::size_t outer = m_lentMaps - 1;
-        if ((maps.params.mask() | maps.topScope.mask()) != 0)
+        if (detail::HasStorage(maps.params) || detail::HasStorage(maps.topScope))
         {
             EmptyMaps(maps, outer < MaxKeptMaps);
         }
@@ -169,7 +170,7 @@ public:
 
     // The tables kept for the next render have at most 1024 buckets: about 800 names. A
     // bigger one is let go, so that one huge render does not hold memory on the thread
-    static constexpr std::size_t MaxMapMask = 1023;
+    static constexpr std::size_t MaxMapBuckets = 1024;
     // The tables of the renders nested deeper than this are let go too, so that a deep
     // recursion through user callables leaves no tables on the thread
     static constexpr std::size_t MaxKeptMaps = 4;

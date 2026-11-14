@@ -40,7 +40,7 @@ everything in the table that is compiled into the library is compiled in whateve
 
 | Component | License | Source archive | Library binary | Installed headers | Notice |
 |---|---|---|---|---|---|
-| robin-hood-hashing (`src/robin_hood.h`, vendored) | MIT | yes | every build | no | in the file, NOTICES |
+| unordered_dense (`src/ankerl/`, vendored) | MIT | yes | every build | no | in the file, NOTICES |
 | lexertk (`src/lexertk.h`, vendored) | MIT | yes | every build | no | in the file, NOTICES |
 | value_types (`include/jinja2cpp/polymorphic_value/`, vendored) | MIT | yes | every build | yes | in the files, NOTICES |
 | Unicode Character Database 15.0 (generated `src/unicode_*.h`, `scripts/unicode_name_aliases.txt`) | Unicode-3.0 | yes | every build | no | NOTICES |

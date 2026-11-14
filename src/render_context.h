@@ -3,11 +3,11 @@
 
 #include "contracts.h"
 #include "dialect.h"
+#include "hash_map.h"
 #include "internal_value.h"
 #include "lookup_result.h"
 #include "node_arena.h"
 #include "sandbox_policy.h"
-#include "robin_hood.h"
 #include "slot_frame.h"
 #include "small_vector.h"
 #include "span.h"
@@ -318,8 +318,8 @@ class HomeCall;
 // that adding a name forgets the cached lookups of that name and records its bucket for when
 // the scope is cleared or left; changing the value of a name already there forgets none, since
 // its slot stays in place. Nor does adding a name move the values of the others: a scope keeps
-// each value in a node of its own
-static_assert(!InternalValueMap::is_flat, "the lookup cache keeps pointers to scope values (docs/tasks/0158)");
+// its values in segments that never move (detail::StableMap); an erase moves one, Erase forgets it
+static_assert(detail::KeepsValuesInPlace<InternalValueMap>::value, "the lookup cache keeps pointers to scope values (docs/tasks/0158)");
 class ScopeRef
 {
 public:
@@ -555,13 +555,10 @@ public:
         // render: the other ids are counted from 1
         JINJA2CPP_ASSERT(topScope.empty());
         // A map that never had a table has nothing to lend
-        if (topScope.mask() != 0)
+        auto& scope = m_scopes.Push();
+        if (detail::HasStorage(topScope))
         {
-            m_scopes.Push(std::move(topScope));
-        }
-        else
-        {
-            m_scopes.Push();
+            scope.swap(topScope);
         }
         UpdateCurrentScope();
     }
@@ -696,21 +693,19 @@ public:
         }
         for (; buckets != 0; buckets &= buckets - 1)
         {
-            m_lookupCache->Forget(static_cast<uint32_t>(ROBIN_HOOD_COUNT_TRAILING_ZEROES(buckets)));
+            m_lookupCache->Forget(detail::CountTrailingZeros(buckets));
         }
     }
 
     // An empty scope changes no lookup until a name is added to it
     JINJA2CPP_ALWAYS_INLINE ScopeRef EnterScope()
     {
+        auto& scope = m_scopes.Push();
         if (m_spareScope)
         {
-            m_scopes.Push(std::move(*m_spareScope));
+            // Swapped, not moved: a move of the map costs several times a swap
+            scope.swap(*m_spareScope);
             m_spareScope.reset();
-        }
-        else
-        {
-            m_scopes.Push();
         }
         UpdateCurrentScope();
         return CurrentScopeRef();
@@ -720,7 +715,8 @@ public:
     // (docs/tasks/0133)
     ScopeRef EnterScope(InternalValueMap&& map)
     {
-        auto& scope = m_scopes.Push(std::move(map));
+        auto& scope = m_scopes.Push();
+        scope.swap(map);
         m_currentScope = &scope;
         if (!scope.empty())
         {
@@ -732,7 +728,7 @@ public:
         return CurrentScopeRef();
     }
 
-    // Leaves the innermost scope, moving its map with its names and nodes into `map`
+    // Leaves the innermost scope, handing its map with its names and storage to `map`
     void ExitScope(InternalValueMap& map)
     {
         // A view attached to the scope would attach to the next scope pushed at its index
@@ -742,7 +738,8 @@ public:
         {
             ForgetBuckets(CurrentBuckets());
         }
-        map = std::move(scope);
+        // The scope takes what `map` held, and lets it go
+        map.swap(scope);
         m_scopes.pop_back();
         UpdateCurrentScope();
     }
@@ -751,7 +748,7 @@ public:
     // table: at the end of a render, so that the next one reuses the table (docs/tasks/0160)
     void TakeTopScope(InternalValueMap& map)
     {
-        if (m_scopes.size() == 1 && m_views.empty() && m_scopes.back().mask() != 0)
+        if (m_scopes.size() == 1 && m_views.empty() && detail::HasStorage(m_scopes.back()))
         {
             ExitScope(map);
         }
@@ -767,12 +764,12 @@ public:
             ForgetBuckets(CurrentBuckets());
             scope.clear();
         }
-        // The emptied map keeps its table and nodes for the next scope: a loop inside a loop
+        // The emptied map keeps its index and segments for the next scope: a loop inside a loop
         // or a macro called in a loop then allocates nothing for its scope. A big table is
         // let go, since clearing it costs its size
-        if (scope.mask() != 0 && scope.mask() <= MaxSpareScopeMask && !m_spareScope)
+        if (detail::HasStorage(scope) && scope.bucket_count() <= MaxSpareScopeBuckets && !m_spareScope)
         {
-            m_spareScope.emplace(std::move(scope));
+            m_spareScope.emplace().swap(scope);
         }
         m_scopes.pop_back();
         UpdateCurrentScope();
@@ -1709,7 +1706,7 @@ private:
     // Lookups pass over the names bound at entry in the scopes below this depth
     // (PassOverEntryBindings)
     size_t m_entryPassDepth = 0;
-    static constexpr size_t MaxSpareScopeMask = 63;
+    static constexpr size_t MaxSpareScopeBuckets = 64;
     // A scope left empty, kept for the next EnterScope; copies do not take it
     std::optional<InternalValueMap> m_spareScope;
     AutoescapeModes m_autoescapeModes;
@@ -1744,7 +1741,7 @@ InternalValue& ScopeRef::operator[](Key&& name)
 inline InternalValue& ScopeRef::ForName(const HashedName& name)
 {
     // With the hash the name has: the key's string is made only when the name is new
-    auto [p, isAdded] = m_map->try_emplace_transparent(name);
+    auto [p, isAdded] = m_map->try_emplace(name);
     if (isAdded)
     {
         const auto bucket = LookupCache::BucketOf(name.hash);
@@ -1756,10 +1753,16 @@ inline InternalValue& ScopeRef::ForName(const HashedName& name)
 
 inline void ScopeRef::Erase(const std::string& name)
 {
-    if (m_map->erase(name) != 0)
+    const auto p = m_map->find(name);
+    if (p == m_map->end())
     {
-        m_context->ForgetName(HashedName::Hash(name));
+        return;
     }
+    // The map moves its last value into the gap (detail::StableMap): the lookups of that
+    // name are forgotten as well
+    m_context->ForgetName(HashedName::Hash(name));
+    m_context->ForgetName(HashedName::Hash(m_map->values().back().first));
+    m_map->erase(p);
 }
 
 inline void ScopeRef::Clear()

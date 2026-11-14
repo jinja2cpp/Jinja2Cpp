@@ -26,11 +26,7 @@
 #include <string>
 #include <utility>
 
-#if defined(_MSC_VER) && _MSC_VER <= 1900 // robin_hood hash map doesn't compatible with MSVC 14.0
-#include <unordered_map>
-#else
-#include "robin_hood.h"
-#endif
+#include "hash_map.h"
 
 #include <optional>
 #include <string_view>
@@ -1460,7 +1456,8 @@ public:
         m_obj.swap(obj);
     }
 
-    InternalValue& operator=(InternalValue&& other) noexcept
+    // Forced inline: GCC moved it out of line in RenderLoopInSlots when the hash map changed (0231)
+    JINJA2CPP_HOT_INLINE InternalValue& operator=(InternalValue&& other) noexcept
     {
         if (this != &other)
         {
@@ -1746,7 +1743,7 @@ struct HashedName
     std::string_view name;
     size_t hash;
 
-    static size_t Hash(std::string_view name) noexcept { return robin_hood::hash_bytes(name.data(), name.size()); }
+    static size_t Hash(std::string_view name) noexcept { return detail::HashBytes(name.data(), name.size()); }
     // The key a scope keeps for the name (ScopeRef)
     explicit operator std::string() const { return std::string(name); }
 };
@@ -1754,6 +1751,7 @@ struct HashedName
 struct NameHash
 {
     using is_transparent = void;
+    using is_avalanching = void;
     size_t operator()(const std::string& name) const noexcept { return HashedName::Hash(name); }
     size_t operator()(const HashedName& name) const noexcept { return name.hash; }
 };
@@ -1801,7 +1799,7 @@ private:
     }
 };
 
-using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue, NameHash, NameEqual>;
+using InternalValueMap = detail::StableMap<std::string, InternalValue, NameHash, NameEqual>;
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);
