@@ -38,10 +38,19 @@ std::uint64_t MakeNameHashKey() noexcept
 }
 } // namespace
 
-std::uint64_t NameHashKey() noexcept
+std::atomic<std::uint64_t> NameHashKeyValue{ 0 }; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+std::uint64_t DrawNameHashKey() noexcept
 {
-    static const std::uint64_t key = MakeNameHashKey();
-    return key;
+    // Never zero, which means not drawn yet. Threads that draw at once agree on the first
+    // key stored
+    const auto drawn = MakeNameHashKey() | 1U;
+    std::uint64_t expected = 0;
+    if (NameHashKeyValue.compare_exchange_strong(expected, drawn, std::memory_order_relaxed))
+    {
+        return drawn;
+    }
+    return expected;
 }
 } // namespace detail
 } // namespace v2
