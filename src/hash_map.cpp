@@ -32,7 +32,7 @@ std::uint64_t MakeNameHashKey() noexcept
     // missing or deterministic
     const auto clock = static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
     const auto here = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(&key)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    const std::uint64_t parts[] = { key, clock, here }; // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+    const std::uint64_t parts[] = { key, clock, here };                                   // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
     return ankerl::unordered_dense::detail::hash_bytes(parts, sizeof(parts));
 #endif
 }
