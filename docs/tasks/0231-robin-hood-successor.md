@@ -54,4 +54,8 @@ The name hash is keyed per process (`detail::HashName`, src/hash_map.h). unorder
 unseeded and never rehashes a crowded group, where robin_hood re-rolled its multiplier: the security
 review of #891 found names chosen offline to share one group made each set or lookup about 90x slower
 per step under `UntrustedSettings`. The key is drawn on the first hash and xored in before one odd
-multiply; collisions of the unkeyed hash itself are 0507, the memory budget's uncounted scope maps 0508.
+multiply. The hash is out of line, with names past 16 bytes and the first draw in functions of their
+own so that the short path saves no registers: inline it changed what GCC inlined into the parser,
++1% to +2.6% on every Load. Its cost over the unkeyed hash, measured: Loads +0.1% to +0.8%,
+`Render/config_file` +0.48% (to +1.08% over master), other renders within noise. Collisions of the
+unkeyed hash itself are 0507, the memory budget's uncounted scope maps 0508.

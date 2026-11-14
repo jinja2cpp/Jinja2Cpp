@@ -1,6 +1,8 @@
 #include "hash_map.h"
+#include "recursion_guard.h"
 
 #include <cstddef>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <exception>
@@ -37,16 +39,50 @@ std::uint64_t MakeNameHashKey() noexcept
     return ankerl::unordered_dense::detail::hash_bytes(parts, sizeof(parts));
 #endif
 }
+
+// Zero until drawn. Threads that draw at once agree on the first key stored
+std::atomic<std::uint64_t> NameHashKey{ 0 }; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+std::size_t Finish(std::uint64_t hash, std::uint64_t key) noexcept
+{
+    // Multiplying the keyed hash by an odd constant is a bijection, and folding the high half
+    // down makes the low byte (the group's fingerprint) depend on all of it
+    auto x = (hash ^ key) * UINT64_C(0xd6e8feb86659fd93);
+    x ^= x >> 32;
+    return static_cast<std::size_t>(x);
+}
+
+// The first hash of the process. Apart, so that HashName saves no registers for the call
+JINJA2CPP_NOINLINE std::size_t HashNameDrawingKey(const void* data, std::size_t size) noexcept
+{
+    std::uint64_t key = 0;
+    const auto drawn = MakeNameHashKey() | 1U; // never zero, which means not drawn yet
+    if (NameHashKey.compare_exchange_strong(key, drawn, std::memory_order_relaxed))
+    {
+        key = drawn;
+    }
+    return Finish(ankerl::unordered_dense::detail::hash_bytes(data, size), key);
+}
+
+// Names past 16 bytes. Apart, so that HashName, which the short names take, saves no registers
+JINJA2CPP_NOINLINE std::size_t HashLongName(const void* data, std::size_t size, std::uint64_t key) noexcept
+{
+    return Finish(ankerl::unordered_dense::detail::hash_bytes(data, size), key);
+}
 } // namespace
 
 std::size_t HashName(const void* data, std::size_t size) noexcept
 {
-    static const std::uint64_t key = MakeNameHashKey();
-    // Multiplying the keyed hash by an odd constant is a bijection, and folding the high half
-    // down makes the low byte (the group's fingerprint) depend on all of it
-    auto x = (ankerl::unordered_dense::detail::hash_bytes(data, size) ^ key) * UINT64_C(0xd6e8feb86659fd93);
-    x ^= x >> 32;
-    return static_cast<std::size_t>(x);
+    const auto key = NameHashKey.load(std::memory_order_relaxed);
+    if (key == 0)
+    {
+        return HashNameDrawingKey(data, size);
+    }
+    if (size > 16)
+    {
+        return HashLongName(data, size, key);
+    }
+    return Finish(ankerl::unordered_dense::detail::hash_bytes(data, size), key);
 }
 } // namespace detail
 } // namespace v2
