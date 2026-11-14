@@ -55,12 +55,10 @@ std::size_t Finish(std::uint64_t hash, std::uint64_t key) noexcept
 // The first hash of the process. Apart, so that HashName saves no registers for the call
 JINJA2CPP_NOINLINE std::size_t HashNameDrawingKey(const void* data, std::size_t size) noexcept
 {
-    std::uint64_t key = 0;
-    const auto drawn = MakeNameHashKey() | 1U; // never zero, which means not drawn yet
-    if (NameHashKey.compare_exchange_strong(key, drawn, std::memory_order_relaxed))
-    {
-        key = drawn;
-    }
+    // Never zero, which means not drawn yet. A thread that loses the race hashes with the key
+    // stored first
+    std::uint64_t expected = 0;
+    NameHashKey.compare_exchange_strong(expected, MakeNameHashKey() | 1U, std::memory_order_relaxed);
     return HashName(data, size);
 }
 
