@@ -541,9 +541,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0477](0477-stopiteration-out-of-render.md) | A StopIteration out of a render is Jinja2's RuntimeError | parity | low | done |
 | [0478](0478-render-memory-uncounted-objects.md) | Count the objects the render memory budget leaves out | robustness | low | done |
 | [0479](0479-stopiteration-out-of-a-macro-call.md) | A StopIteration out of a macro the template calls is undefined in Jinja2 | parity | low | done |
-| [0480](0480-module-call-export-self-holding-leak.md) | A self-holding container a module's call hands a host leaks when the host keeps it | robustness | low | open |
+| [0480](0480-module-call-export-self-holding-leak.md) | A self-holding container a module's call hands a host leaks when the host keeps it | robustness | low | done |
 | [0481](0481-nested-render-macro-in-shared-global-use-after-free.md) | A macro a nested render writes into a shared global is called after its template is gone | lifetime | high | done |
-| [0482](0482-module-tree-keep-alives.md) | End the trees a module replaced on a source change | robustness | low | open |
+| [0482](0482-module-tree-keep-alives.md) | End the trees a module replaced on a source change | robustness | low | done |
 | [0483](0483-render-memory-uncharged-release.md) | Give the render memory budget back only what it was charged | robustness | low | done |
 | [0484](0484-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds the Load check still decides differently from Jinja2 | parity | low | done |
 | [0485](0485-list-sort-restore-needs-memory.md) | A failed list.sort() loses the list's items when memory stays spent | robustness | low | done |
@@ -562,5 +562,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | open |
 | [0499](0499-stopped-macro-rollback-into-a-sink.md) | A macro that stops after its output reached the sink keeps the RuntimeError | parity | low | open |
 | [0500](0500-stopiteration-in-gettext-and-format.md) | A StopIteration out of gettext or str.format is undefined in Jinja2 | parity | low | open |
+| [0501](0501-stored-super-deep-chain.md) | A stored `super` called past its block renders without the block's frame | parity | low | open |
+| [0502](0502-stored-loop-namespace-assign.md) | A stored recursive loop that sets a namespace attribute fails after its include ended | parity | low | open |
+| [0503](0503-replaced-trees-slots-and-failed-calls.md) | Replaced trees that hold a slot, or that a failed call loaded, still stay | robustness | low | open |
 | [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | open |
 | [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
