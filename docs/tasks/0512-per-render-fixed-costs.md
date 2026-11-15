@@ -22,7 +22,9 @@ touches: [src/internal_value.cpp, src/template_impl.h, src/global_functions.cpp]
 
 **Change.**
 - `ValueObject::operator new` tests the budget first. Without one it jumps to `::operator new` (4
-  instructions); with one an out-of-line helper allocates and charges as before.
+  instructions); with one an out-of-line helper allocates and charges as before. That is the static
+  library's count; a shared library still reads the TLS through `__tls_get_addr` first (backlog item 3,
+  the TLS model).
 - `RenderCore` keeps the `std::list` of a `GenericMap`'s values only for a `GenericMap` render. For a
   `ValuesMap` it was empty, but destroying it was still a call: about 27 instructions a render.
 - `GetBuiltinGlobals` reads one function-local static (a reference to both maps) instead of two, with

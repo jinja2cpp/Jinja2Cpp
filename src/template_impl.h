@@ -562,10 +562,6 @@ public:
 
     // `hooks` (with hasHooks set) brings the render's own globals and poll (RenderHooks). A
     // separate instantiation, so that the ordinary Render pays nothing for them
-    // RenderCore of a render started inside another one: the collector of the outermost render that
-    // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
-    // again as copies of `params`, or of the values a GenericMap gave (`genericValues`), so that the host's
-    // accessor is not asked twice (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
     // The values a GenericMap gave, each with its name; nothing for a ValuesMap, whose values the context refers to
     using GenericValues = std::list<std::pair<std::string, Value>>;
     struct NoGenericValues
@@ -574,6 +570,10 @@ public:
     template<typename ParamsMap>
     using GenericValuesOf = std::conditional_t<std::is_same_v<ParamsMap, GenericMap>, GenericValues, NoGenericValues>;
 
+    // RenderCore of a render started inside another one: the collector of the outermost render that
+    // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
+    // again as copies of `params`, or of the values a GenericMap gave (`genericValues`), so that the host's
+    // accessor is not asked twice (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
     template<typename ParamsMap>
     JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace,
                                                           const GlobalsSnapshot& globals,
