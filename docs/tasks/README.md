@@ -302,7 +302,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | done |
 | [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | done |
 | [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | done |
-| [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | high | open |
+| [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | high | done |
 | [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | done |
 | [0233](0233-cpp-only-filter-stubs.md) | C++-only filters `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` do nothing | api | medium | done |
 | [0234](0234-github-tracker-cleanup.md) | Close GitHub issues that master already fixes, before 2.0 | release | medium | open |
@@ -330,7 +330,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0256](0256-survive-allocation-failure.md) | Survive allocation failure in Load and Render: remaining coverage | robustness | high | done |
 | [0257](0257-render-to-string-and-sink.md) | `RenderTo` a caller's string or an output sink | api | high | done |
 | [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | done |
-| [0259](0259-vendored-internal-namespaces.md) | Vendored robin_hood and lexertk still live in global namespaces | release | medium | open |
+| [0259](0259-vendored-internal-namespaces.md) | Vendored robin_hood and lexertk still live in global namespaces | release | medium | done |
 | [0260](0260-public-headers-iosfwd.md) | Public headers include `<iostream>` where `<iosfwd>` would do | release | low | open |
 | [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
 | [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | done |
@@ -567,3 +567,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0503](0503-replaced-trees-slots-and-failed-calls.md) | Replaced trees that hold a slot, or that a failed call loaded, still stay | robustness | low | open |
 | [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | open |
 | [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
+| [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | open |
+| [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | open |
+| [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | open |
