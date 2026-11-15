@@ -33,3 +33,5 @@ otherwise) and the builtin globals call the installed callable without formattin
 
 **Done when.** The four cases above match Jinja2 in `python/tests/test_i18n.py` (the `oldstyle`
 rows), and the "Differences" line of docs/python.md is removed.
+
+**Timing (Ruslan 2026-11-15).** Lands before the G1 freeze: the new `Settings` field changes its size.
