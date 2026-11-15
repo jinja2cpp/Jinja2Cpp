@@ -79,6 +79,12 @@ COMMON = [
     "{{ _('Hello')|upper }}{% set m = _('Hello') %}{{ m }}",
     "{% for i in range(2) %}{% trans i=i %}Hello {{ i }}{% endtrans %}{% endfor %}",
     "{% macro m() %}{% trans %}Hello{% endtrans %}{% endmacro %}{{ m() }}",
+    # where oldstyle tells a {% trans %} block from a call (task 0415)
+    "{% trans %}100% sure{% endtrans %}|{% trans %}100% {{ name }}{% endtrans %}",
+    "{% trans num=2 %}{{ num }} apple{% pluralize %}{{ num }} apples{% endtrans %}",
+    "{% trans %}<i>Hello</i>{% endtrans %}|{% trans x='<b>' %}<i>{{ x }}</i>{% endtrans %}",
+    "{{ gettext('x %(a)s', a=1) }}",
+    "{{ ngettext('%(num)s apple', '%(num)s apples', 2, num=5) }}",
 ]
 
 
@@ -101,11 +107,36 @@ def test_oldstyle_calls_without_variables_return_the_translation(autoescape):
     same("{{ _('100%') }}|{{ _('Hello %(name)s')|format(name='<x>') }}", translations(False), autoescape=autoescape)
 
 
-def test_a_count_named_num():
+@STYLES
+def test_a_count_named_num(newstyle):
     source = "{% trans num=2 %}{{ num }} apple{% pluralize %}{{ num }} apples{% endtrans %}"
-    assert same(source, translations(True)) == "2 pommes"
-    # oldstyle: the engine passes no variable for it, so the wrapper cannot tell the block from a call (docs/python.md)
-    assert render(source, translations(False))[0] == "2 pommes"
+    assert same(source, translations(newstyle)) == "2 pommes"
+
+
+@STYLES
+def test_the_message_ids_the_translations_get(newstyle):
+    # oldstyle: a block that names no variable keeps its % single, as Jinja2's _make_node does
+    got = []
+    for module in MODULES:
+        calls = []
+        env = module.Environment(extensions=["jinja2.ext.i18n"])
+        env.install_gettext_callables(lambda m: calls.append(m) or m, lambda s, p, n: calls.append((s, p, n)) or p, newstyle=newstyle)
+        env.from_string("{% trans %}100% sure{% endtrans %}{% trans x=1 %}{{ x }}%{% endtrans %}{% trans n=2 %}%{% pluralize %}%%{% endtrans %}").render()
+        got.append(calls)
+    assert got[0] == got[1]
+
+
+def test_a_template_keeps_the_style_it_was_loaded_with():
+    # Jinja2 reads newstyle_gettext when it compiles a {% trans %} block
+    got = []
+    for module in MODULES:
+        env = module.Environment(extensions=["jinja2.ext.i18n"])
+        env.install_gettext_translations(Fake(), newstyle=False)
+        old = env.from_string("{% trans %}100%{% endtrans %}")
+        env.newstyle_gettext = True
+        new = env.from_string("{% trans %}100%{% endtrans %}")
+        got.append((old.render(), new.render()))
+    assert got[0] == got[1] == ("100%", "100%%")
 
 
 def test_oldstyle_is_the_default_and_newstyle_gettext_is_an_attribute():
@@ -233,16 +264,15 @@ def test_without_installed_translations_the_engine_leaves_messages_as_they_are()
     "source",
     [
         "{{ gettext('%(a)1000000000s', a=1)|length }}",
-        "{{ gettext('%(a).1000000000f', a=1.5)|length }}",
         "{{ gettext('%(a)s%(a)s%(a)s', a=s)|length }}",
     ],
 )
 def test_formatting_a_translation_is_capped_before_it_allocates(source):
-    # Oldstyle calls format in Python (newstyle ones in the engine, capped there): Python would build the string
-    # first (a 1 GB width); the render's cap (MaxSequenceSize) is checked from the widths, a number's precision and
-    # the strings the fields repeat, as for str.format in the sandbox
+    # Newstyle calls format in the engine, which checks the render's cap (MaxSequenceSize) before it builds the string
+    # (a 1 GB width); oldstyle calls take no variables, and a {% trans %} block formats with the engine's %. A float
+    # precision is clamped to 2**20 digits there, as for every % format (python_format.cpp)
     env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
-    env.install_null_translations(newstyle=False)
+    env.install_null_translations(newstyle=True)
     with pytest.raises(jinja2cpp.exceptions.TemplateRuntimeError, match="too long"):
         env.from_string(source).render(s="y" * 30000000)
 
@@ -255,11 +285,33 @@ def test_formatting_a_translation_that_fits_is_as_jinja2(autoescape):
 def test_formatting_a_translation_checks_what_fits_in_one_pass():
     # Codex on #823: a precision truncates a repeated long string, and a run of unclosed keys is not rescanned
     env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
-    env.install_null_translations(newstyle=False)
+    env.install_null_translations(newstyle=True)
     assert env.from_string("{{ gettext('%(a).1s%(a).1s%(a).1s|%((b))s', a=s, **{'(b)': 2}) }}").render(s="y" * 30000000) == "yyy|2"
     # a bare dot is precision zero, and %c ignores a precision
     assert env.from_string("{{ gettext('[%(a).s%(a).s]%(c).1000000000c', a=s, c=65) }}").render(s="y" * 30000000) == "[]A"
     started = time.perf_counter()
-    with pytest.raises(ValueError, match="incomplete format key"):
+    # Jinja2 raises ValueError; the engine's % formatting raises TemplateRuntimeError (0510)
+    with pytest.raises(jinja2cpp.exceptions.TemplateRuntimeError, match="incomplete format key"):
         env.from_string("{{ gettext(t, a=1) }}").render(t="%(" * 80000)
     assert time.perf_counter() - started < 2
+
+
+def test_an_oldstyle_install_does_not_keep_the_environment_alive():
+    # Codex on #895: a translation callable bound to the environment must not make it immortal
+    import gc
+    import weakref
+
+    class Env(jinja2cpp.Environment):
+        def gettext(self, message):
+            return message
+
+        def ngettext(self, singular, plural, n):
+            return singular
+
+    env = Env(extensions=["jinja2.ext.i18n"])
+    env.install_gettext_callables(env.gettext, env.ngettext, newstyle=False)
+    assert env.from_string("{% trans %}a{% endtrans %}{{ _('b') }}").render() == "ab"
+    ref = weakref.ref(env)
+    del env
+    gc.collect()
+    assert ref() is None

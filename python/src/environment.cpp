@@ -528,6 +528,7 @@ void PyEnvironment::Rebuild()
         immutable = Truth(nb::getattr(self, "_sandbox_immutable", nb::bool_(false)));
     }
     settings.immutableContainers = immutable;
+    settings.extensions.i18nNewstyle = m_newstyleGettext;
     m_sandboxed = sandboxed;
     if (sandboxed)
     {
@@ -601,6 +602,18 @@ void PyEnvironment::ApplyGettext()
     m_env->InstallGettextCallables(callable(m_gettext[0]), callable(m_gettext[1]), callable(m_gettext[2]), callable(m_gettext[3]));
 }
 
+void PyEnvironment::SetNewstyleGettext(bool newstyle)
+{
+    m_newstyleGettext = newstyle;
+    if (m_env)
+    {
+        // A template keeps the style it was loaded with; the next loads take this one
+        auto settings = m_env->GetSettings();
+        settings.extensions.i18nNewstyle = newstyle;
+        m_env->SetSettings(settings);
+    }
+}
+
 void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::handle pgettext, nb::handle npgettext)
 {
     CheckAlive();
@@ -616,6 +629,38 @@ void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::hand
         m_gettext[i] = callables[i].ptr();
     }
     ApplyGettext();
+}
+
+nb::tuple PyEnvironment::GettextGlobals() const
+{
+    nb::list result;
+    for (auto* object : m_gettextGlobals)
+    {
+        result.append(object ? nb::borrow(object) : nb::none());
+    }
+    return nb::tuple(result);
+}
+
+void PyEnvironment::SetGettextGlobals(nb::handle callables)
+{
+    CheckAlive();
+    size_t idx = 0;
+    for (auto callable : callables)
+    {
+        if (idx == 4)
+        {
+            RaiseTypeError("_gettext_globals takes four callables or None");
+        }
+        if (!callable.is_none())
+        {
+            Keep(callable);
+        }
+        m_gettextGlobals[idx++] = callable.is_none() ? nullptr : callable.ptr();
+    }
+    for (; idx < 4; ++idx)
+    {
+        m_gettextGlobals[idx] = nullptr;
+    }
 }
 
 void PyEnvironment::CheckSandboxHooks() const
@@ -1013,6 +1058,8 @@ void BindEnvironment(nb::module_& module)
                                "template_class"_a)
                            .def("_set_chat_templates", &PyEnvironment::SetChatTemplates, "clock"_a.none())
                            .def("_set_gettext", &PyEnvironment::SetGettext, "gettext"_a.none(), "ngettext"_a.none(), "pgettext"_a.none(), "npgettext"_a.none())
+                           .def_prop_rw(
+                               "_gettext_globals", [](const PyEnvironment& self) { return self.GettextGlobals(); }, [](PyEnvironment& self, nb::handle value) { self.SetGettextGlobals(value); })
                            .def_prop_rw(
                                "newstyle_gettext", [](const PyEnvironment& self) { return self.NewstyleGettext(); }, [](PyEnvironment& self, bool value) { self.SetNewstyleGettext(value); })
                            .def(

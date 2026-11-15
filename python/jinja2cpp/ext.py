@@ -4,13 +4,7 @@ Environment(extensions=[...]) takes these, Jinja2's own classes or their dotted 
 ("jinja2.ext.do", "jinja2.ext.loopcontrols", "jinja2.ext.i18n").
 """
 
-import re
 import typing as t
-
-from markupsafe import Markup
-
-from . import _jinja2cpp
-from .utils import pass_context
 
 
 try:  # a custom extension subclasses this class and runs in Jinja2: the fallback (docs/python.md)
@@ -84,9 +78,10 @@ def _install_callables(
     """Environment.install_gettext_callables.
 
     Newstyle gettext is the engine's own: it translates with the callables and formats the result
-    with the variables of the call. Oldstyle (Jinja2's default) installs the callables as the
-    ``gettext``, ``ngettext``, ``pgettext`` and ``npgettext`` globals, wrapped so that a call
-    without variables returns the translation as it is, and a ``{% trans %}`` block formats it.
+    with the variables of the call. Oldstyle (Jinja2's default) installs the callables themselves as
+    the ``gettext``, ``ngettext``, ``pgettext`` and ``npgettext`` globals, as Jinja2 does; a
+    ``{% trans %}`` block loaded while ``newstyle_gettext`` is off formats their result in the
+    engine (Settings::Extensions::i18nNewstyle).
     """
     if newstyle is not None:
         env.newstyle_gettext = bool(newstyle)
@@ -94,147 +89,26 @@ def _install_callables(
     if env.newstyle_gettext:
         env._set_gettext(gettext, ngettext, pgettext, npgettext)
         return
-    # The oldstyle wrappers replace the engine's, which format every call
     env._set_gettext(None, None, None, None)
-    wrappers = (_old_gettext(gettext), _old_ngettext(ngettext), _old_pgettext(pgettext), _old_npgettext(npgettext))
-    for name, wrapper in zip(_GETTEXT_NAMES, wrappers):
-        if wrapper is not None:
-            env.globals[name] = wrapper
-            wrapper._jinja2cpp_gettext = True  # type: ignore[attr-defined]
+    callables = (gettext, ngettext, pgettext, npgettext)
+    for name, func in zip(_GETTEXT_NAMES, callables):
+        if func is not None:
+            env.globals[name] = func
+    # Kept by the environment (its traverse reaches them): a bound method of it holds it
+    env._gettext_globals = callables
 
 
 def _uninstall(env: t.Any, translations: t.Any = None) -> None:
     """Environment.uninstall_gettext_translations."""
     env._set_gettext(None, None, None, None)
+    env._gettext_globals = (None, None, None, None)
     for name in _GETTEXT_NAMES:
         env.globals.pop(name, None)
 
 
 def _remove_globals(env: t.Any) -> None:
-    # A previous install's wrappers; a global the program set by hand is left alone
-    for name in _GETTEXT_NAMES:
-        if getattr(env.globals.get(name), "_jinja2cpp_gettext", False):
+    # A previous oldstyle install's callables; a global the program set by hand is left alone
+    for name, func in zip(_GETTEXT_NAMES, env._gettext_globals):
+        if func is not None and env.globals.get(name) is func:
             del env.globals[name]
-
-
-# What follows the key of a %-conversion: flags, width, .precision, length modifier, type (printf-style formatting)
-_PERCENT_SPEC = re.compile(r"[#0\- +]*(?P<width>\*|[0-9]+)?(?P<dot>\.(?P<precision>\*|[0-9]*))?[hlL]?(?P<type>.?)", re.DOTALL)
-# The types a precision pads with digits (%c ignores one)
-_NUMBER_TYPES = frozenset("diouxXeEfFgG")
-
-
-def _check_percent_size(translated: str, variables: t.Mapping[str, t.Any]) -> None:
-    # Python builds the string first; the render's cap on sequences (MaxSequenceSize) is checked before, as for
-    # str.format in the sandbox (SandboxedFormatter): each field's width, a number's precision, and an estimate of
-    # the whole, the literal text and each field's string (a field may repeat a long value). One pass over the
-    # text: a key without its closing parenthesis ends the check, and Python's % raises for it
-    total = 0
-    position = 0
-    length = len(translated)
-    while True:
-        start = translated.find("%", position)
-        if start < 0:
-            break
-        total += start - position
-        cursor = start + 1
-        key = None
-        if cursor < length and translated[cursor] == "(":
-            # Python's key nests parentheses: %((a))s is the key (a)
-            depth = 1
-            end = cursor + 1
-            while end < length and depth:
-                char = translated[end]
-                if char == "(":
-                    depth += 1
-                elif char == ")":
-                    depth -= 1
-                end += 1
-            if depth:
-                return
-            key = translated[cursor + 1 : end - 1]
-            cursor = end
-        match = _PERCENT_SPEC.match(translated, cursor)
-        if match is None:  # never: every part of the pattern is optional
-            return
-        position = match.end()
-        kind = match.group("type")
-        if kind == "%":
-            total += 1
-            continue
-        width, precision = match.group("width"), match.group("precision")
-        size = int(width) if width not in (None, "*") else 0
-        # A bare dot is a precision of zero (%.s)
-        precision = "0" if match.group("dot") and not precision else precision
-        has_precision = precision not in (None, "*")
-        if has_precision and kind in _NUMBER_TYPES:
-            size = max(size, int(precision))
-        _jinja2cpp._check_sequence_size(size)
-        value = variables.get(key) if key is not None and isinstance(variables, dict) else None
-        if isinstance(value, str):
-            # a precision truncates a string (%.1s)
-            size = max(size, min(len(value), int(precision)) if has_precision and kind in ("s", "r", "a") else len(value))
-        total += size
-        _jinja2cpp._check_sequence_size(total)
-    _jinja2cpp._check_sequence_size(total + length - position)
-
-
-def _format(ctx: t.Any, translated: t.Any, variables: t.Dict[str, t.Any]) -> t.Any:
-    if not variables:
-        return translated
-    if ctx.eval_ctx.autoescape:
-        translated = Markup(translated)
-    if isinstance(translated, str):
-        _check_percent_size(translated, variables)
-    return translated % variables
-
-
-def _old_gettext(func: t.Optional[t.Callable[..., str]]) -> t.Optional[t.Callable[..., t.Any]]:
-    if func is None:
-        return None
-
-    @pass_context
-    def gettext(ctx: t.Any, string: str, **variables: t.Any) -> t.Any:
-        return _format(ctx, ctx.call(func, string), variables)
-
-    return gettext
-
-
-def _old_ngettext(func: t.Optional[t.Callable[..., str]]) -> t.Optional[t.Callable[..., t.Any]]:
-    if func is None:
-        return None
-
-    @pass_context
-    def ngettext(ctx: t.Any, singular: str, plural: str, num: int, **variables: t.Any) -> t.Any:
-        rv = ctx.call(func, singular, plural, num)
-        if variables:
-            variables.setdefault("num", num)
-        return _format(ctx, rv, variables)
-
-    return ngettext
-
-
-def _old_pgettext(func: t.Optional[t.Callable[..., str]]) -> t.Optional[t.Callable[..., t.Any]]:
-    if func is None:
-        return None
-
-    @pass_context
-    def pgettext(ctx: t.Any, string_ctx: str, string: str, **variables: t.Any) -> t.Any:
-        if variables:
-            variables.setdefault("context", string_ctx)
-        return _format(ctx, ctx.call(func, string_ctx, string), variables)
-
-    return pgettext
-
-
-def _old_npgettext(func: t.Optional[t.Callable[..., str]]) -> t.Optional[t.Callable[..., t.Any]]:
-    if func is None:
-        return None
-
-    @pass_context
-    def npgettext(ctx: t.Any, string_ctx: str, singular: str, plural: str, num: int, **variables: t.Any) -> t.Any:
-        if variables:
-            variables.setdefault("context", string_ctx)
-            variables.setdefault("num", num)
-        return _format(ctx, ctx.call(func, string_ctx, singular, plural, num), variables)
-
-    return npgettext
+    env._gettext_globals = (None, None, None, None)

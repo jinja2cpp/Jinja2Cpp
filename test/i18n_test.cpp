@@ -102,3 +102,70 @@ TEST(I18nDisabledTest, TransIsUnknownTag)
     Template tpl;
     EXPECT_FALSE(tpl.Load("{% trans %}a{% endtrans %}").has_value());
 }
+
+// Oldstyle gettext, Jinja2's default (Settings::Extensions::i18nNewstyle off, task 0415): the globals return what the
+// installed callable returns, and a `{% trans %}` block formats the translation itself
+class I18nOldstyleTest : public I18nTest
+{
+protected:
+    void SetUp() override
+    {
+        I18nTest::SetUp();
+        m_env.GetSettings().extensions.i18nNewstyle = false;
+    }
+};
+
+TEST_F(I18nOldstyleTest, TransFormatsTheTranslation)
+{
+    EXPECT_EQ("Hallo Welt!", Render("{% trans %}Hello {{ name }}!{% endtrans %}", { { "name", "Welt" } }));
+    // Without a variable the message keeps its single `%`, and the translation is not formatted
+    EXPECT_EQ("100%", Render("{% trans %}100%{% endtrans %}"));
+    EXPECT_EQ("100 %%", Render("{% trans %}100%%{% endtrans %}"));
+    // The variables are the block's: ngettext's `num` is not one unless the count is named so
+    EXPECT_NE(Render("{% trans n=3 %}Apfel{% pluralize %}Apfels{% endtrans %}").find("KeyError: 'num'"), std::string::npos);
+    EXPECT_EQ("3 Apfele", Render("{% trans num=3 %}Apfel{% pluralize %}Apfels{% endtrans %}"));
+    EXPECT_EQ("2 2 xe", Render("{% trans num=2 %}{{ num }} x{% pluralize %}{{ num }} xs{% endtrans %}"));
+}
+
+TEST_F(I18nOldstyleTest, GlobalsAreTheInstalledCallables)
+{
+    EXPECT_EQ("Hallo %(name)s!|Hallo %(name)s!", Render("{{ _('Hello %(name)s!') }}|{{ gettext('Hello %(name)s!') }}"));
+    EXPECT_EQ("%(num)d Birnee|menu:Open", Render("{{ ngettext('Birne', 'Birnen', 2) }}|{{ pgettext('menu', 'Open') }}"));
+    // A keyword argument goes to the callable, which ignores it here; nothing formats the translation
+    EXPECT_EQ("Hallo %(name)s!", Render("{{ gettext('Hello %(name)s!', name='x') }}"));
+}
+
+TEST_F(I18nOldstyleTest, NullTranslationsReturnTheMessage)
+{
+    // npgettext was not installed: gettext.NullTranslations, which takes no keyword arguments
+    EXPECT_EQ("%(num)s files", Render("{{ npgettext('ctx', '%(num)s file', '%(num)s files', 2) }}"));
+    EXPECT_NE(Render("{{ npgettext('ctx', 'a', 'b', 2, num=2) }}").find("unexpected keyword argument 'num'"), std::string::npos);
+}
+
+TEST_F(I18nOldstyleTest, Autoescape)
+{
+    m_env.GetSettings().autoescape = true;
+    EXPECT_EQ("<i>|&lt;b&gt; Apfel", Render("{% trans %}<i>{% endtrans %}|{% trans n='<b>' %}{{ n }} Apfel{% endtrans %}"));
+    EXPECT_EQ("&lt;i&gt;", Render("{{ _('<i>') }}"));
+}
+
+TEST_F(I18nOldstyleTest, WideTemplate)
+{
+    TemplateW tpl(&m_env);
+    ASSERT_TRUE(tpl.Load(L"{% trans name=L %}Hello {{ name }}!{% endtrans %}|{% trans %}100%{% endtrans %}|{{ _('a %(b)s') }}").has_value());
+    auto result = tpl.RenderAsString({ { "L", "Welt" } });
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(L"Hallo Welt!|100%|a %(b)s", result.value());
+}
+
+// A template loaded again after the style changed is parsed again: the setting takes part in Settings ==
+TEST_F(I18nOldstyleTest, ReloadAfterTheStyleChanged)
+{
+    EXPECT_EQ("100%", Render("{% trans %}100%{% endtrans %}"));
+    m_env.GetSettings().extensions.i18nNewstyle = true;
+    EXPECT_EQ("100 %", Render("{% trans %}100%{% endtrans %}"));
+    auto newstyle = m_env.GetSettings();
+    auto oldstyle = newstyle;
+    oldstyle.extensions.i18nNewstyle = false;
+    EXPECT_FALSE(newstyle == oldstyle);
+}

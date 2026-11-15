@@ -520,6 +520,10 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
                 return missing;
             }
         }
+        else if (key == "newstyle_gettext")
+        {
+            settings.extensions.i18nNewstyle = val.get<bool>();
+        }
         else if (key == "undefined")
         {
             auto policy = policies.find(val.get<std::string>());

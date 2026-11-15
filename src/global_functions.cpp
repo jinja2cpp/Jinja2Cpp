@@ -13,6 +13,7 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -597,6 +598,11 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     else
     {
         size_t message = fn.hasContext ? 1 : 0;
+        if (fn.hasPlural)
+        {
+            // `n == 1`, which a strict undefined refuses
+            CheckUndefinedUse(params.posParams[message + 2], UndefinedUse::Operator);
+        }
         translated = fn.hasPlural && !IsOne(params.posParams[message + 2]) ? params.posParams[message + 1] : params.posParams[message];
     }
     if (fn.hasPlural)
@@ -622,6 +628,75 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     return result;
 }
 
+// Oldstyle (Jinja2's default, newstyle_gettext off): the global is the installed callable itself, called with the
+// arguments of the call and returning what it returns. Without one, gettext.NullTranslations: the message, or the
+// plural one when the count is not 1
+InternalValue CallOldGettext(const GettextFunction& fn, const CallParams& params, RenderContext& context)
+{
+    auto* env = context.GetEnv();
+    if (auto userFn = env ? env->FindGettextCallable(fn.name) : std::optional<UserCallable>())
+    {
+        auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn);
+        return GetIf<Callable>(&callable)->GetExpressionCallable()(params, context);
+    }
+    // The parameters of gettext.NullTranslations' methods, by position or by keyword
+    std::vector<const char*> names;
+    if (fn.hasContext)
+    {
+        names.push_back("context");
+    }
+    if (fn.hasPlural)
+    {
+        names.insert(names.end(), { "msgid1", "msgid2", "n" });
+    }
+    else
+    {
+        names.push_back("message");
+    }
+    const auto typeError = [&fn](const std::string& what) {
+        return TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "NullTranslations."s + fn.name + "() " + what);
+    };
+    if (params.posParams.size() > names.size())
+    {
+        throw typeError("takes " + std::to_string(names.size() + 1) + " positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+    }
+    std::vector<const InternalValue*> args(names.size(), nullptr);
+    for (size_t idx = 0; idx < params.posParams.size(); ++idx)
+    {
+        args[idx] = &params.posParams[idx];
+    }
+    for (const auto& kwParam : params.kwParams)
+    {
+        const auto& name = kwParam.first;
+        const auto pos = std::find_if(names.begin(), names.end(), [&name](const char* known) { return name == known; });
+        if (pos == names.end())
+        {
+            throw typeError("got an unexpected keyword argument '" + name + "'");
+        }
+        auto& arg = args[static_cast<size_t>(pos - names.begin())];
+        if (arg)
+        {
+            throw typeError("got multiple values for argument '" + name + "'");
+        }
+        arg = &kwParam.second;
+    }
+    for (size_t idx = 0; idx < args.size(); ++idx)
+    {
+        if (!args[idx])
+        {
+            throw typeError("missing required argument '"s + names[idx] + "'");
+        }
+    }
+    const size_t message = fn.hasContext ? 1 : 0;
+    if (!fn.hasPlural)
+    {
+        return *args[message];
+    }
+    // `n == 1`, which a strict undefined refuses
+    CheckUndefinedUse(*args[message + 2], UndefinedUse::Operator);
+    return IsOne(*args[message + 2]) ? *args[message] : *args[message + 1];
+}
+
 // jinja2.ext._gettext_alias: `_` calls whatever `gettext` is at the call site
 InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 {
@@ -632,12 +707,19 @@ InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 
 namespace
 {
-void SetupI18nGlobals(InternalValueMap& globalParams)
+void SetupI18nGlobals(InternalValueMap& globalParams, bool newstyle)
 {
     static const GettextFunction functions[] = { { "gettext", false, false }, { "ngettext", false, true }, { "pgettext", true, false }, { "npgettext", true, true } };
     for (const auto& fn : functions)
     {
-        globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
+        if (newstyle)
+        {
+            globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
+        }
+        else
+        {
+            globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallOldGettext(fn, params, context); }));
+        }
     }
     globalParams.emplace("_", MakeFunction(CallGettextAlias));
 }
@@ -705,12 +787,37 @@ std::optional<InternalValue> ClassGlobalOf(std::string_view module, std::string_
     return std::nullopt;
 }
 
+// Jinja2's MarkSafeIfAutoescape node, which an oldstyle `{% trans %}` block wraps its gettext call in: Markup(value)
+// under autoescape, the value itself otherwise
+const InternalValue& MarkSafeIfAutoescapeFunction()
+{
+    static const InternalValue fn = [] {
+        const UncountedMemoryScope uncounted;
+        return InternalValue(MakeFunction([](const CallParams& params, RenderContext& context) {
+            const auto& value = params.posParams.front();
+            if (!context.IsAutoescape())
+            {
+                return value;
+            }
+            if (!IsStringValue(value))
+            {
+                return MakeMarkup(value, context.GetRendererCallback());
+            }
+            InternalValue result = value;
+            result.SetMarkup();
+            return result;
+        }));
+    }();
+    return fn;
+}
+
 namespace
 {
 struct BuiltinGlobals
 {
     InternalValueMap plain;
     InternalValueMap withI18n;
+    InternalValueMap withOldI18n;
 };
 
 BuiltinGlobals MakeBuiltinGlobals()
@@ -720,7 +827,9 @@ BuiltinGlobals MakeBuiltinGlobals()
     BuiltinGlobals result;
     SetupGlobals(result.plain);
     SetupGlobals(result.withI18n);
-    SetupI18nGlobals(result.withI18n);
+    SetupI18nGlobals(result.withI18n, true);
+    SetupGlobals(result.withOldI18n);
+    SetupI18nGlobals(result.withOldI18n, false);
     return result;
 }
 
@@ -732,13 +841,17 @@ JINJA2CPP_NOINLINE const BuiltinGlobals& BuildBuiltinGlobals()
 }
 } // namespace
 
-const InternalValueMap& GetBuiltinGlobals(bool withI18n)
+const InternalValueMap& GetBuiltinGlobals(const Settings::Extensions& extensions)
 {
     // Built once and only read afterwards, so renders on any thread share them; the state of
     // the stateful globals (cycler, joiner, lipsum's generator) lives in their results or in
     // the render
     static const BuiltinGlobals& globals = BuildBuiltinGlobals();
-    return withI18n ? globals.withI18n : globals.plain;
+    if (!extensions.i18n)
+    {
+        return globals.plain;
+    }
+    return extensions.i18nNewstyle ? globals.withI18n : globals.withOldI18n;
 }
 } // namespace v2
 } // namespace jinja2
