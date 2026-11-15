@@ -5,7 +5,6 @@
 #include <jinja2cpp/binding/nlohmann_json.h>
 #include <jinja2cpp/chat_template.h>
 #include <jinja2cpp/json_adapter.h>
-#include <jinja2cpp/markup.h>
 #include <jinja2cpp/prompt.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
@@ -448,24 +447,21 @@ TEST(ChatTemplateRegistry, DivergencesNameExistingCases)
 namespace
 {
 // docs/tasks/0358: a template written for transformers in AutoescapeMode::Prompt. Its literals are prompt-safe, so its
-// own special tokens pass; bos_token and eos_token come from the host as Markup; message content is neutralized
+// own special tokens pass; bos_token and eos_token are plain strings named prompt-safe (docs/tasks/0394); message
+// content is neutralized
 template<typename CharT>
-Result RenderInPromptMode(const std::string& templateFile, jinja2::ValuesMap params)
+Result RenderInPromptMode(const std::string& templateFile, const jinja2::ValuesMap& params)
 {
     using Tpl = std::conditional_t<std::is_same_v<CharT, char>, jinja2::Template, jinja2::TemplateW>;
     jinja2::TemplateEnv env;
-    ConfigureEnv(env);
+    jinja2::ChatTemplateOptions options;
+    options.now = FixedNow;
+    options.promptSafeParams = { "bos_token", "eos_token" };
+    jinja2::ConfigureForChatTemplates(env, options);
     auto& settings = env.GetSettings();
     settings.autoescape = true;
     settings.autoescapeMode = jinja2::AutoescapeMode::Prompt;
     settings.promptEscaper = jinja2::PromptEscaper({ { "<|im_start|>", "<|im_end|>", "<|endoftext|>" }, { "tool_call", "tool_response", "tools" } });
-    for (const char* name : { "bos_token", "eos_token" })
-    {
-        if (auto found = params.find(name); found != params.end() && found->second.IsString())
-        {
-            found->second = jinja2::Markup(found->second.AsString());
-        }
-    }
     Tpl tpl(&env);
     const auto source = ReadFile(Dir() + "/templates/" + templateFile);
     auto load = [&] {

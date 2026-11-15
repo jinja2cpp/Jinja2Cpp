@@ -516,7 +516,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0446](0446-nfkc-template-names.md) | Names a template sets are not NFKC-normalised | parity | low | done |
 | [0447](0447-chained-if-unicode-space.md) | Chained else-less conditionals and Unicode spaces inside tags | parity | low | done |
 | [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | open |
-| [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | open |
+| [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | done |
 | [0450](0450-module-call-collector-quadratic.md) | A module whose calls grow a module-level container walks all of it on every call | robustness | medium | done |
 | [0451](0451-python-module-trans-percent-and-range.md) | Python module: `{% trans %}100%{% endtrans %}` prints `100%%`; `range()` prints nothing | api | low | open |
 | [0452](0452-str-expandtabs.md) | str.expandtabs is missing from the string methods | parity | low | done |

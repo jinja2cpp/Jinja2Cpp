@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/897
 priority: low
 area: release
 depends: [0076]
@@ -24,3 +25,7 @@ transitive include after the tag breaks source compatibility.
 (test/package/main.cpp) still builds.
 
 **Timing (Ruslan 2026-11-15).** Lands before the G1 freeze, since dropping a transitive include after the tag breaks source compatibility.
+
+**Resolution.** template.h, error_info.h and filesystem_handler.h include `<iosfwd>`: they only
+declare stream parameters and the `FileStreamPtr` deleter type. `test/test_tools.h` includes
+`<iostream>`/`<sstream>` itself; MIGRATION.md lists the source break. No ABI change.

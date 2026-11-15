@@ -596,6 +596,19 @@ public:
         return keeper;
     }
 
+    // Marks prompt-safe the strings of the params the environment names (ChatTemplateOptions::promptSafeParams,
+    // docs/tasks/0394), as if the host passed them as Markup. Out of line: few environments name any
+    JINJA2CPP_NOINLINE static void MarkPromptSafeParams(const std::vector<std::string>& names, InternalValueMap& params)
+    {
+        for (const auto& name : names)
+        {
+            if (auto found = params.find(name); found != params.end())
+            {
+                found->second.SetMarkup();
+            }
+        }
+    }
+
     template<bool hasHooks, typename Target, typename ParamsMap>
     std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const RenderHooks* hooks) const
     {
@@ -679,6 +692,11 @@ public:
             if (JINJA2CPP_CELL_UNLIKELY(maps.Workspace().Running() != nullptr) && globals)
             {
                 keeper = KeepForOuterRender(maps.Workspace(), *globals, params, genericValues, intParams);
+            }
+            // After the keep, which converts the params again
+            if (const auto* safeParams = m_settings->PromptSafeParamsToMark(); JINJA2CPP_CELL_UNLIKELY(safeParams))
+            {
+                MarkPromptSafeParams(*safeParams, intParams);
             }
             RendererCallback callback(this);
             callback.SetGlobals(maps.Workspace(), globals, cycles);

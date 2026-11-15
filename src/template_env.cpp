@@ -173,6 +173,11 @@ bool IsSameHandler(const FilesystemHandlerPtr& lhs, const FilesystemHandlerPtr& 
     return !lhs && !rhs;
 }
 
+bool IsSamePromptSafeParams(const std::shared_ptr<const std::vector<std::string>>& lhs, const std::shared_ptr<const std::vector<std::string>>& rhs)
+{
+    return lhs == rhs || (lhs && rhs && *lhs == *rhs);
+}
+
 bool IsSameCallables(const TemplateEnvImpl::CallablesMap& lhs, const TemplateEnvImpl::CallablesMap& rhs)
 {
     return lhs.size() == rhs.size() && std::all_of(lhs.begin(), lhs.end(), [&rhs](const auto& item) {
@@ -256,7 +261,7 @@ bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
         return true;
     }
     const ReaderLockPair lock(guard, other.guard);
-    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && GetBigIntBackend() == other.GetBigIntBackend() && GetDialect() == other.GetDialect() && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
+    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && GetBigIntBackend() == other.GetBigIntBackend() && GetDialect() == other.GetDialect() && IsSamePromptSafeParams(GetPromptSafeParams(), other.GetPromptSafeParams()) && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
 }
 
 LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
@@ -268,11 +273,11 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
     const WriterLock<Mutex> l(m_loadSettingsGuard);
     if (settings.finalize.callable)
     {
-        return std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked());
+        return MakeLoadSettingsLocked(BigIntBackendLocked());
     }
     if (!m_loadSettings || m_loadSettings->settings != settings)
     {
-        m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked());
+        m_loadSettings = MakeLoadSettingsLocked(BigIntBackendLocked());
     }
     return m_loadSettings;
 }
@@ -286,7 +291,7 @@ bool TemplateEnvImpl::SetBigIntBackend(const BigIntBackend* backend) noexcept
     }
     try
     {
-        m_loadSettings = std::make_shared<const LoadSettings>(settings, backend, DialectLocked());
+        m_loadSettings = MakeLoadSettingsLocked(backend);
     }
     catch (...)
     {
@@ -308,7 +313,24 @@ void TemplateEnvImpl::SetDialect(Dialect dialect)
     {
         return;
     }
-    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect);
+    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect, PromptSafeParamsLocked());
+}
+
+void TemplateEnvImpl::SetPromptSafeParams(std::vector<std::string> names)
+{
+    auto safeParams = names.empty() ? nullptr : std::make_shared<const std::vector<std::string>>(std::move(names));
+    const WriterLock<Mutex> l(m_loadSettingsGuard);
+    if (IsSamePromptSafeParams(PromptSafeParamsLocked(), safeParams))
+    {
+        return;
+    }
+    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked(), std::move(safeParams));
+}
+
+std::shared_ptr<const std::vector<std::string>> TemplateEnvImpl::GetPromptSafeParams() const
+{
+    const WriterLock<Mutex> l(m_loadSettingsGuard);
+    return PromptSafeParamsLocked();
 }
 
 Dialect TemplateEnvImpl::GetDialect() const

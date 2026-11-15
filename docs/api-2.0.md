@@ -307,7 +307,10 @@ keys in insertion order, no HTML escaping, `indent`/`separators`/`sort_keys`), t
 read-only lists and dicts (`ImmutableSandboxedEnvironment`: calling `append`, `update`, ... fails
 with `ErrorCode::SecurityError` and the sandbox's message) and the globals
 `raise_exception` (`ErrorCode::TemplateRuntimeError`) and `strftime_now` (clock in
-`ChatTemplateOptions::now`). Later knobs are new fields of `ChatTemplateOptions`, not new entry points.
+`ChatTemplateOptions::now`). Later knobs are new fields of `ChatTemplateOptions`, not new entry points:
+`ChatTemplateOptions::promptSafeParams` (task 0394, before the G1 freeze) names the params whose
+strings are prompt-safe in prompt mode (`bos_token`, `eos_token`), so the host passes them as plain
+strings rather than as `jinja2::Markup`.
 The header and its one source file are built and installed only with the CMake option
 `JINJA2CPP_WITH_CHAT_TEMPLATES` (default ON); `JINJA2CPP_HAS_CHAT_TEMPLATES` (generated
 `jinja2cpp/features.h`, included by `config.h`) says whether they are, and
