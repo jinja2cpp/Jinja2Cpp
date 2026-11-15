@@ -69,11 +69,25 @@ void ThrowSequenceTooLong(uint64_t size, const char* what)
                              std::string(what) + " of length " + std::to_string(size) + " is longer than " + std::to_string(detail::t_renderLimits.maxSequenceSize));
 }
 
-void* ValueObject::operator new(std::size_t size)
+namespace
+{
+// ValueObject's allocation function with a memory budget: allocates first, so that a failed allocation charges nothing
+JINJA2CPP_NOINLINE void* NewChargedObject(std::size_t size)
 {
     void* ptr = ::operator new(size);
     ChargeObjectMemory(size);
     return ptr;
+}
+} // namespace
+
+void* ValueObject::operator new(std::size_t size)
+{
+    // Without a budget a jump to the global allocation function: charging after it would keep a frame across the call
+    if (!RenderMemoryCounted())
+    {
+        return ::operator new(size);
+    }
+    return NewChargedObject(size);
 }
 
 void ValueObject::operator delete(void* ptr, std::size_t size) noexcept
