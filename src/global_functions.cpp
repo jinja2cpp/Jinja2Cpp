@@ -705,27 +705,40 @@ std::optional<InternalValue> ClassGlobalOf(std::string_view module, std::string_
     return std::nullopt;
 }
 
+namespace
+{
+struct BuiltinGlobals
+{
+    InternalValueMap plain;
+    InternalValueMap withI18n;
+};
+
+BuiltinGlobals MakeBuiltinGlobals()
+{
+    // Made once, maybe in a render with a memory budget, for every render after it
+    const UncountedMemoryScope uncounted;
+    BuiltinGlobals result;
+    SetupGlobals(result.plain);
+    SetupGlobals(result.withI18n);
+    SetupI18nGlobals(result.withI18n);
+    return result;
+}
+
+// Out of line, so that each render's GetBuiltinGlobals is one guard test and a select, with no object on its stack
+JINJA2CPP_NOINLINE const BuiltinGlobals& BuildBuiltinGlobals()
+{
+    static const BuiltinGlobals globals = MakeBuiltinGlobals();
+    return globals;
+}
+} // namespace
+
 const InternalValueMap& GetBuiltinGlobals(bool withI18n)
 {
     // Built once and only read afterwards, so renders on any thread share them; the state of
     // the stateful globals (cycler, joiner, lipsum's generator) lives in their results or in
     // the render
-    static const auto globals = [] {
-        // Made once, maybe in a render with a memory budget, for every render after it
-        const UncountedMemoryScope uncounted;
-        InternalValueMap result;
-        SetupGlobals(result);
-        return result;
-    }();
-    static const auto globalsWithI18n = [] {
-        // Made once, maybe in a render with a memory budget, for every render after it
-        const UncountedMemoryScope uncounted;
-        InternalValueMap result;
-        SetupGlobals(result);
-        SetupI18nGlobals(result);
-        return result;
-    }();
-    return withI18n ? globalsWithI18n : globals;
+    static const BuiltinGlobals& globals = BuildBuiltinGlobals();
+    return withI18n ? globals.withI18n : globals.plain;
 }
 } // namespace v2
 } // namespace jinja2
