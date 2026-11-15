@@ -665,9 +665,10 @@ InternalValue CallOldGettext(const GettextFunction& fn, const CallParams& params
     {
         args[idx] = &params.posParams[idx];
     }
-    for (const auto& [name, value] : params.kwParams)
+    for (const auto& kwParam : params.kwParams)
     {
-        const auto pos = std::find_if(names.begin(), names.end(), [&name = name](const char* known) { return name == known; });
+        const auto& name = kwParam.first;
+        const auto pos = std::find_if(names.begin(), names.end(), [&name](const char* known) { return name == known; });
         if (pos == names.end())
         {
             throw typeError("got an unexpected keyword argument '" + name + "'");
@@ -677,7 +678,7 @@ InternalValue CallOldGettext(const GettextFunction& fn, const CallParams& params
         {
             throw typeError("got multiple values for argument '" + name + "'");
         }
-        arg = &value;
+        arg = &kwParam.second;
     }
     for (size_t idx = 0; idx < args.size(); ++idx)
     {
