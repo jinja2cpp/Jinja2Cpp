@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: api
 depends: [0358]
@@ -21,3 +21,12 @@ a `PromptEscaper`.
 prompt-safe, and the example builds.
 
 **Timing (Ruslan 2026-11-15).** Lands before the G1 freeze: the new `ChatTemplateOptions` field changes its size.
+
+**Resolution.** `ChatTemplateOptions::promptSafeParams` names the params; `ConfigureForChatTemplates` keeps
+them in the environment's load settings beside the dialect, and in prompt mode a render (and
+`MakeModule`) marks the strings of those params Markup after converting them. Lists and other
+values are not marked; in HTML mode the names change nothing. `examples/chat_template_specials.h`
+reads the specials (added tokens marked `special`, the named tokens, `additional_special_tokens`)
+and the named params from `tokenizer_config.json`; `test/chat_template_preset_test.cpp` builds and
+runs it. ABI: `ChatTemplateOptions` grows by one `std::vector<std::string>`; aggregate
+initialisation `{ now }` now warns under `-Wmissing-field-initializers`.

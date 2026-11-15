@@ -761,6 +761,10 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
         {
             state->convertedParams[name] = OwnedArgument(value);
         }
+        if (const auto* safeParams = self->m_settings->PromptSafeParamsToMark())
+        {
+            TemplateImpl::MarkPromptSafeParams(*safeParams, state->convertedParams);
+        }
         ModuleCallCollector cycles(state->cells, state->kept);
         const auto limitsScope = state->MakeLimitsScope();
         // Into result.body, which outlives the limits that keep a pointer to it

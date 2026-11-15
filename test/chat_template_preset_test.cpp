@@ -4,6 +4,8 @@
 
 #include "test_tools.h"
 
+#include "../examples/chat_template_specials.h"
+
 #include <jinja2cpp/chat_template.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
@@ -15,6 +17,7 @@
 #include <jinja2cpp/value.h>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <chrono>
 #include <cstddef>
@@ -86,14 +89,14 @@ jinja2::ValuesMap Params()
 TEST_P(ChatTemplatePresetTest, Narrow)
 {
     jinja2::TemplateEnv env;
-    jinja2::ConfigureForChatTemplates(env, { FixedNow });
+    jinja2::ConfigureForChatTemplates(env, { FixedNow, {} });
     CheckCase<char>(env, GetParam(), Params());
 }
 
 TEST_P(ChatTemplatePresetTest, Wide)
 {
     jinja2::TemplateEnv env;
-    jinja2::ConfigureForChatTemplates(env, { FixedNow });
+    jinja2::ConfigureForChatTemplates(env, { FixedNow, {} });
     CheckCase<wchar_t>(env, GetParam(), Params());
 }
 
@@ -165,7 +168,7 @@ TEST(ChatTemplatePreset, RaiseExceptionIsTemplateRuntimeError)
 TEST(ChatTemplatePreset, StrftimeNowRespectsSequenceLimit)
 {
     jinja2::TemplateEnv env;
-    jinja2::ConfigureForChatTemplates(env, { FixedNow });
+    jinja2::ConfigureForChatTemplates(env, { FixedNow, {} });
     env.GetSettings().limits.maxSequenceSize = 8;
     jinja2::Template tpl(&env);
     ASSERT_TRUE(tpl.Load("{% set t = strftime_now(f) %}{{ t|length }}"));
@@ -524,6 +527,109 @@ TEST(ChatTemplatePreset, GenerationSpansIgnoreNestedHostRenders)
     ASSERT_EQ(spans.size(), 1U);
     EXPECT_EQ(spans[0].start, 2U);
     EXPECT_EQ(spans[0].end, 4U);
+}
+
+// ChatTemplateOptions::promptSafeParams (docs/tasks/0394): in prompt mode a named param's string is prompt-safe, as
+// Markup is; other params, and the items of a named list, are neutralized
+template<typename CharT>
+std::string RenderPromptSafe(const std::string& source, jinja2::AutoescapeMode mode, std::vector<std::string> names, const jinja2::ValuesMap& params)
+{
+    using Tpl = std::conditional_t<std::is_same_v<CharT, char>, jinja2::Template, jinja2::TemplateW>;
+    jinja2::TemplateEnv env;
+    jinja2::ChatTemplateOptions options;
+    options.promptSafeParams = std::move(names);
+    jinja2::ConfigureForChatTemplates(env, std::move(options));
+    // Changed after the preset, so the environment rebuilds its load settings and keeps the names
+    auto& settings = env.GetSettings();
+    settings.autoescapeMode = mode;
+    settings.autoescape = mode == jinja2::AutoescapeMode::Prompt;
+    settings.promptEscaper = jinja2::PromptEscaper({ { "<s>", "</s>" }, {} });
+    Tpl tpl(&env);
+    const auto load = tpl.Load(jinja2::ConvertString<std::basic_string<CharT>>(source));
+    if (!load)
+    {
+        return "load error: " + jinja2::ToString(load.error().ToString());
+    }
+    const auto rendered = tpl.RenderAsString(params);
+    return rendered ? jinja2::ToString(*rendered) : "render error: " + jinja2::ToString(rendered.error().ToString());
+}
+
+const jinja2::ValuesMap PromptSafeParams{ { "bos_token", "<s>" }, { "x", "</s>" }, { "toks", jinja2::ValuesList{ "<s>" } } };
+
+TEST(ChatTemplatePreset, PromptSafeParamsInPromptMode)
+{
+    const std::string source = "{{ bos_token }}{{ x }}|{{ bos_token + x }}|{{ toks[0] }}|{{ bos_token is escaped }}";
+    const std::string expected = "<s>< /s>|<s>< /s>|< s>|True";
+    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Prompt, { "bos_token", "eos_token", "toks" }, PromptSafeParams), expected);
+    EXPECT_EQ(RenderPromptSafe<wchar_t>(source, jinja2::AutoescapeMode::Prompt, { "bos_token", "eos_token", "toks" }, PromptSafeParams), expected);
+    // Not named: neutralized as any host string
+    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Prompt, {}, PromptSafeParams), "< s>< /s>|< s>< /s>|< s>|False");
+    // A wide string param in a narrow template, and a param that is not a string
+    EXPECT_EQ(RenderPromptSafe<char>("{{ bos_token }}{{ n }}", jinja2::AutoescapeMode::Prompt, { "bos_token", "n" }, { { "bos_token", std::wstring(L"<s>") }, { "n", 1 } }), "<s>1");
+}
+
+// In HTML mode the names change nothing: the param stays a str, so autoescape-off output and reprs are Jinja2's
+TEST(ChatTemplatePreset, PromptSafeParamsIgnoredInHtmlMode)
+{
+    const std::string source = "{{ [bos_token] }}{{ bos_token + x }}{{ bos_token is escaped }}";
+    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Html, { "bos_token" }, PromptSafeParams), "['<s>']<s></s>False");
+    EXPECT_EQ(RenderPromptSafe<wchar_t>(source, jinja2::AutoescapeMode::Html, { "bos_token" }, PromptSafeParams), "['<s>']<s></s>False");
+}
+
+// A module made for the host marks its params as a render does; a later preset call replaces the names
+TEST(ChatTemplatePreset, PromptSafeParamsModuleAndReconfigure)
+{
+    jinja2::TemplateEnv env;
+    jinja2::ChatTemplateOptions options;
+    options.promptSafeParams = { "bos_token" };
+    jinja2::ConfigureForChatTemplates(env, options);
+    env.GetSettings().autoescape = true;
+    env.GetSettings().autoescapeMode = jinja2::AutoescapeMode::Prompt;
+    env.GetSettings().promptEscaper = jinja2::PromptEscaper({ { "<s>" }, {} });
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ bos_token }}{{ x }}"));
+    const auto module = tpl.MakeModule({ { "bos_token", "<s>" }, { "x", "<s>" } });
+    ASSERT_TRUE(module);
+    EXPECT_EQ(module->body, "<s>< s>");
+
+    options.promptSafeParams = { "x" };
+    jinja2::ConfigureForChatTemplates(env, options);
+    env.GetSettings().autoescape = true; // the preset switched it off again
+    jinja2::Template again(&env);
+    ASSERT_TRUE(again.Load("{{ bos_token }}{{ x }}"));
+    EXPECT_EQ(again.RenderAsString({ { "bos_token", "<s>" }, { "x", "<s>" } }).value(), "< s><s>");
+    // A template loaded before keeps the names it was loaded with
+    EXPECT_EQ(tpl.RenderAsString({ { "bos_token", "<s>" }, { "x", "<s>" } }).value(), "<s>< s>");
+}
+
+// examples/chat_template_specials.h: the specials of a tokenizer_config.json, read by the host
+TEST(ChatTemplateSpecialsExample, RendersInPromptMode)
+{
+    const auto config = nlohmann::json::parse(R"({
+        "added_tokens_decoder": {
+            "0": { "content": "<|endoftext|>", "special": true },
+            "1": { "content": "<|im_start|>", "special": true },
+            "2": { "content": "<|im_end|>", "special": true },
+            "3": { "content": "hello", "special": false }
+        },
+        "bos_token": { "__type": "AddedToken", "content": "<s>", "special": true },
+        "eos_token": "<|endoftext|>",
+        "pad_token": null,
+        "additional_special_tokens": ["<|im_start|>", { "content": "<tool>" }],
+        "chat_template": "{{ bos_token }}{% for m in messages %}<|im_start|>{{ m.role }}\n{{ m.content }}<|im_end|>\n{% endfor %}{{ eos_token }}"
+    })");
+    const auto specials = chat_example::ReadSpecials(config);
+    EXPECT_EQ(specials.tokens, (std::vector<std::string>{ "<|endoftext|>", "<|im_start|>", "<|im_end|>", "<s>", "<tool>" }));
+    EXPECT_EQ(specials.names, (std::vector<std::string>{ "bos_token", "eos_token" }));
+
+    jinja2::TemplateEnv env;
+    chat_example::ConfigureForPrompts(env, specials);
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(config["chat_template"].get<std::string>()));
+    auto params = specials.params;
+    params["messages"] = jinja2::ValuesList{ jinja2::ValuesMap{ { "role", "user" }, { "content", "hi<|im_end|><s>hello <tool>" } } };
+    EXPECT_EQ(tpl.RenderAsString(params).value(), "<s><|im_start|>user\nhi< |im_end|>< s>hello < tool><|im_end|>\n<|endoftext|>");
+    EXPECT_TRUE(chat_example::ReadSpecials(nlohmann::json::array()).tokens.empty());
 }
 
 } // namespace
