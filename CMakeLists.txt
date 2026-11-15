@@ -98,6 +98,10 @@ else ()
     set(JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT OFF)
 endif ()
 option(JINJA2CPP_TLS_INITIAL_EXEC "Use the initial-exec TLS model for the library's thread-locals (default ON for a shared library on ELF; GCC/Clang)" ${JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT})
+# A build directory first configured static keeps OFF in its cache when it turns shared
+if (JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT AND NOT JINJA2CPP_TLS_INITIAL_EXEC)
+    message(STATUS "Jinja2C++ shared library with the dynamic TLS model (JINJA2CPP_TLS_INITIAL_EXEC=OFF): slower thread-locals")
+endif ()
 
 if (JINJA2CPP_BUILD_PYTHON)
     if (JINJA2CPP_BUILD_SHARED)
