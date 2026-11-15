@@ -4,6 +4,7 @@
 #include "contracts.h"
 #include "internal_value.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -101,7 +102,7 @@ public:
     [[nodiscard]] auto end() const noexcept { return m_entries.end(); }
     // Whether the table holds memory, and so has something to empty when the render ends
     [[nodiscard]] bool HasStorage() const noexcept { return m_entries.capacity() != 0; }
-    [[nodiscard]] size_t capacity() const noexcept { return m_entries.capacity(); }
+    [[nodiscard]] size_t Capacity() const noexcept { return m_entries.capacity(); }
 
     // Empties the table; with `keepStorage`, keeps its memory for the next render unless it
     // holds more than `maxKept` entries
@@ -132,15 +133,10 @@ public:
         {
             return false;
         }
-        for (const auto& entry : lhs)
-        {
+        return std::all_of(lhs.begin(), lhs.end(), [&rhs](const Entry& entry) {
             const auto* other = rhs.Find(entry.name);
-            if (!other || !(*other == entry.value))
-            {
-                return false;
-            }
-        }
-        return true;
+            return other && *other == entry.value;
+        });
     }
 
 private:

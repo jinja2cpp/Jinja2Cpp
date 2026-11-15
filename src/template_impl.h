@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "borrowed_cells.h"
+#include "contracts.h"
 #include "cycle_collector.h"
 #include "dialect.h"
 #include "error_boundary.h"
@@ -13,6 +14,7 @@
 #include "load_settings.h"
 #include "make_unexpected.h"
 #include "node_arena.h"
+#include "params_table.h"
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "render_failure.h"

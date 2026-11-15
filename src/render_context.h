@@ -1414,7 +1414,12 @@ private:
             }
         }
 
-        // Then the params, the external, global and built-in scopes
+        return FindInOuterLevels(val);
+    }
+    // FindEntryFrom past the scopes: the params, the external, global and built-in scopes
+    template<typename Key>
+    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValue* FindInOuterLevels(const Key& val) const
+    {
         if (m_params && !m_params->empty())
         {
             if (const auto* result = m_params->Find(ToParamName(val)))
@@ -1425,10 +1430,9 @@ private:
         const InternalValueMap* map = m_externalScope;
         for (int idx = 0; map; ++idx)
         {
-            const auto* result = finder(*map);
-            if (result)
+            if (const auto* p = FindIn(*map, val))
             {
-                return result;
+                return &p->second;
             }
             map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
         }
@@ -1651,7 +1655,7 @@ private:
     static HashedName ToHashedName(const HashedName& name) { return name; }
     static HashedName ToHashedName(const std::string& name) { return { name, HashedName::Hash(name) }; }
     // The params take a HashedName as it is, and hash a std::string only past ParamsTable::LinearMax
-    static const HashedName& ToParamName(const HashedName& name) { return name; }
+    static HashedName ToParamName(const HashedName& name) { return name; }
     static std::string_view ToParamName(const std::string& name) { return name; }
 
     // How many of the scopes of this context a child seeing `limit` scopes sees

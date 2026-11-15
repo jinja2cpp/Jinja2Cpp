@@ -8,6 +8,8 @@
 #include "slot_frame.h"
 #include "span.h"
 
+#include <jinja2cpp/value.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cstddef>

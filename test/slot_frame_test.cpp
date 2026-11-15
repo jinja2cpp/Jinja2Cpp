@@ -304,7 +304,7 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     EXPECT_NE(&outer, &inner);
     EXPECT_TRUE(inner.params.empty());
     workspace.ReturnMaps(inner);
-    const auto buckets = outer.params.capacity();
+    const auto buckets = outer.params.Capacity();
     workspace.ReturnMaps(outer);
 
     // Emptied, with the table kept for the next render
@@ -312,7 +312,7 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     EXPECT_EQ(&outer, &again);
     EXPECT_TRUE(again.params.empty());
     EXPECT_TRUE(again.topScope.empty());
-    EXPECT_EQ(buckets, again.params.capacity());
+    EXPECT_EQ(buckets, again.params.Capacity());
 
     // A table too big to keep on the thread is let go
     for (int idx = 0; idx != 2000; ++idx)
@@ -323,7 +323,7 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     workspace.ReturnMaps(again);
     auto& last = workspace.LendMaps();
     EXPECT_EQ(0u, last.topScope.bucket_count());
-    EXPECT_NE(0u, last.params.capacity());
+    EXPECT_NE(0u, last.params.Capacity());
     workspace.ReturnMaps(last);
 
     // The renders nested past MaxKeptMaps keep no tables
@@ -338,8 +338,8 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     {
         workspace.ReturnMaps(**it);
     }
-    EXPECT_EQ(0u, nested.back()->params.capacity());
-    EXPECT_NE(0u, nested.front()->params.capacity());
+    EXPECT_EQ(0u, nested.back()->params.Capacity());
+    EXPECT_NE(0u, nested.front()->params.Capacity());
 }
 
 // Where a closure's call runs (docs/tasks/0165): on the caller when it is the defining
