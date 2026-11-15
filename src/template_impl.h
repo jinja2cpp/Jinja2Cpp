@@ -65,7 +65,7 @@ inline namespace v2
 {
 
 // The default globals of every render, looked up after the environment's (global_functions.cpp)
-extern const InternalValueMap& GetBuiltinGlobals(bool withI18n);
+extern const InternalValueMap& GetBuiltinGlobals(const Settings::Extensions& extensions);
 
 // The globals of an environment converted for the renders of one thread (docs/tasks/0139)
 struct GlobalsSnapshot
@@ -470,7 +470,7 @@ public:
         // A fold may compute as much as a render: under the template's limits
         const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
         RendererCallback callback(this);
-        RenderContext context(noValues, noValues, &callback, &GetBuiltinGlobals(m_settings->settings.extensions.i18n));
+        RenderContext context(noValues, noValues, &callback, &GetBuiltinGlobals(m_settings->settings.extensions));
         context.SetLookupCache(&LookupCache::ForThisThread());
         context.SetNodes(nodes);
         for (std::size_t index = 0; index != checks.size(); ++index)
@@ -716,7 +716,7 @@ public:
             RenderContext context(RenderContext::EmptyScope(),
                                   renderGlobals,
                                   &callback,
-                                  &GetBuiltinGlobals(m_settings->settings.extensions.i18n),
+                                  &GetBuiltinGlobals(m_settings->settings.extensions),
                                   maps.TopScope(),
                                   &intParams);
             context.SetLookupCache(&LookupCache::ForThisThread());
@@ -931,7 +931,7 @@ public:
         std::sort(names.begin(), names.end());
         names.erase(std::unique(names.begin(), names.end()), names.end());
         // Jinja2 leaves out the environment's globals: the built-in functions and the host's
-        const auto& builtins = GetBuiltinGlobals(m_settings->settings.extensions.i18n);
+        const auto& builtins = GetBuiltinGlobals(m_settings->settings.extensions);
         const auto isGlobal = [this, &builtins](const std::string& name) {
             if (builtins.find(name) != builtins.end())
             {

@@ -482,7 +482,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0412](0412-python-sandbox-operator-interception.md) | Sandbox: `intercepted_binops`, `intercepted_unops`, `call_binop` and `call_unop` | api | low | open |
 | [0413](0413-strict-undefined-sort-unique-key.md) | `sort` and `unique` with `attribute=` do not fail on a StrictUndefined key | parity | low | done |
 | [0414](0414-python-sandbox-policy-on-engine-values.md) | Sandbox policy on the engine's own values | api | low | open |
-| [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | open |
+| [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | done |
 | [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | open |
 | [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | open |
 | [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | done |
@@ -570,3 +570,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | done |
 | [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | open |
 | [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | open |
+| [0509](0509-gettext-call-style-follows-install.md) | The style of a gettext call follows the last install, not the template's load | parity | low | open |
+| [0510](0510-percent-format-errors-python-classes.md) | `%` formatting errors carry no Python class | parity | low | open |
+| [0512](0512-per-render-fixed-costs.md) | Per-render fixed costs: the memory budget's per-object charge and the render's setup | perf | medium | done |

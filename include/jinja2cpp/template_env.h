@@ -102,9 +102,15 @@ struct Settings
     {
         bool doStatement = false;  //!< Enable use of `do` statement (Jinja2 `jinja2.ext.do`)
         bool loopControls = false; //!< Enable use of `break` and `continue` statements in loops (Jinja2 `jinja2.ext.loopcontrols`)
-        //! Enable `{% trans %}` blocks and the `_`, `gettext`, `ngettext`, `pgettext` and `npgettext` globals (Jinja2 `jinja2.ext.i18n`
-        //! with newstyle gettext). Messages are not translated unless \ref TemplateEnv::InstallGettextCallables provides the translations
+        //! Enable `{% trans %}` blocks and the `_`, `gettext`, `ngettext`, `pgettext` and `npgettext` globals (Jinja2 `jinja2.ext.i18n`).
+        //! Messages are not translated unless \ref TemplateEnv::InstallGettextCallables provides the translations
         bool i18n = false;
+        //! Newstyle gettext (Jinja2 `Environment.newstyle_gettext = True`, the default here): the gettext globals format the
+        //! translation with their keyword arguments, and a `{% trans %}` block passes its variables to them. Off is Jinja2's
+        //! default, oldstyle: the globals return what the installed callable returns, unformatted, and a `{% trans %}` block
+        //! formats the translation itself, `gettext(message) % variables` (Markup under autoescape); its `%` is not doubled
+        //! when the message names no variable. Read when a template is loaded, as the other settings are
+        bool i18nNewstyle = true;
     };
 
     //! Enables blocks trimming the same way as it does python Jinja2 engine
@@ -480,12 +486,13 @@ public:
     [[nodiscard]] std::optional<UserCallable> FindTest(const std::string& name) const;
 
     /*!
-     * \brief Provide the translations used by the i18n extension (Jinja2 `install_gettext_callables` with `newstyle=True`)
+     * \brief Provide the translations used by the i18n extension (Jinja2 `install_gettext_callables`)
      *
      * Takes effect when \ref Settings::Extensions::i18n is on. `gettext` is called with the message, `ngettext` with the
      * singular message, the plural one and the count, `pgettext` and `npgettext` with the message context first. They
-     * return the translated message, which is then formatted with the variables of the `{% trans %}` block or the keyword
-     * arguments of the `gettext()` call (`%(name)s`). Messages of wide templates are converted to the string type the callable takes. A callable left
+     * return the translated message. With \ref Settings::Extensions::i18nNewstyle on (the default) it is then formatted with
+     * the variables of the `{% trans %}` block or the keyword arguments of the `gettext()` call (`%(name)s`); off, a call
+     * gets the arguments of the template's call as they are and its result is not formatted. Messages of wide templates are converted to the string type the callable takes. A callable left
      * unset (no `callable`) keeps the untranslated message, as `install_null_translations` does.
      * Method is thread-safe.
      */

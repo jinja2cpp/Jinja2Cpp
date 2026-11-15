@@ -84,7 +84,7 @@ ENV_OPTIONS = {
     "extensions", "undefined", "block_start_string", "block_end_string",
     "variable_start_string", "variable_end_string", "comment_start_string",
     "comment_end_string", "line_statement_prefix", "line_comment_prefix",
-    "newline_sequence", "filters", "tests", "finalize",
+    "newline_sequence", "filters", "tests", "finalize", "newstyle_gettext",
 }
 EXTENSIONS = {"do": "jinja2.ext.do", "loopcontrols": "jinja2.ext.loopcontrols",
               "i18n": "jinja2.ext.i18n", "debug": "jinja2.ext.debug"}
@@ -113,7 +113,7 @@ def make_env(options, templates):
     unknown = set(options) - ENV_OPTIONS
     if unknown:
         raise ValueError(f"unknown env options {sorted(unknown)}")
-    kwargs = {k: v for k, v in options.items() if k not in ("extensions", "undefined", "filters", "tests", "finalize")}
+    kwargs = {k: v for k, v in options.items() if k not in ("extensions", "undefined", "filters", "tests", "finalize", "newstyle_gettext")}
     kwargs["extensions"] = [EXTENSIONS[e] for e in options.get("extensions", [])]
     kwargs["undefined"] = UNDEFINED[options.get("undefined", "default")]
     if "finalize" in options:
@@ -124,7 +124,8 @@ def make_env(options, templates):
     env.filters.update({name: FILTERS[name] for name in options.get("filters", [])})
     env.tests.update({name: TESTS[name] for name in options.get("tests", [])})
     if "i18n" in options.get("extensions", []):
-        env.install_null_translations(newstyle=True)
+        # newstyle unless the case asks for Jinja2's default, oldstyle (Settings::Extensions::i18nNewstyle)
+        env.install_null_translations(newstyle=options.get("newstyle_gettext", True))
     return env
 
 

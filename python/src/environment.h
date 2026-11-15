@@ -42,6 +42,10 @@ public:
     // The translation callables of the i18n extension, as the engine takes them (None for none):
     // gettext, ngettext, pgettext, npgettext. The environment keeps them alive
     void SetGettext(nb::handle gettext, nb::handle ngettext, nb::handle pgettext, nb::handle npgettext);
+    // The callables an oldstyle install put in `globals` (ext.py), so that the next install removes them: kept by the
+    // environment, where its traverse reaches, since one may hold the environment (a bound method of it)
+    [[nodiscard]] nb::tuple GettextGlobals() const;
+    void SetGettextGlobals(nb::handle callables);
     // transformers' chat-template environment (jinja2cpp.integrations.transformers): the engine's
     // ConfigureForChatTemplates on every rebuild, with `clock` (a callable giving a POSIX
     // timestamp, kept alive by the environment; None for the system clock) as strftime_now's clock
@@ -50,7 +54,8 @@ public:
     // get_template reads the loader again, as Jinja2's does (templates loaded before keep what they have)
     void DropEngineCache() noexcept { m_env.reset(); }
     [[nodiscard]] bool NewstyleGettext() const noexcept { return m_newstyleGettext; }
-    void SetNewstyleGettext(bool newstyle) noexcept { m_newstyleGettext = newstyle; }
+    // Templates loaded from now on read it, as Jinja2 reads it when it compiles a `{% trans %}` block
+    void SetNewstyleGettext(bool newstyle);
 
     // The template of a source or of a loader's name, an instance of `templateClass` (Jinja2's
     // Environment.template_class: a subclass of Template)
@@ -118,6 +123,8 @@ private:
     std::vector<std::pair<std::string, PyObject*>> m_boundTests;
     // The i18n callables, borrowed from m_kept; null for none
     PyObject* m_gettext[4] = {};
+    // The oldstyle globals, borrowed from m_kept; null for none
+    PyObject* m_gettextGlobals[4] = {};
     bool m_newstyleGettext = false;
     // SetChatTemplates: on, and its clock, borrowed from m_kept (null for the system clock)
     bool m_chatTemplates = false;

@@ -178,8 +178,9 @@ engines on a Release build of the module.
   `gettext`, `ngettext`, `pgettext` and `npgettext` globals, with `install_gettext_translations`,
   `install_null_translations`, `install_gettext_callables` and `uninstall_gettext_translations`.
   Newstyle gettext (`newstyle=True`, Flask-Babel's choice) runs in the engine
-  (`TemplateEnv::InstallGettextCallables`); oldstyle, Jinja2's default, installs Python wrappers
-  as the four globals.
+  (`TemplateEnv::InstallGettextCallables`); oldstyle, Jinja2's default, installs the callables
+  themselves as the four globals, and a `{% trans %}` block loaded while `newstyle_gettext` is off
+  formats their result in the engine (`Settings::Extensions::i18nNewstyle`), as Jinja2 does.
 - The sandbox: `jinja2cpp.sandbox` with `SandboxedEnvironment`, `ImmutableSandboxedEnvironment`,
   `SecurityError`, `is_internal_attribute`, `modifies_known_mutable`, `unsafe`, `safe_range`,
   `MAX_RANGE` and the `UNSAFE_*` sets, ported from Jinja2 3.1.6 (see "Sandbox" below).
@@ -506,11 +507,10 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   arguments, the globals and the template's top-level names; its `vars` and `parent` both hold
   all of them (0416). `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and
   `exported_vars` (empty) are not there.
-- Oldstyle gettext is emulated with Python wrappers, which cannot tell a `{% trans %}` block from
-  a direct call: `{% trans %}100% sure{% endtrans %}` without variables passes `100%% sure` to the
-  translations and prints it; a count named `num` is not formatted (`%(num)s` stays); a block
-  without variables is escaped under autoescape; `gettext('x %(a)s', a=1)` formats instead of
-  raising TypeError (0415). Newstyle is exact.
+- The gettext calls of a template take the style it was loaded with (`newstyle_gettext` then), where
+  Jinja2's take the style of the last install: a template loaded while oldstyle was on and rendered
+  after a newstyle install does not format `gettext('%(a)s', a=1)` (0509). `{% trans %}` blocks
+  take the style they were loaded with in both.
 - Without installed translations (and after `uninstall_gettext_translations`) the engine's
   `_()` and `{% trans %}` render the message untranslated; Jinja2 raises `UndefinedError`
   because it has no `gettext` global yet (0417). A `gettext` set in `env.globals` replaces the
