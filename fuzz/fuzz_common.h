@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <string_view>
@@ -51,8 +52,16 @@ const Result& AbortOnContractViolation(const Result& result)
     {
         using CharT = typename decltype(result.error().ToString())::value_type;
         static constexpr CharT marker[] = { ' ', 'v', 'i', 'o', 'l', 'a', 't', 'e', 'd', ':', ' ', 0 };
-        if (result.error().ToString().find(marker) != std::basic_string<CharT>::npos)
+        const auto text = result.error().ToString();
+        if (text.find(marker) != std::basic_string<CharT>::npos)
         {
+            // The violated condition, for the job log: the reproducer alone does not say which check failed
+            std::fputs("jinja2cpp fuzz: an engine contract failed: ", stderr);
+            for (const CharT ch : text)
+            {
+                std::fputc(ch >= 0x20 && ch < 0x7F ? static_cast<int>(ch) : '?', stderr);
+            }
+            std::fputc('\n', stderr);
             std::abort();
         }
     }
