@@ -43,7 +43,7 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 | expected-lite | 0.10.0 | BSL-1.0 | mandatory | public-api | fetched | `jinja2::Result<T>` in every Load/Render signature; C++17 has no `std::expected` | Keep until a C++23 floor; could be vendored into `include/` |
 | {fmt} | 12.2.0 | MIT | mandatory | link | fetched | Python `str.format`, `%`-formatting and number output with runtime specs and `wchar_t`; `std::format` is C++20 | Keep; header-only mode would drop the link dependency |
 | fast_float | 8.2.10 | MIT, Apache-2.0 or BSL-1.0 | mandatory | internal | fetched | decimal-to-double conversion that ignores the C locale: float literals, the `float` and `round` filters, `{% meta %}` numbers (`src/decimal_number.cpp`, 0333); `strtod` follows `LC_NUMERIC` and `std::from_chars` for `double` is missing from older AppleClang | Header-only and a build interface: not installed, not seen by static consumers; `std::from_chars` once every supported library has it |
-| robin-hood-hashing | 3.11.5, modified | MIT | mandatory | internal | vendored | flat hash map for values and scopes, faster than `std::unordered_map` here | Keep the idea; upstream is archived (docs/tasks/0231) |
+| unordered_dense | 5.3.3, modified | MIT | mandatory | internal | vendored | hash maps for scopes and values (`src/hash_map.h`); replaced the archived robin_hood in 0231 | Keep; the local change is its namespace (0259) |
 | lexertk | unrecorded, modified | MIT | mandatory | internal | vendored | expression tokenizer | Keep; effectively forked code |
 | boostorg/context fcontext | 1.92.0, unmodified | BSL-1.0 | optional, and test | internal | vendored | the stack switch of the Python module's lazy `generate()` and of the suspendable render tests (`python/src/fiber`, 0457 D3); x86-64 and AArch64, ELF and Mach-O | Keep: eight assembly files, never in the library |
 | value_types | 57f2e7a, modified | MIT | mandatory | public-api | vendored | `polymorphic`/`indirect` in `jinja2::v2::detail::xyz`, behind `jinja2::types` (Value, GenericList) | Keep; `std::` at C++26 |
@@ -122,10 +122,11 @@ deprecated alias of `internal`, removed in 3.0.
    entity behaviour; committing generated tables keeps builds Python-free, and the
    staleness checks keep them honest. The open question (0187, 0186) is whether the
    tables should come from pinned Unicode data instead of the oracle interpreter.
-4. **Vendoring trades a dependency for a fork.** robin_hood, lexertk and value_types are
-   all locally modified, and two have no recorded upstream revision. The inventory now
-   records what changed; robin_hood's upstream being archived is the first place where
-   the fork has to be paid for (docs/tasks/0231).
+4. **Vendoring trades a dependency for a fork.** unordered_dense, lexertk and value_types
+   are all locally modified, and two have no recorded upstream revision. The inventory now
+   records what changed. robin_hood's upstream being archived was the first place where
+   the fork had to be paid for: 0231 replaced it with its maintained successor, whose only
+   local change is the namespace (0259), so an update is a copy of two files.
 5. **Pins that disagree.** Conan mode builds against expected-lite 0.9.0, a header-only
    Boost 1.91.0 (tests and `bigint=boost` only) while internal mode uses 0.10.0 and
    1.92.0. ConanCenter has no newer expected-lite or Boost, so each difference carries a `conan_why` in components.json and a

@@ -89,8 +89,8 @@ Match any targeted compiler workaround to the documented CI configuration.
   and JSON bindings. Public types use C++17 vocabulary types; `Result` uses pinned
   expected-lite rather than selecting a different ABI with the consumer's standard.
 - `src/`: lexer, parsers, evaluator, statements, filters, tests and serializers.
-  `robin_hood.h` and `lexertk.h` are vendored; generated Unicode/HTML tables have
-  generators in `scripts/`.
+  `ankerl/` (unordered_dense, used through `hash_map.h`) and `lexertk.h` are vendored;
+  generated Unicode/HTML tables have generators in `scripts/`.
 - `test/`: GoogleTest suites and the differential corpus in `test/parity/`.
   `MULTISTR_TEST` exercises narrow and wide templates.
 - `fuzz/`: fuzz targets, differential tooling and regression inputs.

@@ -260,6 +260,7 @@ set(JINJA2CPP_SOURCES
     src/expression_parser.cpp
     src/filesystem_handler.cpp
     src/filter_factories.cpp
+    src/hash_map.cpp
     src/filters.cpp
     src/function_base.cpp
     src/json_reader.cpp
@@ -382,7 +383,7 @@ if (JINJA2CPP_STRICT_WARNINGS)
         set(_strict_warnings -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
             -Wnon-virtual-dtor -Woverloaded-virtual -Wold-style-cast -Wimplicit-fallthrough -Werror)
         # A profile-guided build (bench/README.md) changes GCC's inlining enough for a false
-        # -Warray-bounds in the vendored robin_hood.h; keep it a warning. GCC 13 Release also
+        # -Warray-bounds in vendored code (robin_hood.h, before 0231); keep it a warning. GCC 13 Release also
         # reports a false -Wmaybe-uninitialized in expected-lite's move assignment (ParseResult);
         # boost_variant used to hand this flag to the library as an INTERFACE option (0229)
         set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings} -Wno-error=array-bounds

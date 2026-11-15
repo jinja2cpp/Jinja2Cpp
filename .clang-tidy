@@ -72,7 +72,7 @@ Checks: >
 # Only the project's own headers; never the FetchContent cache (an unfiltered -fix
 # rewrites Boost and fmt) or the vendored files .clang-format-ignore also skips.
 HeaderFilterRegex: '/(include/jinja2cpp|src)/'
-ExcludeHeaderFilterRegex: '(_deps|jinja2cpp-deps|/polymorphic_value/|robin_hood\.h|lexertk\.h|unicode_tables\.h)'
+ExcludeHeaderFilterRegex: '(_deps|jinja2cpp-deps|/polymorphic_value/|/ankerl/|lexertk\.h|unicode_tables\.h)'
 FormatStyle: file
 # The ratchet: every enabled check fails the pull-request job on a new hit
 # (docs/tasks/0054). Compiler warnings are the build's job (-Werror there).
@@ -83,7 +83,7 @@ WarningsAsErrors: >
 CheckOptions:
   # include-cleaner (docs/tasks/0064): name the public headers of dependencies, never their
   # internals (libstdc++ bits/, Boost and nonstd detail headers, fmt's version-specific split).
-  misc-include-cleaner.IgnoreHeaders: 'bits/.*;gtest/.*;gmock/.*;nlohmann/.*;.*/binding/.*;.*test_tools\.h;.*/detail/.*;fmt/.*;boost/.*;nonstd/.*;.*polymorphic_value/.*;.*lexertk\.h;.*robin_hood\.h;__.*'
+  misc-include-cleaner.IgnoreHeaders: 'bits/.*;gtest/.*;gmock/.*;nlohmann/.*;.*/binding/.*;.*test_tools\.h;.*/detail/.*;fmt/.*;boost/.*;nonstd/.*;.*polymorphic_value/.*;.*lexertk\.h;.*/ankerl/.*;__.*'
   # `if (ptr)` and `if (count)` are the house idiom; flag only the surprising conversions.
   readability-implicit-bool-conversion.AllowPointerConditions: true
   readability-implicit-bool-conversion.AllowIntegerConditions: true

@@ -93,7 +93,7 @@ jobs:
         # migrated (docs/tasks/0077).
         git diff -U0 --no-color "$BASE_SHA" -- src include bindings test \
             ':!bindings/boost_*' ':!test/binding/boost_json*' \
-            ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h' \
+            ':!include/jinja2cpp/polymorphic_value/*' ':!src/ankerl/*' ':!src/lexertk.h' \
             ':!src/unicode_tables.h' ':!test/*.inc' ':!test/package/*' ':!test/migration/*' \
           | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \
               -clang-tidy-binary "$CLANG_TIDY" \
@@ -134,7 +134,7 @@ jobs:
         # test/big_int_test.cpp, which includes it (docs/tasks/0272), and Boost.JSON in
         # bindings.yml (docs/tasks/0311).
         git ls-files 'src/*.h' 'include/jinja2cpp/*.h' 'bindings/nlohmann_json/*.h' \
-            ':!src/robin_hood.h' ':!src/lexertk.h' ':!src/unicode_*.h' \
+            ':!src/ankerl/*' ':!src/lexertk.h' ':!src/unicode_*.h' \
             ':!include/jinja2cpp/polymorphic_value/*' \
           | xargs -P "$(nproc)" -n 1 "$CLANG_TIDY" -p build --quiet --extra-arg=-Wno-unknown-warning-option \
           >> tidy.log 2>&1 || status=1

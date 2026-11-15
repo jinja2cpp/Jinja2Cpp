@@ -4,7 +4,7 @@
 #include "cell_trace.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
-#include "robin_hood.h"
+#include "hash_map.h"
 #include "small_vector.h"
 
 #include <jinja2cpp/config.h>
@@ -379,7 +379,7 @@ private:
 };
 
 // A registry's cells by identity (BorrowedCells::Table)
-using CellTable = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
+using CellTable = detail::FlatMap<const void*, IntrusivePtr<const BorrowedCell>>;
 
 // What one call of a template module handed to the host (docs/tasks/0335, 0332): the values read
 // through it. While the call runs, a read goes to the module's cells, on the call's thread, so a
