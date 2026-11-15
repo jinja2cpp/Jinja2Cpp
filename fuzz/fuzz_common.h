@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 
@@ -38,6 +39,24 @@ inline void AddSupportTemplates(jinja2::MemoryFileSystem& fs, const std::wstring
     fs.AddFile("base", L"<{% block content %}base{% endblock %}|{% block other %}{% endblock %}>");
     fs.AddFile("header", L"[{{ foo }}|{{ bar }}]");
     fs.AddFile("macros", L"{% macro m(a, b=2) %}{{ a }}-{{ b }}-{{ varargs }}-{{ kwargs }}{{ caller() if caller }}{% endmacro %}{% set v = 42 %}");
+}
+
+// A failed engine invariant (src/contracts.h): the fuzz builds check them at FULL, where a violation is reported as an
+// UnexpectedException error Result rather than an abort. To a target that is a finding, not an ordinary error
+// (docs/tasks/0455). Returns `result` for use in place
+template<typename Result>
+const Result& AbortOnContractViolation(const Result& result)
+{
+    if (!result && result.error().GetCode() == jinja2::ErrorCode::UnexpectedException)
+    {
+        using CharT = typename decltype(result.error().ToString())::value_type;
+        static constexpr CharT marker[] = { ' ', 'v', 'i', 'o', 'l', 'a', 't', 'e', 'd', ':', ' ', 0 };
+        if (result.error().ToString().find(marker) != std::basic_string<CharT>::npos)
+        {
+            std::abort();
+        }
+    }
+    return result;
 }
 
 // Every optional statement is on, so the fuzzer reaches their parsers too.

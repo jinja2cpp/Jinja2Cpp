@@ -146,7 +146,7 @@ Run LoadAndRender(jinja2::Template& tpl, const std::string& source, bool load)
     if (load)
     {
         auto loaded = tpl.Load(source, "self");
-        if (!loaded)
+        if (!AbortOnContractViolation(loaded))
         {
             run.code = loaded.error().GetCode();
             return run;
@@ -154,7 +154,7 @@ Run LoadAndRender(jinja2::Template& tpl, const std::string& source, bool load)
     }
     run.loaded = true;
     auto rendered = tpl.RenderAsString(MakeContext());
-    if (rendered)
+    if (AbortOnContractViolation(rendered))
     {
         run.output = std::move(rendered.value());
     }

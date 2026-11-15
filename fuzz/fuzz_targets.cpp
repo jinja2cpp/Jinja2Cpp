@@ -97,13 +97,13 @@ Outcome LoadAndRender(const std::basic_string<CharT>& source)
 
     jinja2::BasicTemplate<CharT> tpl(&env);
     auto loaded = tpl.Load(source, "self");
-    if (!loaded)
+    if (!AbortOnContractViolation(loaded))
     {
         return { Outcome::ParseError, {}, loaded.error().GetCode() };
     }
     // A render error is a normal outcome, a crash is not
     auto rendered = tpl.RenderAsString(MakeContext());
-    if (!rendered)
+    if (!AbortOnContractViolation(rendered))
     {
         return { Outcome::RenderError, {}, rendered.error().GetCode() };
     }
