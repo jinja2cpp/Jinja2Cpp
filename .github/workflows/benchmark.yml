@@ -104,17 +104,20 @@ jobs:
     # The source and build paths end up in the binaries (__FILE__), and their lengths move
     # code and data addresses: identical sources built in two directories differed by up to
     # 14% in cache misses. Mapping both to fixed names makes those builds identical.
+    # The name hash is keyed per process (src/hash_map.cpp), so which names share a group, and
+    # with it the count of a name-heavy case, changed from run to run: Render/hf_qwen3 by up to
+    # 1.6% on one binary (docs/tasks/0506). A fixed key makes every run hash alike.
     - name: Build the PR head
       run: |
         cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
-          "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$PWD=S -ffile-prefix-map=$PWD/build=B"
+          "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$PWD=S -ffile-prefix-map=$PWD/build=B -DJINJA2CPP_NAME_HASH_KEY=0x2545F4914F6CDD1D"
         cmake --build build --target jinja2cpp_bench --parallel
 
     - name: Build the base commit
       run: |
         git worktree add ../base ${{ github.event.pull_request.base.sha }}
         cmake -S ../base -B build-base -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
-          "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$(realpath ../base)=S -ffile-prefix-map=$PWD/build-base=B"
+          "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$(realpath ../base)=S -ffile-prefix-map=$PWD/build-base=B -DJINJA2CPP_NAME_HASH_KEY=0x2545F4914F6CDD1D"
         cmake --build build-base --target jinja2cpp_bench --parallel
 
     # Both binaries run the PR's cases, so a changed case is compared like for like
@@ -159,7 +162,9 @@ jobs:
 
     - name: Build
       run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON
+        # A fixed name-hash key, as in the PR count above, so that runs of one commit agree
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+          "-DCMAKE_CXX_FLAGS=-DJINJA2CPP_NAME_HASH_KEY=0x2545F4914F6CDD1D"
         cmake --build build --target jinja2cpp_bench --parallel
 
     - name: Count

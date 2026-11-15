@@ -254,9 +254,15 @@ Unlike the C++ engines, the Rust ones are still faster than Jinja2C++ in places
 
 Timings on shared machines are noisy; instruction counts are not. `count.py` runs each
 benchmark under callgrind, collecting only the measured loop, and reports instructions
-per iteration, repeatable to about 0.05% for the same binary:
+per iteration, repeatable to about 0.05% for the same binary when it is built with a fixed
+name-hash key. The library keys its hash of names per process (src/hash_map.cpp), so which
+names share a group changes from run to run, and a name-heavy case's count with it:
+`Render/hf_qwen3` moved by up to 1.6% between runs of one binary (docs/tasks/0506). CI's count
+builds set the key, and a local count should too:
 
 ```bash
+cmake -S . -B build-rel -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+  -DCMAKE_CXX_FLAGS=-DJINJA2CPP_NAME_HASH_KEY=0x2545F4914F6CDD1D
 python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --out before.json
 # ... change the code, rebuild ...
 python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --baseline before.json

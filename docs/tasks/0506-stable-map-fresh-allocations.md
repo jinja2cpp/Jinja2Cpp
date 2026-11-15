@@ -69,3 +69,11 @@ MiniJinja without `preserve_order`), so `tool.items()` iterated in another order
 The driver now keeps the insertion order and sorts keys in its `tojson` as Jinja2's does (not for
 the transformers `hf_*` cases): MiniJinja renders 20 cases as Python does, `chat_mistral` and
 `hf_qwen3` included.
+
+Found while reading #896's counts: since #891 keyed the name hash per process, a name-heavy case's
+count changed between runs of one binary (`Render/hf_qwen3` 119.0 k to 120.9 k, up to 1.6%),
+which the gate read as a regression. The count builds (benchmark.yml's PR count and trend,
+`scripts/preflight.sh --perf`, bench/README.md's commands) now set
+`-DJINJA2CPP_NAME_HASH_KEY`, the fixed key src/hash_map.cpp already took for fuzz reproducers:
+four runs then gave the same count to the instruction. The trend series shifts once at that
+commit.
