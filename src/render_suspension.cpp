@@ -1,12 +1,12 @@
 #include "render_suspension.h"
 
+#include "contracts.h"
 #include "cycle_collector.h"
 #include "recursion_guard.h"
 #include "render_workspace.h"
 
 #include <jinja2cpp/template.h>
 
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -67,7 +67,7 @@ RenderThreadState::RenderThreadState(const RenderSuspension& suspension)
 RenderThreadState::~RenderThreadState()
 {
     // Back with the thread's state: this holds what the render left, which it does not need again
-    assert(renders == 0 && depth == 0 && !collector);
+    JINJA2CPP_ASSERT_NOEXCEPT(renders == 0 && depth == 0 && !collector);
     if (workspace->m_lentMaps != 0 || !workspace->m_frames.empty())
     {
         // A render that ended holds nothing of its workspace: keep a broken one out of the pool
@@ -104,19 +104,21 @@ void RenderThreadState::Exchange() noexcept
 
 void RenderThreadState::RecordMarks() noexcept
 {
-#ifndef NDEBUG
-    marks = ValueSuspensionMarks();
-    marks.renderFailure = HasPendingRenderFailure();
-#endif
+    if constexpr (detail::ContractChecks >= 2)
+    {
+        marks = ValueSuspensionMarks();
+        marks.renderFailure = HasPendingRenderFailure();
+    }
 }
 
 void RenderThreadState::CheckIdle() const noexcept
 {
-#ifndef NDEBUG
-    auto now = ValueSuspensionMarks();
-    now.renderFailure = HasPendingRenderFailure();
-    assert(now == marks);
-#endif
+    if constexpr (detail::ContractChecks >= 2)
+    {
+        auto now = ValueSuspensionMarks();
+        now.renderFailure = HasPendingRenderFailure();
+        JINJA2CPP_ASSERT_NOEXCEPT(now == marks);
+    }
 }
 
 bool ReleaseSuspensionPool() noexcept

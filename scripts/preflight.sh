@@ -137,7 +137,7 @@ if [ "$perf" = 1 ]; then
       [ $side = base ] && rm -rf "${dir:?}"
       cmake -S "$src" -B "$dir" -G Ninja "${init[@]}" -DCMAKE_BUILD_TYPE=Release \
         -DJINJA2CPP_BUILD_BENCHMARKS=ON \
-        "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$src=S -ffile-prefix-map=$PWD/$dir=B" >/dev/null \
+        "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$src=S -ffile-prefix-map=$PWD/$dir=B -DJINJA2CPP_NAME_HASH_KEY=0x2545F4914F6CDD1D" >/dev/null \
         && cmake --build "$dir" --target jinja2cpp_bench --parallel 2 >/dev/null || ok=0
     done
     # As CI: a base driver that does not know a newer settings.json key counts its own cases

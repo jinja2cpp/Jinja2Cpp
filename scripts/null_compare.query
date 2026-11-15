@@ -4,7 +4,8 @@
 # matches under src/ and include/jinja2cpp/ (dependencies are not system headers here).
 set output diag
 set bind-root true
-let nullcmp expr(anyOf(binaryOperator(hasAnyOperatorName("==", "!="), hasEitherOperand(ignoringParenImpCasts(cxxNullPtrLiteralExpr()))), cxxOperatorCallExpr(hasAnyOverloadedOperatorName("==", "!="), hasAnyArgument(ignoringParenImpCasts(cxxNullPtrLiteralExpr())))), unless(isExpansionInSystemHeader()), unless(binaryOperator(hasEitherOperand(ignoringParenImpCasts(expr(hasType(pointerType(pointee(booleanType())))))))))
+let nullcmp expr(anyOf(binaryOperator(hasAnyOperatorName("==", "!="), hasEitherOperand(ignoringParenImpCasts(cxxNullPtrLiteralExpr()))), cxxOperatorCallExpr(hasAnyOverloadedOperatorName("==", "!="), hasAnyArgument(ignoringParenImpCasts(cxxNullPtrLiteralExpr())))), unless(isExpansionInSystemHeader()), unless(isExpandedFromMacro("GTEST_DEATH_TEST_")), unless(binaryOperator(hasEitherOperand(ignoringParenImpCasts(expr(hasType(pointerType(pointee(booleanType())))))))))
+# GoogleTest death-test macros compare with nullptr in their own expansion (docs/tasks/0455).
 # A `bool*` variable keeps the explicit form: `if (flag)` reads as the flag's value, and
 # bugprone-bool-pointer-implicit-conversion warns on it.
 # Only where `if (p)` is the house idiom, i.e. where readability-implicit-bool-conversion
