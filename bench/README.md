@@ -179,9 +179,14 @@ default release profile (no LTO), as Jinja2C++ is built without it.
   `minijinja-contrib` (its `truncate`, `wordcount`, ...) and Python's string and dict
   methods (`pycompat`), and a `tojson` that writes `", "` and `": "` between items as
   Jinja2 does (its own writes compact JSON, so every tool definition in the chat templates
-  would differ; Rust LLM servers register one like it). It renders 17 of the 20 cases; not
+  would differ; Rust LLM servers register one like it) and sorts keys as Jinja2's does
+  (not for the `hf_*` cases, whose transformers `tojson` does not). The data keeps the
+  insertion order of `data.json` (`preserve_order` in MiniJinja and serde_json), as Python's
+  dicts do, so a template iterating `dict.items()` sees the keys in Jinja2's order
+  (`chat_mistral`, `hf_qwen3`). It renders 20 of the 25 cases Python runs; not
   `filters` (no `center`), `html_autoescape` (contrib's `truncate` takes the length only as
-  a keyword) and `mitsuhiko_table_wide` (no wide strings, as for every other engine).
+  a keyword), `hf_gpt_oss`, `hf_mistral_small` and `mitsuhiko_table_wide` (no wide strings,
+  as for every other engine).
 - Tera's dialect is further from Jinja's: keyword-only filter and function arguments
   (`range(end=100)`), components instead of macros, no `namespace`, no `loop.cycle`, no
   `trim_blocks`/`lstrip_blocks`. A case may carry `<name>.tera` next to `<name>.j2`, the

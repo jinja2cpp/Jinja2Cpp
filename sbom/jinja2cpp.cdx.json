@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:13e43ce7-6b00-531a-b373-f1a87fb85294",
+  "serialNumber": "urn:uuid:347caac3-c22e-5177-87ef-de55636a29f3",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -507,7 +507,7 @@
         }
       ],
       "pedigree": {
-        "notes": "Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); segmented_vector constructors free their blocks when an element copy throws (0231); documented at the top of src/ankerl/unordered_dense.h"
+        "notes": "Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); segmented_vector constructors free their blocks when an element copy throws (0231); segmented_vector keeps its first block pointers in its first block and table::try_emplace_placing_inline added (0506); documented at the top of src/ankerl/unordered_dense.h"
       },
       "properties": [
         {
@@ -544,11 +544,11 @@
         },
         {
           "name": "jinja2cpp:modified",
-          "value": "Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); segmented_vector constructors free their blocks when an element copy throws (0231); documented at the top of src/ankerl/unordered_dense.h"
+          "value": "Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); segmented_vector constructors free their blocks when an element copy throws (0231); segmented_vector keeps its first block pointers in its first block and table::try_emplace_placing_inline added (0506); documented at the top of src/ankerl/unordered_dense.h"
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/ankerl/unordered_dense.h sha256:3db9c9cceffbc54ed2ec7923d6dfc1df9665bdf55d762147dc491fbd057dd487"
+          "value": "src/ankerl/unordered_dense.h sha256:731dd997375593a0edff8924e20ea0a3a5074f5ce91fe290c54315f318df3d1b"
         },
         {
           "name": "jinja2cpp:file",

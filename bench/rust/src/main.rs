@@ -191,21 +191,40 @@ impl serde_json::ser::Formatter for PythonJsonFormatter {
 /// `tojson` as Python Jinja2 and Hugging Face chat templates print it. MiniJinja's own
 /// writes compact JSON (no spaces after `,` and `:`), so chat templates rendered with it
 /// differ from Jinja2's in every tool definition; Rust LLM servers that run these templates
-/// on MiniJinja register a filter like this one. The same serde_json pass as the built-in.
+/// on MiniJinja register a filter like this one. The same serde_json pass as the built-in,
+/// with the keys sorted as Jinja2's `tojson` sorts them (`sort_keys`; transformers' does not,
+/// for the `hf_*` cases): the data keeps its insertion order (`preserve_order`, which a
+/// template iterating `dict.items()` sees, docs/tasks/0511), so the sorting is the filter's.
 fn python_tojson(
     value: &minijinja::Value,
     kwargs: minijinja::value::Kwargs,
+    sort_keys: bool,
 ) -> Result<minijinja::Value, minijinja::Error> {
     use serde::Serialize;
     let indent: Option<usize> = kwargs.get("indent")?;
     kwargs.assert_all_used()?;
+    fn sort_all(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                map.sort_keys();
+                map.values_mut().for_each(sort_all);
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(sort_all),
+            _ => {}
+        }
+    }
+    let mut sorted = serde_json::to_value(value)
+        .map_err(|e| minijinja::Error::new(minijinja::ErrorKind::InvalidOperation, e.to_string()))?;
+    if sort_keys {
+        sort_all(&mut sorted);
+    }
     let mut out = Vec::new();
     let formatter = PythonJsonFormatter {
         indent: indent.map(|n| vec![b' '; n]),
         depth: 0,
         has_value: false,
     };
-    value
+    sorted
         .serialize(&mut serde_json::Serializer::with_formatter(&mut out, formatter))
         .map_err(|e| minijinja::Error::new(minijinja::ErrorKind::InvalidOperation, e.to_string()))?;
     Ok(minijinja::Value::from_safe_string(String::from_utf8(out).unwrap()))
@@ -223,7 +242,11 @@ impl MiniJinjaRunner {
         // wordcount, ...) and Python's str/dict/list methods
         minijinja_contrib::add_to_environment(&mut env);
         env.set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
-        env.add_filter("tojson", python_tojson);
+        let sort_keys = !case.setting("transformers");
+        env.add_filter(
+            "tojson",
+            move |value: &minijinja::Value, kwargs: minijinja::value::Kwargs| python_tojson(value, kwargs, sort_keys),
+        );
         let autoescape = case.setting("autoescape");
         env.set_auto_escape_callback(move |_| {
             if autoescape {

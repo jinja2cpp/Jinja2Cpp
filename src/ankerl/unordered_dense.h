@@ -31,8 +31,10 @@
 // own unordered_dense next to the static library shares no symbol with this copy, and the
 // specializations src/hash_map.h makes stay this copy's. Its std::erase_if overload is removed:
 // nothing here uses it, and it would be a global name again. segmented_vector's constructors that
-// copy or move element by element release what they made when that throws (construct_from). Carry
-// all three forward when this file is updated.
+// copy or move element by element release what they made when that throws (construct_from). With
+// the default allocator, segmented_vector keeps its first block pointers in the tail of its first
+// block rather than in a std::vector of their own (colocated_blocks), and the map has a
+// try_emplace_placing_inline (docs/tasks/0506). Carry all five forward when this file is updated.
 
 #ifndef ANKERL_UNORDERED_DENSE_H
 #define ANKERL_UNORDERED_DENSE_H
@@ -923,6 +925,7 @@ struct key_compare_is_call<std::tuple<Ts...>> : std::bool_constant<(key_compare_
 template <typename Key>
 constexpr bool key_compare_is_call_v = key_compare_is_call<Key>::value;
 
+
 template <typename T>
 using detect_is_transparent = typename T::is_transparent;
 
@@ -1079,9 +1082,6 @@ private:
     static constexpr bool allocators_always_equal = vec_alloc_traits::is_always_equal::value;
     static constexpr bool propagates_on_swap = vec_alloc_traits::propagate_on_container_swap::value;
 
-    std::vector<pointer, vec_alloc> m_blocks{};
-    std::size_t m_size{};
-
     // Calculates the maximum number for x in  (s << x) <= max_val
     static constexpr auto num_bits_closest(std::size_t max_val, std::size_t s) -> std::size_t {
         auto f = std::size_t{0};
@@ -1095,6 +1095,180 @@ private:
     static constexpr auto num_bits = num_bits_closest(MaxSegmentSizeBytes, sizeof(T));
     static constexpr auto num_elements_in_block = 1U << num_bits;
     static constexpr auto mask = num_elements_in_block - 1U;
+
+    // Jinja2C++ local change (docs/tasks/0506). A container that never had an element allocates
+    // three times on its first insert in a map: the index, the first block, and the std::vector that
+    // lists the blocks, eight bytes in an allocation of its own. With the default allocator, which
+    // has no state to propagate or compare, the list starts in the tail of the first block instead:
+    // the first block is allocated with room for a few block pointers after its elements, and only a
+    // container that outgrows them moves its list to an array of its own, doubling as std::vector
+    // does. The list stays on the heap either way, so an iterator, which holds the list's address,
+    // survives a move or a swap of the container as it did. Other allocators keep the std::vector.
+    static constexpr bool colocate_blocks =
+        std::is_same_v<Allocator, std::allocator<T>> && alignof(T) % alignof(pointer) == 0;
+    // The tail: the unused bytes of a segment of MaxSegmentSizeBytes, or room for four pointers
+    // when the elements fill it
+    static constexpr std::size_t tail_elements = [] {
+        auto const slack = MaxSegmentSizeBytes - num_elements_in_block * sizeof(T);
+        auto const bytes = (std::max)(slack, 4 * sizeof(pointer));
+        return (bytes + sizeof(T) - 1) / sizeof(T);
+    }();
+    static constexpr std::size_t tail_pointers = tail_elements * sizeof(T) / sizeof(pointer);
+
+    class colocated_blocks {
+        pointer* m_data{};
+        std::size_t m_count{};
+        // tail_pointers while the list is in the first block's tail, more once it has an array of
+        // its own; 0 when there is neither
+        std::size_t m_capacity{};
+
+        // The block pointers made in the tail of the first block, null
+        [[nodiscard]] static auto tail_list(pointer first) noexcept -> pointer* {
+            auto* list = reinterpret_cast<pointer*>(std::addressof(first[num_elements_in_block])); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+            std::uninitialized_value_construct_n(list, tail_pointers);
+            return list;
+        }
+
+        [[nodiscard]] auto has_own_array() const noexcept -> bool {
+            return m_capacity > tail_pointers;
+        }
+
+        // Moves the list to an array of `capacity` pointers. Allocates before anything changes, so
+        // a failure leaves the list as it was
+        void move_to_array(std::size_t capacity) {
+            auto va = vec_alloc();
+            pointer* array = vec_alloc_traits::allocate(va, capacity);
+            std::copy(m_data, m_data + m_count, array);
+            if (has_own_array()) {
+                vec_alloc_traits::deallocate(va, m_data, m_capacity);
+            }
+            m_data = array;
+            m_capacity = capacity;
+        }
+
+    public:
+        colocated_blocks() noexcept = default;
+        explicit colocated_blocks(vec_alloc const& /*unused*/) noexcept {}
+        colocated_blocks(colocated_blocks const&) = delete;
+        auto operator=(colocated_blocks const&) -> colocated_blocks& = delete;
+        colocated_blocks(colocated_blocks&& other) noexcept
+            : m_data(std::exchange(other.m_data, nullptr))
+            , m_count(std::exchange(other.m_count, 0))
+            , m_capacity(std::exchange(other.m_capacity, 0)) {}
+        auto operator=(colocated_blocks&& other) noexcept -> colocated_blocks& {
+            if (this != &other) {
+                release();
+                m_data = std::exchange(other.m_data, nullptr);
+                m_count = std::exchange(other.m_count, 0);
+                m_capacity = std::exchange(other.m_capacity, 0);
+            }
+            return *this;
+        }
+        ~colocated_blocks() {
+            release();
+        }
+
+        friend void swap(colocated_blocks& a, colocated_blocks& b) noexcept {
+            std::swap(a.m_data, b.m_data);
+            std::swap(a.m_count, b.m_count);
+            std::swap(a.m_capacity, b.m_capacity);
+        }
+
+        [[nodiscard]] auto get_allocator() const noexcept -> vec_alloc {
+            return vec_alloc();
+        }
+        [[nodiscard]] auto size() const noexcept -> std::size_t {
+            return m_count;
+        }
+        [[nodiscard]] auto data() noexcept -> pointer* {
+            return m_data;
+        }
+        [[nodiscard]] auto data() const noexcept -> pointer const* {
+            return m_data;
+        }
+        [[nodiscard]] auto operator[](std::size_t i) const noexcept -> pointer {
+            return m_data[i];
+        }
+
+        // Room for `count` block pointers. The tail of the first block holds the first few, and
+        // there is no tail before the first block
+        void reserve(std::size_t count) {
+            if (count > m_capacity && count > tail_pointers) {
+                move_to_array(count);
+            }
+        }
+
+        // Allocates one more block. Room for its pointer is made first, so that nothing leaks when
+        // either allocation fails
+        void add_block() {
+            auto ba = Allocator();
+            if (m_count == 0) {
+                pointer block = std::allocator_traits<Allocator>::allocate(ba, num_elements_in_block + tail_elements);
+                if (m_capacity == 0) {
+                    m_data = tail_list(block);
+                    m_capacity = tail_pointers;
+                }
+                m_data[0] = block;
+                m_count = 1;
+                return;
+            }
+            if (m_count == m_capacity) {
+                move_to_array(m_capacity * 2);
+            }
+            m_data[m_count] = std::allocator_traits<Allocator>::allocate(ba, num_elements_in_block);
+            ++m_count;
+        }
+
+        // Frees the last block, which is not the first
+        void pop_block() noexcept {
+            auto ba = Allocator();
+            --m_count;
+            std::allocator_traits<Allocator>::deallocate(ba, m_data[m_count], num_elements_in_block);
+        }
+
+        // Frees the blocks, last first, and the list. The test inline, the work not: a map is
+        // destroyed or emptied in many places, most often one that never had an element
+        void release() noexcept {
+            if (m_capacity != 0) {
+                free_all();
+            }
+        }
+
+    private:
+        ANKERL_UNORDERED_DENSE_NOINLINE void free_all() noexcept {
+            auto ba = Allocator();
+            while (m_count > 1) {
+                pop_block();
+            }
+            pointer first = m_count != 0 ? m_data[0] : pointer();
+            if (has_own_array()) {
+                auto va = vec_alloc();
+                vec_alloc_traits::deallocate(va, m_data, m_capacity);
+            }
+            if (first) {
+                std::allocator_traits<Allocator>::deallocate(ba, first, num_elements_in_block + tail_elements);
+            }
+            m_data = nullptr;
+            m_count = 0;
+            m_capacity = 0;
+        }
+
+    public:
+        // Moves the list back into the first block's tail when it fits there
+        void shrink_to_fit() {
+            if (has_own_array() && m_count != 0 && m_count <= tail_pointers) {
+                auto* list = tail_list(m_data[0]);
+                std::copy(m_data, m_data + m_count, list);
+                auto va = vec_alloc();
+                vec_alloc_traits::deallocate(va, m_data, m_capacity);
+                m_data = list;
+                m_capacity = tail_pointers;
+            }
+        }
+    };
+
+    std::conditional_t<colocate_blocks, colocated_blocks, std::vector<pointer, vec_alloc>> m_blocks{};
+    std::size_t m_size{};
 
     /**
      * Iterator class doubles as const_iterator and iterator
@@ -1237,19 +1411,23 @@ private:
 
     // slow path: need to allocate a new segment every once in a while
     void increase_capacity() {
-        auto ba = Allocator(m_blocks.get_allocator());
+        if constexpr (colocate_blocks) {
+            m_blocks.add_block();
+        } else {
+            auto ba = Allocator(m_blocks.get_allocator());
 
-        // Room for the pointer first. push_back is the other thing here that can throw -- it
-        // reallocates -- and it used to do so with the block already allocated and owned by
-        // nobody, which leaked it. Reserving first means the only allocation still outstanding
-        // when something fails is one that has not happened yet, and the push_back below cannot
-        // fail because the capacity is already there. Grow geometrically to avoid reallocation
-        // on every new segment.
-        if (m_blocks.size() == m_blocks.capacity()) {
-            m_blocks.reserve((std::max)(std::size_t{1}, m_blocks.capacity() * 2));
+            // Room for the pointer first. push_back is the other thing here that can throw -- it
+            // reallocates -- and it used to do so with the block already allocated and owned by
+            // nobody, which leaked it. Reserving first means the only allocation still outstanding
+            // when something fails is one that has not happened yet, and the push_back below cannot
+            // fail because the capacity is already there. Grow geometrically to avoid reallocation
+            // on every new segment.
+            if (m_blocks.size() == m_blocks.capacity()) {
+                m_blocks.reserve((std::max)(std::size_t{1}, m_blocks.capacity() * 2));
+            }
+            pointer block = std::allocator_traits<Allocator>::allocate(ba, num_elements_in_block);
+            m_blocks.push_back(block);
         }
-        pointer block = std::allocator_traits<Allocator>::allocate(ba, num_elements_in_block);
-        m_blocks.push_back(block);
     }
 
     // Moves everything from other
@@ -1288,9 +1466,13 @@ private:
 
     // Last block first, like destroy_tail() below.
     void dealloc() {
-        auto ba = Allocator(m_blocks.get_allocator());
-        for (auto it = m_blocks.rbegin(); it != m_blocks.rend(); ++it) {
-            std::allocator_traits<Allocator>::deallocate(ba, *it, num_elements_in_block);
+        if constexpr (colocate_blocks) {
+            m_blocks.release();
+        } else {
+            auto ba = Allocator(m_blocks.get_allocator());
+            for (auto it = m_blocks.rbegin(); it != m_blocks.rend(); ++it) {
+                std::allocator_traits<Allocator>::deallocate(ba, *it, num_elements_in_block);
+            }
         }
     }
 
@@ -1521,13 +1703,23 @@ public:
     }
 
     void shrink_to_fit() {
-        auto ba = Allocator(m_blocks.get_allocator());
         auto num_blocks_required = calc_num_blocks_for_capacity(m_size);
-        while (m_blocks.size() > num_blocks_required) {
-            std::allocator_traits<Allocator>::deallocate(ba, m_blocks.back(), num_elements_in_block);
-            m_blocks.pop_back();
+        if constexpr (colocate_blocks) {
+            if (num_blocks_required == 0) {
+                m_blocks.release();
+            }
+            while (m_blocks.size() > num_blocks_required) {
+                m_blocks.pop_block();
+            }
+            m_blocks.shrink_to_fit();
+        } else {
+            auto ba = Allocator(m_blocks.get_allocator());
+            while (m_blocks.size() > num_blocks_required) {
+                std::allocator_traits<Allocator>::deallocate(ba, m_blocks.back(), num_elements_in_block);
+                m_blocks.pop_back();
+            }
+            m_blocks.shrink_to_fit();
         }
-        m_blocks.shrink_to_fit();
     }
 };
 
@@ -3683,7 +3875,7 @@ private:
     // fingerprint class never overflowed home, placed there. Everything else is find_or_place_far's.
     // Without the attribute clang called the whole of it, and a hit paid the placement's six
     // register prologue (#305, #321).
-    template <bool Piecewise, typename K, typename... Args>
+    template <bool Piecewise, bool InlineMiss = false, typename K, typename... Args>
     ANKERL_UNORDERED_DENSE_FORCEINLINE auto do_find_or_place(K&& key, Args&&... args) -> std::pair<iterator, bool> {
         static_assert(!is_view_v, "map_view and set_view are read only");
         auto const mh = mixed_hash(key);
@@ -3704,7 +3896,11 @@ private:
             }
             lanes &= lanes - 1;
         }
-        return find_or_place_miss<Piecewise>(mh, word, home_idx, std::forward<K>(key), std::forward<Args>(args)...);
+        if constexpr (InlineMiss) {
+            return find_or_place_miss_body<Piecewise>(mh, word, home_idx, std::forward<K>(key), std::forward<Args>(args)...);
+        } else {
+            return find_or_place_miss<Piecewise>(mh, word, home_idx, std::forward<K>(key), std::forward<Args>(args)...);
+        }
     }
 
     // Everything an insert does after a miss in the home group -- the empty table's allocation, the
@@ -3726,6 +3922,13 @@ private:
     template <bool Piecewise, typename K, typename... Args>
     ANKERL_UNORDERED_DENSE_NOINLINE auto
     find_or_place_miss(std::uint64_t mh, std::uint32_t word, value_idx_type home_idx, K&& key, Args&&... args)
+        -> std::pair<iterator, bool> {
+        return find_or_place_miss_body<Piecewise>(mh, word, home_idx, std::forward<K>(key), std::forward<Args>(args)...);
+    }
+
+    template <bool Piecewise, typename K, typename... Args>
+    ANKERL_UNORDERED_DENSE_FORCEINLINE auto
+    find_or_place_miss_body(std::uint64_t mh, std::uint32_t word, value_idx_type home_idx, K&& key, Args&&... args)
         -> std::pair<iterator, bool> {
         // Allocates before anything is written, which keeps the sentinel (#329) unwritten, and places
         // the first element directly rather than growing into it, which would hash it a second time.
@@ -4495,6 +4698,22 @@ public:
                          bool> = true>
     ANKERL_UNORDERED_DENSE_FORCEINLINE auto try_emplace(K&& key, Args&&... args) -> std::pair<iterator, bool> {
         return do_try_emplace(std::forward<K>(key), std::forward<Args>(args)...);
+    }
+
+    // Jinja2C++ local change (docs/tasks/0506): try_emplace with the placement of a new key inlined
+    // as well, for the one caller where adding a key is the common case (a `set` of a new name,
+    // ScopeRef::ForName). Out of line the miss costs a call, a six register prologue and a stack
+    // protector, about 23 instructions of each new name; inlined into every caller it grows them
+    // enough to cost more elsewhere than it saves (+1% on Render/config_file)
+    template <
+        typename K,
+        typename Q = T,
+        typename H = Hash,
+        typename KE = KeyEqual,
+        std::enable_if_t<is_map_v<Q> && is_transparent_v<H, KE> && is_neither_convertible_v<K&&, iterator, const_iterator>,
+                         bool> = true>
+    ANKERL_UNORDERED_DENSE_FORCEINLINE auto try_emplace_placing_inline(K&& key) -> std::pair<iterator, bool> {
+        return do_find_or_place<true, true>(std::forward<K>(key));
     }
 
     template <

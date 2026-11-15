@@ -1238,6 +1238,63 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                          Case{ "{{ _('Hello %(name)s!', name=user.name) }}|{{ ngettext('%(num)d apple', '%(num)d apples', 3) }}|"
                                                "{{ pgettext('menu', 'Open') }}|{{ gettext('%(n)s item', n=1) }}",
                                                "Hallo Ann!|3 apples|menu:Open|1 Ding" }));
+// A scope map's first insert allocates its index and its first segment, which holds the list of
+// segments as well (docs/tasks/0506): two allocations, as robin_hood's table and node pool were
+TEST_F(AllocationFailureTest, FreshStableMapAllocatesTwiceOnItsFirstInsert)
+{
+    using Map = jinja2::detail::StableMap<std::string, int, jinja2::detail::ankerl::unordered_dense::hash<std::string>, std::equal_to<>>;
+    Map map;
+    const long before = g_live.load(std::memory_order_relaxed);
+    map.try_emplace("x", 1);
+    EXPECT_EQ(2, g_live.load(std::memory_order_relaxed) - before);
+}
+
+// A map growing past the tail of its first segment, whose list of segments then moves to an array
+// of its own and doubles, frees what it had made when an allocation fails, and keeps every value
+// it held (docs/tasks/0506)
+TEST_F(AllocationFailureTest, FailedStableMapGrowthKeepsItsValues)
+{
+    using Map = jinja2::detail::StableMap<std::string, int, jinja2::detail::ankerl::unordered_dense::hash<std::string>, std::equal_to<>>;
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        const long live = g_live.load(std::memory_order_relaxed);
+        bool fired = false;
+        {
+            Map map;
+            int added = 0;
+            {
+                const Injection injection(n);
+                try
+                {
+                    for (; added != 600; ++added)
+                    {
+                        map.try_emplace("n" + std::to_string(added), added);
+                    }
+                }
+                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed insert is one of the outcomes checked
+                {
+                }
+                fired = Injection::Fired();
+            }
+            ASSERT_EQ(static_cast<size_t>(added), map.size()) << "allocation " << n;
+            for (int idx = 0; idx != added; ++idx)
+            {
+                const auto found = map.find("n" + std::to_string(idx));
+                ASSERT_NE(map.end(), found) << "allocation " << n;
+                EXPECT_EQ(idx, found->second);
+            }
+        }
+        ASSERT_EQ(live, g_live.load(std::memory_order_relaxed)) << "allocation " << n;
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n);
+    EXPECT_LT(n, maxAllocations);
+}
+
 // A scope map whose copy runs out of memory frees the segments it had made: unordered_dense's
 // segmented vector did not, as its copy constructor never completed (Codex review of #891)
 TEST_F(AllocationFailureTest, FailedStableMapCopyFreesItsSegments)
