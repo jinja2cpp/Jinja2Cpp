@@ -19,3 +19,5 @@ a `PromptEscaper`.
 
 **Done when.** A chat template test renders in prompt mode with `bos_token` as a plain string named
 prompt-safe, and the example builds.
+
+**Timing (Ruslan 2026-11-15).** Lands before the G1 freeze: the new `ChatTemplateOptions` field changes its size.

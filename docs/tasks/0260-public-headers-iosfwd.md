@@ -22,3 +22,5 @@ transitive include after the tag breaks source compatibility.
 
 **Done when.** No public header includes `<iostream>`, and the installed-package test
 (test/package/main.cpp) still builds.
+
+**Timing (Ruslan 2026-11-15).** Lands before the G1 freeze, since dropping a transitive include after the tag breaks source compatibility.

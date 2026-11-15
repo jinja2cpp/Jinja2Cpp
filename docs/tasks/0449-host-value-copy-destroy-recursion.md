@@ -33,3 +33,5 @@ document the limit for the JSON bindings (which may need their own depth cap).
 **Done when** the decision is recorded, and under the chosen design a `Value` nested 200000 deep
 is copied (or refused) and destroyed under ASan without a crash, with the instruction gate within
 its bar.
+
+**Decision (Ruslan 2026-11-15).** Take the additive helper (`jinja2::DestroyDeep(Value&&)` and a depth-checked `DeepCopy`) and leave `Value`'s destructor as it is; it may land after the G1 freeze.
