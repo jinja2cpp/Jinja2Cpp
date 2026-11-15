@@ -13,6 +13,7 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -522,14 +523,20 @@ std::string DictKeyText(const InternalValue& key)
 TemplateDict::TemplateDict(InternalDict&& items)
     : m_items(std::move(items))
 {
-    ChargeEntries();
-    if constexpr (detail::ContractChecks >= 2)
+    // A name may start with the mark: a keyword argument spread from a dict (`**{'\xFFa': 1}`) or a host's key.
+    // Stored as the token of that string, it reads back as the string and never as another key's token
+    // (docs/tasks/0455: the fuzzers' FULL checks found it)
+    if (std::any_of(m_items.begin(), m_items.end(), [](const auto& item) { return NeedsEscape(item.first); }))
     {
-        for (const auto& item : m_items)
+        InternalDict escaped;
+        escaped.reserve(m_items.size());
+        for (auto& [name, value] : m_items)
         {
-            JINJA2CPP_ASSERT(!NeedsEscape(item.first) && "a name never starts with the mark of a dict key token");
+            escaped.try_emplace(NeedsEscape(name) ? EscapeString(name) : name, std::move(value));
         }
+        m_items = std::move(escaped);
     }
+    ChargeEntries();
 }
 
 TemplateDict::TemplateDict(const TemplateDict& other)

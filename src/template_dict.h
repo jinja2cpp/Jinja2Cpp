@@ -65,7 +65,7 @@ public:
     using const_iterator = InternalDict::const_iterator;
 
     TemplateDict() = default;
-    // A dict of string keys, such as the names of keyword arguments, which never start with the mark
+    // A dict of string keys, such as the names of keyword arguments; a name that starts with the mark is escaped
     explicit TemplateDict(InternalDict&& items);
     TemplateDict(const TemplateDict& other);
     // OrderedMap's moves allocate on MSVC (see ordered_map.h), so these are noexcept only where its are. The entries

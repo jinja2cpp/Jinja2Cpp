@@ -3,7 +3,7 @@ status: in-progress
 priority: low
 area: robustness
 depends: [0265]
-touches: [src/render_context.h, src/render_suspension.cpp, src/render_suspension.h, src/contracts.h, src/contracts.cpp, test/contracts_test.cpp, fuzz/fuzz_common.h, fuzz/fuzz_targets.cpp, fuzz/untrusted_targets.cpp, fuzz/alloc_failure_target.cpp]
+touches: [src/render_context.h, scripts/null_compare.py, src/render_suspension.cpp, src/render_suspension.h, src/contracts.h, src/contracts.cpp, test/contracts_test.cpp, test/internal_value_test.cpp, src/template_dict.cpp, src/template_dict.h, scripts/null_compare.query, fuzz/fuzz_common.h, fuzz/fuzz_targets.cpp, fuzz/untrusted_targets.cpp, fuzz/alloc_failure_target.cpp]
 ---
 # RenderContext's debug-only invariants follow the contract level, not NDEBUG
 
@@ -37,3 +37,11 @@ targets abort on an `UnexpectedException` error whose text carries " violated: "
 (`AbortOnContractViolation` in fuzz/fuzz_common.h). Not covered: the property renders of
 fuzz/prompt_escape_case.h, which test/filters_test.cpp shares and which report only "not rendered";
 the same target's second, prompt-mode render is covered.
+
+**Found by it.** Once reported, the alloc_failure replay caught a pre-existing invariant failure that
+template text reaches: a `**` spread of a dict whose key starts with byte 0xFF, the mark of a dict key
+token (`'%(a)s'|format(**{'\xFFa': 5})`, `dict(**...)`, `namespace(**...)`). `TemplateDict(InternalDict&&)`
+stored the name raw, so at ON a lookup of it missed and a name spelled like another key's token could
+read as that key. The constructor now escapes such names, keeping their order (regression
+fuzz/regressions/kwargs-name-with-dict-key-mark.j2, TemplateDictTest). Python Jinja2 cannot hold the
+byte (UTF-8 source), so there is no parity case.
