@@ -40,8 +40,10 @@ the same target's second, prompt-mode render is covered.
 
 **Found by it.** Once reported, the alloc_failure replay caught a pre-existing invariant failure that
 template text reaches: a `**` spread of a dict whose key starts with byte 0xFF, the mark of a dict key
-token (`'%(a)s'|format(**{'\xFFa': 5})`, `dict(**...)`, `namespace(**...)`). `TemplateDict(InternalDict&&)`
+token (`'%(a)s'|format(**{'\xFFa': 5})`, a macro's `**kwargs`, gettext keyword arguments; `dict()` and
+`namespace()` store through `SetString`, which already escaped). `TemplateDict(InternalDict&&)`
 stored the name raw, so at ON a lookup of it missed and a name spelled like another key's token could
-read as that key. The constructor now escapes such names, keeping their order (regression
-fuzz/regressions/kwargs-name-with-dict-key-mark.j2, TemplateDictTest). Python Jinja2 cannot hold the
+read as that key. The constructor now escapes such names, keeping their order (regressions
+fuzz/regressions/kwargs-name-with-dict-key-mark.j2 and, with the alloc target's three header bytes,
+alloc-failure-kwargs-name-with-dict-key-mark.j2; TemplateDictTest). Python Jinja2 cannot hold the
 byte (UTF-8 source), so there is no parity case.
