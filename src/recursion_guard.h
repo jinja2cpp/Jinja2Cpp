@@ -48,10 +48,6 @@ constexpr unsigned LimitOrNone(std::uint32_t limit)
     return limit != 0 ? limit : UINT_MAX;
 }
 
-// The thread-locals every render step reads. In the Python module, a library the interpreter
-// loads with dlopen, they would take the dynamic TLS model: a call into the dynamic loader at
-// each access, a fifth of a render's instructions. The module's build (JINJA2CPP_BUILD_PYTHON)
-// gives these few the initial-exec model, which the loader's static TLS reserve has room for
 // An error path or a rare mode kept out of the function it is called from
 #ifdef _MSC_VER
 #define JINJA2CPP_NOINLINE __declspec(noinline)
@@ -59,11 +55,10 @@ constexpr unsigned LimitOrNone(std::uint32_t limit)
 #define JINJA2CPP_NOINLINE __attribute__((noinline))
 #endif
 
-#ifdef JINJA2CPP_HOT_TLS_INITIAL_EXEC
-#define JINJA2CPP_HOT_TLS __attribute__((tls_model("initial-exec")))
-#else
-#define JINJA2CPP_HOT_TLS
-#endif
+// The thread-locals below are read at every render step. In position-independent code (a shared
+// library, the Python module) the default TLS model reaches each through a call into the dynamic
+// loader; JINJA2CPP_TLS_INITIAL_EXEC (CMakeLists.txt, docs/tasks/0514) builds the library with the
+// initial-exec model, which then defines JINJA2CPP_HOT_TLS_INITIAL_EXEC
 
 namespace detail
 {
@@ -80,7 +75,7 @@ struct ThreadStack
     std::uintptr_t low = 0;
     std::uintptr_t renderLimit = UINTPTR_MAX;
 };
-inline thread_local ThreadStack t_threadStack JINJA2CPP_HOT_TLS;
+inline thread_local ThreadStack t_threadStack;
 
 bool StackNearlyExhaustedSlow(std::uintptr_t frame);
 // The checks of a stack [low, high) that a render runs on: a thread's, or a fiber's its host switched
@@ -158,7 +153,7 @@ struct RenderLimits
 };
 static_assert(RenderLimits{}.maxRenderDepth == Settings::Limits{}.maxRenderDepth);
 // Constant-initialised, so that reading it needs no guard
-inline thread_local RenderLimits t_renderLimits JINJA2CPP_HOT_TLS;
+inline thread_local RenderLimits t_renderLimits;
 
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
@@ -168,7 +163,7 @@ void InstallRenderLimits(const RenderLimits& limits);
 // limits calls it every HostPollSteps steps; it may throw to stop the render. Null, the
 // default, costs nothing: the slow path of the step count reads it, not the step
 using HostPoll = const std::function<void()>*;
-inline thread_local HostPoll t_hostPoll JINJA2CPP_HOT_TLS = nullptr;
+inline thread_local HostPoll t_hostPoll = nullptr;
 inline constexpr std::uint64_t HostPollSteps = 1024;
 } // namespace detail
 
