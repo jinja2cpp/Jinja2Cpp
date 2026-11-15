@@ -811,33 +811,47 @@ const InternalValue& MarkSafeIfAutoescapeFunction()
     return fn;
 }
 
+namespace
+{
+struct BuiltinGlobals
+{
+    InternalValueMap plain;
+    InternalValueMap withI18n;
+    InternalValueMap withOldI18n;
+};
+
+BuiltinGlobals MakeBuiltinGlobals()
+{
+    // Made once, maybe in a render with a memory budget, for every render after it
+    const UncountedMemoryScope uncounted;
+    BuiltinGlobals result;
+    SetupGlobals(result.plain);
+    SetupGlobals(result.withI18n);
+    SetupI18nGlobals(result.withI18n, true);
+    SetupGlobals(result.withOldI18n);
+    SetupI18nGlobals(result.withOldI18n, false);
+    return result;
+}
+
+// Out of line, so that each render's GetBuiltinGlobals is one guard test and a select, with no object on its stack
+JINJA2CPP_NOINLINE const BuiltinGlobals& BuildBuiltinGlobals()
+{
+    static const BuiltinGlobals globals = MakeBuiltinGlobals();
+    return globals;
+}
+} // namespace
+
 const InternalValueMap& GetBuiltinGlobals(const Settings::Extensions& extensions)
 {
     // Built once and only read afterwards, so renders on any thread share them; the state of
     // the stateful globals (cycler, joiner, lipsum's generator) lives in their results or in
     // the render
-    static const auto globals = [] {
-        // Made once, maybe in a render with a memory budget, for every render after it
-        const UncountedMemoryScope uncounted;
-        InternalValueMap result;
-        SetupGlobals(result);
-        return result;
-    }();
-    static const auto makeWithI18n = [](bool newstyle) {
-        // Made once, maybe in a render with a memory budget, for every render after it
-        const UncountedMemoryScope uncounted;
-        InternalValueMap result;
-        SetupGlobals(result);
-        SetupI18nGlobals(result, newstyle);
-        return result;
-    };
-    static const auto globalsWithI18n = makeWithI18n(true);
-    static const auto globalsWithOldI18n = makeWithI18n(false);
+    static const BuiltinGlobals& globals = BuildBuiltinGlobals();
     if (!extensions.i18n)
     {
-        return globals;
+        return globals.plain;
     }
-    return extensions.i18nNewstyle ? globalsWithI18n : globalsWithOldI18n;
+    return extensions.i18nNewstyle ? globals.withI18n : globals.withOldI18n;
 }
 } // namespace v2
 } // namespace jinja2

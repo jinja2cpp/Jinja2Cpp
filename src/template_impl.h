@@ -562,6 +562,14 @@ public:
 
     // `hooks` (with hasHooks set) brings the render's own globals and poll (RenderHooks). A
     // separate instantiation, so that the ordinary Render pays nothing for them
+    // The values a GenericMap gave, each with its name; nothing for a ValuesMap, whose values the context refers to
+    using GenericValues = std::list<std::pair<std::string, Value>>;
+    struct NoGenericValues
+    {
+    };
+    template<typename ParamsMap>
+    using GenericValuesOf = std::conditional_t<std::is_same_v<ParamsMap, GenericMap>, GenericValues, NoGenericValues>;
+
     // RenderCore of a render started inside another one: the collector of the outermost render that
     // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
     // again as copies of `params`, or of the values a GenericMap gave (`genericValues`), so that the host's
@@ -570,7 +578,7 @@ public:
     JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace,
                                                           const GlobalsSnapshot& globals,
                                                           [[maybe_unused]] const ParamsMap& params,
-                                                          [[maybe_unused]] const std::list<std::pair<std::string, Value>>& genericValues,
+                                                          [[maybe_unused]] const GenericValuesOf<ParamsMap>& genericValues,
                                                           InternalValueMap& intParams) const
     {
         auto* keeper = SharedSnapshotKeeper(workspace, &globals);
@@ -669,7 +677,8 @@ public:
 
             // A GenericMap returns values by copy; the context refers to them, so they live here, each
             // with its name, so that a keep converts them again without asking the host twice
-            std::list<std::pair<std::string, Value>> genericValues;
+            // (an empty std::list costs a call to destroy it: a ValuesMap's render has none)
+            GenericValuesOf<ParamsMap> genericValues;
             if constexpr (std::is_same_v<ParamsMap, GenericMap>)
             {
                 for (auto& name : params.GetKeys())

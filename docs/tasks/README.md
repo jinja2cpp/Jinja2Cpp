@@ -567,6 +567,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0503](0503-replaced-trees-slots-and-failed-calls.md) | Replaced trees that hold a slot, or that a failed call loaded, still stay | robustness | low | open |
 | [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | open |
 | [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
-| [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | open |
+| [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | done |
 | [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | open |
 | [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | open |
