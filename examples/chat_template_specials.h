@@ -121,6 +121,8 @@ inline Specials ReadSpecials(const nlohmann::json& config)
 
 // The chat-template preset in prompt mode: the tokenizer's specials are broken in every value
 // that is not prompt-safe, and the named params that carry them on purpose are prompt-safe
+// PromptEscaper throws std::invalid_argument when a token contains its separator (a space by
+// default): choose another separator in PromptEscapeOptions for such a tokenizer
 inline void ConfigureForPrompts(jinja2::TemplateEnv& env, const Specials& specials)
 {
     jinja2::ChatTemplateOptions options;
