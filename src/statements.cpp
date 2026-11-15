@@ -8,6 +8,7 @@
 #include "expression_evaluator.h"
 #include "generation_tracker.h"
 #include "generic_adapters.h"
+#include "hash_map.h"
 #include "host_object.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
@@ -740,10 +741,10 @@ JINJA2CPP_ALWAYS_INLINE bool FetchAfterBody(LoopState& state, size_t itemIdx)
 
 // Assigns the current item to the loop target. A plain name is stored straight into its
 // slot, made by the first item so that the `else` body of an empty loop does not see the
-// name. The map keeps its nodes in place, so the slot survives other names being added
+// name. The map keeps its values in place, so the slot survives other names being added
 void AssignLoopTarget(TargetNodes target, const InternalValue& item, ScopeRef scope, LoopTargetSlots& slots, RenderContext& values)
 {
-    static_assert(!InternalValueMap::is_flat);
+    static_assert(detail::KeepsValuesInPlace<InternalValueMap>::value);
     if (target[0].IsPlainName())
     {
         if (!slots.single)

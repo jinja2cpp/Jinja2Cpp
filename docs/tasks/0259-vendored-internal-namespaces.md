@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: release
 depends: [0076]
@@ -22,3 +22,10 @@ allow-list. If 0231 replaces robin_hood first, only lexertk and the successor re
 
 **Done when.** `nm -C libjinja2cpp.a` shows no top-level `robin_hood::` or `lexertk::`
 symbols and the abi_namespace test checks them without exceptions.
+
+**Done with 0231 (2026-11-14).** robin_hood is gone; unordered_dense (`src/ankerl/`) and lexertk are
+wrapped in `jinja2::v2::detail` with the change recorded at the top of each file (unordered_dense also
+loses its `std::erase_if` overload, a global name). Macros and include guards keep their upstream
+names: the headers are private to `src/` and never meet a consumer's copy in one translation unit.
+test/abi_symbols.cmake now fails on any defined `ankerl::`, `robin_hood::` or `lexertk::` symbol (it
+reported 31 on master).

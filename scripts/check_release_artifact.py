@@ -48,7 +48,7 @@ from pathlib import Path
 # Sections THIRD-PARTY-NOTICES.txt must have: the code and data compiled into every build or
 # installed with it (docs/licensing.md, "Third-party code and data in the artifacts")
 REQUIRED_NOTICES = [
-    "robin-hood-hashing",
+    "unordered_dense",
     "lexertk",
     "value-types",
     "fast_float",

@@ -2,6 +2,7 @@
 
 #include "cell_trace.h"
 #include "cycle_collector.h"
+#include "hash_map.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 #include "render_workspace.h"
@@ -1049,7 +1050,7 @@ void CallExports::Record(const CellTable& table)
 void CallExports::PinNested(const CellTable& table)
 {
     // The table's keys are the identities, so a cell is pinned at most once by its identity
-    robin_hood::unordered_flat_set<const void*> pinned;
+    detail::FlatSet<const void*> pinned;
     pinned.reserve(m_pins.size());
     std::vector<InternalValue> work;
     work.reserve(m_pins.size());
@@ -1058,7 +1059,7 @@ void CallExports::PinNested(const CellTable& table)
         pinned.insert(pin.identity);
         work.push_back(pin.storage);
     }
-    robin_hood::unordered_flat_set<const void*> seen;
+    detail::FlatSet<const void*> seen;
     const auto visit = [this, &table, &work, &pinned, &seen](const InternalValue& item) {
         if (const auto* cell = CellOfItem(table, item))
         {

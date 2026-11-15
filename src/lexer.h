@@ -403,7 +403,7 @@ public:
     }
 
 private:
-    using traits = lexertk::details::lexer_traits<CharT>;
+    using traits = detail::lexertk::details::lexer_traits<CharT>;
 
     // Jinja2's whitespace_re is `\s+`: Python's whitespace, Unicode included (docs/tasks/0447)
     [[nodiscard]] size_t SkipWhitespace(size_t pos, size_t end) const

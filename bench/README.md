@@ -479,7 +479,7 @@ cmake --build build-pgo
 `-fprofile-partial-training` keeps code the training did not reach optimised for speed
 rather than size. Clang's equivalent is `-fprofile-instr-generate` / `-fprofile-instr-use`
 with `llvm-profdata merge`. With a profile, GCC 13 reports a false `-Warray-bounds` in the
-vendored `robin_hood.h`; the strict-warnings build keeps that one a warning.
+vendored `robin_hood.h` (replaced in 0231); the strict-warnings build keeps that one a warning.
 
 ## Noise
 

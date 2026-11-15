@@ -22,7 +22,8 @@ A nested `namespace jinja2::detail` becomes `namespace jinja2 { inline namespace
 namespace detail` (C++17 cannot nest an inline namespace in that form). An opening already
 followed by `inline namespace vN` with another N gets the new tag, so the 3.0 retag is one
 run with TAG changed. The vendored polymorphic_value headers are rewritten in their own
-upstream brace style; robin_hood.h and lexertk.h do not use namespace jinja2.
+upstream brace style; src/ankerl/ and lexertk.h
+keep their upstream brace style: their jinja2 namespace is a recorded local change (0259).
 """
 
 import argparse
@@ -180,7 +181,7 @@ def rewrite(text):
 def files():
     out = subprocess.run(["git", "ls-files", "--", *ROOTS], cwd=REPO, capture_output=True, text=True, check=True).stdout
     for path in out.split():
-        if path.endswith((".h", ".cpp")) and not path.endswith(("robin_hood.h", "lexertk.h")):
+        if path.endswith((".h", ".cpp")) and not path.endswith("lexertk.h") and not path.startswith("src/ankerl/"):
             yield path
 
 
