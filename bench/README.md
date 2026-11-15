@@ -179,9 +179,14 @@ default release profile (no LTO), as Jinja2C++ is built without it.
   `minijinja-contrib` (its `truncate`, `wordcount`, ...) and Python's string and dict
   methods (`pycompat`), and a `tojson` that writes `", "` and `": "` between items as
   Jinja2 does (its own writes compact JSON, so every tool definition in the chat templates
-  would differ; Rust LLM servers register one like it). It renders 17 of the 20 cases; not
+  would differ; Rust LLM servers register one like it) and sorts keys as Jinja2's does
+  (not for the `hf_*` cases, whose transformers `tojson` does not). The data keeps the
+  insertion order of `data.json` (`preserve_order` in MiniJinja and serde_json), as Python's
+  dicts do, so a template iterating `dict.items()` sees the keys in Jinja2's order
+  (`chat_mistral`, `hf_qwen3`). It renders 20 of the 25 cases Python runs; not
   `filters` (no `center`), `html_autoescape` (contrib's `truncate` takes the length only as
-  a keyword) and `mitsuhiko_table_wide` (no wide strings, as for every other engine).
+  a keyword), `hf_gpt_oss`, `hf_mistral_small` and `mitsuhiko_table_wide` (no wide strings,
+  as for every other engine).
 - Tera's dialect is further from Jinja's: keyword-only filter and function arguments
   (`range(end=100)`), components instead of macros, no `namespace`, no `loop.cycle`, no
   `trim_blocks`/`lstrip_blocks`. A case may carry `<name>.tera` next to `<name>.j2`, the
@@ -249,9 +254,15 @@ Unlike the C++ engines, the Rust ones are still faster than Jinja2C++ in places
 
 Timings on shared machines are noisy; instruction counts are not. `count.py` runs each
 benchmark under callgrind, collecting only the measured loop, and reports instructions
-per iteration, repeatable to about 0.05% for the same binary:
+per iteration, repeatable to about 0.05% for the same binary when it is built with a fixed
+name-hash key. The library keys its hash of names per process (src/hash_map.cpp), so which
+names share a group changes from run to run, and a name-heavy case's count with it:
+`Render/hf_qwen3` moved by up to 1.6% between runs of one binary (docs/tasks/0506). CI's count
+builds set the key, and a local count should too:
 
 ```bash
+cmake -S . -B build-rel -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_BENCHMARKS=ON \
+  -DCMAKE_CXX_FLAGS=-DJINJA2CPP_NAME_HASH_KEY=0x2545F4914F6CDD1D
 python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --out before.json
 # ... change the code, rebuild ...
 python3 bench/count.py --bench build-rel/bench/jinja2cpp_bench --baseline before.json

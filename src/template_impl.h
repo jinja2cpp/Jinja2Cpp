@@ -663,7 +663,8 @@ public:
             const WorkspaceMaps maps;
             auto& intParams = maps.Params();
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
-                intParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
+                // With the placement inline: each param is a new name in the emptied table
+                intParams.try_emplace_placing_inline(name).first->second = visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
 
             // A GenericMap returns values by copy; the context refers to them, so they live here, each

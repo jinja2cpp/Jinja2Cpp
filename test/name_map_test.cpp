@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 using namespace jinja2;
 
@@ -106,6 +108,76 @@ TEST(NameMapTest, EraseMovesOnlyTheLastValue)
     EXPECT_EQ(9, ConvertToInt(map.find(std::string("name9"))->second));
     EXPECT_EQ(map.end(), map.find(std::string("name5")));
     EXPECT_EQ(9U, map.size());
+}
+
+// The list of a map's segments starts in the tail of its first segment and moves to an array of
+// its own once it outgrows that tail (docs/tasks/0506): the values stay where they are, the
+// iteration order is the insertion order, and an iterator survives a move or a swap of the map,
+// as it did while the list was a std::vector
+TEST(NameMapTest, SegmentListOutgrowsTheFirstSegment)
+{
+    InternalValueMap map;
+    std::vector<const InternalValue*> where;
+    // Past the tail of the first segment and several doublings of the list after it
+    for (int idx = 0; idx != 2000; ++idx)
+    {
+        auto& value = map.try_emplace(Name("name" + std::to_string(idx))).first->second;
+        value = InternalValue(int64_t{ idx });
+        where.push_back(&value);
+    }
+    for (int idx = 0; idx != 2000; ++idx)
+    {
+        const auto found = map.find(std::string("name") + std::to_string(idx));
+        ASSERT_NE(map.end(), found);
+        EXPECT_EQ(where[static_cast<size_t>(idx)], &found->second);
+        EXPECT_EQ(idx, ConvertToInt(map.values()[static_cast<size_t>(idx)].second));
+    }
+
+    const auto first = map.begin();
+    InternalValueMap moved(std::move(map));
+    EXPECT_EQ("name0", first->first);
+    InternalValueMap other;
+    other.try_emplace(Name("other"));
+    const auto otherFirst = other.begin();
+    moved.swap(other);
+    EXPECT_EQ("name0", first->first);
+    EXPECT_EQ("other", otherFirst->first);
+    EXPECT_EQ(2000U, other.size());
+    EXPECT_EQ(1U, moved.size());
+}
+
+// Emptied and filled again, the map reuses its segments, and a map shrunk to a few values moves
+// its list back into its first segment (shrink_to_fit, rehash(0))
+TEST(NameMapTest, SegmentListShrinksBackIntoTheFirstSegment)
+{
+    InternalValueMap map;
+    for (int idx = 0; idx != 500; ++idx)
+    {
+        map.try_emplace(Name("name" + std::to_string(idx)));
+    }
+    map.clear();
+    EXPECT_TRUE(detail::HasStorage(map));
+    for (int idx = 0; idx != 3; ++idx)
+    {
+        map.try_emplace(Name("kept" + std::to_string(idx))).first->second = InternalValue(int64_t{ idx });
+    }
+    map.rehash(0);
+    EXPECT_EQ(3U, map.size());
+    for (int idx = 0; idx != 3; ++idx)
+    {
+        EXPECT_EQ(idx, ConvertToInt(map.find(std::string("kept") + std::to_string(idx))->second));
+    }
+    // And grows again from there
+    for (int idx = 0; idx != 500; ++idx)
+    {
+        map.try_emplace(Name("again" + std::to_string(idx)));
+    }
+    EXPECT_EQ(503U, map.size());
+    const InternalValueMap copy(map);
+    EXPECT_EQ(503U, copy.size());
+    EXPECT_NE(copy.end(), copy.find(std::string("again499")));
+    map = InternalValueMap();
+    EXPECT_FALSE(detail::HasStorage(map));
 }
 
 // The name hash is keyed per process: the key stays put while the process runs, and the hash

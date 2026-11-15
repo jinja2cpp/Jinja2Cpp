@@ -1740,7 +1740,8 @@ InternalValue& ScopeRef::operator[](Key&& name)
 inline InternalValue& ScopeRef::ForName(const HashedName& name)
 {
     // With the hash the name has: the key's string is made only when the name is new
-    auto [p, isAdded] = m_map->try_emplace(name);
+    // With the placement of a new name inline: a `set` of a new name is the common case here
+    auto [p, isAdded] = m_map->try_emplace_placing_inline(name);
     if (isAdded)
     {
         const auto bucket = LookupCache::BucketOf(name.hash);
