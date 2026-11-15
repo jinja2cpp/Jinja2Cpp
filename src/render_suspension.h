@@ -69,7 +69,7 @@ struct RenderThreadState
     void Exchange() noexcept;
     // At FULL contract checks: what the values' thread-locals hold now (RecordMarks), when the render gets the thread
     void RecordMarks() noexcept;
-    // Debug: they hold the same when it lets the thread go, so the host finds them as it left them
+    // At FULL contract checks: they hold the same when it lets the thread go, so the host finds them as it left them
     void CheckIdle() const noexcept;
 
     std::unique_ptr<RenderWorkspace> workspace;

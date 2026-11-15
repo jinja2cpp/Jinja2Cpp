@@ -35,7 +35,7 @@ void ContractFailedNoexcept(const char* kind, const char* condition, const char*
     // No allocation: the check may run while memory is short or during unwinding
     const auto name = FileName(file);
     std::array<char, 16> number{};
-    const auto end = std::to_chars(number.data(), number.data() + number.size(), line).ptr;
+    auto* const end = std::to_chars(number.data(), number.data() + number.size(), line).ptr;
     for (const std::string_view part : { std::string_view("jinja2cpp: "), std::string_view(kind), std::string_view(" violated: "), std::string_view(condition), std::string_view(" ("), name,
                                          std::string_view(":"), std::string_view(number.data(), static_cast<size_t>(end - number.data())), std::string_view(")\n") })
     {

@@ -34,4 +34,6 @@ condition and aborts, as `assert` did. RenderContext's `m_noCachedLookups`, Home
 the macro; the bare `assert`s of src/render_context.h and src/render_suspension.cpp (the
 `RecordMarks`/`CheckIdle` thread-local marks too) became `JINJA2CPP_ASSERT_NOEXCEPT`. The fuzz
 targets abort on an `UnexpectedException` error whose text carries " violated: "
-(`AbortOnContractViolation` in fuzz/fuzz_common.h).
+(`AbortOnContractViolation` in fuzz/fuzz_common.h). Not covered: the property renders of
+fuzz/prompt_escape_case.h, which test/filters_test.cpp shares and which report only "not rendered";
+the same target's second, prompt-mode render is covered.
