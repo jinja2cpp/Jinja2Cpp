@@ -28,5 +28,6 @@ them in the environment's load settings beside the dialect, and in prompt mode a
 values are not marked; in HTML mode the names change nothing. `examples/chat_template_specials.h`
 reads the specials (added tokens marked `special`, the named tokens, `additional_special_tokens`)
 and the named params from `tokenizer_config.json`; `test/chat_template_preset_test.cpp` builds and
-runs it. ABI: `ChatTemplateOptions` grows by one `std::vector<std::string>`; aggregate
-initialisation `{ now }` now warns under `-Wmissing-field-initializers`.
+runs it. Globals of the same names are not marked. ABI: `ChatTemplateOptions` grows by one
+`std::vector<std::string>` (with a `{}` initializer, so `{ now }` aggregate initialisation stays
+warning-free).

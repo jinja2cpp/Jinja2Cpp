@@ -91,14 +91,14 @@ jinja2::ValuesMap Params()
 TEST_P(ChatTemplatePresetTest, Narrow)
 {
     jinja2::TemplateEnv env;
-    jinja2::ConfigureForChatTemplates(env, { FixedNow, {} });
+    jinja2::ConfigureForChatTemplates(env, { FixedNow });
     CheckCase<char>(env, GetParam(), Params());
 }
 
 TEST_P(ChatTemplatePresetTest, Wide)
 {
     jinja2::TemplateEnv env;
-    jinja2::ConfigureForChatTemplates(env, { FixedNow, {} });
+    jinja2::ConfigureForChatTemplates(env, { FixedNow });
     CheckCase<wchar_t>(env, GetParam(), Params());
 }
 
@@ -170,7 +170,7 @@ TEST(ChatTemplatePreset, RaiseExceptionIsTemplateRuntimeError)
 TEST(ChatTemplatePreset, StrftimeNowRespectsSequenceLimit)
 {
     jinja2::TemplateEnv env;
-    jinja2::ConfigureForChatTemplates(env, { FixedNow, {} });
+    jinja2::ConfigureForChatTemplates(env, { FixedNow });
     env.GetSettings().limits.maxSequenceSize = 8;
     jinja2::Template tpl(&env);
     ASSERT_TRUE(tpl.Load("{% set t = strftime_now(f) %}{{ t|length }}"));

@@ -32,8 +32,10 @@ struct ChatTemplateOptions
     //! The render params that carry special tokens on purpose, such as `bos_token` and `eos_token`. In prompt mode
     //! (\ref Settings::autoescapeMode `Prompt`) a string passed under one of these names is prompt-safe, as if it were
     //! passed as `jinja2::Markup`; other values, the items of a list among them, are not marked. In HTML mode the names
-    //! change nothing. Empty by default: name only params the host fills from its tokenizer, never untrusted text
-    std::vector<std::string> promptSafeParams;
+    //! change nothing. Only render params are marked: an environment global or a \ref RenderOptions global of the
+    //! same name is not, so pass it as Markup. Empty by default: name only params the host fills from its tokenizer,
+    //! never untrusted text
+    std::vector<std::string> promptSafeParams{};
 };
 
 /*!

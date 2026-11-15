@@ -172,7 +172,8 @@ with the environment's `PromptEscaper`, and Markup means "prompt-safe". `|safe`,
   with two Markup effects: printing a container or repr of literals shows `Markup('a')`, and a
   literal format string rejects `%x`, `%o`, `%c` and `%*d` as markupsafe does.
   Host values that carry special tokens on purpose (`bos_token`) are passed as `jinja2::Markup`,
-  or as plain strings named in `ChatTemplateOptions::promptSafeParams` of the chat-template preset.
+  or as plain render params named in `ChatTemplateOptions::promptSafeParams` of the chat-template
+  preset (globals of the same name are not marked).
   `examples/chat_template_specials.h` reads the specials and those params from a model's
   `tokenizer_config.json`.
 - `|e`, `|escape` and `|forceescape` neutralize instead of writing HTML entities, and the
