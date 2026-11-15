@@ -567,7 +567,7 @@ detected: configuration calls (threads, item 4) and destroying the `Template` ob
 render is running (the C++ rule for a member call). Both are undefined behaviour.
 
 **Values crossing the boundary.**
-1. The render borrows the params map and everything in it for the duration of the call. Host
+1. The render borrows the params map, its keys included ([0513](tasks/0513-params-table-render-setup.md)), and everything in it for the duration of the call. Host
    data reflected by `const&`, by pointer or as a `string_view` must stay alive and unchanged
    while any value that refers to it is in use: the render, and any copy the host kept, module
    exports included.
