@@ -896,32 +896,8 @@ jinja2::Value DeepValue(std::size_t depth, bool asMap, jinja2::Value leaf = jinj
     return value;
 }
 
-// Destroys a value of DeepValue one level at a time: Value's destructor recurses once per
-// level, as its copy does (docs/tasks/0449)
-void DestroyDeep(jinja2::Value value)
-{
-    // Each container's items move to the list before it is destroyed, so none recurses
-    std::vector<jinja2::Value> pending;
-    pending.push_back(std::move(value));
-    while (!pending.empty())
-    {
-        jinja2::Value item = std::move(pending.back());
-        pending.pop_back();
-        if (auto* list = item.GetIf<jinja2::ValuesList>())
-        {
-            std::move(list->begin(), list->end(), std::back_inserter(pending));
-        }
-        else if (auto* map = item.GetIf<jinja2::ValuesMap>())
-        {
-            for (auto& entry : *map)
-            {
-                pending.push_back(std::move(entry.second));
-            }
-        }
-    }
-}
-
-// A list of values of DeepValue, destroyed with DestroyDeep
+// A list of values of DeepValue, destroyed with jinja2::DestroyDeep: Value's destructor recurses
+// once per level, as its copy does (docs/tasks/0449)
 struct DeepValues
 {
     std::vector<jinja2::Value> values;
@@ -929,7 +905,7 @@ struct DeepValues
     {
         for (auto& value : values)
         {
-            DestroyDeep(std::move(value));
+            jinja2::DestroyDeep(std::move(value));
         }
     }
 };
