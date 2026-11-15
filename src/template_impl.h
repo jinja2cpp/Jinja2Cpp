@@ -566,11 +566,19 @@ public:
     // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
     // again as copies of `params`, or of the values a GenericMap gave (`genericValues`), so that the host's
     // accessor is not asked twice (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
+    // The values a GenericMap gave, each with its name; nothing for a ValuesMap, whose values the context refers to
+    using GenericValues = std::list<std::pair<std::string, Value>>;
+    struct NoGenericValues
+    {
+    };
+    template<typename ParamsMap>
+    using GenericValuesOf = std::conditional_t<std::is_same_v<ParamsMap, GenericMap>, GenericValues, NoGenericValues>;
+
     template<typename ParamsMap>
     JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace,
                                                           const GlobalsSnapshot& globals,
                                                           [[maybe_unused]] const ParamsMap& params,
-                                                          [[maybe_unused]] const std::list<std::pair<std::string, Value>>& genericValues,
+                                                          [[maybe_unused]] const GenericValuesOf<ParamsMap>& genericValues,
                                                           InternalValueMap& intParams) const
     {
         auto* keeper = SharedSnapshotKeeper(workspace, &globals);
@@ -669,7 +677,8 @@ public:
 
             // A GenericMap returns values by copy; the context refers to them, so they live here, each
             // with its name, so that a keep converts them again without asking the host twice
-            std::list<std::pair<std::string, Value>> genericValues;
+            // (an empty std::list costs a call to destroy it: a ValuesMap's render has none)
+            GenericValuesOf<ParamsMap> genericValues;
             if constexpr (std::is_same_v<ParamsMap, GenericMap>)
             {
                 for (auto& name : params.GetKeys())
