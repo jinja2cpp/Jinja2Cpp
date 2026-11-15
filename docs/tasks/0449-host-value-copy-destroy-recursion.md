@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/894
 priority: low
 area: robustness
 depends: [0418]
-touches: [include/jinja2cpp/value.h, src/value.cpp]
+touches: [include/jinja2cpp/value.h, src/value.cpp, test/value_deep_test.cpp]
 shares: [test/template_module_test.cpp]
 ---
 # A host Value nested deeper than the stack allows cannot be copied or destroyed
@@ -35,3 +36,27 @@ is copied (or refused) and destroyed under ASan without a crash, with the instru
 its bar.
 
 **Decision (Ruslan 2026-11-15).** Take the additive helper (`jinja2::DestroyDeep(Value&&)` and a depth-checked `DeepCopy`) and leave `Value`'s destructor as it is; it may land after the G1 freeze.
+
+**Implementation.** `include/jinja2cpp/value.h` declares, after `ValuesMap`, two exported free
+functions and a constant; nothing in `Value` changes, so the change is additive to the ABI and
+costs the render path nothing (no inline code calls them):
+
+- `jinja2::DestroyDeep(Value&&) noexcept` takes the value apart depth-first on a heap worklist:
+  each list or map is destroyed after the items that hold items of their own were moved out of
+  it, so no destructor recurses more than one level. The value is left `none`. If the worklist
+  cannot grow (`std::bad_alloc`), the rest is destroyed by `Value`'s destructor, as without it.
+- `jinja2::DeepCopy(const Value&, std::size_t maxDepth = ValueMaxSafeDepth)` returns
+  `std::optional<Value>`: the same value the copy constructor makes (views stay views,
+  `GenericList`/`GenericMap`/`UserCallable` copied as the copy constructor copies them), built
+  top-down from a worklist, or `std::nullopt` when list and map levels nest deeper than
+  `maxDepth` (a scalar is 0 deep, `[1]` 1). The partial copy of a refusal or an exception is
+  released with `DestroyDeep`.
+- `ValueMaxSafeDepth = 512`, the default bound: a copy that deep is destroyed by `~Value` well
+  inside a 1 MB stack, as `JsonMaxCopyDepth` (also 512) bounds JSON documents.
+
+The JSON bindings already cap their own depth (`JsonCopyLimits::maxDepth`, 128 by default and at
+most `JsonMaxCopyDepth`), so a `ToValue` copy never builds a value that needs `DestroyDeep`; only
+a host's own reader without a depth limit does. `test/value_deep_test.cpp` builds lists and
+mixed list/map values 200000 deep, destroys them with `DestroyDeep`, copies them with an
+unlimited `DeepCopy`, and checks the refusal at the bound, the depth count, key order and that a
+string view stays a view.

@@ -7,7 +7,7 @@
 #include <jinja2cpp/utils/i_comparable.h>
 
 #include <chrono>
-#include <iostream>
+#include <iosfwd>
 #include <memory>
 #include <optional>
 #include <string>

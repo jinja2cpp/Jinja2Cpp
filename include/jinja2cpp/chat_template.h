@@ -11,6 +11,8 @@
 
 #include <chrono>
 #include <functional>
+#include <string>
+#include <vector>
 
 #if !JINJA2CPP_HAS_CHAT_TEMPLATES
 #error "Jinja2C++ was built without chat templates (JINJA2CPP_WITH_CHAT_TEMPLATES=OFF)"
@@ -27,6 +29,14 @@ struct ChatTemplateOptions
     //! The clock `strftime_now` reads. Empty: `std::chrono::system_clock::now`. The time is shown in local time, as
     //! Python's `datetime.now()`
     std::function<std::chrono::system_clock::time_point()> now;
+    //! The render params that carry special tokens on purpose, such as `bos_token` and `eos_token`. In prompt mode
+    //! (\ref Settings::autoescapeMode `Prompt`) a string passed under one of these names is prompt-safe, as if it were
+    //! passed as `jinja2::Markup`; other values, the items of a list among them, are not marked. In HTML mode the names
+    //! change nothing. Only render params are marked: an environment global or a \ref RenderOptions global of the
+    //! same name is not, so pass it as Markup. Empty by default: name only params the host fills from its tokenizer,
+    //! never untrusted text
+    // NOLINTNEXTLINE(readability-redundant-member-init): keeps `{ now }` free of -Wmissing-field-initializers
+    std::vector<std::string> promptSafeParams{};
 };
 
 /*!
@@ -48,12 +58,14 @@ struct ChatTemplateOptions
  *   formats it in the "C" locale: the C++ `std::put_time` directives, `%f`, empty `%z`/`%Z` and glibc's `-` flag
  *   (`%-d`); other directives are copied as written.
  *
+ * In prompt mode, string params named in `options.promptSafeParams` are prompt-safe (\ref ChatTemplateOptions).
+ *
  * Templates loaded before keep what they were loaded with. It is not the rest of `apply_chat_template`: the host builds
  * the context (`messages`, `tools`, `add_generation_prompt`, `bos_token`, ...), and it is no security sandbox beyond what
  * is listed here: untrusted templates also need \ref UntrustedLimits.
  *
  * @param env     The environment to configure
- * @param options The clock of `strftime_now`
+ * @param options The clock of `strftime_now` and the prompt-safe params
  */
 JINJA2CPP_EXPORT void ConfigureForChatTemplates(TemplateEnv& env, ChatTemplateOptions options = {});
 

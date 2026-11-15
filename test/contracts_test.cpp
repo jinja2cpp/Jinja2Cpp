@@ -111,3 +111,24 @@ TEST(ContractsTest, ViolationInARenderIsAnErrorResult)
     ASSERT_FALSE(result.has_value());
     EXPECT_NE(result.error().ToString().find("the callable's precondition"), std::string::npos) << result.error().ToString();
 }
+
+// docs/tasks/0455: state kept only for invariant checks follows the contract level, not NDEBUG
+static_assert(JINJA2CPP_FULL_CONTRACT_CHECKS == (ContractChecks >= 2 ? 1 : 0), "JINJA2CPP_FULL_CONTRACT_CHECKS is the FULL level");
+
+TEST(ContractsTest, NoexceptAssertPassesWhenItHolds)
+{
+    g_evaluated = 0;
+    JINJA2CPP_ASSERT_NOEXCEPT(Counted(true));
+    EXPECT_EQ(ContractChecks >= 2 ? 1 : 0, g_evaluated);
+}
+
+#if GTEST_HAS_DEATH_TEST
+TEST(ContractsTest, NoexceptAssertViolationAbortsAtFull)
+{
+    if constexpr (ContractChecks < 2)
+    {
+        GTEST_SKIP() << "invariants are checked only at FULL";
+    }
+    EXPECT_DEATH(JINJA2CPP_ASSERT_NOEXCEPT(1 + 1 == 3), "invariant violated: 1 . 1 == 3 .contracts_test.cpp:");
+}
+#endif

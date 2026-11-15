@@ -399,6 +399,47 @@ TEST(TemplateDictTest, StringKeysStartingWithTheMarkAreEscaped)
     EXPECT_EQ(ValueKind::Int, dict.KeyOf(std::next(dict.begin())->first).Kind());
 }
 
+// docs/tasks/0455: names given to the dict, such as `**` keyword arguments, may start with the mark too
+TEST(TemplateDictTest, NamesStartingWithTheMarkAreEscapedOnConstruction)
+{
+    const std::string odd = std::string(1, DictKeyMark) + "a";
+    // A name spelled like the token of the int 1
+    const std::string tokenLike = MakeDictKey(InternalValue(int64_t{ 1 })).value_or(std::string());
+    ASSERT_FALSE(tokenLike.empty());
+    InternalDict names;
+    names["b"] = InternalValue(int64_t{ 1 });
+    names[odd] = InternalValue(int64_t{ 2 });
+    names[tokenLike] = InternalValue(int64_t{ 3 });
+    const TemplateDict dict(std::move(names));
+
+    ASSERT_EQ(3U, dict.size());
+    ASSERT_NE(dict.end(), dict.FindString(odd));
+    EXPECT_EQ(2, ConvertToInt(dict.FindString(odd)->second));
+    ASSERT_NE(dict.end(), dict.FindString(tokenLike));
+    EXPECT_EQ(3, ConvertToInt(dict.FindString(tokenLike)->second));
+    // The int 1 is not the string that looks like its token
+    EXPECT_EQ(dict.end(), dict.Find(InternalValue(int64_t{ 1 })));
+    // In their order, read back as the strings they were
+    std::vector<std::string> keys;
+    for (const auto& item : dict)
+    {
+        keys.push_back(AsString(dict.KeyOf(item.first)));
+    }
+    EXPECT_EQ((std::vector<std::string>{ "b", odd, tokenLike }), keys);
+}
+
+TEST(TemplateDictTest, KeywordArgumentsStartingWithTheMark)
+{
+    // Found by the alloc_failure fuzzer once its FULL checks were reported: the dict of a `**` spread failed an
+    // invariant. Raw bytes, as a narrow template may hold
+    const std::string name = std::string(1, '\xFF') + "a";
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ '%(a)s'|format(**{'" + name + "': 5, 'a': 1}) }}|{{ dict(**{'" + name + "': 5}) }}|{{ dict(**{'" + name + "': 5})['" + name + "'] }}").has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("1|{'" + name + "': 5}|5", result.value());
+}
+
 TEST(TemplateDictTest, PublicMapSpellsKeys)
 {
     TemplateDict dict;

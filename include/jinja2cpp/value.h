@@ -1019,6 +1019,43 @@ struct ValuesMap : OrderedMap<std::string, Value>
     using OrderedMap::OrderedMap;
 };
 
+/*!
+ * \brief The default nesting bound of \ref DeepCopy: a Value nested this deep is copied and destroyed by `Value`'s
+ * own copy constructor and destructor well inside a 1 MB thread stack, as \ref JsonMaxCopyDepth for JSON documents
+ */
+inline constexpr std::size_t ValueMaxSafeDepth = 512;
+
+/*!
+ * \brief Destroys `value` without recursion, however deeply its lists and maps nest (docs/tasks/0449)
+ *
+ * `Value`'s destructor recurses once per level of nested \ref ValuesList and \ref ValuesMap (several frames a
+ * level), so a value nested around 100000 deep, built from untrusted input without a depth limit, overflows the
+ * stack when it goes out of scope. This takes the value apart level by level on the heap instead; `value` is left
+ * empty (`none`). Other alternatives (\ref GenericList, \ref GenericMap, \ref UserCallable, strings) are released as
+ * `Value` releases them: the library does not see inside them. If the heap is exhausted while taking the value
+ * apart, the rest is destroyed by `Value`'s destructor, which may then overflow the stack on a very deep value.
+ *
+ * @param value The value to destroy
+ */
+JINJA2CPP_EXPORT void DestroyDeep(Value&& value) noexcept;
+
+/*!
+ * \brief Copies `value` without recursion, or refuses a value whose lists and maps nest deeper than `maxDepth`
+ *
+ * The result equals what `Value`'s copy constructor makes (a string view stays a view, a \ref GenericList,
+ * \ref GenericMap or \ref UserCallable is copied as the copy constructor copies it), but the copy takes no stack
+ * per level of nested \ref ValuesList and \ref ValuesMap, so a deep value is copied, or refused, without overflowing
+ * the stack (docs/tasks/0449). The depth counts list and map levels: a scalar is 0 deep, `[1]` 1 and `[[1]]` 2.
+ * A copy within the default \ref ValueMaxSafeDepth may be destroyed as any Value; one deeper than that should be
+ * destroyed with \ref DestroyDeep. Throws what copying the items throws (`std::bad_alloc`), after releasing the
+ * partial copy without recursion.
+ *
+ * @param value    The value to copy
+ * @param maxDepth The deepest nesting copied; `std::numeric_limits<std::size_t>::max()` copies any value
+ * @return The copy, or `std::nullopt` when `value` nests deeper than `maxDepth`
+ */
+[[nodiscard]] JINJA2CPP_EXPORT std::optional<Value> DeepCopy(const Value& value, std::size_t maxDepth = ValueMaxSafeDepth);
+
 
 /*!
  * \brief Where in a template a user-defined callable was called from (Jinja2's `eval_context` and `context.name`)
