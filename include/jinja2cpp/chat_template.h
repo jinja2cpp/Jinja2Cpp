@@ -35,6 +35,7 @@ struct ChatTemplateOptions
     //! change nothing. Only render params are marked: an environment global or a \ref RenderOptions global of the
     //! same name is not, so pass it as Markup. Empty by default: name only params the host fills from its tokenizer,
     //! never untrusted text
+    // NOLINTNEXTLINE(readability-redundant-member-init): keeps `{ now }` free of -Wmissing-field-initializers
     std::vector<std::string> promptSafeParams{};
 };
 
