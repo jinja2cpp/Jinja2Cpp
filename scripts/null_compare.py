@@ -113,7 +113,8 @@ def vendored():
 
 def changed_lines(ref):
     diff = subprocess.run(["git", "diff", "-U0", "--no-color", ref, "--"], cwd=REPO, check=True,
-                          stdout=subprocess.PIPE, text=True).stdout
+                          stdout=subprocess.PIPE, text=True, errors="replace").stdout
+    # errors: a fuzz input may hold any byte
     result, current = {}, None
     for line in diff.splitlines():
         if line.startswith("+++ "):

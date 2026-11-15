@@ -108,10 +108,10 @@ void RenderUntrusted(jinja2::TemplateEnv& env, std::uint8_t settingsByte, const 
     AddSupportTemplates(*fs, source, DelimitersOf(settingsByte));
     env.AddFilesystemHandler(std::string(), fs);
     jinja2::BasicTemplate<CharT> tpl(&env);
-    // A Load or Render error is a normal outcome
-    if (tpl.Load(source, "self"))
+    // A Load or Render error is a normal outcome, unless an engine invariant failed
+    if (AbortOnContractViolation(tpl.Load(source, "self")))
     {
-        (void)tpl.RenderAsString(params);
+        (void)AbortOnContractViolation(tpl.RenderAsString(params));
     }
 }
 
@@ -406,7 +406,7 @@ void FuzzLoader(const std::uint8_t* data, std::size_t size)
     // error that quotes it quotes a file read outside the root
     std::string output;
     const auto take = [&output](const auto& result) {
-        if (result)
+        if (AbortOnContractViolation(result))
         {
             output += result.value();
         }
@@ -416,7 +416,7 @@ void FuzzLoader(const std::uint8_t* data, std::size_t size)
         }
     };
     auto loaded = env.LoadTemplate("self");
-    if (loaded)
+    if (AbortOnContractViolation(loaded))
     {
         take(loaded.value().RenderAsString(MakeContext()));
     }
@@ -426,7 +426,7 @@ void FuzzLoader(const std::uint8_t* data, std::size_t size)
     }
     jinja2::Template tpl(&env);
     auto parsed = tpl.Load(source, "self");
-    if (parsed)
+    if (AbortOnContractViolation(parsed))
     {
         take(tpl.RenderAsString(MakeContext()));
     }

@@ -97,13 +97,13 @@ Outcome LoadAndRender(const std::basic_string<CharT>& source)
 
     jinja2::BasicTemplate<CharT> tpl(&env);
     auto loaded = tpl.Load(source, "self");
-    if (!loaded)
+    if (!AbortOnContractViolation(loaded))
     {
         return { Outcome::ParseError, {}, loaded.error().GetCode() };
     }
     // A render error is a normal outcome, a crash is not
     auto rendered = tpl.RenderAsString(MakeContext());
-    if (!rendered)
+    if (!AbortOnContractViolation(rendered))
     {
         return { Outcome::RenderError, {}, rendered.error().GetCode() };
     }
@@ -133,10 +133,10 @@ void FuzzParse(const std::uint8_t* data, std::size_t size)
     {
         std::abort();
     }
-    if (!tpl.Load(std::string(reinterpret_cast<const char*>(data), size)))
+    if (!AbortOnContractViolation(tpl.Load(std::string(reinterpret_cast<const char*>(data), size))))
     {
         auto rendered = tpl.RenderAsString({});
-        if (!rendered || rendered.value() != std::string(64, '.') + "2")
+        if (!AbortOnContractViolation(rendered) || rendered.value() != std::string(64, '.') + "2")
         {
             std::abort();
         }
@@ -182,9 +182,9 @@ void FuzzMetadata(const std::uint8_t* data, std::size_t size)
     for (jinja2::TemplateEnv* owner : { static_cast<jinja2::TemplateEnv*>(nullptr), &env })
     {
         jinja2::Template tpl(owner);
-        if (tpl.Load(source))
+        if (AbortOnContractViolation(tpl.Load(source)))
         {
-            (void)tpl.GetMetadata();
+            (void)AbortOnContractViolation(tpl.GetMetadata());
         }
     }
 }
@@ -221,14 +221,14 @@ void FuzzPromptEscape(const std::uint8_t* data, std::size_t size)
     env.GetSettings().autoescapeMode = jinja2::AutoescapeMode::Prompt;
     env.GetSettings().promptEscaper = jinja2::PromptEscaper({ escapeCase.specials, { "b", "document" }, "\xEE\x80\x8F" });
     jinja2::Template tpl(&env);
-    if (tpl.Load(source))
+    if (AbortOnContractViolation(tpl.Load(source)))
     {
         auto params = MakeContext();
         for (const auto& [name, value] : escapeCase.params)
         {
             params[name] = value;
         }
-        (void)tpl.RenderAsString(params);
+        (void)AbortOnContractViolation(tpl.RenderAsString(params));
     }
 }
 

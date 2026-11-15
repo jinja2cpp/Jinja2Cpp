@@ -24,7 +24,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -600,7 +599,7 @@ public:
     RenderContext& operator=(const RenderContext&) = delete;
     RenderContext& operator=(RenderContext&&) = delete;
     // Nothing holds the context's anchor beyond a call nested in its lifetime (HomeCall)
-    ~RenderContext() { assert(!m_anchor || m_anchor.use_count() == 1); } // use_count: an assertion on the render's own thread
+    ~RenderContext() { JINJA2CPP_ASSERT_NOEXCEPT(!m_anchor || m_anchor.use_count() == 1); } // use_count: an assertion on the render's own thread
 
     // A context that sees the first `depth` scopes of `other`, plus a fresh one of its own on
     // top. It refers to those scopes instead of copying them (docs/tasks/0108), so it must
@@ -757,7 +756,7 @@ public:
     void ExitScope()
     {
         // A view attached to the scope would attach to the next scope pushed at its index
-        assert(m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1);
+        JINJA2CPP_ASSERT_NOEXCEPT(m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1);
         auto& scope = *m_currentScope;
         if (!scope.empty())
         {
@@ -801,7 +800,7 @@ public:
     {
         // A body called under its caller's epoch reads no name through the cache
         // (HomeCall::Run)
-#ifndef NDEBUG // the counter exists only without NDEBUG
+#if JINJA2CPP_FULL_CONTRACT_CHECKS // the counter exists only at FULL
         JINJA2CPP_ASSERT(m_noCachedLookups == 0);
 #endif
         if (m_lookupCache)
@@ -1217,7 +1216,7 @@ public:
     // Unbinds `slots`, whose names are `names`, forgetting the lookups of each that was bound
     void UnbindSlots(Span<Slot> slots, Span<const SlotName> names)
     {
-        assert(slots.size() == names.size());
+        JINJA2CPP_ASSERT_NOEXCEPT(slots.size() == names.size());
         for (size_t idx = 0; idx != slots.size(); ++idx)
         {
             if (slots[idx].IsBound())
@@ -1719,7 +1718,7 @@ private:
     }
     LookupCache* m_lookupCache{};
     uint64_t m_epoch{};
-#ifndef NDEBUG
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
     // Calls running that must not read the lookup cache (HomeCall::NoCachedLookups)
     int m_noCachedLookups = 0;
 #endif
@@ -2166,7 +2165,7 @@ public:
             Enter(isFresh);
         }
         site.m_state = static_cast<uint8_t>(m_state | ClosureSite::Active);
-#ifndef NDEBUG
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
         m_debugScopes = m_context->m_scopes.size();
         m_debugExceptions = std::uncaught_exceptions();
 #endif
@@ -2180,7 +2179,9 @@ public:
         m_site.m_state = m_state;
         // A body that ends normally has left its scope and dropped its views. On the caller,
         // one left by an exception leaves them there, as any statement does: the render is over
-        assert(m_saved || std::uncaught_exceptions() != m_debugExceptions || m_context->m_scopes.size() == m_debugScopes);
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
+        JINJA2CPP_ASSERT_NOEXCEPT(m_saved || std::uncaught_exceptions() != m_debugExceptions || m_context->m_scopes.size() == m_debugScopes);
+#endif
         if (m_saved)
         {
             Leave(*m_context, *m_saved);
@@ -2304,7 +2305,7 @@ private:
         Direct(const ClosureSite& site, [[maybe_unused]] const RenderContext& caller, uint8_t state)
             : m_site(site)
             , m_state(state)
-#ifndef NDEBUG
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
             , m_caller(caller)
             , m_scopes(caller.m_scopes.size())
             , m_exceptions(std::uncaught_exceptions())
@@ -2319,26 +2320,28 @@ private:
         ~Direct()
         {
             // A body that ends normally has left its scope and dropped its views
-            assert(std::uncaught_exceptions() != m_exceptions || m_caller.m_scopes.size() == m_scopes);
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
+            JINJA2CPP_ASSERT_NOEXCEPT(std::uncaught_exceptions() != m_exceptions || m_caller.m_scopes.size() == m_scopes);
+#endif
             m_site.m_state = m_state;
         }
 
     private:
         const ClosureSite& m_site;
         uint8_t m_state;
-#ifndef NDEBUG
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
         const RenderContext& m_caller;
         size_t m_scopes;
         int m_exceptions;
 #endif
     };
 
-    // Debug: the lookup cache stays unused for the duration of a call (FindValueCached)
+    // At FULL contract checks: the lookup cache stays unused for the duration of a call (FindValueCached)
     class NoCachedLookups
     {
     public:
         NoCachedLookups([[maybe_unused]] RenderContext& context, [[maybe_unused]] bool isOn)
-#ifndef NDEBUG
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
             : m_context(context)
             , m_isOn(isOn)
         {
@@ -2352,7 +2355,7 @@ private:
         NoCachedLookups(NoCachedLookups&&) = delete;
         NoCachedLookups& operator=(const NoCachedLookups&) = delete;
         NoCachedLookups& operator=(NoCachedLookups&&) = delete;
-#ifndef NDEBUG
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
         ~NoCachedLookups() { m_context.m_noCachedLookups -= m_isOn ? 1 : 0; }
 
     private:
@@ -2482,7 +2485,7 @@ private:
         // Left by an exception: the scopes and views the body pushed are still there
         if (context.m_scopes.size() != scopes)
         {
-            assert(context.m_scopes.size() > scopes);
+            JINJA2CPP_ASSERT_NOEXCEPT(context.m_scopes.size() > scopes);
             auto views = context.m_views.size();
             while (views != 0 && context.m_views[views - 1].scopeIndex >= scopes)
             {
@@ -2515,7 +2518,7 @@ private:
     uint8_t m_state;
     // Set by a call that switched the home: Leave restores it
     std::optional<HomeCallSaved> m_saved;
-#ifndef NDEBUG
+#if JINJA2CPP_FULL_CONTRACT_CHECKS
     size_t m_debugScopes = 0;
     int m_debugExceptions = 0;
 #endif
