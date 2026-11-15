@@ -10,6 +10,7 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/features.h>
+#include <jinja2cpp/prompt.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -27,6 +28,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace
@@ -554,16 +556,19 @@ std::string RenderPromptSafe(const std::string& source, jinja2::AutoescapeMode m
     return rendered ? jinja2::ToString(*rendered) : "render error: " + jinja2::ToString(rendered.error().ToString());
 }
 
-const jinja2::ValuesMap PromptSafeParams{ { "bos_token", "<s>" }, { "x", "</s>" }, { "toks", jinja2::ValuesList{ "<s>" } } };
+jinja2::ValuesMap PromptSafeParams()
+{
+    return { { "bos_token", "<s>" }, { "x", "</s>" }, { "toks", jinja2::ValuesList{ "<s>" } } };
+}
 
 TEST(ChatTemplatePreset, PromptSafeParamsInPromptMode)
 {
     const std::string source = "{{ bos_token }}{{ x }}|{{ bos_token + x }}|{{ toks[0] }}|{{ bos_token is escaped }}";
     const std::string expected = "<s>< /s>|<s>< /s>|< s>|True";
-    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Prompt, { "bos_token", "eos_token", "toks" }, PromptSafeParams), expected);
-    EXPECT_EQ(RenderPromptSafe<wchar_t>(source, jinja2::AutoescapeMode::Prompt, { "bos_token", "eos_token", "toks" }, PromptSafeParams), expected);
+    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Prompt, { "bos_token", "eos_token", "toks" }, PromptSafeParams()), expected);
+    EXPECT_EQ(RenderPromptSafe<wchar_t>(source, jinja2::AutoescapeMode::Prompt, { "bos_token", "eos_token", "toks" }, PromptSafeParams()), expected);
     // Not named: neutralized as any host string
-    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Prompt, {}, PromptSafeParams), "< s>< /s>|< s>< /s>|< s>|False");
+    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Prompt, {}, PromptSafeParams()), "< s>< /s>|< s>< /s>|< s>|False");
     // A wide string param in a narrow template, and a param that is not a string
     EXPECT_EQ(RenderPromptSafe<char>("{{ bos_token }}{{ n }}", jinja2::AutoescapeMode::Prompt, { "bos_token", "n" }, { { "bos_token", std::wstring(L"<s>") }, { "n", 1 } }), "<s>1");
 }
@@ -572,8 +577,8 @@ TEST(ChatTemplatePreset, PromptSafeParamsInPromptMode)
 TEST(ChatTemplatePreset, PromptSafeParamsIgnoredInHtmlMode)
 {
     const std::string source = "{{ [bos_token] }}{{ bos_token + x }}{{ bos_token is escaped }}";
-    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Html, { "bos_token" }, PromptSafeParams), "['<s>']<s></s>False");
-    EXPECT_EQ(RenderPromptSafe<wchar_t>(source, jinja2::AutoescapeMode::Html, { "bos_token" }, PromptSafeParams), "['<s>']<s></s>False");
+    EXPECT_EQ(RenderPromptSafe<char>(source, jinja2::AutoescapeMode::Html, { "bos_token" }, PromptSafeParams()), "['<s>']<s></s>False");
+    EXPECT_EQ(RenderPromptSafe<wchar_t>(source, jinja2::AutoescapeMode::Html, { "bos_token" }, PromptSafeParams()), "['<s>']<s></s>False");
 }
 
 // A module made for the host marks its params as a render does; a later preset call replaces the names
