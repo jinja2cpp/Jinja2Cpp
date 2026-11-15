@@ -264,13 +264,13 @@ def test_without_installed_translations_the_engine_leaves_messages_as_they_are()
     "source",
     [
         "{{ gettext('%(a)1000000000s', a=1)|length }}",
-        "{{ gettext('%(a).1000000000f', a=1.5)|length }}",
         "{{ gettext('%(a)s%(a)s%(a)s', a=s)|length }}",
     ],
 )
 def test_formatting_a_translation_is_capped_before_it_allocates(source):
     # Newstyle calls format in the engine, which checks the render's cap (MaxSequenceSize) before it builds the string
-    # (a 1 GB width); oldstyle calls take no variables, and a {% trans %} block formats with the engine's %
+    # (a 1 GB width); oldstyle calls take no variables, and a {% trans %} block formats with the engine's %. A float
+    # precision is clamped to 2**20 digits there, as for every % format (python_format.cpp)
     env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
     env.install_null_translations(newstyle=True)
     with pytest.raises(jinja2cpp.exceptions.TemplateRuntimeError, match="too long"):
@@ -290,6 +290,7 @@ def test_formatting_a_translation_checks_what_fits_in_one_pass():
     # a bare dot is precision zero, and %c ignores a precision
     assert env.from_string("{{ gettext('[%(a).s%(a).s]%(c).1000000000c', a=s, c=65) }}").render(s="y" * 30000000) == "[]A"
     started = time.perf_counter()
-    with pytest.raises(ValueError, match="incomplete format key"):
+    # Jinja2 raises ValueError; the engine's % formatting raises TemplateRuntimeError (0510)
+    with pytest.raises(jinja2cpp.exceptions.TemplateRuntimeError, match="incomplete format key"):
         env.from_string("{{ gettext(t, a=1) }}").render(t="%(" * 80000)
     assert time.perf_counter() - started < 2

@@ -33,17 +33,12 @@ test_ext.py::TestAutoEscape::test_overlay_scopes                                
 test_ext.py::TestAutoEscape::test_volatile_scoping                                     unsupported Environment.compile (and `.__class__` of an output value, docs/tasks/0476)
 test_ext.py::TestExtensions                                                            extension   a custom Extension or jinja2.ext.debug
 test_ext.py::TestInternationalization::test_comment_extract                            unsupported babel_extract (message extraction)
-test_ext.py::TestInternationalization::test_complex_plural                             divergence  0415 oldstyle gettext formats the variables after the call
 test_ext.py::TestInternationalization::test_extract                                    unsupported babel_extract (message extraction)
 test_ext.py::TestInternationalization::test_extract_context                            unsupported babel_extract (message extraction)
 test_ext.py::TestInternationalization::test_extract_trimmed                            unsupported babel_extract (message extraction)
 test_ext.py::TestInternationalization::test_extract_trimmed_option                     unsupported babel_extract (message extraction)
-test_ext.py::TestInternationalization::test_trans_plural                               divergence  0415 oldstyle gettext formats the variables after the call
-test_ext.py::TestInternationalization::test_trans_plural_with_functions                divergence  0415 oldstyle gettext formats the variables after the call
 test_ext.py::TestInternationalization::test_trimmed_policy                             divergence  0435 the ext.i18n.trimmed policy
 test_ext.py::TestInternationalization::test_trimmed_policy_override                    divergence  0435 the ext.i18n.trimmed policy
-test_ext.py::TestInternationalization::test_trimmed_varname_trimmed                    divergence  0415 oldstyle gettext formats the variables after the call
-test_ext.py::TestInternationalization::test_trimmed_vars                               divergence  0415 oldstyle gettext formats the variables after the call
 test_ext.py::TestNewstyleInternationalization::test_num_called_num                     unsupported Environment.compile
 test_ext.py::TestScope::test_basic_scope_behavior                                      extension   a custom Extension
 test_filters.py::TestFilter::test_filter_calling                                       unsupported Environment.call_filter
