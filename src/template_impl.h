@@ -158,8 +158,14 @@ JINJA2CPP_NOINLINE inline std::shared_ptr<const GlobalsSnapshot> ConvertGlobalsS
 // changed since the last render here, or a render changed one in place. The render holds the
 // result, which a render it starts may replace. A render that attached a global to one of its
 // cells keeps its snapshot; one it starts with the same environment and generation reads that
-// snapshot, and a later one converts its own. The hit is inline (docs/tasks/0513)
-JINJA2CPP_ALWAYS_INLINE std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(RenderWorkspace& workspace, detail::TemplateEnvImpl& env)
+// snapshot, and a later one converts its own. The hit is inline (docs/tasks/0513): forced for GCC,
+// which keeps it out of line otherwise; MSVC refuses __forceinline here (C4714, /WX)
+#ifdef _MSC_VER
+#define JINJA2CPP_SNAPSHOT_INLINE inline
+#else
+#define JINJA2CPP_SNAPSHOT_INLINE JINJA2CPP_ALWAYS_INLINE
+#endif
+JINJA2CPP_SNAPSHOT_INLINE std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(RenderWorkspace& workspace, detail::TemplateEnvImpl& env)
 {
     const auto& cached = workspace.Globals();
     const auto generation = env.globalsGeneration.load(std::memory_order_acquire);
