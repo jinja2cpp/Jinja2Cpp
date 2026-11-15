@@ -925,7 +925,6 @@ struct key_compare_is_call<std::tuple<Ts...>> : std::bool_constant<(key_compare_
 template <typename Key>
 constexpr bool key_compare_is_call_v = key_compare_is_call<Key>::value;
 
-
 template <typename T>
 using detect_is_transparent = typename T::is_transparent;
 
@@ -1107,13 +1106,17 @@ private:
     static constexpr bool colocate_blocks =
         std::is_same_v<Allocator, std::allocator<T>> && alignof(T) % alignof(pointer) == 0;
     // The tail: the unused bytes of a segment of MaxSegmentSizeBytes, or room for four pointers
-    // when the elements fill it
-    static constexpr std::size_t tail_elements = [] {
-        auto const slack = MaxSegmentSizeBytes - num_elements_in_block * sizeof(T);
+    // when the elements fill it. A single element larger than the segment leaves no slack: the
+    // subtraction would wrap, and the tail would be empty
+    static constexpr auto calc_tail_elements() -> std::size_t {
+        auto const used = num_elements_in_block * sizeof(T);
+        auto const slack = used < MaxSegmentSizeBytes ? MaxSegmentSizeBytes - used : 0;
         auto const bytes = (std::max)(slack, 4 * sizeof(pointer));
         return (bytes + sizeof(T) - 1) / sizeof(T);
-    }();
+    }
+    static constexpr std::size_t tail_elements = calc_tail_elements();
     static constexpr std::size_t tail_pointers = tail_elements * sizeof(T) / sizeof(pointer);
+    static_assert(!colocate_blocks || tail_pointers >= 4, "the first block's tail holds at least four block pointers");
 
     class colocated_blocks {
         pointer* m_data{};

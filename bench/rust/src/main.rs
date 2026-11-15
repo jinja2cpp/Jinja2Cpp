@@ -194,7 +194,7 @@ impl serde_json::ser::Formatter for PythonJsonFormatter {
 /// on MiniJinja register a filter like this one. The same serde_json pass as the built-in,
 /// with the keys sorted as Jinja2's `tojson` sorts them (`sort_keys`; transformers' does not,
 /// for the `hf_*` cases): the data keeps its insertion order (`preserve_order`, which a
-/// template iterating `dict.items()` sees, docs/tasks/0511), so the sorting is the filter's.
+/// template iterating `dict.items()` sees, docs/tasks/0506), so the sorting is the filter's.
 fn python_tojson(
     value: &minijinja::Value,
     kwargs: minijinja::value::Kwargs,
