@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/891
 priority: high
 area: perf
 touches: [src/robin_hood.h, src/ankerl/unordered_dense.h, src/hash_map.h, src/internal_value.h, src/render_context.h, src/render_workspace.h, src/borrowed_cells.h, test/name_map_test.cpp, .clang-format-ignore, sbom/components.json]
