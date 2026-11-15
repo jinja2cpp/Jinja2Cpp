@@ -624,6 +624,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/undefined_test.cpp
         test/user_callable_test.cpp
         test/v1_names_test.cpp
+        test/value_deep_test.cpp
         test/value_ptr_test.cpp
         test/parity/parity_test.cpp
     )
