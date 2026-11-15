@@ -119,45 +119,51 @@ inline std::shared_ptr<const GlobalsSnapshot>& ThreadGlobalsSnapshot()
     return RenderWorkspace::ForThisThread().Globals();
 }
 
-// The globals of `env` for a render on this thread: converted again only when they changed since
-// the last render here, or a render changed one in place. The render holds the result, which a
-// render it starts may replace. A render that attached a global to one of its cells keeps its
-// snapshot; one it starts with the same environment and generation reads that snapshot, and a
-// later one converts its own
-inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::TemplateEnvImpl& env)
+// GetGlobalsSnapshot when the thread's snapshot is not the one to read: out of line
+JINJA2CPP_NOINLINE inline std::shared_ptr<const GlobalsSnapshot> ConvertGlobalsSnapshot(RenderWorkspace& workspace, detail::TemplateEnvImpl& env, std::uint64_t generation)
 {
-    auto& workspace = RenderWorkspace::ForThisThread();
     auto& cached = workspace.Globals();
-    const auto generation = env.globalsGeneration.load(std::memory_order_acquire);
-    if (workspace.IsGlobalAttached() || !cached || cached->generation != generation)
+    // A render started inside another of the same environment shares its snapshot, with the
+    // globals that one changed in place, as Jinja2's renders share the globals' objects: the
+    // outer render no longer caches it (GlobalScopeWritten), and its adapters of the globals
+    // stay attached to its cells while this one runs (docs/tasks/0211, 0324)
+    for (const auto* running = workspace.Running(); running; running = running->outer)
     {
-        // A render started inside another of the same environment shares its snapshot, with the
-        // globals that one changed in place, as Jinja2's renders share the globals' objects: the
-        // outer render no longer caches it (GlobalScopeWritten), and its adapters of the globals
-        // stay attached to its cells while this one runs (docs/tasks/0211, 0324)
-        for (const auto* running = workspace.Running(); running; running = running->outer)
+        const auto& globals = *running->owner;
+        if (globals && globals->generation == generation)
         {
-            const auto& globals = *running->owner;
-            if (globals && globals->generation == generation)
-            {
-                return globals;
-            }
+            return globals;
         }
-        auto snapshot = std::make_shared<GlobalsSnapshot>();
-        {
-            const detail::ReaderLock lock(env.guard);
-            snapshot->generation = env.globalsGeneration.load(std::memory_order_relaxed);
-            snapshot->source = env.globalValues;
-        }
-        // The values keep the map: a host callable or a value the template made may keep one
-        // after the global is replaced and this snapshot goes. The snapshot outlives the render
-        const UncountedMemoryScope uncounted;
-        for (const auto& [name, value] : *snapshot->source)
-        {
-            snapshot->values[name] = LendGlobal(value, snapshot->source);
-        }
-        cached = std::move(snapshot);
-        workspace.GlobalsConverted();
+    }
+    auto snapshot = std::make_shared<GlobalsSnapshot>();
+    {
+        const detail::ReaderLock lock(env.guard);
+        snapshot->generation = env.globalsGeneration.load(std::memory_order_relaxed);
+        snapshot->source = env.globalValues;
+    }
+    // The values keep the map: a host callable or a value the template made may keep one
+    // after the global is replaced and this snapshot goes. The snapshot outlives the render
+    const UncountedMemoryScope uncounted;
+    for (const auto& [name, value] : *snapshot->source)
+    {
+        snapshot->values[name] = LendGlobal(value, snapshot->source);
+    }
+    cached = std::move(snapshot);
+    workspace.GlobalsConverted();
+    return cached;
+}
+// The globals of `env` for a render on this thread (`workspace`): converted again only when they
+// changed since the last render here, or a render changed one in place. The render holds the
+// result, which a render it starts may replace. A render that attached a global to one of its
+// cells keeps its snapshot; one it starts with the same environment and generation reads that
+// snapshot, and a later one converts its own. The hit is inline (docs/tasks/0513)
+JINJA2CPP_ALWAYS_INLINE std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(RenderWorkspace& workspace, detail::TemplateEnvImpl& env)
+{
+    const auto& cached = workspace.Globals();
+    const auto generation = env.globalsGeneration.load(std::memory_order_acquire);
+    if (JINJA2CPP_CELL_UNLIKELY(workspace.IsGlobalAttached() || !cached || cached->generation != generation))
+    {
+        return ConvertGlobalsSnapshot(workspace, env, generation);
     }
     return cached;
 }
@@ -649,10 +655,10 @@ public:
             std::conditional_t<hasHooks, InternalValueMap, NoGlobals> convertedGlobals;
             const InternalValueMap* hostGlobals = GlobalsOf(convertedGlobals, hooks);
             static const InternalValueMap noGlobals;
-            const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
+            const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(maps.Workspace(), *detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
             auto& intParams = maps.Params();
             // A render started inside another one that shares its globals: a value it stores in a
             // global outlives it in the outer render, which keeps this template and copies of the

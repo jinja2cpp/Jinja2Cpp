@@ -556,7 +556,17 @@ public:
     void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
     // Renders the template on its own (for Template::Render and include); `name` is the one
     // `self` prints (TemplateImpl::SelfName)
-    void RenderNamed(OutStream& os, RenderContext& values, std::string_view name);
+    // Inline: most included templates define no blocks and extend nothing, so that their stack
+    // stays empty and the caller goes straight to the body (docs/tasks/0513)
+    void RenderNamed(OutStream& os, RenderContext& values, std::string_view name)
+    {
+        if (m_blocks.empty() && !m_hasExtends)
+        {
+            RenderBody(os, values, nullptr, name);
+            return;
+        }
+        RenderWithBlocks(os, values, name);
+    }
     void Render(OutStream& os, RenderContext& values) override { RenderNamed(os, values, {}); }
     // Gives `values`, an included template's context, the `self` of `frame` for the closures
     // kept past the include (RenderContext::KeepEndedSelf)
@@ -582,6 +592,8 @@ private:
     // `stack` is null for a template that defines no blocks and extends nothing
     // `name` is the one `self` prints (TemplateFrame::name)
     void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, const ParentRender* asParent = nullptr);
+    // RenderNamed of a template with blocks or `extends`: with a stack of its own
+    void RenderWithBlocks(OutStream& os, RenderContext& values, std::string_view name);
 
     NodeRef<ComposedRenderer> m_body;
     ArenaSpan<NodeRef<BlockStatement>> m_blocks;

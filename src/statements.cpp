@@ -2956,14 +2956,8 @@ void TemplateRenderer::PushBlocks(IRendererCallback& callback, const ArenaView& 
     }
 }
 
-void TemplateRenderer::RenderNamed(OutStream& os, RenderContext& values, std::string_view name)
+void TemplateRenderer::RenderWithBlocks(OutStream& os, RenderContext& values, std::string_view name)
 {
-    // Most included templates define no blocks and extend nothing: their stack stays empty
-    if (m_blocks.empty() && !m_hasExtends)
-    {
-        RenderBody(os, values, nullptr, name);
-        return;
-    }
     BlocksStack stack;
     PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
     RenderBody(os, values, &stack, name);
