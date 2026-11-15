@@ -5,7 +5,6 @@ Environment(extensions=[...]) takes these, Jinja2's own classes or their dotted 
 """
 
 import typing as t
-import weakref
 
 
 try:  # a custom extension subclasses this class and runs in Jinja2: the fallback (docs/python.md)
@@ -38,8 +37,6 @@ class InternationalizationExtension(Extension):
 i18n = InternationalizationExtension
 
 _GETTEXT_NAMES = ("gettext", "ngettext", "pgettext", "npgettext")
-# The globals an oldstyle install set, by environment, so that the next install or uninstall removes them
-_INSTALLED: "weakref.WeakKeyDictionary[t.Any, t.Dict[str, t.Any]]" = weakref.WeakKeyDictionary()
 
 
 def _install(env: t.Any, translations: t.Any, newstyle: t.Optional[bool] = None) -> None:
@@ -93,24 +90,25 @@ def _install_callables(
         env._set_gettext(gettext, ngettext, pgettext, npgettext)
         return
     env._set_gettext(None, None, None, None)
-    installed = {}
-    for name, func in zip(_GETTEXT_NAMES, (gettext, ngettext, pgettext, npgettext)):
+    callables = (gettext, ngettext, pgettext, npgettext)
+    for name, func in zip(_GETTEXT_NAMES, callables):
         if func is not None:
             env.globals[name] = func
-            installed[name] = func
-    _INSTALLED[env] = installed
+    # Kept by the environment (its traverse reaches them): a bound method of it holds it
+    env._gettext_globals = callables
 
 
 def _uninstall(env: t.Any, translations: t.Any = None) -> None:
     """Environment.uninstall_gettext_translations."""
     env._set_gettext(None, None, None, None)
-    _INSTALLED.pop(env, None)
+    env._gettext_globals = (None, None, None, None)
     for name in _GETTEXT_NAMES:
         env.globals.pop(name, None)
 
 
 def _remove_globals(env: t.Any) -> None:
     # A previous oldstyle install's callables; a global the program set by hand is left alone
-    for name, func in _INSTALLED.pop(env, {}).items():
-        if env.globals.get(name) is func:
+    for name, func in zip(_GETTEXT_NAMES, env._gettext_globals):
+        if func is not None and env.globals.get(name) is func:
             del env.globals[name]
+    env._gettext_globals = (None, None, None, None)

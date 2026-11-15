@@ -631,6 +631,38 @@ void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::hand
     ApplyGettext();
 }
 
+nb::tuple PyEnvironment::GettextGlobals() const
+{
+    nb::list result;
+    for (auto* object : m_gettextGlobals)
+    {
+        result.append(object ? nb::borrow(object) : nb::none());
+    }
+    return nb::tuple(result);
+}
+
+void PyEnvironment::SetGettextGlobals(nb::handle callables)
+{
+    CheckAlive();
+    size_t idx = 0;
+    for (auto callable : callables)
+    {
+        if (idx == 4)
+        {
+            RaiseTypeError("_gettext_globals takes four callables or None");
+        }
+        if (!callable.is_none())
+        {
+            Keep(callable);
+        }
+        m_gettextGlobals[idx++] = callable.is_none() ? nullptr : callable.ptr();
+    }
+    for (; idx < 4; ++idx)
+    {
+        m_gettextGlobals[idx] = nullptr;
+    }
+}
+
 void PyEnvironment::CheckSandboxHooks() const
 {
     if (!m_sandboxed)
@@ -1026,6 +1058,8 @@ void BindEnvironment(nb::module_& module)
                                "template_class"_a)
                            .def("_set_chat_templates", &PyEnvironment::SetChatTemplates, "clock"_a.none())
                            .def("_set_gettext", &PyEnvironment::SetGettext, "gettext"_a.none(), "ngettext"_a.none(), "pgettext"_a.none(), "npgettext"_a.none())
+                           .def_prop_rw(
+                               "_gettext_globals", [](const PyEnvironment& self) { return self.GettextGlobals(); }, [](PyEnvironment& self, nb::handle value) { self.SetGettextGlobals(value); })
                            .def_prop_rw(
                                "newstyle_gettext", [](const PyEnvironment& self) { return self.NewstyleGettext(); }, [](PyEnvironment& self, bool value) { self.SetNewstyleGettext(value); })
                            .def(

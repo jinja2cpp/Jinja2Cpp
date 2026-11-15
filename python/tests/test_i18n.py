@@ -294,3 +294,24 @@ def test_formatting_a_translation_checks_what_fits_in_one_pass():
     with pytest.raises(jinja2cpp.exceptions.TemplateRuntimeError, match="incomplete format key"):
         env.from_string("{{ gettext(t, a=1) }}").render(t="%(" * 80000)
     assert time.perf_counter() - started < 2
+
+
+def test_an_oldstyle_install_does_not_keep_the_environment_alive():
+    # Codex on #895: a translation callable bound to the environment must not make it immortal
+    import gc
+    import weakref
+
+    class Env(jinja2cpp.Environment):
+        def gettext(self, message):
+            return message
+
+        def ngettext(self, singular, plural, n):
+            return singular
+
+    env = Env(extensions=["jinja2.ext.i18n"])
+    env.install_gettext_callables(env.gettext, env.ngettext, newstyle=False)
+    assert env.from_string("{% trans %}a{% endtrans %}{{ _('b') }}").render() == "ab"
+    ref = weakref.ref(env)
+    del env
+    gc.collect()
+    assert ref() is None
