@@ -106,11 +106,23 @@ public:
     // Load of a fresh environment paid for without the preset (docs/tasks/0384)
     void SetDialect(Dialect dialect);
     Dialect GetDialect() const;
+    // The params of templates loaded from now on whose strings are prompt-safe (ConfigureForChatTemplates,
+    // docs/tasks/0394), kept in m_loadSettings as the dialect is. Empty: none
+    void SetPromptSafeParams(std::vector<std::string> names);
+    std::shared_ptr<const std::vector<std::string>> GetPromptSafeParams() const;
 
 private:
     const BigIntBackend* BigIntBackendLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
 
     Dialect DialectLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->environmentDialect : Dialect::Jinja2; }
+
+    std::shared_ptr<const std::vector<std::string>> PromptSafeParamsLocked() const JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->promptSafeParams : nullptr; }
+
+    // New settings from `settings`, keeping what the environment set besides them
+    LoadSettingsPtr MakeLoadSettingsLocked(const BigIntBackend* backend) const JINJA2CPP_REQUIRES(m_loadSettingsGuard)
+    {
+        return std::make_shared<const LoadSettings>(settings, backend, DialectLocked(), PromptSafeParamsLocked());
+    }
 
     mutable Mutex m_loadSettingsGuard;
     // Made on the first Load, or by SetBigIntBackend or SetDialect when they change what it holds

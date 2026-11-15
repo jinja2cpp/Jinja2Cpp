@@ -12,6 +12,11 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <iostream>
+#include <ostream>
+#include <sstream>
+#include <string>
+
 struct InputOutputPair
 {
     std::string tpl;

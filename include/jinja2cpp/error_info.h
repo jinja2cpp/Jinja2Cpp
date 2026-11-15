@@ -8,7 +8,7 @@
 
 #include <atomic>
 #include <exception>
-#include <iostream>
+#include <iosfwd>
 #include <string>
 #include <system_error>
 #include <type_traits> // IWYU pragma: keep (public header: user code may rely on it)

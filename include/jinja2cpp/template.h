@@ -19,7 +19,7 @@
 
 #include <cstddef>
 #include <functional>
-#include <iostream>
+#include <iosfwd>
 #include <memory>
 #include <optional>
 #include <string>

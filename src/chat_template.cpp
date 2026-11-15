@@ -231,7 +231,9 @@ void ConfigureForChatTemplates(TemplateEnv& env, ChatTemplateOptions options)
     {
         settings.limits.maxRange = SandboxMaxRange;
     }
-    detail::TemplateEnvAccess::GetImpl(env)->SetDialect(detail::Dialect::Transformers);
+    const auto& impl = detail::TemplateEnvAccess::GetImpl(env);
+    impl->SetDialect(detail::Dialect::Transformers);
+    impl->SetPromptSafeParams(std::move(options.promptSafeParams));
 
     // transformers: raise jinja2.exceptions.TemplateError(message), with str(message) as its text
     env.AddGlobal("raise_exception", UserCallable{ [](const UserCallableParams& params) -> Value { throw Exception(ErrorCode::TemplateRuntimeError, MessageText(params["message"])); },

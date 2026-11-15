@@ -103,7 +103,10 @@ private:
 // (TemplateEnvImpl::GetLoadSettings), instead of each copying the settings and rebuilding the delimiters
 struct LoadSettings
 {
-    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr, Dialect templateDialect = Dialect::Jinja2)
+    explicit LoadSettings(const Settings& setts,
+                          const BigIntBackend* backend = nullptr,
+                          Dialect templateDialect = Dialect::Jinja2,
+                          std::shared_ptr<const std::vector<std::string>> safeParams = nullptr)
         : settings(setts)
         , narrow(setts)
         , wide(setts)
@@ -117,6 +120,7 @@ struct LoadSettings
         , bigIntBackend(backend)
         , sandboxPolicy(setts.sandboxPolicy ? MakeEngineSandboxPolicy(setts.sandboxPolicy) : nullptr)
         , promptEscaper(AutoescapePromptEscaper(settings))
+        , promptSafeParams(std::move(safeParams))
     {
     }
 
@@ -153,6 +157,12 @@ struct LoadSettings
     // The escaper of AutoescapeMode::Prompt, null in HTML mode: chosen once here, so a render only copies it into its
     // callback (docs/tasks/0358). Points into settings.promptEscaper, or to the one without patterns
     const PromptEscaperImpl* promptEscaper;
+    // The params whose strings a render marks prompt-safe (ChatTemplateOptions::promptSafeParams, docs/tasks/0394), as
+    // the environment set them: null for none. Marked only in prompt mode (promptEscaper set)
+    std::shared_ptr<const std::vector<std::string>> promptSafeParams;
+
+    // The names a render marks: none outside prompt mode
+    [[nodiscard]] const std::vector<std::string>* PromptSafeParamsToMark() const noexcept { return promptEscaper ? promptSafeParams.get() : nullptr; }
 };
 
 using LoadSettingsPtr = std::shared_ptr<const LoadSettings>;

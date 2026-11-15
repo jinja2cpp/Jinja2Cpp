@@ -58,7 +58,7 @@ the 1.x names are removed in 3.0. CI runs the script on a 1.x-style copy of our 
 
 ### Removed or renamed without a deprecation (compile errors)
 
-*Tasks 0028, 0043, 0074, 0076.*
+*Tasks 0028, 0043, 0074, 0076, 0260.*
 
 | 1.x | 2.0 | Script |
 |---|---|---|
@@ -72,6 +72,7 @@ the 1.x names are removed in 3.0. CI runs the script on a 1.x-style copy of our 
 | `TemplateEnv::IsEqual`, `TimePoint`, `TimeStamp` | implementation details, gone | by hand |
 | `ApplyGlobals(ValuesMap&)` callbacks | take `const ValuesMap&` | by hand |
 | `ValuesMap` as a `std::unordered_map` | `jinja2::OrderedMap`: insertion order, no bucket API, node handles, `hash_function`, `key_eq`, `get_allocator` | by hand |
+| `std::cout`, `std::cerr`, `std::cin` through a Jinja2C++ header | the public headers include `<iosfwd>`, not `<iostream>` | by hand: `#include <iostream>` (or `<sstream>`, `<fstream>`) where you use them |
 | `namespace jinja2 { class Value; }` forward declarations | `#include <jinja2cpp/fwd.h>` (everything is in the inline namespace `jinja2::v2`) | by hand |
 | `namespace jinja2 { namespace detail { template<> struct Reflector<T> ... } }` | `template<> struct jinja2::detail::Reflector<T>` (MSVC does not see through the inline namespace) | by hand |
 
