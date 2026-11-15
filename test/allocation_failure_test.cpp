@@ -1239,14 +1239,45 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                                "{{ pgettext('menu', 'Open') }}|{{ gettext('%(n)s item', n=1) }}",
                                                "Hallo Ann!|3 apples|menu:Open|1 Ding" }));
 // A scope map's first insert allocates its index and its first segment, which holds the list of
-// segments as well (docs/tasks/0506): two allocations, as robin_hood's table and node pool were
-TEST_F(AllocationFailureTest, FreshStableMapAllocatesTwiceOnItsFirstInsert)
+// segments as well (docs/tasks/0506): one allocation fewer than the same map with another
+// allocator, which keeps the list in a std::vector of its own. Counted against that map rather
+// than as a number, since a checked standard library (MSVC's debug iterators) adds allocations
+// of its own to both
+template<typename T>
+struct OtherAllocator
 {
-    using Map = jinja2::detail::StableMap<std::string, int, jinja2::detail::ankerl::unordered_dense::hash<std::string>, std::equal_to<>>;
+    using value_type = T;
+    OtherAllocator() = default;
+    template<typename U>
+    OtherAllocator(const OtherAllocator<U>& /*other*/) noexcept // NOLINT(google-explicit-constructor,hicpp-explicit-conversions): rebinding
+    {
+    }
+    T* allocate(std::size_t n) { return std::allocator<T>().allocate(n); }
+    void deallocate(T* p, std::size_t n) noexcept { std::allocator<T>().deallocate(p, n); }
+    friend bool operator==(const OtherAllocator& /*a*/, const OtherAllocator& /*b*/) noexcept { return true; }
+    friend bool operator!=(const OtherAllocator& /*a*/, const OtherAllocator& /*b*/) noexcept { return false; }
+};
+
+TEST_F(AllocationFailureTest, FreshStableMapAllocatesOnceLessOnItsFirstInsert)
+{
+    using Hash = jinja2::detail::ankerl::unordered_dense::hash<std::string>;
+    using Map = jinja2::detail::StableMap<std::string, int, Hash, std::equal_to<>>;
+    using VectorListMap = jinja2::detail::ankerl::unordered_dense::segmented_map<std::string,
+                                                                                 int,
+                                                                                 Hash,
+                                                                                 std::equal_to<>,
+                                                                                 OtherAllocator<std::pair<std::string, int>>,
+                                                                                 jinja2::detail::ankerl::unordered_dense::bucket_type::group,
+                                                                                 JINJA2CPP_STABLE_MAP_SEGMENT_BYTES>;
+    const auto firstInsert = [](auto& map) {
+        const long before = g_live.load(std::memory_order_relaxed);
+        map.try_emplace("x", 1);
+        return g_live.load(std::memory_order_relaxed) - before;
+    };
     Map map;
-    const long before = g_live.load(std::memory_order_relaxed);
-    map.try_emplace("x", 1);
-    EXPECT_EQ(2, g_live.load(std::memory_order_relaxed) - before);
+    VectorListMap vectorListMap;
+    EXPECT_EQ(firstInsert(vectorListMap) - 1, firstInsert(map));
+    EXPECT_EQ(1, map.find("x")->second);
 }
 
 // A map growing past the tail of its first segment, whose list of segments then moves to an array
