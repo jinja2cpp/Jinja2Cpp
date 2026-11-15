@@ -4,14 +4,18 @@
 #include "hash_map.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
+#include "params_table.h"
 #include "slot_frame.h"
 #include "span.h"
+
+#include <jinja2cpp/value.h>
 
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -119,8 +123,11 @@ public:
     // The tables of the params and the top scope of a render (docs/tasks/0160)
     struct RenderMaps
     {
-        InternalValueMap params;
+        ParamsTable params;
         InternalValueMap topScope;
+        // The values a GenericMap gave, each with its name, which the params refer to: reserved
+        // before the first one, so that a view of an element never sees it move (docs/tasks/0513)
+        std::vector<std::pair<std::string, Value>> genericValues;
     };
     // Empty maps for a render, lent until ReturnMaps: with the storage an earlier
     // render left in them, so that a steady render allocates nothing for them. A render
@@ -140,7 +147,7 @@ public:
         // A render that set no name and got no params has nothing to empty. The maps stay lent
         // while they are emptied: a destructor of a value in them may call ReleaseCaches
         const std::size_t outer = m_lentMaps - 1;
-        if (detail::HasStorage(maps.params) || detail::HasStorage(maps.topScope))
+        if (maps.params.HasStorage() || detail::HasStorage(maps.topScope))
         {
             EmptyMaps(maps, outer < MaxKeptMaps);
         }

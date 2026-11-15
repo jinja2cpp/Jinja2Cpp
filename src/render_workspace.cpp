@@ -106,17 +106,26 @@ void RenderWorkspace::ReleaseRetired() noexcept
 
 void RenderWorkspace::EmptyMaps(RenderMaps& maps, bool keepTables) noexcept
 {
-    for (auto* map : { &maps.params, &maps.topScope })
+    // The params first: they refer to the values a GenericMap gave
+    maps.params.Clear(keepTables, MaxMapBuckets);
+    if (!keepTables || maps.genericValues.capacity() > MaxMapBuckets)
     {
-        if (!keepTables || map->bucket_count() > MaxMapBuckets)
-        {
-            // Moving out takes the index and segments; assigning an empty map would keep them
-            const InternalValueMap dropped(std::move(*map));
-        }
-        else
-        {
-            map->clear();
-        }
+        const auto dropped = std::move(maps.genericValues);
+        maps.genericValues = {};
+    }
+    else
+    {
+        maps.genericValues.clear();
+    }
+    auto& map = maps.topScope;
+    if (!keepTables || map.bucket_count() > MaxMapBuckets)
+    {
+        // Moving out takes the index and segments; assigning an empty map would keep them
+        const InternalValueMap dropped(std::move(map));
+    }
+    else
+    {
+        map.clear();
     }
 }
 } // namespace v2

@@ -7,6 +7,7 @@
 #include "internal_value.h"
 #include "lookup_result.h"
 #include "node_arena.h"
+#include "params_table.h"
 #include "sandbox_policy.h"
 #include "slot_frame.h"
 #include "small_vector.h"
@@ -544,9 +545,11 @@ public:
                   const InternalValueMap& globalValues,
                   IRendererCallback* rendererCallback,
                   const InternalValueMap* builtins,
-                  InternalValueMap& topScope)
+                  InternalValueMap& topScope,
+                  ParamsTable* params = nullptr)
         : m_rendererCallback(rendererCallback)
         , m_externalScope(&extValues)
+        , m_params(params)
         , m_globalScope(&globalValues)
         , m_builtinScope(builtins)
     {
@@ -565,6 +568,7 @@ public:
     RenderContext(const RenderContext& other)
         : m_rendererCallback(other.m_rendererCallback)
         , m_externalScope(other.m_externalScope)
+        , m_params(other.m_params)
         , m_globalScope(other.m_globalScope)
         , m_builtinScope(other.m_builtinScope)
         , m_templateFrame(other.m_templateFrame)
@@ -616,6 +620,7 @@ public:
     RenderContext(RenderContext& other, size_t depth)
         : m_rendererCallback(other.m_rendererCallback)
         , m_externalScope(other.m_externalScope)
+        , m_params(other.m_params)
         , m_globalScope(other.m_globalScope)
         , m_builtinScope(other.m_builtinScope)
         , m_templateFrame(other.m_templateFrame)
@@ -785,7 +790,7 @@ public:
             return FindValueWithViews(ToHashedName(val));
         }
         const auto* p = FindEntry(val);
-        return p ? LookupResult(p->second) : LookupResult();
+        return p ? LookupResult(*p) : LookupResult();
     }
 
     // FindValue for the name expression `key`, through the lookup cache. Only names that are
@@ -913,6 +918,13 @@ public:
         {
             return result;
         }
+        if (m_params)
+        {
+            if (auto* param = m_params->FindMutable(name))
+            {
+                return MutableLookupResult(*param);
+            }
+        }
         auto* external = const_cast<InternalValueMap*>(m_externalScope);
         auto valP = external->find(name);
         if (valP != external->end())
@@ -971,6 +983,13 @@ public:
                 }
                 return false;
             });
+        if (m_params)
+        {
+            for (const auto& param : *m_params)
+            {
+                names.emplace(std::string(param.name), param.value);
+            }
+        }
         for (const auto& [name, value] : *m_externalScope)
         {
             names.emplace(name, value);
@@ -1028,6 +1047,14 @@ public:
                 }
                 return result.has_value();
             });
+        if (!result && m_params)
+        {
+            const auto* param = m_params->Find(hashed);
+            if (param && accepts(*param))
+            {
+                result = *param;
+            }
+        }
         if (!result)
         {
             const auto* external = FindIn(*m_externalScope, hashed);
@@ -1081,6 +1108,14 @@ public:
     // Settings::userCallablesAsFilters of the template: whether a name that is no filter or test
     // of the template may be a callable among the values
     [[nodiscard]] bool UserCallablesAsFilters() const { return m_rendererCallback ? m_rendererCallback->GetSettings().userCallablesAsFilters : false; }
+    // The external scope of a context that has none: a top-level render's, whose params are a
+    // ParamsTable, and a nested render's without context. Shared, and never written: FindForWrite
+    // finds nothing in an empty map
+    static const InternalValueMap& EmptyScope()
+    {
+        static const InternalValueMap empty;
+        return empty;
+    }
     // A context for a nested render: with `includeCurrentContext` it sees all of this
     // context's names (see the constructor above for how long it may live), otherwise only
     // the global ones
@@ -1088,7 +1123,7 @@ public:
     {
         if (!includeCurrentContext)
         {
-            return CloneWith(m_emptyScope);
+            return CloneWith(EmptyScope());
         }
 
         return { *this, GetScopesCount() };
@@ -1241,15 +1276,15 @@ public:
         {
             return false;
         }
+        if ((m_params == nullptr) != (other.m_params == nullptr) || (m_params && !(*m_params == *other.m_params)))
+        {
+            return false;
+        }
         if (!IsEqual(m_globalScope, other.m_globalScope))
         {
             return false;
         }
         if (m_builtinScope != other.m_builtinScope)
-        {
-            return false;
-        }
-        if (m_emptyScope != other.m_emptyScope)
         {
             return false;
         }
@@ -1334,16 +1369,19 @@ private:
 
     // The entry of the name `val` in the innermost scope that has it; null when none does
     template<typename Key>
-    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValueMap::value_type* FindEntry(const Key& val) const
+    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValue* FindEntry(const Key& val) const
     {
         return FindEntryFrom(this, m_scopes.size(), m_parentDepth, val);
     }
     // FindEntry from the `count` innermost scopes of `ctx` (this context or a parent it sees
     // `limit` scopes of) outwards
     template<typename Key>
-    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValueMap::value_type* FindEntryFrom(const RenderContext* ctx, size_t count, size_t limit, const Key& val) const
+    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValue* FindEntryFrom(const RenderContext* ctx, size_t count, size_t limit, const Key& val) const
     {
-        auto finder = [&val](const InternalValueMap& map) { return FindIn(map, val); };
+        auto finder = [&val](const InternalValueMap& map) -> const InternalValue* {
+            const auto* p = FindIn(map, val);
+            return p ? &p->second : nullptr;
+        };
 
         // The scopes of this context, then the ones it sees of its parents. Scopes past the
         // first chunk are rare and searched out of line
@@ -1376,14 +1414,25 @@ private:
             }
         }
 
-        // Then the external, global and built-in scopes
+        return FindInOuterLevels(val);
+    }
+    // FindEntryFrom past the scopes: the params, the external, global and built-in scopes
+    template<typename Key>
+    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE const InternalValue* FindInOuterLevels(const Key& val) const
+    {
+        if (m_params && !m_params->empty())
+        {
+            if (const auto* result = m_params->Find(ToParamName(val)))
+            {
+                return result;
+            }
+        }
         const InternalValueMap* map = m_externalScope;
         for (int idx = 0; map; ++idx)
         {
-            const auto* result = finder(*map);
-            if (result)
+            if (const auto* p = FindIn(*map, val))
             {
-                return result;
+                return &p->second;
             }
             map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
         }
@@ -1437,7 +1486,7 @@ private:
     }
     // `name` is taken by value: a pointer to the caller's copy would make it a stack variable
     // The innermost of the scopes [ScopeStack::ChunkSize, count) of `scopes` that has `name`
-    JINJA2CPP_NOINLINE_INLINE static const InternalValueMap::value_type* FindInDeepScopes(const ScopeStack& scopes, size_t count, HashedName name)
+    JINJA2CPP_NOINLINE_INLINE static const InternalValue* FindInDeepScopes(const ScopeStack& scopes, size_t count, HashedName name)
     {
         for (; count > ScopeStack::ChunkSize; --count)
         {
@@ -1445,7 +1494,7 @@ private:
             auto p = scope.find(name);
             if (p != scope.end())
             {
-                return &*p;
+                return &p->second;
             }
         }
         return nullptr;
@@ -1550,7 +1599,7 @@ private:
             }
         }
         const auto* p = FindEntryFrom(static_cast<const RenderContext*>(nullptr), 0, 0, val);
-        return p ? LookupResult(p->second) : LookupResult();
+        return p ? LookupResult(*p) : LookupResult();
     }
     // The innermost of the `count` innermost scopes of this context, and the views attached to
     // them, that has `val`. Stops at a closure body's link, which it stores in `link`. Passes
@@ -1605,6 +1654,9 @@ private:
     void UpdateFullWalk() { m_fullWalk = m_inheritsViews || m_entryPassDepth != 0 || !m_views.empty(); }
     static HashedName ToHashedName(const HashedName& name) { return name; }
     static HashedName ToHashedName(const std::string& name) { return { name, HashedName::Hash(name) }; }
+    // The params take a HashedName as it is, and hash a std::string only past ParamsTable::LinearMax
+    static HashedName ToParamName(const HashedName& name) { return name; }
+    static std::string_view ToParamName(const std::string& name) { return name; }
 
     // How many of the scopes of this context a child seeing `limit` scopes sees
     [[nodiscard]] size_t VisibleScopesCount(size_t limit) const
@@ -1645,11 +1697,13 @@ private:
     IRendererCallback* m_rendererCallback{};
     InternalValueMap* m_currentScope{};
     const InternalValueMap* m_externalScope{};
+    // The params of a top-level render, searched where the external scope is (docs/tasks/0513);
+    // null in the contexts CloneWith makes, which do not see them
+    ParamsTable* m_params{};
     const InternalValueMap* m_globalScope{};
     const InternalValueMap* m_builtinScope{};
     TemplateFrame* m_templateFrame{};
     ArenaView m_nodes;
-    InternalValueMap m_emptyScope;
     LoopControl m_loopControl = LoopControl::None;
     // The context this one was made from and how many of its scopes this one sees, below
     // its own; null for a context that copies no scopes
