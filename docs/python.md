@@ -60,7 +60,7 @@ cmake --build build-module
 cd build-module && PYTHONPATH=$PWD python3 -m pytest ../python/tests
 ```
 
-A shared library works too (`-DJINJA2CPP_BUILD_SHARED=ON`, which on Linux takes the initial-exec
+A shared library works too (`-DJINJA2CPP_BUILD_SHARED=ON`, which with glibc takes the initial-exec
 model by default, docs/tasks/0514).
 Without the big integers the module configures with a warning, and integer arithmetic beyond
 int64 is not exact (docs/tasks/0272). `-DJINJA2CPP_STRICT_WARNINGS=ON` turns the library's

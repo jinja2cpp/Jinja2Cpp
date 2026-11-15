@@ -90,14 +90,24 @@ endif ()
 # library's thread-locals (about 660 bytes) in the static TLS block, which a library loaded with dlopen
 # takes from the loader's reserve; when another library has used that reserve up, the dlopen fails
 # with "cannot allocate memory in static TLS block", and this option set OFF is the fix.
-# On by default for a shared library on ELF; JINJA2CPP_BUILD_PYTHON turns it on for the wheel's
-# static copy, and a static library installed for python/ built alone should set it
+# On by default for a shared library with glibc, whose loader keeps that reserve; musl's refuses
+# initial-exec TLS in a library loaded with dlopen at all, so elsewhere it stays opt-in.
+# JINJA2CPP_BUILD_PYTHON turns it on for the wheel's static copy, and a static library installed for
+# python/ built alone should set it
 if (JINJA2CPP_BUILD_SHARED AND UNIX AND NOT APPLE)
+    include(CheckCXXSourceCompiles)
+    check_cxx_source_compiles("#include <features.h>
+#ifndef __GLIBC__
+#error not glibc
+#endif
+int main() { return 0; }" JINJA2CPP_GLIBC_TARGET)
+endif ()
+if (JINJA2CPP_BUILD_SHARED AND JINJA2CPP_GLIBC_TARGET)
     set(JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT ON)
 else ()
     set(JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT OFF)
 endif ()
-option(JINJA2CPP_TLS_INITIAL_EXEC "Use the initial-exec TLS model for the library's thread-locals (default ON for a shared library on ELF; GCC/Clang)" ${JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT})
+option(JINJA2CPP_TLS_INITIAL_EXEC "Use the initial-exec TLS model for the library's thread-locals (default ON for a shared library with glibc; GCC/Clang)" ${JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT})
 # A build directory first configured static keeps OFF in its cache when it turns shared
 if (JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT AND NOT JINJA2CPP_TLS_INITIAL_EXEC)
     message(STATUS "Jinja2C++ shared library with the dynamic TLS model (JINJA2CPP_TLS_INITIAL_EXEC=OFF): slower thread-locals")

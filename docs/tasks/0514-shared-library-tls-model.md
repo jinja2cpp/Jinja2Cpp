@@ -29,8 +29,9 @@ Variants counted against the static build (Render rows):
 
 **Change.**
 - `JINJA2CPP_TLS_INITIAL_EXEC` builds the whole library target with `-ftls-model=initial-exec`
-  (GCC/Clang on ELF) instead of tagging three variables, and is ON by default for a shared library on
-  ELF. The per-variable `JINJA2CPP_HOT_TLS` attribute is gone; `JINJA2CPP_HOT_TLS_INITIAL_EXEC` still
+  (GCC/Clang on ELF) instead of tagging three variables, and is ON by default for a shared library
+  built against glibc (configure check for `__GLIBC__`). musl refuses initial-exec relocations in a
+  library loaded with `dlopen` at all (Codex on #907), so there it stays opt-in. The per-variable `JINJA2CPP_HOT_TLS` attribute is gone; `JINJA2CPP_HOT_TLS_INITIAL_EXEC` still
   moves the 3 KB lookup cache to the heap, so the library's TLS block is 656 bytes. The configure
   error for a shared library with the option is gone. The Python module's static copy gets the whole
   library model too (it already needed the whole block in static TLS: a module with any initial-exec
