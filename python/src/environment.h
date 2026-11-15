@@ -50,7 +50,8 @@ public:
     // get_template reads the loader again, as Jinja2's does (templates loaded before keep what they have)
     void DropEngineCache() noexcept { m_env.reset(); }
     [[nodiscard]] bool NewstyleGettext() const noexcept { return m_newstyleGettext; }
-    void SetNewstyleGettext(bool newstyle) noexcept { m_newstyleGettext = newstyle; }
+    // Templates loaded from now on read it, as Jinja2 reads it when it compiles a `{% trans %}` block
+    void SetNewstyleGettext(bool newstyle);
 
     // The template of a source or of a loader's name, an instance of `templateClass` (Jinja2's
     // Environment.template_class: a subclass of Template)

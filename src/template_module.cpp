@@ -494,7 +494,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
 
         callback = std::make_unique<Callback>(impl.get());
         callback->SetGlobals(&globals);
-        module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(), &GetBuiltinGlobals(impl->m_settings->settings.extensions.i18n));
+        module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(), &GetBuiltinGlobals(impl->m_settings->settings.extensions));
 
         OutStream stream(body);
         if (impl->m_settings->hasRenderLimits)

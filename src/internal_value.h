@@ -1822,6 +1822,8 @@ std::optional<InternalValue> MakeNamedClassObject(std::string_view className);
 // The global that is the class `name` of `module` in Jinja2 (range, dict, cycler, joiner, namespace), the same object
 // for every render (global_functions.cpp); nullopt for another class
 std::optional<InternalValue> ClassGlobalOf(std::string_view module, std::string_view name);
+// The callable of an oldstyle `{% trans %}` block: Markup of its argument under autoescape (Jinja2 MarkSafeIfAutoescape)
+const InternalValue& MarkSafeIfAutoescapeFunction();
 // Jinja2's TemplateModule of an imported template named `name`: `values` are its exports,
 // `output` the text str() prints (docs/tasks/0309)
 MapAdapter CreateModuleAdapter(InternalValueMap&& values, InternalValue name, InternalValue output);

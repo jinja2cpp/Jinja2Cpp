@@ -1171,6 +1171,318 @@
     "type": "UndefinedError",
     "message": "'_' is undefined"
    }
+  },
+  {
+   "id": "i18n.old_trans_percent",
+   "template": "{% trans %}100% sure{% endtrans %}|{% trans %}100% {{ x }}{% endtrans %}|{% trans %}%%{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "output": "100% sure|100% 3|%%"
+  },
+  {
+   "id": "i18n.old_trans_count_named_num",
+   "template": "{% trans num=2 %}{{ num }} apple{% pluralize %}{{ num }} apples{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "output": "2 apples"
+  },
+  {
+   "id": "i18n.old_trans_plural",
+   "template": "{% trans n=one %}{{ n }} item{% pluralize %}{{ n }} items{% endtrans %}|{% trans %}{{ x }} a{% pluralize %}{{ x }} b{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "output": "1 item|3 b"
+  },
+  {
+   "id": "i18n.old_trans_unused_param",
+   "template": "{% trans a=1 %}100%{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "incomplete format"
+   }
+  },
+  {
+   "id": "i18n.old_trans_context",
+   "template": "{% trans 'ctx' %}Hello{% endtrans %}|{% trans 'ctx' n=x %}one{% pluralize %}many {{ n }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "output": "Hello|many 3"
+  },
+  {
+   "id": "i18n.old_trans_autoescape",
+   "template": "{% trans %}<i>{% endtrans %}|{% trans %}{{ s }}<i>{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false,
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<i>|&lt;b&gt;<i>"
+  },
+  {
+   "id": "i18n.old_trans_value_types",
+   "template": "{% trans %}{{ s }} {{ l }} {{ missing }}!{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "output": "<b> [1, 2] !"
+  },
+  {
+   "id": "i18n.old_trans_strict_undefined",
+   "template": "{% trans %}{{ missing }}!{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false,
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'missing' is undefined"
+   }
+  },
+  {
+   "id": "i18n.old_trans_gettext_macro",
+   "template": "{% macro gettext(a) %}<{{ a }}>{% endmacro %}{% trans %}b{% endtrans %}|{% trans x %}{{ x }}{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false,
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>|<3>"
+  },
+  {
+   "id": "i18n.old_trans_gettext_not_string",
+   "template": "{% trans %}b{% endtrans %}",
+   "context": {
+    "gettext": 5
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not callable"
+   }
+  },
+  {
+   "id": "i18n.old_gettext_unformatted",
+   "template": "{{ _('100%') }}|{{ _('%s %(a)s') }}|{{ ngettext('%(num)d a', '%(num)d b', 3) }}|{{ pgettext('c', 'm%') }}{{ npgettext('c', 'a', 'b', 1) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "output": "100%|%s %(a)s|%(num)d b|m%a"
+  },
+  {
+   "id": "i18n.old_gettext_keyword_arguments",
+   "template": "{{ gettext('x %(a)s', a=1) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "NullTranslations.gettext() got an unexpected keyword argument 'a'"
+   }
+  },
+  {
+   "id": "i18n.old_ngettext_keyword_arguments",
+   "template": "{{ ngettext('a', 'b', 2, num=1) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "NullTranslations.ngettext() got an unexpected keyword argument 'num'"
+   }
+  },
+  {
+   "id": "i18n.old_gettext_autoescape",
+   "template": "{{ _('<a>') }}|{{ ngettext('<a>', '<b>', 2) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false,
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;a&gt;|&lt;b&gt;"
   }
  ]
 }

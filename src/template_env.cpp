@@ -87,12 +87,12 @@ bool operator==(const Settings& lhs, const Settings& rhs)
                  lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox, lLimits] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
                  rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox, rLimits] = rhs;
-    const auto& [lDo, lLoopControls, lI18n] = lExt;
-    const auto& [rDo, rLoopControls, rI18n] = rExt;
+    const auto& [lDo, lLoopControls, lI18n, lI18nNewstyle] = lExt;
+    const auto& [rDo, rLoopControls, rI18n, rI18nNewstyle] = rExt;
 
     // The flags and numbers first, then the strings
-    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox)
-        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox))
+    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lI18nNewstyle, lKeepNl, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox)
+        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rI18nNewstyle, rKeepNl, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox))
     {
         return false;
     }

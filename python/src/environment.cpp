@@ -528,6 +528,7 @@ void PyEnvironment::Rebuild()
         immutable = Truth(nb::getattr(self, "_sandbox_immutable", nb::bool_(false)));
     }
     settings.immutableContainers = immutable;
+    settings.extensions.i18nNewstyle = m_newstyleGettext;
     m_sandboxed = sandboxed;
     if (sandboxed)
     {
@@ -599,6 +600,18 @@ void PyEnvironment::ApplyGettext()
     // A callable left out stays unset: the message is not translated
     const auto callable = [](PyObject* object) { return object ? BorrowedCallable(object) : jinja2::UserCallable(); };
     m_env->InstallGettextCallables(callable(m_gettext[0]), callable(m_gettext[1]), callable(m_gettext[2]), callable(m_gettext[3]));
+}
+
+void PyEnvironment::SetNewstyleGettext(bool newstyle)
+{
+    m_newstyleGettext = newstyle;
+    if (m_env)
+    {
+        // A template keeps the style it was loaded with; the next loads take this one
+        auto settings = m_env->GetSettings();
+        settings.extensions.i18nNewstyle = newstyle;
+        m_env->SetSettings(settings);
+    }
 }
 
 void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::handle pgettext, nb::handle npgettext)

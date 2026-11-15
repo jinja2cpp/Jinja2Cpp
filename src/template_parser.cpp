@@ -2296,6 +2296,38 @@ void AddTransMessageNames(NodeArena& nodes, NameResolver& names, TransInfo& tran
     }
 }
 
+// Jinja2's _make_node for oldstyle gettext: a message that names no variable is not formatted, so its `%` stays single
+template<typename CharT>
+void UndoublePercents(std::basic_string<CharT>& message)
+{
+    std::basic_string<CharT> result;
+    result.reserve(message.size());
+    for (size_t pos = 0; pos < message.size(); ++pos)
+    {
+        result.push_back(message[pos]);
+        if (message[pos] == '%' && pos + 1 < message.size() && message[pos + 1] == '%')
+        {
+            ++pos;
+        }
+    }
+    message = std::move(result);
+}
+
+void UndoubleTransPercents(TransInfo& trans)
+{
+    for (auto* message : { &trans.singular, &trans.plural })
+    {
+        if (auto* narrow = std::get_if<std::string>(message))
+        {
+            UndoublePercents(*narrow);
+        }
+        else if (auto* wide = std::get_if<std::wstring>(message))
+        {
+            UndoublePercents(*wide);
+        }
+    }
+}
+
 void TrimTransMessages(TransInfo& trans)
 {
     for (auto* message : { &trans.singular, &trans.plural })
@@ -2329,9 +2361,15 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     {
         TrimTransMessages(trans);
     }
+    const bool newstyle = m_settings.extensions.i18nNewstyle;
+    if (!newstyle && trans.singularNames.empty() && trans.pluralNames.empty())
+    {
+        UndoubleTransPercents(trans);
+    }
 
-    // gettext(singular, **variables), with the `n` and `p` variants Jinja2 uses for a plural form
-    // and a message context; ngettext takes `num` from the count unless the count is `num` itself
+    // Newstyle: gettext(singular, **variables), with the `n` and `p` variants Jinja2 uses for a plural
+    // form and a message context; ngettext takes `num` from the count unless the count is `num` itself.
+    // Oldstyle: MarkSafeIfAutoescape(gettext(singular)) % {variables}, without the `%` when there are none
     CallParamsInfo params;
     if (!trans.context.IsUndefined())
     {
@@ -2353,7 +2391,10 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
                 continue;
             }
         }
-        params.kwParams[name] = slot;
+        if (newstyle)
+        {
+            params.kwParams[name] = slot;
+        }
     }
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
@@ -2361,7 +2402,24 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     {
         m_names.AddReadOfName(fnName);
     }
-    auto call = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
+    NodeRef<Expression> call = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
+    if (!newstyle)
+    {
+        CallParamsInfo markParams;
+        markParams.posParams.push_back(call);
+        call = m_nodes.Make<CallExpression>(m_nodes, MakeConstant(m_nodes, MarkSafeIfAutoescapeFunction()), std::move(markParams));
+        if (!trans.variables.empty())
+        {
+            std::vector<DictCreator::Item> items;
+            items.reserve(trans.variables.size());
+            for (size_t idx = 0; idx < trans.variables.size(); ++idx)
+            {
+                items.push_back(DictCreator::Item{ MakeConstant(m_nodes, InternalValue(trans.variables[idx].first)),
+                                                   ValueRefExpression::Make(m_nodes, TransStatement::VariableSlot(idx)) });
+            }
+            call = BinaryExpression::Make(m_nodes, BinaryExpression::DivRemainder, call, m_nodes.Make<DictCreator>(m_nodes.MakeSpan(items)));
+        }
+    }
     auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
     std::vector<NodeRef<Expression>> values;
     values.reserve(trans.variables.size());

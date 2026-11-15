@@ -375,7 +375,7 @@ error is compared, not the message or the line.
 | `line_statement_prefix`, `line_comment_prefix` | ✅ | |
 | `jinja2.ext.do` | ✅ | |
 | `jinja2.ext.loopcontrols` | ✅ (`Settings::Extensions::loopControls`) | |
-| `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ✅ newstyle (`Settings::Extensions::i18n`, `TemplateEnv::InstallGettextCallables`); no `ext.i18n.trimmed` policy | |
+| `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ✅ newstyle and oldstyle (`Settings::Extensions::i18n`, `i18nNewstyle`, `TemplateEnv::InstallGettextCallables`); no `ext.i18n.trimmed` policy | |
 | `jinja2.ext.debug` | ❌ (not in corpus: output is not deterministic) | |
 
 ## API level (not corpus-checked)

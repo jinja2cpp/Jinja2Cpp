@@ -622,6 +622,32 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     return result;
 }
 
+// Oldstyle (Jinja2's default, newstyle_gettext off): the global is the installed callable itself, called with the
+// arguments of the call and returning what it returns. Without one, gettext.NullTranslations: the message, or the
+// plural one when the count is not 1
+InternalValue CallOldGettext(const GettextFunction& fn, const CallParams& params, RenderContext& context)
+{
+    auto* env = context.GetEnv();
+    if (auto userFn = env ? env->FindGettextCallable(fn.name) : std::optional<UserCallable>())
+    {
+        auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn);
+        return GetIf<Callable>(&callable)->GetExpressionCallable()(params, context);
+    }
+    size_t argsCount = 1U + (fn.hasContext ? 1U : 0U) + (fn.hasPlural ? 2U : 0U);
+    if (!params.kwParams.empty())
+    {
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError,
+                                   "NullTranslations."s + fn.name + "() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+    }
+    if (params.posParams.size() != argsCount)
+    {
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError,
+                                   "NullTranslations."s + fn.name + "() takes " + std::to_string(argsCount + 1) + " positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+    }
+    size_t message = fn.hasContext ? 1 : 0;
+    return fn.hasPlural && !IsOne(params.posParams[message + 2]) ? params.posParams[message + 1] : params.posParams[message];
+}
+
 // jinja2.ext._gettext_alias: `_` calls whatever `gettext` is at the call site
 InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 {
@@ -632,12 +658,19 @@ InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 
 namespace
 {
-void SetupI18nGlobals(InternalValueMap& globalParams)
+void SetupI18nGlobals(InternalValueMap& globalParams, bool newstyle)
 {
     static const GettextFunction functions[] = { { "gettext", false, false }, { "ngettext", false, true }, { "pgettext", true, false }, { "npgettext", true, true } };
     for (const auto& fn : functions)
     {
-        globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
+        if (newstyle)
+        {
+            globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
+        }
+        else
+        {
+            globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallOldGettext(fn, params, context); }));
+        }
     }
     globalParams.emplace("_", MakeFunction(CallGettextAlias));
 }
@@ -705,7 +738,31 @@ std::optional<InternalValue> ClassGlobalOf(std::string_view module, std::string_
     return std::nullopt;
 }
 
-const InternalValueMap& GetBuiltinGlobals(bool withI18n)
+// Jinja2's MarkSafeIfAutoescape node, which an oldstyle `{% trans %}` block wraps its gettext call in: Markup(value)
+// under autoescape, the value itself otherwise
+const InternalValue& MarkSafeIfAutoescapeFunction()
+{
+    static const InternalValue fn = [] {
+        const UncountedMemoryScope uncounted;
+        return InternalValue(MakeFunction([](const CallParams& params, RenderContext& context) {
+            const auto& value = params.posParams.front();
+            if (!context.IsAutoescape())
+            {
+                return value;
+            }
+            if (!IsStringValue(value))
+            {
+                return MakeMarkup(value, context.GetRendererCallback());
+            }
+            InternalValue result = value;
+            result.SetMarkup();
+            return result;
+        }));
+    }();
+    return fn;
+}
+
+const InternalValueMap& GetBuiltinGlobals(const Settings::Extensions& extensions)
 {
     // Built once and only read afterwards, so renders on any thread share them; the state of
     // the stateful globals (cycler, joiner, lipsum's generator) lives in their results or in
@@ -717,15 +774,21 @@ const InternalValueMap& GetBuiltinGlobals(bool withI18n)
         SetupGlobals(result);
         return result;
     }();
-    static const auto globalsWithI18n = [] {
+    static const auto makeWithI18n = [](bool newstyle) {
         // Made once, maybe in a render with a memory budget, for every render after it
         const UncountedMemoryScope uncounted;
         InternalValueMap result;
         SetupGlobals(result);
-        SetupI18nGlobals(result);
+        SetupI18nGlobals(result, newstyle);
         return result;
-    }();
-    return withI18n ? globalsWithI18n : globals;
+    };
+    static const auto globalsWithI18n = makeWithI18n(true);
+    static const auto globalsWithOldI18n = makeWithI18n(false);
+    if (!extensions.i18n)
+    {
+        return globals;
+    }
+    return extensions.i18nNewstyle ? globalsWithI18n : globalsWithOldI18n;
 }
 } // namespace v2
 } // namespace jinja2

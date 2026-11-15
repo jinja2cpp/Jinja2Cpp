@@ -1,6 +1,8 @@
 """The i18n extension (task 0029): trans blocks and the gettext globals, with null translations (newstyle)."""
 CONTEXT = {"x": 3, "one": 1, "l": [1, 2], "s": "<b>"}
 I18N = {"extensions": ["i18n"]}
+OLD = {"extensions": ["i18n"], "newstyle_gettext": False}
+OLD_ESCAPE = {**OLD, "autoescape": True}
 CASES = [
     # trans blocks
     ("trans_percent_is_literal", "{% trans %}100% {{ x }}{% endtrans %}|{% trans %}100%{% endtrans %}", {"env": I18N}),
@@ -61,4 +63,19 @@ CASES = [
     ("gettext_non_string_message", "{{ _(x) }}", {"env": I18N}),
     ("trans_non_ascii", "{% trans %}héllo {{ x }}…{% endtrans %}|{{ _('ünïcode') }}", {"env": I18N}),
     ("gettext_without_extension", "{{ _('a') }}"),
+    # oldstyle gettext, Jinja2's default (task 0415): a block formats the translation, a call does not
+    ("old_trans_percent", "{% trans %}100% sure{% endtrans %}|{% trans %}100% {{ x }}{% endtrans %}|{% trans %}%%{% endtrans %}", {"env": OLD}),
+    ("old_trans_count_named_num", "{% trans num=2 %}{{ num }} apple{% pluralize %}{{ num }} apples{% endtrans %}", {"env": OLD}),
+    ("old_trans_plural", "{% trans n=one %}{{ n }} item{% pluralize %}{{ n }} items{% endtrans %}|{% trans %}{{ x }} a{% pluralize %}{{ x }} b{% endtrans %}", {"env": OLD}),
+    ("old_trans_unused_param", "{% trans a=1 %}100%{% endtrans %}", {"env": OLD}),
+    ("old_trans_context", "{% trans 'ctx' %}Hello{% endtrans %}|{% trans 'ctx' n=x %}one{% pluralize %}many {{ n }}{% endtrans %}", {"env": OLD}),
+    ("old_trans_autoescape", "{% trans %}<i>{% endtrans %}|{% trans %}{{ s }}<i>{% endtrans %}", {"env": OLD_ESCAPE}),
+    ("old_trans_value_types", "{% trans %}{{ s }} {{ l }} {{ missing }}!{% endtrans %}", {"env": OLD}),
+    ("old_trans_strict_undefined", "{% trans %}{{ missing }}!{% endtrans %}", {"env": {**OLD, "undefined": "strict"}}),
+    ("old_trans_gettext_macro", "{% macro gettext(a) %}<{{ a }}>{% endmacro %}{% trans %}b{% endtrans %}|{% trans x %}{{ x }}{% endtrans %}", {"env": OLD_ESCAPE}),
+    ("old_trans_gettext_not_string", "{% trans %}b{% endtrans %}", {"env": OLD, "ctx": {"gettext": 5}}),
+    ("old_gettext_unformatted", "{{ _('100%') }}|{{ _('%s %(a)s') }}|{{ ngettext('%(num)d a', '%(num)d b', 3) }}|{{ pgettext('c', 'm%') }}{{ npgettext('c', 'a', 'b', 1) }}", {"env": OLD}),
+    ("old_gettext_keyword_arguments", "{{ gettext('x %(a)s', a=1) }}", {"env": OLD}),
+    ("old_ngettext_keyword_arguments", "{{ ngettext('a', 'b', 2, num=1) }}", {"env": OLD}),
+    ("old_gettext_autoescape", "{{ _('<a>') }}|{{ ngettext('<a>', '<b>', 2) }}", {"env": OLD_ESCAPE}),
 ]
