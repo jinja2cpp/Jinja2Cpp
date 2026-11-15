@@ -573,3 +573,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0509](0509-gettext-call-style-follows-install.md) | The style of a gettext call follows the last install, not the template's load | parity | low | open |
 | [0510](0510-percent-format-errors-python-classes.md) | `%` formatting errors carry no Python class | parity | low | open |
 | [0512](0512-per-render-fixed-costs.md) | Per-render fixed costs: the memory budget's per-object charge and the render's setup | perf | medium | done |
+| [0513](0513-params-table-render-setup.md) | The params of a render as a flat table, and a slimmer per-render setup | perf | medium | done |
