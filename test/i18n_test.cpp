@@ -157,3 +157,15 @@ TEST_F(I18nOldstyleTest, WideTemplate)
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(L"Hallo Welt!|100%|a %(b)s", result.value());
 }
+
+// A template loaded again after the style changed is parsed again: the setting takes part in Settings ==
+TEST_F(I18nOldstyleTest, ReloadAfterTheStyleChanged)
+{
+    EXPECT_EQ("100%", Render("{% trans %}100%{% endtrans %}"));
+    m_env.GetSettings().extensions.i18nNewstyle = true;
+    EXPECT_EQ("100 %", Render("{% trans %}100%{% endtrans %}"));
+    auto newstyle = m_env.GetSettings();
+    auto oldstyle = newstyle;
+    oldstyle.extensions.i18nNewstyle = false;
+    EXPECT_FALSE(newstyle == oldstyle);
+}

@@ -13,6 +13,7 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -597,6 +598,11 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     else
     {
         size_t message = fn.hasContext ? 1 : 0;
+        if (fn.hasPlural)
+        {
+            // `n == 1`, which a strict undefined refuses
+            CheckUndefinedUse(params.posParams[message + 2], UndefinedUse::Operator);
+        }
         translated = fn.hasPlural && !IsOne(params.posParams[message + 2]) ? params.posParams[message + 1] : params.posParams[message];
     }
     if (fn.hasPlural)
@@ -633,19 +639,61 @@ InternalValue CallOldGettext(const GettextFunction& fn, const CallParams& params
         auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn);
         return GetIf<Callable>(&callable)->GetExpressionCallable()(params, context);
     }
-    size_t argsCount = 1U + (fn.hasContext ? 1U : 0U) + (fn.hasPlural ? 2U : 0U);
-    if (!params.kwParams.empty())
+    // The parameters of gettext.NullTranslations' methods, by position or by keyword
+    std::vector<const char*> names;
+    if (fn.hasContext)
     {
-        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError,
-                                   "NullTranslations."s + fn.name + "() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+        names.push_back("context");
     }
-    if (params.posParams.size() != argsCount)
+    if (fn.hasPlural)
     {
-        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError,
-                                   "NullTranslations."s + fn.name + "() takes " + std::to_string(argsCount + 1) + " positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+        names.insert(names.end(), { "msgid1", "msgid2", "n" });
     }
-    size_t message = fn.hasContext ? 1 : 0;
-    return fn.hasPlural && !IsOne(params.posParams[message + 2]) ? params.posParams[message + 1] : params.posParams[message];
+    else
+    {
+        names.push_back("message");
+    }
+    const auto typeError = [&fn](const std::string& what) {
+        return TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "NullTranslations."s + fn.name + "() " + what);
+    };
+    if (params.posParams.size() > names.size())
+    {
+        throw typeError("takes " + std::to_string(names.size() + 1) + " positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+    }
+    std::vector<const InternalValue*> args(names.size(), nullptr);
+    for (size_t idx = 0; idx < params.posParams.size(); ++idx)
+    {
+        args[idx] = &params.posParams[idx];
+    }
+    for (const auto& [name, value] : params.kwParams)
+    {
+        const auto pos = std::find_if(names.begin(), names.end(), [&name = name](const char* known) { return name == known; });
+        if (pos == names.end())
+        {
+            throw typeError("got an unexpected keyword argument '" + name + "'");
+        }
+        auto& arg = args[static_cast<size_t>(pos - names.begin())];
+        if (arg)
+        {
+            throw typeError("got multiple values for argument '" + name + "'");
+        }
+        arg = &value;
+    }
+    for (size_t idx = 0; idx < args.size(); ++idx)
+    {
+        if (!args[idx])
+        {
+            throw typeError("missing required argument '"s + names[idx] + "'");
+        }
+    }
+    const size_t message = fn.hasContext ? 1 : 0;
+    if (!fn.hasPlural)
+    {
+        return *args[message];
+    }
+    // `n == 1`, which a strict undefined refuses
+    CheckUndefinedUse(*args[message + 2], UndefinedUse::Operator);
+    return IsOne(*args[message + 2]) ? *args[message] : *args[message + 1];
 }
 
 // jinja2.ext._gettext_alias: `_` calls whatever `gettext` is at the call site

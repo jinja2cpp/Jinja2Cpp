@@ -16,7 +16,12 @@ callables. So with the Python module, a template loaded while `newstyle_gettext`
 after `install_gettext_translations(t, newstyle=True)` calls the translations without formatting:
 `{{ gettext('%(a)s', a=1) }}` passes `a` to the callable (TypeError) where Jinja2 prints `1`. The
 reverse order matches Jinja2, because an oldstyle install puts the callables in `env.globals`.
-Documented in the "Differences" list of docs/python.md.
+Documented in the "Differences" list of docs/python.md. The C++ API shows the same mix the other way
+(the 0415 verifier): flip `i18nNewstyle` on a warm environment, and a template included from the
+cache keeps the `{% trans %}` tree of its first load while `gettext` resolves to the includer's
+builtins, so `{% trans n=1 %}a {{ n }}{% endtrans %}` fails with `KeyError: 'n'`. Also: the fuzz
+targets (fuzz/fuzz_common.h `ConfigureEnv`) set `i18n` but never turn `i18nNewstyle` off, so the
+oldstyle parser path has no fuzz coverage; a settings byte choosing the style would add it.
 
 **Proposal.** Let the call style be the environment's translations state, set by
 `InstallGettextCallables` (for example an optional style argument, or the module installing

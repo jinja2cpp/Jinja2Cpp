@@ -1463,6 +1463,128 @@
    }
   },
   {
+   "id": "i18n.old_null_keyword_parameters",
+   "template": "{{ gettext(message='a') }}|{{ ngettext('a', msgid2='b', n=1) }}|{{ pgettext(context='c', message='m') }}|{{ gettext(**{'message': 'x'}) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "output": "a|a|m|x"
+  },
+  {
+   "id": "i18n.old_null_parameter_twice",
+   "template": "{{ gettext('a', message='b') }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "NullTranslations.gettext() got multiple values for argument 'message'"
+   }
+  },
+  {
+   "id": "i18n.old_null_missing_parameter",
+   "template": "{{ ngettext('a', 'b') }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "NullTranslations.ngettext() missing 1 required positional argument: 'n'"
+   }
+  },
+  {
+   "id": "i18n.old_strict_undefined_count",
+   "template": "{{ ngettext('a', 'b', missing) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "newstyle_gettext": false,
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'missing' is undefined"
+   }
+  },
+  {
+   "id": "i18n.strict_undefined_count",
+   "template": "{{ ngettext('a', 'b', missing) }}|{% trans n=missing %}a{% pluralize n %}b{% endtrans %}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'missing' is undefined"
+   }
+  },
+  {
    "id": "i18n.old_gettext_autoescape",
    "template": "{{ _('<a>') }}|{{ ngettext('<a>', '<b>', 2) }}",
    "context": {

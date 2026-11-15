@@ -77,5 +77,10 @@ CASES = [
     ("old_gettext_unformatted", "{{ _('100%') }}|{{ _('%s %(a)s') }}|{{ ngettext('%(num)d a', '%(num)d b', 3) }}|{{ pgettext('c', 'm%') }}{{ npgettext('c', 'a', 'b', 1) }}", {"env": OLD}),
     ("old_gettext_keyword_arguments", "{{ gettext('x %(a)s', a=1) }}", {"env": OLD}),
     ("old_ngettext_keyword_arguments", "{{ ngettext('a', 'b', 2, num=1) }}", {"env": OLD}),
+    ("old_null_keyword_parameters", "{{ gettext(message='a') }}|{{ ngettext('a', msgid2='b', n=1) }}|{{ pgettext(context='c', message='m') }}|{{ gettext(**{'message': 'x'}) }}", {"env": OLD}),
+    ("old_null_parameter_twice", "{{ gettext('a', message='b') }}", {"env": OLD}),
+    ("old_null_missing_parameter", "{{ ngettext('a', 'b') }}", {"env": OLD}),
+    ("old_strict_undefined_count", "{{ ngettext('a', 'b', missing) }}", {"env": {**OLD, "undefined": "strict"}}),
+    ("strict_undefined_count", "{{ ngettext('a', 'b', missing) }}|{% trans n=missing %}a{% pluralize n %}b{% endtrans %}", {"env": {"extensions": ["i18n"], "undefined": "strict"}}),
     ("old_gettext_autoescape", "{{ _('<a>') }}|{{ ngettext('<a>', '<b>', 2) }}", {"env": OLD_ESCAPE}),
 ]
