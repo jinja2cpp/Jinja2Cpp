@@ -421,6 +421,9 @@ protected:
 private:
     // The slot's value, when the frame of the unit is installed and the slot bound
     [[nodiscard]] LookupResult ReadSlot(RenderContext& values) const;
+    // The lookup by name of EvaluateRef: out of line, so that a slot read saves no registers
+    // for it (docs/tasks/0513)
+    [[nodiscard]] LookupResult FindByName(RenderContext& values) const;
 
     ArenaText m_valueName;
     size_t m_nameHash;

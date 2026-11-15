@@ -296,14 +296,15 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
 {
     RenderWorkspace workspace;
     auto& outer = workspace.LendMaps();
-    outer.params["a"] = InternalValue(int64_t{ 1 });
+    outer.params.Reserve(1);
+    outer.params.Add("a", InternalValue(int64_t{ 1 }), false);
     outer.topScope["b"] = InternalValue(int64_t{ 2 });
     // A render inside the first one is lent other maps
     auto& inner = workspace.LendMaps();
     EXPECT_NE(&outer, &inner);
     EXPECT_TRUE(inner.params.empty());
     workspace.ReturnMaps(inner);
-    const auto buckets = outer.params.bucket_count();
+    const auto buckets = outer.params.capacity();
     workspace.ReturnMaps(outer);
 
     // Emptied, with the table kept for the next render
@@ -311,7 +312,7 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     EXPECT_EQ(&outer, &again);
     EXPECT_TRUE(again.params.empty());
     EXPECT_TRUE(again.topScope.empty());
-    EXPECT_EQ(buckets, again.params.bucket_count());
+    EXPECT_EQ(buckets, again.params.capacity());
 
     // A table too big to keep on the thread is let go
     for (int idx = 0; idx != 2000; ++idx)
@@ -322,7 +323,7 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     workspace.ReturnMaps(again);
     auto& last = workspace.LendMaps();
     EXPECT_EQ(0u, last.topScope.bucket_count());
-    EXPECT_NE(0u, last.params.bucket_count());
+    EXPECT_NE(0u, last.params.capacity());
     workspace.ReturnMaps(last);
 
     // The renders nested past MaxKeptMaps keep no tables
@@ -330,14 +331,15 @@ TEST(SlotFrameTest, LentMapsComeBackEmptyWithTheirTables)
     for (size_t idx = 0; idx != RenderWorkspace::MaxKeptMaps + 1; ++idx)
     {
         nested.push_back(&workspace.LendMaps());
-        nested.back()->params["a"] = InternalValue(int64_t{ 1 });
+        nested.back()->params.Reserve(1);
+        nested.back()->params.Add("a", InternalValue(int64_t{ 1 }), false);
     }
     for (auto it = nested.rbegin(); it != nested.rend(); ++it)
     {
         workspace.ReturnMaps(**it);
     }
-    EXPECT_EQ(0u, nested.back()->params.bucket_count());
-    EXPECT_NE(0u, nested.front()->params.bucket_count());
+    EXPECT_EQ(0u, nested.back()->params.capacity());
+    EXPECT_NE(0u, nested.front()->params.capacity());
 }
 
 // Where a closure's call runs (docs/tasks/0165): on the caller when it is the defining

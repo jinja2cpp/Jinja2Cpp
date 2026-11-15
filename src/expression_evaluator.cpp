@@ -168,6 +168,11 @@ LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
             return value;
         }
     }
+    return FindByName(values);
+}
+
+JINJA2CPP_NOINLINE LookupResult ValueRefExpression::FindByName(RenderContext& values) const
+{
     return values.FindValueCached(values.Nodes().KeyOf(m_valueName), m_cacheSlot, [this, &values] { return GetHashedName(values.Nodes()); });
 }
 

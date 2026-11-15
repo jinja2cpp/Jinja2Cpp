@@ -609,6 +609,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/node_arena_test.cpp
         test/arena_switch_test.cpp
         test/ordered_map_test.cpp
+        test/params_table_test.cpp
         test/recursion_limits_test.cpp
         test/referenced_templates_test.cpp
         test/slot_frame_test.cpp

@@ -103,7 +103,8 @@ public:
     WorkspaceMaps& operator=(const WorkspaceMaps&) = delete;
     WorkspaceMaps& operator=(WorkspaceMaps&&) = delete;
 
-    [[nodiscard]] InternalValueMap& Params() const { return m_maps.params; }
+    [[nodiscard]] ParamsTable& Params() const { return m_maps.params; }
+    [[nodiscard]] std::vector<std::pair<std::string, Value>>& GenericValues() const { return m_maps.genericValues; }
     [[nodiscard]] InternalValueMap& TopScope() const { return m_maps.topScope; }
     [[nodiscard]] RenderWorkspace& Workspace() const { return m_workspace; }
 
@@ -562,50 +563,33 @@ public:
 
     // `hooks` (with hasHooks set) brings the render's own globals and poll (RenderHooks). A
     // separate instantiation, so that the ordinary Render pays nothing for them
-    // The values a GenericMap gave, each with its name; nothing for a ValuesMap, whose values the context refers to
-    using GenericValues = std::list<std::pair<std::string, Value>>;
-    struct NoGenericValues
-    {
-    };
-    template<typename ParamsMap>
-    using GenericValuesOf = std::conditional_t<std::is_same_v<ParamsMap, GenericMap>, GenericValues, NoGenericValues>;
-
     // RenderCore of a render started inside another one: the collector of the outermost render that
-    // shares its snapshot of the globals, which now keeps this template, with `intParams` converted
-    // again as copies of `params`, or of the values a GenericMap gave (`genericValues`), so that the host's
-    // accessor is not asked twice (SharedSnapshotKeeper, docs/tasks/0481); null when none shares it
-    template<typename ParamsMap>
-    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace,
-                                                          const GlobalsSnapshot& globals,
-                                                          [[maybe_unused]] const ParamsMap& params,
-                                                          [[maybe_unused]] const GenericValuesOf<ParamsMap>& genericValues,
-                                                          InternalValueMap& intParams) const
+    // shares its snapshot of the globals, which now keeps this template; null when none shares it. The
+    // render then converts its params as copies (OwnedArgument), so that a value it stores in a global
+    // outlives the host's data (SharedSnapshotKeeper, docs/tasks/0481)
+    JINJA2CPP_NOINLINE CycleCollector* KeepForOuterRender(const RenderWorkspace& workspace, const GlobalsSnapshot& globals) const
     {
         auto* keeper = SharedSnapshotKeeper(workspace, &globals);
-        if (!keeper)
+        if (keeper)
         {
-            return nullptr;
-        }
-        keeper->KeepTree(this->weak_from_this().lock());
-        if constexpr (std::is_same_v<ParamsMap, GenericMap>)
-        {
-            for (const auto& [name, value] : genericValues)
-            {
-                intParams[name] = OwnedArgument(value);
-            }
-        }
-        else
-        {
-            for (const auto& [name, value] : params)
-            {
-                intParams[name] = OwnedArgument(value);
-            }
+            keeper->KeepTree(this->weak_from_this().lock());
         }
         return keeper;
     }
 
     // Marks prompt-safe the strings of the params the environment names (ChatTemplateOptions::promptSafeParams,
     // docs/tasks/0394), as if the host passed them as Markup. Out of line: few environments name any
+    JINJA2CPP_NOINLINE static void MarkPromptSafeParams(const std::vector<std::string>& names, ParamsTable& params)
+    {
+        for (const auto& name : names)
+        {
+            if (auto* found = params.FindMutable(name))
+            {
+                found->SetMarkup();
+            }
+        }
+    }
+    // The same for a module's params (MakeModule), which it keeps in a map
     JINJA2CPP_NOINLINE static void MarkPromptSafeParams(const std::vector<std::string>& names, InternalValueMap& params)
     {
         for (const auto& name : names)
@@ -670,40 +654,45 @@ public:
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
             auto& intParams = maps.Params();
-            auto convertParam = [&intParams](const std::string& name, const Value& value) {
-                // With the placement inline: each param is a new name in the emptied table
-                intParams.try_emplace_placing_inline(name).first->second = visit(visitors::InputValueConvertor(false, true), value.GetData());
-            };
-
-            // A GenericMap returns values by copy; the context refers to them, so they live here, each
-            // with its name, so that a keep converts them again without asking the host twice
-            // (an empty std::list costs a call to destroy it: a ValuesMap's render has none)
-            GenericValuesOf<ParamsMap> genericValues;
-            if constexpr (std::is_same_v<ParamsMap, GenericMap>)
-            {
-                for (auto& name : params.GetKeys())
-                {
-                    auto& entry = genericValues.emplace_back(name, params.GetValueByName(name));
-                    convertParam(entry.first, entry.second);
-                }
-            }
-            else
-            {
-                for (const auto& [name, value] : params)
-                {
-                    convertParam(name, value);
-                }
-            }
             // A render started inside another one that shares its globals: a value it stores in a
-            // global outlives it in the outer render, which keeps this template and the params'
-            // copies alive until it ends, as the host may destroy both once this render returns
-            // (docs/tasks/0481). One compare for a render that runs inside no other one
+            // global outlives it in the outer render, which keeps this template and copies of the
+            // params alive until it ends, as the host may destroy both once this render returns
+            // (docs/tasks/0481). Decided before the params are converted, so that they are converted
+            // once. One compare for a render that runs inside no other one
             CycleCollector* keeper = nullptr;
             if (JINJA2CPP_CELL_UNLIKELY(maps.Workspace().Running() != nullptr) && globals)
             {
-                keeper = KeepForOuterRender(maps.Workspace(), *globals, params, genericValues, intParams);
+                keeper = KeepForOuterRender(maps.Workspace(), *globals);
             }
-            // After the keep, which converts the params again
+            // The params refer to the host's values and names, or own copies under a keeper
+            auto convertParam = [keeper](const Value& value) {
+                return JINJA2CPP_CELL_UNLIKELY(keeper != nullptr) ? OwnedArgument(value) : visit(visitors::InputValueConvertor(false, true), value.GetData());
+            };
+            if constexpr (std::is_same_v<ParamsMap, GenericMap>)
+            {
+                // A GenericMap returns values by copy: they live in the workspace, each with its
+                // name, for the render. Reserved first, so that the params' views of the names
+                // never see an element move
+                auto keys = params.GetKeys();
+                intParams.Reserve(keys.size());
+                auto& genericValues = maps.GenericValues();
+                genericValues.reserve(keys.size());
+                for (auto& name : keys)
+                {
+                    auto value = params.GetValueByName(name);
+                    auto& entry = genericValues.emplace_back(std::move(name), std::move(value));
+                    intParams.Add(entry.first, convertParam(entry.second), true);
+                }
+                JINJA2CPP_ASSERT(genericValues.size() <= keys.size());
+            }
+            else
+            {
+                intParams.Reserve(params.size());
+                for (const auto& [name, value] : params)
+                {
+                    intParams.Add(name, convertParam(value), false);
+                }
+            }
             if (const auto* safeParams = m_settings->PromptSafeParamsToMark(); JINJA2CPP_CELL_UNLIKELY(safeParams))
             {
                 MarkPromptSafeParams(*safeParams, intParams);
@@ -716,11 +705,12 @@ public:
             }
             const InternalValueMap& renderGlobals = hostGlobals ? *hostGlobals : globals ? globals->values
                                                                                          : noGlobals;
-            RenderContext context(intParams,
+            RenderContext context(RenderContext::EmptyScope(),
                                   renderGlobals,
                                   &callback,
                                   &GetBuiltinGlobals(m_settings->settings.extensions.i18n),
-                                  maps.TopScope());
+                                  maps.TopScope(),
+                                  &intParams);
             context.SetLookupCache(&LookupCache::ForThisThread());
             context.SetNodes(Nodes());
             const auto output = BeginOutput(os);
