@@ -158,7 +158,7 @@ CASES = [
     ("tuple_of_slices_chain_no_step_folds", "{% if x|default([1][:, :])|sort|first %}y{% endif %}"),
     ("tuple_of_slices_chain_step_strict_fails", "{% if [1][:, :]|sort|first %}y{% endif %}", {"env": {"undefined": "strict"}}),
     # with StrictUndefined the Load's failure is decided by the candidate's node kind, not by
-    # the filter or test in a branch of a conditional (0521)
+    # the filter or test in a branch of a conditional (0527)
     ("tuple_of_slices_strict_conditional_branch", "{% if false and ([1][:, :]|length if 1 else x) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_conditional_test", "{% if false and (1 if [1][:, :] else x) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
     # a filter drops an argument it does not take; the argument's fold is still checked (0497)
