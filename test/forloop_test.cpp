@@ -396,13 +396,12 @@ b[1] = image[1];
 // A loop keeps its scope maps from run to run and enters a map without storage without a swap
 // (docs/tasks/0518): a body that sets names in some passes and runs only, and a run with no
 // pass, hand back what they set and leave no name to the next pass or run
-MULTISTR_TEST(ForLoopTest, NestedLoopSetsNamesInSomeRuns,
-              R"({% for r in rows %}{% for c in r %}{% if c is odd %}{% set k = c * 10 %}{% endif %}{{ k|default('-') }},{% endfor %}{% if loop.index is even %}{% set m = r|length %}{% endif %}{{ m|default('.') }};{% endfor %}{% for r in rows %}{% for c in r %}{{ c }}{% endfor %}{% endfor %})",
+MULTISTR_TEST(ForLoopTest, NestedLoopSetsNamesInSomeRuns, R"({% for r in rows %}{% for c in r %}{% if c is odd %}{% set k = c * 10 %}{% endif %}{{ k|default('-') }},{% endfor %}{% if loop.index is even %}{% set m = r|length %}{% endif %}{{ m|default('.') }};{% endfor %}{% for r in rows %}{% for c in r %}{{ c }}{% endfor %}{% endfor %})",
               //-----------
               R"(10,-,30,.;-,1;.;50,-,2;70,-,90,-,.;12345678910)")
 {
     params = {
-        {"rows", ValuesList{ValuesList{1, 2, 3}, ValuesList{4}, ValuesList{}, ValuesList{5, 6}, ValuesList{7, 8, 9, 10}}}
+        { "rows", ValuesList{ ValuesList{ 1, 2, 3 }, ValuesList{ 4 }, ValuesList{}, ValuesList{ 5, 6 }, ValuesList{ 7, 8, 9, 10 } } }
     };
 }
 
