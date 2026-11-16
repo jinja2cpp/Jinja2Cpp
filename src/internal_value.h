@@ -131,7 +131,8 @@ enum class IteratorKind : uint8_t
     ItemsGenerator,
     // Not iterators: the views dict.keys(), values() and items() return (docs/tasks/0489). They
     // have len(), `in` and reversed() but, as an iterator, no items, slices, list methods or
-    // `+` and `*`; they print as dict_keys([...]) and compare as their own kind does
+    // `+` and `*`; they print as dict_keys([...]) and compare as their own kind does. Last:
+    // the kinds before them are iterators, true whatever they hold (BooleanEvaluator)
     DictKeys,
     DictValues,
     DictItems

@@ -157,6 +157,12 @@ public:
     // Those of the top-level expression being parsed (ExpressionParser::AddFoldCandidate)
     std::vector<FoldCandidate>& FoldCandidates();
     void DropFoldCandidates();
+    // A fold candidate's node, which the tree may not hold: a step of a filter chain, made only
+    // as a candidate, or an argument a filter drops (docs/tasks/0497). Seal checks them as roots
+    // (TemplateParser::MakeFoldNodeRoots)
+    void AddFoldNode(NodeRef<Expression> node);
+    // Null when there are none
+    [[nodiscard]] const std::vector<NodeRef<Expression>>* GetFoldNodes() const { return m_fold ? FoldNodes() : nullptr; }
 
 private:
     std::vector<Name> m_names;
@@ -167,6 +173,7 @@ private:
     };
     FoldState& Fold();
     [[nodiscard]] const std::vector<FoldCheck>* FoldChecks() const;
+    [[nodiscard]] const std::vector<NodeRef<Expression>>* FoldNodes() const;
     std::unique_ptr<FoldState, FoldStateDeleter> m_fold;
     // m_names.size(), which every expression reads twice: a load, not a division by sizeof(Name)
     // (docs/tasks/0205)
@@ -219,7 +226,9 @@ public:
     ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
     // The arguments of a call, a filter or a test, `*args` and `**kwargs` included
     ParseResult<CallArgsInfo> ParseCallArgs(LexScanner& lexer);
-    ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
+    // The filters of a chain `|a|b`. In an expression the chain filters `operand`, parsed since
+    // m_tupleSliceSubscripts was foldFrom: each of its steps but the last is a fold candidate too
+    ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer, NodeRef<Expression> operand = {}, unsigned foldFrom = 0);
     // The names a filter `name` called with `params` reads besides its own: `applymacro` reads a
     // macro by name, `map`, `select` and the like a filter or test that may fall back to a value
     // (NameResolver::AddRead)

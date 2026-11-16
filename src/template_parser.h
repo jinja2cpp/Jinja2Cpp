@@ -721,6 +721,14 @@ public:
     // inlines Parse, a cost on every Load (PR #865)
     [[nodiscard]] ErrorInfo GetFoldCheckError(const FoldCheck& check) { return ParseErrorsToErrorInfo(std::vector<ParseError>{ check.error }).error()[0]; }
 
+    // The nodes only the fold checks hold (UnknownCallables::AddFoldNode), for Seal as roots:
+    // an empty list for most templates. Out of line, as FailedFoldError is
+    JINJA2CPP_NOINLINE ArenaSpan<NodeRef<Expression>> MakeFoldNodeRoots()
+    {
+        const auto* foldNodes = m_unknown.GetFoldNodes();
+        return foldNodes ? m_nodes.MakeSpan(*foldNodes) : ArenaSpan<NodeRef<Expression>>();
+    }
+
     // Frees what only the parse needed. Load calls it before Seal makes the tree's buffer,
     // so that the two are not held at once
     void ReleaseParseState()

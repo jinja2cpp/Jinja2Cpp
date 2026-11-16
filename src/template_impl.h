@@ -463,7 +463,7 @@ public:
             }
             // Its fields are set once the Load succeeds
             nodes.SetOrigin(&m_origin);
-            auto sealed = nodes.Seal(*parseResult);
+            auto sealed = nodes.Seal(*parseResult, parser.MakeFoldNodeRoots());
             if (foldChecks)
             {
                 if (auto error = FailedFoldError(parser, *foldChecks, sealed.View()))

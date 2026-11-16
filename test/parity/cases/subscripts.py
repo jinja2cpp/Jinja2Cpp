@@ -150,7 +150,18 @@ CASES = [
     # the parts of a tuple of slices of a ChainableUndefined are evaluated (Codex on #880)
     ("tuple_of_slices_chainable_failing_part", "[{{ [1][:, :][:, 1 / 0] }}]", {"env": {"undefined": "chainable"}}),
     ("tuple_of_slices_nested_default", "[{{ [1][:, :][:, :] is undefined }}]"),
-    # a step of a filter chain folds on its own; the engine's candidate is the whole chain (0497)
+    # a step of a filter chain folds on its own, where the whole chain does not (0497)
     ("tuple_of_slices_chain_step", "[{% if [1][:, :]|sort|first %}y{% endif %}]"),
     ("tuple_of_slices_chain_step_strict", "[{% if [1][:, :]|default([])|map('string') %}y{% endif %}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_chain_step_test", "[{% if [1][:, :] is undefined|string|first %}y{% endif %}|{% if [1][:, :]|sort|first is defined %}y{% endif %}|{% set v = [1][:, :]|sort|first %}{{ v }}|{{ x|default([1][:, :]|sort)|first }}]"),
+    ("tuple_of_slices_chain_step_later", "[{% if [1][:, :]|length|string|first %}y{% endif %}|{% for i in [1][:, :]|sort|map('string') %}{{ i }}{% endfor %}|{{ [1][:, :]|sort|first }}]"),
+    ("tuple_of_slices_chain_no_step_folds", "{% if x|default([1][:, :])|sort|first %}y{% endif %}"),
+    ("tuple_of_slices_chain_step_strict_fails", "{% if [1][:, :]|sort|first %}y{% endif %}", {"env": {"undefined": "strict"}}),
+    # with StrictUndefined the Load's failure is decided by the candidate's node kind, not by
+    # the filter or test in a branch of a conditional (0521)
+    ("tuple_of_slices_strict_conditional_branch", "{% if false and ([1][:, :]|length if 1 else x) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_test", "{% if false and (1 if [1][:, :] else x) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
+    # a filter drops an argument it does not take; the argument's fold is still checked (0497)
+    ("tuple_of_slices_dropped_filter_argument", "{{ x|first([1][:, :]) }}"),
+    ("tuple_of_slices_dropped_filter_argument_folds", "{{ x|first([1][:, :]|sort) }}"),
 ]

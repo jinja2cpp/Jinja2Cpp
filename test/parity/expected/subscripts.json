@@ -4096,6 +4096,288 @@
    },
    "templates": {},
    "output": "[y]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_chain_step_test",
+   "template": "[{% if [1][:, :] is undefined|string|first %}y{% endif %}|{% if [1][:, :]|sort|first is defined %}y{% endif %}|{% set v = [1][:, :]|sort|first %}{{ v }}|{{ x|default([1][:, :]|sort)|first }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[y|||]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_chain_step_later",
+   "template": "[{% if [1][:, :]|length|string|first %}y{% endif %}|{% for i in [1][:, :]|sort|map('string') %}{{ i }}{% endfor %}|{{ [1][:, :]|sort|first }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[y||]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_chain_no_step_folds",
+   "template": "{% if x|default([1][:, :])|sort|first %}y{% endif %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 30)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_chain_step_strict_fails",
+   "template": "{% if [1][:, :]|sort|first %}y{% endif %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 23)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_conditional_branch",
+   "template": "{% if false and ([1][:, :]|length if 1 else x) %}a{% else %}b{% endif %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_conditional_test",
+   "template": "{% if false and (1 if [1][:, :] else x) %}a{% else %}b{% endif %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_dropped_filter_argument",
+   "template": "{{ x|first([1][:, :]) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 18)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_dropped_filter_argument_folds",
+   "template": "{{ x|first([1][:, :]|sort) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "sync_do_first() takes 2 positional arguments but 3 were given"
+   }
   }
  ]
 }
