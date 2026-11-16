@@ -720,7 +720,12 @@ public:
     ScopeRef EnterScope(InternalValueMap&& map)
     {
         auto& scope = m_scopes.Push();
-        scope.swap(map);
+        // A map without storage is empty: the pushed scope is already what it holds. A swap of
+        // the segmented map costs about 19 instructions, four times a loop run (docs/tasks/0518)
+        if (detail::HasStorage(map))
+        {
+            scope.swap(map);
+        }
         m_currentScope = &scope;
         if (!scope.empty())
         {
@@ -742,8 +747,14 @@ public:
         {
             ForgetBuckets(CurrentBuckets());
         }
-        // The scope takes what `map` held, and lets it go
-        map.swap(scope);
+        // The scope takes what `map` held, and lets it go. A scope without storage is empty and
+        // has nothing to hand back; `map` was handed to the scope when it was entered, so it
+        // holds no storage to let go either
+        JINJA2CPP_ASSERT(!detail::HasStorage(map));
+        if (detail::HasStorage(scope))
+        {
+            map.swap(scope);
+        }
         m_scopes.pop_back();
         UpdateCurrentScope();
     }
