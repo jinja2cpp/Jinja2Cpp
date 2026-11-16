@@ -291,7 +291,7 @@ TEST(NameMapTest, NamesThatZeroUnkeyedLanesHashApart)
 TEST(NameMapTest, NameHashCoversEveryByte)
 {
     std::set<std::size_t> hashes;
-    for (std::size_t size = 0; size != 3 * 144 + 20; ++size)
+    for (std::size_t size = 0; size != (3 * 144) + 20; ++size)
     {
         std::string name(size, 'n');
         const auto hash = HashedName::Hash(name);

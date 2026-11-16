@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <ratio>
 #include <string>
 #include <vector>
 
@@ -174,7 +175,7 @@ TEST_F(ParamsTableTest, KeysThatZeroUnkeyedLanesStayLinear)
     for (size_t idx = 0; idx != 4000; ++idx)
     {
         std::string key(16, '\0');
-        std::memcpy(&key[0], &secret1, sizeof(secret1));
+        std::memcpy(key.data(), &secret1, sizeof(secret1));
         const auto tail = static_cast<std::uint64_t>(idx);
         std::memcpy(&key[8], &tail, sizeof(tail));
         crafted[key] = static_cast<int64_t>(idx);
@@ -186,7 +187,7 @@ TEST_F(ParamsTableTest, KeysThatZeroUnkeyedLanesStayLinear)
     const auto plain = FastestRender(tpl, ordinary);
     const auto attacked = FastestRender(tpl, crafted);
     // Unkeyed, the crafted render is thousands of times slower; the floor absorbs a slow runner
-    EXPECT_LT(attacked, plain * 10 + 2000) << "ordinary keys " << plain << " us, crafted " << attacked << " us";
+    EXPECT_LT(attacked, (plain * 10) + 2000) << "ordinary keys " << plain << " us, crafted " << attacked << " us";
 }
 
 } // namespace
