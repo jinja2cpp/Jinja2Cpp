@@ -293,6 +293,9 @@ private:
     // which do not nest: the rest are nested in one (m_depth counts them)
     [[nodiscard]] bool InFoldRoot() const { return m_outputRoot || m_depth != 0; }
     void AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output);
+    // `operand` filtered by `chain`, the filters of a chain before the next one, is a candidate
+    // of its own (docs/tasks/0497); out of line: only with a tuple-slice subscript
+    JINJA2CPP_NOINLINE void NoteChainStepFold(NodeRef<Expression> operand, NodeRef<ExpressionFilter> chain, unsigned foldFrom);
     // At the end of the top-level expression starting at `tok`: an error if one of its subscripts
     // cannot fold, else the check goes to the Load
     nonstd::expected<void, ParseError> FinishFoldRoot(const Token& tok, unsigned rootFrom);

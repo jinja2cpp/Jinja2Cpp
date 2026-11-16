@@ -1636,6 +1636,18 @@ NodeRef<SubscriptExpression> ExpressionParser::MakeSubscript(NodeRef<Expression>
     return m_nodes.Make<SubscriptExpression>(value);
 }
 
+void ExpressionParser::NoteChainStepFold(NodeRef<Expression> operand, NodeRef<ExpressionFilter> chain, unsigned foldFrom)
+{
+    if (!InFoldRoot())
+    {
+        return;
+    }
+    const NodeRef<Expression> step = m_nodes.Make<FilteredExpression>(m_nodes, operand, chain);
+    // A root for Seal even where it is no candidate (UnknownCallables::AddFoldNode)
+    m_unknown.AddFoldNode(step);
+    NoteFoldCandidate(step, foldFrom);
+}
+
 ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer,
                                                                                                  NodeRef<Expression> operand,
                                                                                                  unsigned foldFrom)
@@ -1651,12 +1663,9 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             // last folds even where the next one does not (docs/tasks/0497). The step's filter
             // nodes are shared with the chain, which does not change them; rare: only with a
             // tuple-slice subscript in the steps so far
-            if (result && operand && m_tupleSliceSubscripts != foldFrom && InFoldRoot())
+            if (result && operand && m_tupleSliceSubscripts != foldFrom)
             {
-                const NodeRef<Expression> step = m_nodes.Make<FilteredExpression>(m_nodes, operand, result);
-                // A root for Seal even where it is no candidate (UnknownCallables::AddFoldNode)
-                m_unknown.AddFoldNode(step);
-                NoteFoldCandidate(step, foldFrom);
+                NoteChainStepFold(operand, result, foldFrom);
             }
             const auto& tok = lexer.NextToken();
             if (tok != Token::Identifier)
