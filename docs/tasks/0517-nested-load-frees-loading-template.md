@@ -53,3 +53,6 @@ The outer Load still finishes into the template it started on, which is no longe
 `Template` holds: the last Load that replaced it wins. Regression test
 `TemplateApiTest.LoadTwiceFromTheSelectorOfTheFirstLoad` (2 and 3 nested Loads, with and without
 `ReleaseThreadCaches` between them, outer Load succeeding or failing, narrow and wide).
+
+**Next.** Same-thread nesting only: nested Loads on another thread the selector joins, and a
+template assigned inside the selector, still free it (0522).

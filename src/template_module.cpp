@@ -9,6 +9,7 @@
 #include "make_unexpected.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
+#include "render_workspace.h"
 #include "render_context.h"
 #include "render_failure.h"
 #include "statements.h"
