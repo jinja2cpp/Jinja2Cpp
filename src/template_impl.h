@@ -380,6 +380,14 @@ public:
         // A failed Load leaves the slot empty again
         struct SlotRelease
         {
+            explicit SlotRelease(std::basic_string<CharT>& slot)
+                : source(slot)
+            {
+            }
+            SlotRelease(const SlotRelease&) = delete;
+            SlotRelease& operator=(const SlotRelease&) = delete;
+            SlotRelease(SlotRelease&&) = delete;
+            SlotRelease& operator=(SlotRelease&&) = delete;
             std::basic_string<CharT>& source;
             bool loaded = false;
             ~SlotRelease()
@@ -389,7 +397,7 @@ public:
                     std::basic_string<CharT>().swap(source);
                 }
             }
-        } release{ source };
+        } release(source);
         source = std::move(tpl);
         NormalizeTemplateNewlines(source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;

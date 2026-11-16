@@ -69,7 +69,7 @@ template<typename CharT>
 void NormalizeTemplateNewlines(std::basic_string<CharT>& tpl, bool keepTrailingNewline)
 {
     // The traits' find is inlined to a memchr call; basic_string::find is a call into the library first
-    if (std::char_traits<CharT>::find(tpl.data(), tpl.size(), static_cast<CharT>('\r')) != nullptr)
+    if (std::char_traits<CharT>::find(tpl.data(), tpl.size(), static_cast<CharT>('\r')))
     {
         size_t out = 0;
         for (size_t in = 0; in < tpl.size(); ++in)
