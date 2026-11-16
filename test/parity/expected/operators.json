@@ -5059,6 +5059,28 @@
    "output": "{'a': 1}|dict_items([('x', 2)])"
   },
   {
+   "id": "operators.dict_view_mapping_proxy",
+   "template": "{{ d.keys().mapping.__class__ }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "<class 'mappingproxy'>"
+  },
+  {
    "id": "operators.reversed_class_of_context",
    "template": "{{ (l | reverse).__class__ }}|{{ (d | reverse).__class__ }}|{{ l | reverse | list }}",
    "context": {

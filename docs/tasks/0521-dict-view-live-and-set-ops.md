@@ -30,5 +30,5 @@ reverse iterators of their own kinds and Python's hashing `in`. Left (Jinja2 3.1
 check Python's iteration does; a read-only map adapter over the dict for `mapping`; the set operators of
 Jinja2's sets once sets exist (they print as `{...}`).
 
-**Done when** cases for 1-3 match in narrow and wide runs, pinned as `operators.dict_view_live` and
-`operators.dict_view_set_ops` in the corpus.
+**Done when** cases for 1-3 match in narrow and wide runs: `operators.dict_view_mapping_proxy` (its
+divergence line goes) and new cases for live views and the set operators.

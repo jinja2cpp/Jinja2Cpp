@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0484]
-touches: [src/testers.cpp, src/value_methods.cpp]
+touches: [src/testers.cpp, src/value_methods.cpp, src/expression_evaluator.cpp]
 shares: [test/parity/cases/undefined.py, test/parity/divergences/undefined.txt]
 ---
 # StrictUndefined in the tests and methods that compare

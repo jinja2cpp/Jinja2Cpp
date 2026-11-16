@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0489]
-touches: [src/value_methods.cpp#DictViewMethods, src/testers.cpp#IsValueIn, src/filters.cpp#Reverse, python/src/adapters.cpp]
+touches: [src/value_methods.cpp#DictViewMethods, src/testers.cpp#IsValueIn, src/filters.cpp#Reverse, src/internal_value.h, src/internal_value.cpp#CreateValuesAdapter, src/value_visitors.h#HostCompare]
 shares: [test/parity/cases/operators.py, test/parity/divergences/operators.txt]
 ---
 # What dict views still lack after 0489
