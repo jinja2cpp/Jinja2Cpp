@@ -154,27 +154,27 @@ bool BorrowedCell::IsUnheld() const noexcept
     {
         return false;
     }
-    const ValueObject* owner = nullptr;
+    // The owner's count first: a cell of data the module's names hold stops there, without the
+    // accessor's two virtual calls (DropUnheld runs at the end of every call, docs/tasks/0519)
+    const auto soleOwner = [](const ValueObject* owner) { return owner && owner->use_count() == 1; };
     const CellLink* link = nullptr;
     // The host's copy of a generic container can lend it to a later call, which must see this
     // call's writes (0049 P2): its cell stays while the host holds one (docs/tasks/0336)
-    bool lentAgain = false;
+    bool lentAgain = true;
     if (m_isList)
     {
-        if (auto list = AsList(m_source); list && list->GetAccessor())
+        if (auto list = AsList(m_source); list && list->GetAccessor() && soleOwner(list->GetOwner()))
         {
-            owner = list->GetOwner();
             link = list->GetAccessor()->GetCellLink();
             lentAgain = list->GetAccessor()->MayBeLentAgain();
         }
     }
-    else if (auto map = AsMap(m_source); map && map->GetAccessor())
+    else if (auto map = AsMap(m_source); map && map->GetAccessor() && soleOwner(map->GetOwner()))
     {
-        owner = map->GetOwner();
         link = map->GetAccessor()->GetCellLink();
         lentAgain = map->GetAccessor()->MayBeLentAgain();
     }
-    if (!owner || owner->use_count() != 1 || lentAgain)
+    if (lentAgain)
     {
         return false;
     }
@@ -772,24 +772,6 @@ void BorrowedCells::ReleaseCallFrozen(CycleCollector* collector) noexcept
     m_callFrozen.shrink_to_fit();
 }
 
-void BorrowedCells::AdoptExports(std::shared_ptr<CallExports> exports) noexcept
-{
-    exports->m_self = exports;
-    m_exports = std::move(exports);
-}
-
-void BorrowedCells::NoteExport(CallExports& exports, const void* identity, bool isList)
-{
-    if (identity)
-    {
-        exports.AddCell(identity, isList);
-    }
-    else
-    {
-        exports.m_containers = true;
-    }
-}
-
 void BorrowedCells::PinExports()
 {
     if (!m_exports)
@@ -904,16 +886,6 @@ void CallExports::KeepHostSources(const CellTable* table) noexcept
     for (const auto& [identity, cell] : *table)
     {
         keep(identity, *cell);
-    }
-}
-
-void CallExports::AddCell(const void* identity, bool isList)
-{
-    // A call that hands out the same data again in a row (a loop) notes it once; Record drops
-    // the other repeats
-    if (m_cells.empty() || m_cells.back() != std::pair(identity, isList))
-    {
-        m_cells.emplace_back(identity, isList);
     }
 }
 

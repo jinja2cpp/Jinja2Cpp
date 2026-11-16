@@ -1643,6 +1643,45 @@ UserCallable MakeSiteProbe(const std::shared_ptr<SiteProbe>& probe, bool askForC
 }
 } // namespace
 
+// The context map of an ended call is used again by the next call on the thread only when the host
+// kept no copy of it (docs/tasks/0519): a copy the host kept stays expired, and each call reads its own
+TEST(CallSiteTest, KeptContextStaysExpiredWhenTheNextCallRuns)
+{
+    std::vector<Value> kept;
+    std::string expiredReads;
+    TemplateEnv env;
+    env.AddGlobal("probe", UserCallable(
+                               [&kept, &expiredReads](const UserCallableParams& params) {
+                                   for (const auto& old : kept)
+                                   {
+                                       try
+                                       {
+                                           (void)old.GetIf<GenericMap>()->GetAccessor()->GetValueByName("x");
+                                           expiredReads += "live,";
+                                       }
+                                       catch (const ErrorInfo& error)
+                                       {
+                                           expiredReads += error.GetCode() == ErrorCode::TemplateExpired ? "expired," : "other,";
+                                       }
+                                   }
+                                   const Value keepArg = params["keep"];
+                                   if (const auto* keep = keepArg.GetIf<bool>(); keep && *keep)
+                                   {
+                                       kept.push_back(params.context);
+                                   }
+                                   return params.context.GetIf<GenericMap>()->GetAccessor()->GetValueByName("x");
+                               },
+                               { ArgInfo{ "keep" } }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% for k in [false, true, false, true, false] %}{% set x = loop.index %}{{ probe(k) }}{% endfor %}").has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("12345", result.value());
+    EXPECT_EQ("expired,expired,expired,expired,", expiredReads);
+    ASSERT_EQ(2u, kept.size());
+    EXPECT_NE(kept[0].GetIf<GenericMap>()->GetAccessor(), kept[1].GetIf<GenericMap>()->GetAccessor());
+}
+
 TEST(CallSiteTest, ContextKeysListVisibleNames)
 {
     auto probe = std::make_shared<SiteProbe>();

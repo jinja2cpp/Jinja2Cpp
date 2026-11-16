@@ -5230,12 +5230,14 @@ private:
     bool m_outer;
 };
 
-// Expires the context a host's call was given when the call ends (host_call::ExpireContextMap)
+// Expires the context a host's call was given when the call ends, and lets go of the call's own copy of it,
+// `context` (host_call::EndContextMap)
 class ContextEnd
 {
 public:
-    explicit ContextEnd(const HostCallScope& scope) noexcept
+    ContextEnd(const HostCallScope& scope, Value& context) noexcept
         : m_scope(scope)
+        , m_context(context)
     {
     }
     ContextEnd(const ContextEnd&) = delete;
@@ -5244,11 +5246,12 @@ public:
     ContextEnd& operator=(ContextEnd&&) = delete;
     ~ContextEnd()
     {
-        host_call::ExpireContextMap(m_scope.contextMap);
+        host_call::EndContextMap(m_scope.contextMap, m_context);
     }
 
 private:
     const HostCallScope& m_scope;
+    Value& m_context;
 };
 
 class LeaseEnd
@@ -5911,7 +5914,7 @@ struct UserCallableBody
         scope.keepUndefined = val.keepUndefined;
         UserCallableParams ucParams;
         // Before ucParams goes: a context the host kept is expired while the call's own copy still holds it
-        const ContextEnd contextEnd(scope);
+        const ContextEnd contextEnd(scope, ucParams.context);
         const KeepUndefinedScope keepUndefined(val.keepUndefined);
         // Kept for the call: the scope's records point into it
         const ParsedArguments args = helpers::ParseCallParams(argsInfo, params, ucParams.paramsParsed);

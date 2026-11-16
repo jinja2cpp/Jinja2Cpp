@@ -4,6 +4,7 @@
 #include "internal_value.h"
 #include "render_context.h"
 #include "render_failure.h"
+#include "shared_owner.h"
 
 #include <jinja2cpp/error_info.h>
 
@@ -32,6 +33,14 @@ public:
         , m_scope(scope)
         , m_lend(lend)
     {
+    }
+
+    // Given to a new call on this thread, once nothing but the caller holds it (MakeContextMap)
+    void Renew(RenderContext* context, void* scope, LendFn lend) const noexcept
+    {
+        m_context = context;
+        m_scope = scope;
+        m_lend = lend;
     }
 
     // The number of names GetKeys lists
@@ -102,24 +111,45 @@ private:
 
     mutable RenderContext* m_context;
     mutable void* m_scope;
-    LendFn m_lend;
+    mutable LendFn m_lend;
 };
+
+// The map of the host's call that ended last on this thread, for the next one (EndContextMap)
+thread_local std::shared_ptr<const IMapItemAccessor> t_spareContext;
 } // namespace
 
 ContextMap MakeContextMap(RenderContext& context, void* scope, LendFn lend)
 {
+    // Taken from the slot, so that a call made during this one makes a map of its own
+    auto spare = std::move(t_spareContext);
+    // No copy of the ended call's map is left, on any thread: none can see the change, and the
+    // host's last read of it is ordered before it (IsSoleOwner)
+    if (spare && IsSoleOwner(spare))
+    {
+        const auto* handle = spare.get();
+        // Only MakeContextMap makes the maps the slot holds
+        static_cast<const ContextMapper*>(handle)->Renew(&context, scope, lend);
+        return ContextMap{ GenericMap(std::move(spare)), handle };
+    }
     auto mapper = std::make_shared<const ContextMapper>(&context, scope, lend);
     const IMapItemAccessor* handle = mapper.get();
     return ContextMap{ GenericMap(std::move(mapper)), handle };
 }
 
-void ExpireContextMap(const IMapItemAccessor* handle) noexcept
+void EndContextMap(const IMapItemAccessor* handle, Value& context) noexcept
 {
-    if (handle)
+    if (!handle)
     {
-        // Made by MakeContextMap only
-        static_cast<const ContextMapper*>(handle)->Expire();
+        return;
     }
+    // Made by MakeContextMap only
+    static_cast<const ContextMapper*>(handle)->Expire();
+    auto* map = context.GetIf<GenericMap>();
+    if (!map || t_spareContext || detail::GenericAccessorAccess::Get(*map).get() != handle)
+    {
+        return;
+    }
+    t_spareContext = detail::GenericAccessorAccess::Take(*map);
 }
 
 void RethrowAsPublicError()
