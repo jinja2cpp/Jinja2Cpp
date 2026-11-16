@@ -221,8 +221,8 @@ public:
     static LookupCache& ForThisThread()
     {
 #ifdef JINJA2CPP_HOT_TLS_INITIAL_EXEC
-        // On the heap: the module's thread-locals then fit the static TLS reserve
-        // (JINJA2CPP_HOT_TLS in recursion_guard.h)
+        // On the heap: with the initial-exec TLS model the library's thread-locals then fit the
+        // loader's static TLS reserve (JINJA2CPP_TLS_INITIAL_EXEC, docs/tasks/0514)
         thread_local std::unique_ptr<LookupCache> cache;
         if (!cache)
         {

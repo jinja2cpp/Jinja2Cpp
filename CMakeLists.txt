@@ -75,12 +75,6 @@ option(JINJA2CPP_INSTALL "Add installation rules for JinjaCpp targets" ${JINJA2C
 # builds for the wheel. It uses the public API only (docs/tasks/0357); the wheel carries its own
 # static copy of the library, so the library is built static and position-independent
 option(JINJA2CPP_BUILD_PYTHON "Build the Python module (python/); pyproject.toml turns it on" OFF)
-# The library's hot thread-locals with the initial-exec TLS model (JINJA2CPP_HOT_TLS in
-# src/recursion_guard.h): for a static library linked into a module the interpreter loads with
-# dlopen, where the default model costs a call into the loader per access. JINJA2CPP_BUILD_PYTHON
-# turns it on; set it when installing a static library for python/ built alone
-option(JINJA2CPP_TLS_INITIAL_EXEC "Use the initial-exec TLS model for the library's thread-locals (a static library for a Python module; GCC/Clang on ELF)" OFF)
-
 if (DEFINED BUILD_SHARED_LIBS)
     set(JINJA2CPP_BUILD_SHARED ${BUILD_SHARED_LIBS})
 endif ()
@@ -88,6 +82,35 @@ endif ()
 if (JINJA2CPP_BUILD_SHARED)
     set(JINJA2CPP_PIC ON)
     set(JINJA2CPP_MSVC_RUNTIME_TYPE "/MD")
+endif ()
+
+# The library's thread-locals with the initial-exec TLS model (docs/tasks/0514). Position-independent
+# code otherwise reaches each of them through a call into the dynamic loader (__tls_get_addr): in a
+# shared library that cost 5-20% of a render's instructions, 27% of the smallest. Initial-exec puts the
+# library's thread-locals (about 660 bytes) in the static TLS block, which a library loaded with dlopen
+# takes from the loader's reserve; when another library has used that reserve up, the dlopen fails
+# with "cannot allocate memory in static TLS block", and this option set OFF is the fix.
+# On by default for a shared library with glibc, whose loader keeps that reserve; musl's refuses
+# initial-exec TLS in a library loaded with dlopen at all, so elsewhere it stays opt-in.
+# JINJA2CPP_BUILD_PYTHON turns it on for the wheel's static copy, and a static library installed for
+# python/ built alone should set it
+if (JINJA2CPP_BUILD_SHARED AND UNIX AND NOT APPLE)
+    include(CheckCXXSourceCompiles)
+    check_cxx_source_compiles("#include <features.h>
+#ifndef __GLIBC__
+#error not glibc
+#endif
+int main() { return 0; }" JINJA2CPP_GLIBC_TARGET)
+endif ()
+if (JINJA2CPP_BUILD_SHARED AND JINJA2CPP_GLIBC_TARGET)
+    set(JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT ON)
+else ()
+    set(JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT OFF)
+endif ()
+option(JINJA2CPP_TLS_INITIAL_EXEC "Use the initial-exec TLS model for the library's thread-locals (default ON for a shared library with glibc; GCC/Clang)" ${JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT})
+# A build directory first configured static keeps OFF in its cache when it turns shared
+if (JINJA2CPP_TLS_INITIAL_EXEC_DEFAULT AND NOT JINJA2CPP_TLS_INITIAL_EXEC)
+    message(STATUS "Jinja2C++ shared library with the dynamic TLS model (JINJA2CPP_TLS_INITIAL_EXEC=OFF): slower thread-locals")
 endif ()
 
 if (JINJA2CPP_BUILD_PYTHON)
@@ -99,9 +122,7 @@ if (JINJA2CPP_BUILD_PYTHON)
     set(JINJA2CPP_TLS_INITIAL_EXEC ON)
 endif ()
 if (JINJA2CPP_TLS_INITIAL_EXEC AND UNIX AND NOT APPLE)
-    if (JINJA2CPP_BUILD_SHARED)
-        message(FATAL_ERROR "JINJA2CPP_TLS_INITIAL_EXEC is for a static library linked into a module")
-    endif ()
+    # Keeps the large lookup cache on the heap (src/render_context.h), so the static block stays small
     add_compile_definitions(JINJA2CPP_HOT_TLS_INITIAL_EXEC)
 endif ()
 
@@ -405,6 +426,15 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     set(JINJA2CPP_TARGET_CXX_FLAGS ${MSVC_CXX_FLAGS})
 endif ()
 target_compile_options(${LIB_TARGET_NAME} PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
+if (JINJA2CPP_TLS_INITIAL_EXEC AND UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE -ftls-model=initial-exec)
+endif ()
+# Calls between the shared library's own exported functions go direct, not through the PLT, and may be
+# inlined: a program cannot interpose them (LD_PRELOAD), as it cannot the hidden ones. Load/plain_text
+# -4% (docs/tasks/0514)
+if (JINJA2CPP_BUILD_SHARED AND UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(${LIB_TARGET_NAME} PRIVATE -fno-semantic-interposition)
+endif ()
 
 
 # The built-in big-integer backend: header-only and private, so consumers need nothing for it
