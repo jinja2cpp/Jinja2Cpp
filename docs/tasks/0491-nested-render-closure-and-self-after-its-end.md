@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0481]
@@ -40,3 +40,12 @@ should agree on the outermost render.
 A macro calling a sibling macro of its template is the common case (found by the 0481 verifier).
 
 **Done when.** The rows print Python's output, ASan clean.
+
+**Resolution (batch 8 C).** A render with a keeper (`SharedSnapshotKeeper`) marks its root context and the
+contexts of the modules it imports `SetEndsBeforeRender`, and closes over them when it ends
+(`CaptureClosures(FrameEnd{ 0, ... })`, the root's copy with the render's params below its names); its
+collector hands what it kept to the keeper (`CycleCollector::KeepForOuter`). Its template table is shared
+(`IRendererCallback::SharedTemplates`) with the `self` and `super()` stacks it ends (`BlocksStack::endedSlots`),
+so their handles resolve in any later render. `SnapshotOwner` now finds the outermost render with the same
+snapshot, as the keeper does: the `A -> B -> A` first write reaches the outer render
+(`BorrowedCellsSingle.NestedRenderFirstWriteAcrossAnotherEnvironment`).
