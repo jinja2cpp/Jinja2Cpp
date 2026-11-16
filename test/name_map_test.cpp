@@ -259,14 +259,36 @@ std::pair<std::size_t, std::size_t> DistinctKeyed(const std::vector<std::string>
     }
     return { hashes.size(), low.size() };
 }
+
+// The most positions a lookup probes when `names` fill a linearly probed index of 8,192 by
+// their keyed hash, as ParamsTable's does: what an insert or lookup costs, with no clock
+std::size_t LongestProbe(const std::vector<std::string>& names)
+{
+    constexpr std::size_t mask = 0x1FFF;
+    std::vector<bool> used(mask + 1);
+    std::size_t longest = 0;
+    for (const auto& name : names)
+    {
+        std::size_t probes = 1;
+        auto pos = HashedName::Hash(name) & mask;
+        while (used[pos])
+        {
+            pos = (pos + 1) & mask;
+            ++probes;
+        }
+        used[pos] = true;
+        longest = std::max(longest, probes);
+    }
+    return longest;
+}
 } // namespace
 
 // hash_bytes xors fixed secrets into its lanes and multiplies, so a lane whose eight bytes
 // equal its secret drops the bytes it covers: every name of 8 to 16 bytes that starts with
 // secret[1] hashes alike, and so does every 32 byte name with secret[1] at 0 and secret[3] at
 // 16. The name hash keys the secrets themselves per process, so the same names spread over the
-// whole table (docs/tasks/0507). 4,000 random 64-bit hashes all differ, and take about 3,100 of
-// the 8,192 values of 13 bits
+// whole table (docs/tasks/0507). 4,000 random 64-bit hashes all differ, take about 3,100 of the
+// 8,192 values of 13 bits, and in a linearly probed index of 8,192 no lookup walks far
 TEST(NameMapTest, NamesThatZeroUnkeyedLanesHashApart)
 {
     constexpr std::uint64_t secret1 = UINT64_C(0xe7037ed1a0b428db);
@@ -285,6 +307,8 @@ TEST(NameMapTest, NamesThatZeroUnkeyedLanesHashApart)
         const auto [distinct, low] = DistinctKeyed(names);
         EXPECT_EQ(4000U, distinct);
         EXPECT_GT(low, 2500U);
+        // Random hashes at half load probe a few dozen positions at worst; one group, 4,000
+        EXPECT_LT(LongestProbe(names), 200U);
     }
 }
 

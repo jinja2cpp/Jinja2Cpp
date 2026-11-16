@@ -38,6 +38,9 @@ bytes only for an input equal to a secret nobody outside the process knows, so t
 finalizer is gone. The secrets are filled once by a function-local static and published with a
 release store that `HashName` reads with acquire. `src/ankerl/` is unchanged.
 Tests: `NameMapTest.NamesThatZeroUnkeyedLanesHashApart` (4,000 names each of 12 and 16 bytes
-starting with secret[1], and of 32 bytes zeroing both blocks: 1 unkeyed hash, 4,000 keyed),
-`NameMapTest.NameHashCoversEveryByte`, and `ParamsTableTest.KeysThatZeroUnkeyedLanesStayLinear`
-(4,000 crafted params keys: master 185 ms against 1 ms with ordinary keys, fixed within noise).
+starting with secret[1], and of 32 bytes zeroing both blocks: 1 unkeyed hash, 4,000 keyed, the
+longest probe in a linearly probed index of 8,192 under 200), `NameMapTest.NameHashCoversEveryByte`,
+`NameMapTest.LongNamesRepeatingTheirLastWindowHashApart` and
+`ParamsTableTest.KeysThatZeroUnkeyedLanesStillRender`. Measured once by hand, not in a test (no
+clocks in tests): 4,000 crafted params keys rendered in 185 ms on master against 1 ms with ordinary
+keys, and as fast as ordinary keys with the fix.
