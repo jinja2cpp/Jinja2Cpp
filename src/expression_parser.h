@@ -226,9 +226,9 @@ public:
     ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
     // The arguments of a call, a filter or a test, `*args` and `**kwargs` included
     ParseResult<CallArgsInfo> ParseCallArgs(LexScanner& lexer);
-    // The filters of a chain `|a|b`. In an expression the chain filters `operand`, parsed since
-    // m_tupleSliceSubscripts was foldFrom: each of its steps but the last is a fold candidate too
-    ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer, NodeRef<Expression> operand = {}, unsigned foldFrom = 0);
+    // The filters of a chain `|a|b`. In an expression (m_chainOperand) each of its steps but the
+    // last is a fold candidate too
+    ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
     // The names a filter `name` called with `params` reads besides its own: `applymacro` reads a
     // macro by name, `map`, `select` and the like a filter or test that may fall back to a value
     // (NameResolver::AddRead)
@@ -331,6 +331,10 @@ private:
     // one that may fold its tuple-slice subscripts away go to UnknownCallables::FoldCandidates,
     // which the parsers of one template share, so that a parser, made for each tag, owns no list
     bool m_outputRoot = false;
+    // What the chain ParseFilterExpression parses filters, in an expression, and
+    // m_tupleSliceSubscripts before it (NoteChainStep); null for a filter tag's chain
+    NodeRef<Expression> m_chainOperand;
+    unsigned m_chainFoldFrom = 0;
     // In the else branch of a conditional, parsed as if it were not nested (ParseIfExpression)
     bool m_inElseChain = false;
     // Subscripts by a tuple holding a slice (`[1, 2][1:2, 3]`) made so far: Jinja2 compiles one

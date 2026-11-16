@@ -16,7 +16,7 @@ shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt
   and fails the engine's Load (`subscripts.tuple_of_slices_strict_conditional_branch`); and
   `{% if false and (1 if [1][:, :] else x) %}` fails Jinja2's compile (the test's truthiness of a
   strict undefined) where the engine renders `b` (`subscripts.tuple_of_slices_strict_conditional_test`);
-- with StrictUndefined `{{ [1][:, :]|batch(2) }}`, `|slice(2)` and `|unique` fold in Jinja2, whose
+- with StrictUndefined `{{ [1][:, :]|batch(2) }}`, `|slice(2)`, `|unique` and `|default([])|items` fold in Jinja2, whose
   filters return generators, and fail in the engine, which evaluates them eagerly (no case: the
   output is a generator's repr with its address);
 - cost: under StrictUndefined every candidate is evaluated, and every operator node and, since

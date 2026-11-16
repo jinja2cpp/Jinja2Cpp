@@ -935,7 +935,13 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFilter
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, opTok);
             }
-            auto filter = ParseFilterExpression(lexer, *result, foldFrom);
+            const auto outerOperand = m_chainOperand;
+            const auto outerFoldFrom = m_chainFoldFrom;
+            m_chainOperand = *result;
+            m_chainFoldFrom = foldFrom;
+            auto filter = ParseFilterExpression(lexer);
+            m_chainOperand = outerOperand;
+            m_chainFoldFrom = outerFoldFrom;
             if (!filter)
             {
                 return MakeUnexpected(filter.error());
@@ -1648,9 +1654,7 @@ void ExpressionParser::NoteChainStepFold(NodeRef<Expression> operand, NodeRef<Ex
     NoteFoldCandidate(step, foldFrom);
 }
 
-ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer,
-                                                                                                 NodeRef<Expression> operand,
-                                                                                                 unsigned foldFrom)
+ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer)
 {
     NodeRef<ExpressionFilter> result;
 
@@ -1663,7 +1667,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             // last folds even where the next one does not (docs/tasks/0497). The step's filter
             // nodes are shared with the chain, which does not change them; rare: only with a
             // tuple-slice subscript in the steps so far
-            NoteChainStep(operand, result, foldFrom);
+            NoteChainStep(m_chainOperand, result, m_chainFoldFrom);
             const auto& tok = lexer.NextToken();
             if (tok != Token::Identifier)
             {
