@@ -29,6 +29,7 @@ struct ContextMap
 
 // The render's lookup as a map, lending what it gives through `lend`. The map of the call that ended last on this
 // thread is used again when the host kept no copy of it (EndContextMap), which saves the call an allocation
+// A host that keeps only the map's address (GetAccessor, GetIdentity), without a copy, may find it naming a later call's map
 ContextMap MakeContextMap(RenderContext& context, void* scope, LendFn lend);
 
 // The host's call the context was given to ended: a copy the host kept fails with TemplateExpired. `context` is the
