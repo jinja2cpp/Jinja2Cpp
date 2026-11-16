@@ -197,8 +197,16 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        python bench/trend.py drift --history data/history.jsonl --window 10 --threshold 0.03 --out drift.md \
-          --repo-url "${{ github.server_url }}/${{ github.repository }}" | tee -a "$GITHUB_STEP_SUMMARY"
+        # The 10-record window is one or two days at about 40 merges a week, so a row creeping
+        # 0.5% a merge never crosses it; the 7 and 28 day anchors see that (task 0520)
+        : > drift.md
+        for args in "--window 10 --threshold 0.03" "--since-days 7 --threshold 0.03" \
+                    "--since-days 28 --threshold 0.05"; do
+          # shellcheck disable=SC2086
+          python bench/trend.py drift --history data/history.jsonl $args --out drift-one.md \
+            --repo-url "${{ github.server_url }}/${{ github.repository }}" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ -s drift-one.md ] && { cat drift-one.md; echo; } >> drift.md
+        done
         [ -s drift.md ] || exit 0
         title="Benchmark drift on master"
         issue=$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
