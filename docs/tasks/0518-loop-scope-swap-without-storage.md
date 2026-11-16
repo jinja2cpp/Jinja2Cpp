@@ -38,3 +38,10 @@ bench/count.py (GCC 13.3 Release, pinned name-hash key) against 9541b58:
 **Done when.** The count job shows those rows down, with no row above +0.3% and no new allocations.
 The loop tests pass under address/undefined sanitizers, in particular those for a body that sets
 names in some runs and not in others (the kept map must still come back with its storage).
+
+**Result.** `EnterScope(map)` swaps only when `map` has storage and `ExitScope(map)` only when
+the scope has; a Debug contract check states that the kept map holds no storage when it is
+handed back. Counted locally against 86815bd (GCC Release, pinned key): `mitsuhiko_table`
+-1.37%, `mitsuhiko_table_wide` -1.28% (RenderTo/RenderSink the same), `config_file` -0.52%,
+`hf_deepseek_v31` -0.23%, `for_range` -0.19%, no row up, allocations unchanged. Regression
+case `ForLoopTest.NestedLoopSetsNamesInSomeRuns`.
