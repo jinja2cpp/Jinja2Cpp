@@ -73,8 +73,13 @@ public:
     template<typename CharT>
     auto LoadTemplate(TemplateEnv* env, std::string fileName);
 
-    // The settings templates are made with: shared with the templates made before while `settings` still equals them
+    // The settings templates are made with: shared with the templates made before until the settings change. Compares
+    // `settings` with them only once the mutable TemplateEnv::GetSettings reference was handed out (docs/tasks/0516)
     LoadSettingsPtr GetLoadSettings() const;
+    // Replaces `settings` and the settings of the templates made from now on (SetSettings, ModifySettings)
+    void ReplaceSettings(Settings newSettings);
+    // Hands out `settings` for edits the environment cannot see: GetLoadSettings compares from now on
+    Settings& MutableSettings();
     // A number that no other state of the globals of any environment has had
     static uint64_t NewGlobalsGeneration();
     // A number greater than every one it returned before: orders the uses of cached templates
@@ -125,8 +130,10 @@ private:
     }
 
     mutable Mutex m_loadSettingsGuard;
-    // Made on the first Load, or by SetBigIntBackend or SetDialect when they change what it holds
+    // Made on the first Load, or by SetBigIntBackend, SetDialect or ReplaceSettings when they change what it holds
     mutable LoadSettingsPtr m_loadSettings JINJA2CPP_GUARDED_BY(m_loadSettingsGuard);
+    // MutableSettings was called: `settings` may have changed since m_loadSettings was made. Never reset
+    bool m_settingsLent JINJA2CPP_GUARDED_BY(m_loadSettingsGuard) = false;
 };
 
 struct TemplateEnvAccess

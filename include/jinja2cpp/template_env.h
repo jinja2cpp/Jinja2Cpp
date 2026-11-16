@@ -310,6 +310,11 @@ public:
      *
      * Change them before loading templates: a template copies the settings when it is loaded.
      *
+     * Prefer \ref ModifySettings or \ref SetSettings. Once this reference has been handed out, the environment
+     * can no longer tell when the settings change, so every template made with it afterwards compares the
+     * settings with those of the previous template (docs/tasks/0516). Call the const overload (`std::as_const`)
+     * to read them.
+     *
      * @return Reference to the global settings
      */
     Settings& GetSettings();
@@ -317,9 +322,22 @@ public:
     /*!
      * \brief Replace global settings for the environment with the new ones
      *
+     * The templates made from now on use them; the templates made before keep the settings they were made with.
+     *
      * @param setts New settings
      */
     void SetSettings(const Settings& setts);
+
+    /*!
+     * \brief Change global settings for the environment in place
+     *
+     * Calls `fn` with a copy of the current settings and, when it returns, makes the copy the settings of the
+     * templates made from now on, as \ref SetSettings does. When `fn` throws, the settings stay as they were and
+     * the exception propagates. `fn` may read the environment but must not configure it.
+     *
+     * @param fn Edits the settings it is given
+     */
+    void ModifySettings(const std::function<void(Settings&)>& fn);
 
     /*!
      * \brief Set the big-integer arithmetic of the templates made from now on (see \ref BigIntBackend)

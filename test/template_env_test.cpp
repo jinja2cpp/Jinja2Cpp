@@ -10,11 +10,13 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <cstddef>
 #include <exception>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 
 using namespace jinja2;
@@ -142,6 +144,121 @@ TEST(TemplateEnvTest, SettingsEquality)
     EXPECT_TRUE(a != b);
     a.finalize = b.finalize;
     EXPECT_TRUE(a == b);
+}
+
+// Settings snapshots (docs/tasks/0516): SetSettings and ModifySettings take effect for the templates made after them,
+// the templates made before keep theirs, and edits through the mutable GetSettings still count
+namespace
+{
+constexpr const char* TrimSource = "{% if true %}\nx{% endif %}";
+
+std::string RenderTrimSource(TemplateEnv& env)
+{
+    Template tpl(&env);
+    auto loaded = tpl.Load(TrimSource);
+    EXPECT_TRUE(loaded) << loaded.error().ToString();
+    return tpl.RenderAsString({}).value();
+}
+
+Settings Trimming(bool trim)
+{
+    Settings settings;
+    settings.trimBlocks = trim;
+    return settings;
+}
+} // namespace
+
+TEST(TemplateEnvTest, SetSettingsAppliesToTheTemplatesMadeAfterIt)
+{
+    TemplateEnv env;
+    Template before(&env);
+    ASSERT_TRUE(before.Load(TrimSource));
+    EXPECT_EQ("\nx", RenderTrimSource(env));
+    env.SetSettings(Trimming(true));
+    EXPECT_TRUE(std::as_const(env).GetSettings().trimBlocks);
+    EXPECT_EQ("x", RenderTrimSource(env));
+    EXPECT_EQ("x", RenderTrimSource(env));
+    EXPECT_EQ("\nx", before.RenderAsString({}).value());
+    env.SetSettings(Trimming(false));
+    EXPECT_EQ("\nx", RenderTrimSource(env));
+}
+
+TEST(TemplateEnvTest, ModifySettingsEditsACopyAndKeepsTheSettingsWhenItThrows)
+{
+    TemplateEnv env;
+    EXPECT_EQ("\nx", RenderTrimSource(env));
+    env.ModifySettings([&env](Settings& settings) {
+        // The environment is readable from the callback, and still has the old settings
+        EXPECT_FALSE(std::as_const(env).GetSettings().trimBlocks);
+        settings.trimBlocks = true;
+    });
+    EXPECT_TRUE(std::as_const(env).GetSettings().trimBlocks);
+    EXPECT_EQ("x", RenderTrimSource(env));
+
+    struct Failure
+    {
+    };
+    EXPECT_THROW(env.ModifySettings([](Settings& settings) {
+        settings.trimBlocks = false;
+        throw Failure();
+    }),
+                 Failure);
+    EXPECT_TRUE(std::as_const(env).GetSettings().trimBlocks);
+    EXPECT_EQ("x", RenderTrimSource(env));
+}
+
+TEST(TemplateEnvTest, EditsThroughTheMutableGetSettingsApplyToTheNextTemplate)
+{
+    TemplateEnv env;
+    env.SetSettings(Trimming(false));
+    EXPECT_EQ("\nx", RenderTrimSource(env));
+    Settings& settings = env.GetSettings();
+    settings.trimBlocks = true;
+    EXPECT_EQ("x", RenderTrimSource(env));
+    // An edit after the reference was handed out, without asking for it again
+    settings.trimBlocks = false;
+    EXPECT_EQ("\nx", RenderTrimSource(env));
+    env.ModifySettings([](Settings& changed) { changed.trimBlocks = true; });
+    EXPECT_EQ("x", RenderTrimSource(env));
+    settings.trimBlocks = false;
+    EXPECT_EQ("\nx", RenderTrimSource(env));
+}
+
+TEST(TemplateEnvTest, TemplatesMadeWhileTheSettingsChangeSeeTheOldOrTheNewOnes)
+{
+    TemplateEnv env;
+    std::atomic<bool> done{ false };
+    std::atomic<int> odd{ 0 };
+    std::thread loader([&] {
+        for (int idx = 0; idx != 200 || !done; ++idx)
+        {
+            Template tpl(&env);
+            if (!tpl.Load(TrimSource))
+            {
+                ++odd;
+                continue;
+            }
+            const auto text = tpl.RenderAsString({});
+            if (!text || (*text != "x" && *text != "\nx"))
+            {
+                ++odd;
+            }
+        }
+    });
+    for (int idx = 0; idx != 200; ++idx)
+    {
+        if (idx % 2 != 0)
+        {
+            env.SetSettings(Trimming(true));
+        }
+        else
+        {
+            env.ModifySettings([](Settings& settings) { settings.trimBlocks = false; });
+        }
+    }
+    done = true;
+    loader.join();
+    EXPECT_EQ(0, odd.load());
 }
 
 // Template::RenderTo with RenderOptions (docs/tasks/0357 B3): a render's own globals and poll
