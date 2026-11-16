@@ -46,7 +46,7 @@ bool OutStream::RollbackTo(const Mark& mark)
         }
         // Everything that left it went to the spill while the mark lived, the buffer first and whole: its part before
         // the mark follows what the spill held at the mark, and the buffer starts anew
-        const size_t kept = static_cast<size_t>(mark.m_cur - m_buffer);
+        const auto kept = static_cast<size_t>(mark.m_cur - m_buffer);
         TruncateSpill(mark.m_spill + kept);
         m_sinkWritten = mark.m_base + (kept / m_charSize);
         m_cur = m_buffer;
