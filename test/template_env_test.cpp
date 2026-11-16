@@ -230,7 +230,7 @@ TEST(TemplateEnvTest, TemplatesMadeWhileTheSettingsChangeSeeTheOldOrTheNewOnes)
     std::atomic<bool> done{ false };
     std::atomic<int> odd{ 0 };
     std::thread loader([&] {
-        for (int idx = 0; idx != 200 || !done; ++idx)
+        for (int idx = 0; idx < 200 || !done; ++idx)
         {
             Template tpl(&env);
             if (!tpl.Load(TrimSource))
