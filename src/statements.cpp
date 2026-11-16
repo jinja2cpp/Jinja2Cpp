@@ -319,6 +319,10 @@ struct LoopState : ValueObject
     bool recursiveVolatile = false;
     // Keeps recursiveNodes alive when a module frees replaced trees (docs/tasks/0482)
     std::shared_ptr<const void> recursiveOwner;
+    // What the site keeps of the frames around the loop once they end (ClosureSite::CaptureOnEnd), held while the
+    // loop is: a recursive loop stored past its include or macro call still resolves its body's names there
+    // (docs/tasks/0502)
+    std::shared_ptr<ClosureCapture> recursiveCapture;
     // The arguments of the last loop.changed() call, made on first use: a list [called,
     // *args] its callables hold as their receiver, where the cycle collector sees them
     InternalValue lastChanged;
@@ -481,6 +485,7 @@ struct LoopState : ValueObject
         if (recursiveStatement)
         {
             recursiveSite = ClosureSite();
+            recursiveCapture.reset();
         }
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
@@ -1545,7 +1550,20 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         state->recursiveStatement = this;
         state->recursiveNodes = values.Nodes();
         // loop(...) runs every level where the outermost one runs (ClosureSite)
-        state->recursiveSite = site ? *site : ClosureSite(values);
+        if (site)
+        {
+            state->recursiveSite = *site;
+            state->recursiveCapture = site->Capture();
+        }
+        else
+        {
+            state->recursiveSite = ClosureSite(values);
+            // Its body reads any name: the loop's names are not recorded as a macro body's are
+            if (state->recursiveSite.OutlivesItsFrames(values))
+            {
+                state->recursiveCapture = state->recursiveSite.CaptureOnEnd(values, {}, true);
+            }
+        }
         state->recursiveAutoescape = values.IsStaticAutoescape();
         state->recursiveVolatile = values.IsVolatileAutoescape();
         state->recursiveOwner = values.TreeOwner();
@@ -1627,7 +1645,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         auto failure = detail::TakeKept();
         if (detail::IsStop(failure))
         {
-            values.CaptureClosures(FrameEnd::Soft(endScopes));
+            values.CaptureClosures(FrameEnd::Stopped(endScopes));
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
         }
         std::rethrow_exception(std::move(failure));
@@ -1814,9 +1832,9 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         if (detail::IsStop(failure))
         {
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
-            // The end unbinds the slots before it closes over the frame
+            // The closures keep the loop's targets too, still in their slots (FrameEnd::Stopped)
+            values.CaptureClosures(FrameEnd::Stopped(endScopes));
             guard.Unbind();
-            values.CaptureClosures(FrameEnd::Soft(endScopes));
         }
         std::rethrow_exception(std::move(failure));
     }
@@ -2296,6 +2314,51 @@ struct SelfBlockCall
         // self.b() returns the block's output: one item of generate(), as a macro's output is
         const OutStream::PieceHold pieceHold(stream);
         RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
+    }
+};
+
+// super() of the block at `depth` of its chain: renders the block at `depth + 1` of the stack it came from, in the
+// frame of that stack, wherever it is called from and once that stack has ended (stored past an include or a module
+// call: SelfBlocks), as Jinja2's BlockReference does (docs/tasks/0501)
+struct SuperBlockCall
+{
+    // Owned: super() may outlive the tree the name is in
+    std::string name;
+    size_t depth;
+    std::shared_ptr<SelfBlocks> owner;
+    ClosureSite site;
+
+    void operator()(const CallParams& /*params*/, OutStream& stream, RenderContext& context) const
+    {
+        // The value of the call, one item of generate() as a macro's output is
+        const OutStream::PieceHold pieceHold(stream);
+        const auto home = site.Resolve(context);
+        // The parent block sees the scopes below this block's, wherever super() is called from (a macro the block
+        // passes it to): a context on them in the block's own
+        RenderContext superContext(*home.context, home.link);
+        // The frames it was taken in have ended: it sees what they held (ClosureCapture)
+        CopyCaptured(superContext, site, home);
+        const BlocksStack* stack = owner->live ? owner->live : &owner->ended;
+        // Its chain's frame: the one running it, else one of its own, so that a super() in the parent block finds
+        // the block above it in the same chain
+        TemplateFrame* frame = nullptr;
+        for (auto* f = superContext.GetTemplateFrame(); f; f = f->outer)
+        {
+            if (f->blocks == stack)
+            {
+                frame = f;
+                break;
+            }
+        }
+        TemplateFrame ownFrame;
+        if (!frame)
+        {
+            ownFrame.blocks = stack;
+            ownFrame.baseDepth = home.link;
+            ownFrame.outer = superContext.GetTemplateFrame();
+            superContext.SetTemplateFrame(&ownFrame);
+        }
+        RenderBlockAt(*stack, name, depth + 1, stream, superContext);
     }
 };
 
@@ -2902,15 +2965,16 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             {
                 stack->self = std::make_shared<SelfBlocks>(stack);
             }
-            // The parent block sees the scopes below this block's, wherever super() is called
-            // from (a macro the block passes it to): a context on them in the block's own
-            parentBlock.emplace(Callable::Macro, [owner = stack->self, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
-                // The value of the call, one item of generate() as a macro's output is
-                const OutStream::PieceHold pieceHold(stream);
-                const auto home = site.Resolve(context);
-                RenderContext superContext(*home.context, home.link);
-                RenderBlockAt(owner->live ? *owner->live : owner->ended, name, depth + 1, stream, superContext);
-            });
+            ClosureSite site(values);
+            // Stored past an include, it sees what the block saw there, as a macro defined in the block does
+            // (0373); elsewhere the frames it sees end with the render, and nothing is kept
+            std::shared_ptr<const void> capture;
+            if (values.EndsBeforeRender() && site.OutlivesItsFrames(values))
+            {
+                capture = site.CaptureOnEnd(values, {}, true);
+            }
+            parentBlock.emplace(Callable::Macro, SuperBlockCall{ std::string(name), depth, stack->self, std::move(site) });
+            parentBlock->SetKeepAlive(std::move(capture));
         }
         else
         {
@@ -2932,11 +2996,14 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     OutputAutoescapeGuard autoescapeGuard(values, m_autoescape);
     values.Nodes()[m_mainBody].Render(os, values);
     // A closure defined in the block and kept past it sees what the block saw above its
-    // template's top level, as Jinja2's block function sees its derived context (0373)
+    // template's top level, as Jinja2's block function sees its derived context (0373). The
+    // frame is all of the block context's own scopes (RenderBlockAt makes it), so that it ends
+    // the capture of super() too, whose site is below the block's scope (0501)
     {
         const size_t count = values.GetScopesCount();
-        const size_t root = frame ? std::min(frame->baseDepth, count - 1) : count - 1;
-        values.CaptureClosures(FrameEnd{ count, true, root, root });
+        const size_t first = std::min(values.FirstOwnScope(), count);
+        const size_t root = frame ? std::min(frame->baseDepth, first - 1) : first - 1;
+        values.CaptureClosures(FrameEnd{ first, true, root, root });
     }
     values.ExitScope();
     values.SetSelfFromContext(prevSelfFromContext);
@@ -4210,6 +4277,36 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     ThrowStoppedCallBlock(values, snapshot, true);
 }
 
+namespace
+{
+// A `with`, `filter` or generation body rendered by `body` in `inner`, its context: a stop out of it closes over the
+// body's names first (FrameEnd::Stopped). The rethrow is outside the handler, as in RenderMacroBody
+[[noreturn]] JINJA2CPP_NOINLINE void EndStoppedSoftBody(RenderContext& inner)
+{
+    auto failure = detail::TakeKept();
+    if (detail::IsStop(failure))
+    {
+        inner.CaptureClosuresAtStop();
+    }
+    std::rethrow_exception(std::move(failure));
+}
+
+template<typename Body>
+void RenderSoftBody(RenderContext& inner, const Body& body)
+{
+    try
+    {
+        body();
+        return;
+    }
+    catch (...)
+    {
+        detail::KeepFailure();
+    }
+    EndStoppedSoftBody(inner);
+}
+} // namespace
+
 void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     values.Nodes()[m_expr].Evaluate(values);
@@ -4226,7 +4323,7 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
         scope.ForName({ nodes.Text(var.name), var.hash }) = nodes[var.value].Evaluate(values);
     }
 
-    values.Nodes()[m_mainBody].Render(os, innerValues);
+    RenderSoftBody(innerValues, [&] { values.Nodes()[m_mainBody].Render(os, innerValues); });
 
     innerValues.CaptureClosuresAtSoftEnd();
     innerValues.ExitScope();
@@ -4282,7 +4379,7 @@ void TransStatement::Render(OutStream& os, RenderContext& values)
 void FilterStatement::Render(OutStream& os, RenderContext& values)
 {
     auto innerValues = values.Clone(true);
-    TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { values.Nodes()[m_body].Render(stream, innerValues); });
+    TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { RenderSoftBody(innerValues, [&] { values.Nodes()[m_body].Render(stream, innerValues); }); });
     innerValues.CaptureClosuresAtSoftEnd();
     // A `break` or `continue` in the body drops its output, as in Jinja2
     values.SetLoopControl(innerValues.GetLoopControl());

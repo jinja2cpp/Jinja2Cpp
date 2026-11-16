@@ -742,6 +742,52 @@ TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopRunsItsOldBody)
     EXPECT_EQ((std::vector<std::string>{ "[][1]1", "[[2]2[3]3]A[1]A1", "[A[2]A2A[3]A3]B[1]B1" }), results);
 }
 
+// A stored recursive loop whose body stores it on its first item runs past its include: the body's names resolve
+// where the loop was defined, not to whatever the later call sees (docs/tasks/0502)
+TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopSetsANamespaceAttribute)
+{
+    const std::string body = "{{ i }}{{ loop(i) if i is iterable and i is not string }}";
+    const auto results = CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f([[2],[3]]) }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% for i in [[1]] recursive %}{% if loop.first %}{% set ns.f = loop %}{% endif %}" + body + "{% endfor %}",
+                                        "{% for i in [[1]] recursive %}{% if loop.first %}{% set ns.f = loop %}{% endif %}A" + body + "{% endfor %}",
+                                        "{% for i in [[1]] recursive %}{% if loop.first %}{% set ns.f = loop %}{% endif %}B" + body + "{% endfor %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[][1]1", "[[2]2[3]3]A[1]A1", "[A[2]A2A[3]A3]B[1]B1" }), results);
+}
+
+// A stored `super` of a block deep in an `extends` chain renders the parent block it was taken from, in that block's
+// chain, when a later call runs it (docs/tasks/0501)
+TEST_F(TemplateModuleChangingSourceTest, StoredSuperRendersItsParentBlock)
+{
+    AddFile("mid", "{% extends 'base' %}{% block b %}M{{ super() }}{% endblock %}");
+    AddFile("base", "{% block b %}B{% endblock %}");
+    const std::string source = "{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}";
+    const std::string lib = "{% extends 'mid' %}{% block b %}{% set ns.f = super %}CH{% endblock %}";
+    EXPECT_EQ((std::vector<std::string>{ "[]CH", "[MB]CH", "[MB]CH" }), CallWithLibs(source, { lib, lib, lib }));
+    const std::string once = "{% extends 'mid' %}{% block b %}{% if not ns.f %}{% set ns.f = super %}{% endif %}CH{{ super() }}{% endblock %}";
+    EXPECT_EQ((std::vector<std::string>{ "[]CHMB", "[MB]CHMB", "[MB]CHMB" }), CallWithLibs(source, { once, once, once }));
+    // The parent blocks see the names of the include that took it, which has ended
+    AddFile("mid", "{% extends 'base' %}{% block b %}M{{ t }}{{ super() }}{% endblock %}");
+    AddFile("base", "{% block b %}B{{ t }}{% endblock %}");
+    const std::string named = "{% set t = 'T' %}{% extends 'mid' %}{% block b %}{% set ns.f = super %}CH{% endblock %}";
+    EXPECT_EQ((std::vector<std::string>{ "[]CH", "[MTBT]CH", "[MTBT]CH" }), CallWithLibs(source, { named, named, named }));
+}
+
+TEST_F(TemplateModuleChangingSourceTest, WideStoredSuperRendersItsParentBlock)
+{
+    AddFile("mid", "{% extends 'base' %}{% block b %}M{{ super() }}{% endblock %}");
+    AddFile("base", "{% block b %}B{% endblock %}");
+    AddFile("lib", "{% extends 'mid' %}{% block b %}{% set ns.f = super %}CH{% endblock %}");
+    jinja2::TemplateW tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load(L"{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}"));
+    auto module = tpl.MakeModule().value();
+    std::vector<std::wstring> results;
+    for (int i = 0; i != 3; ++i)
+    {
+        results.push_back(Call(module.exports["m"]).AsWString());
+    }
+    EXPECT_EQ((std::vector<std::wstring>{ L"[]CH", L"[MB]CH", L"[MB]CH" }), results);
+}
+
 // A stored macro of a tree a later call let go of makes a macro that keeps that tree too (Codex review of #884)
 TEST_F(TemplateModuleChangingSourceTest, MacroMadeByAStoredMacroOfAReleasedTree)
 {

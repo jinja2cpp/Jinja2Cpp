@@ -1624,6 +1624,9 @@ std::string RenderWithDestroyedNested(const std::string& outer, const std::strin
     TemplateEnv env;
     auto fs = std::make_shared<MemoryFileSystem>();
     fs->AddFile("lib.j2", "{% macro lm() %}lib-{{ 'x' }}{% endmacro %}");
+    fs->AddFile("modB.j2", "{% macro m2() %}deep{% endmacro %}");
+    fs->AddFile("mod.j2", "{% from 'modB.j2' import m2 %}{% macro f() %}f:{{ m2() }}{% endmacro %}");
+    fs->AddFile("par.j2", "{% block b %}PB{% endblock %}");
     env.AddFilesystemHandler(std::string(), fs);
     // Nothing caches lib.j2: only the nested render holds it
     env.GetSettings().cacheSize = 0;
@@ -1650,7 +1653,7 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
     // one outlives it here: a macro or `caller` that runs in its tree, a loop or a module of a
     // template it imported, a copy of its params. The host destroys the nested template and its
     // params once the nested render returns; this render keeps them alive until it ends. The
-    // expectations are Python Jinja2's, but where noted (task 0491)
+    // expectations are Python Jinja2's
     struct Case
     {
         const char* outer;
@@ -1672,9 +1675,16 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
         { "{% set _ = g.append(0) %}{% for x in g %}{% if loop.index < 3 %}{{ inner() }}{% endif %}{{ x is number }}{% endfor %}{{ g[-1]() }}", macro,
           "TrueFalseFalsehi" },
         { "{% for i in range(3) %}{{ inner() }}{% endfor %}{{ g|length }}{{ g[0]() }}{{ g[2]() }}", macro, "3hihi" },
-        // Python reads the closure's names: "cl" and "capk" (0491)
-        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}", "" },
-        { "{{ inner() }}{{ g[-1]('k') }}", "{% macro o(n) %}{% macro i(k) %}{{ n }}{{ k }}{% endmacro %}{% set _ = g.append(i) %}{% endmacro %}{{ o('cap') }}", "k" },
+        // The closure sees the names of the nested render's frames, which ended with it (0491)
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}", "cl" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'a' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{% set x = 'b' %}", "b" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% macro m() %}{{ p[0] }}{% endmacro %}{% set _ = g.append(m) %}", "param-str" },
+        { "{{ inner() }}{{ g[-1]('k') }}", "{% macro o(n) %}{% macro i(k) %}{{ n }}{{ k }}{% endmacro %}{% set _ = g.append(i) %}{% endmacro %}{{ o('cap') }}", "capk" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% macro s() %}S{% endmacro %}{% macro m() %}{{ s() }}{% endmacro %}{% set _ = g.append(m) %}", "S" },
+        { "{{ inner() }}{{ g[-1]() }}{{ g[-1]() }}", "{% macro m2() %}{{ caller(5) }}{% endmacro %}{% macro m() %}{% call(q) m2() %}c{{ q }}{% endcall %}{% endmacro %}{% set _ = g.append(m) %}", "c5c5" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% import 'mod.j2' as mod %}{% set _ = g.append(mod.f) %}", "f:deep" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% extends 'par.j2' %}{% block b %}{% set _ = g.append(super) %}CB{% endblock %}", "PB" },
+        { "{{ inner() }}{{ g[-1].b() }}", "{% block b %}blk{% endblock %}{% set _ = g.append(self) %}", "blk" },
     };
     for (const auto& c : cases)
     {
@@ -1723,8 +1733,8 @@ TEST(BorrowedCellsSingle, NestedGenericRenderAsksTheHostOnce)
 
 TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
 {
-    // 0481: a nested render's `self` stored in a global and called once that render ended fails
-    // rather than read the destroyed template; Python prints "blk" (0491)
+    // 0481, 0491: a nested render's `self` stored in a global and called once that render ended
+    // renders the blocks the outer render keeps, as Python does
     TemplateEnv env;
     env.AddGlobal("g", ValuesList{});
     ValuesMap params;
@@ -1738,7 +1748,7 @@ TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
         {});
     Template outer(&env);
     ASSERT_TRUE(!!outer.Load("{{ inner() }}{{ g[-1].b() }}"));
-    EXPECT_FALSE(outer.RenderAsString(params));
+    EXPECT_EQ("blk", outer.RenderAsString(params).value());
 }
 
 TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplateInsideAnotherEnvironment)
