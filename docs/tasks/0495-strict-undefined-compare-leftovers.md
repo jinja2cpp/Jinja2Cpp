@@ -28,3 +28,10 @@ src/undefined.h) and the operand check of `in`; add a case per bullet to
 `test/parity/cases/undefined.py`.
 
 **Done when.** The cases match in narrow and wide runs.
+
+**Result (batch 8 A).** `in` no longer checks its left operand up front: the container compares (with
+the identity shortcut) or hashes it (dicts, keys and items views), so `x in []` is False and `a in [a]`
+True; comparisons check their operands after both are evaluated, as Python's do. `sameas` of two undefined
+values is their identity; `eq`, `ne` and the ordering tests refuse undefined operands as operator.eq and
+the others do; list `index`, `count` and `remove` compare as PyObject_RichCompareBool; `x is iterable` of
+an undefined value is True, and StrictUndefined refuses it. Cases in `test/parity/cases/undefined.py`.

@@ -2885,6 +2885,10 @@ const char* IteratorTypeName(IteratorKind kind) noexcept
         return "range_iterator";
     case IteratorKind::DictReverseKey:
         return "dict_reversekeyiterator";
+    case IteratorKind::DictReverseValue:
+        return "dict_reversevalueiterator";
+    case IteratorKind::DictReverseItem:
+        return "dict_reverseitemiterator";
     case IteratorKind::None:
     case IteratorKind::DictKeys:
     case IteratorKind::DictValues:
@@ -3213,11 +3217,12 @@ std::shared_ptr<const Accessor> MakeHostCopy(const Adapter& adapter)
     return std::shared_ptr<const Accessor>(holder, &holder->Get());
 }
 
-ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind)
+// A list of `values`; a dict view (docs/tasks/0496) when `mapping` is set, the dict it keeps
+ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind, InternalValue* mapping = nullptr)
 {
     // The items are shared by every copy of the list, as a Python list is shared by its
     // names: an append() through one is seen through all, and `a is sameas b` holds
-    class Adapter final : public IndexedListAccessorImpl<Adapter>
+    class Adapter : public IndexedListAccessorImpl<Adapter>
     {
     public:
         Adapter(InternalValueList&& values, IteratorKind iteratorKind)
@@ -3285,6 +3290,31 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         BySharedMutable<InternalValueList> m_values;
     };
 
+    // The dict a view was taken from, for its `mapping`: one more reference, which the cycle
+    // collector follows as the view's own
+    class DictView final : public Adapter
+    {
+    public:
+        DictView(InternalValueList&& values, IteratorKind iteratorKind, InternalValue mapping)
+            : Adapter(std::move(values), iteratorKind)
+            , m_mapping(std::move(mapping))
+        {
+        }
+        [[nodiscard]] const InternalValue* GetViewMapping() const override { return &m_mapping; }
+        void Traverse(const TraverseFn& fn) const override
+        {
+            Adapter::Traverse(fn);
+            TraverseValue(m_mapping, fn);
+        }
+
+    private:
+        InternalValue m_mapping;
+    };
+
+    if (mapping)
+    {
+        return ListAdapter(MakeRef<DictView>(std::move(values), iteratorKind, std::move(*mapping)));
+    }
     return ListAdapter(MakeRef<Adapter>(std::move(values), iteratorKind));
 }
 } // namespace
@@ -3297,6 +3327,11 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
 ListAdapter ListAdapter::CreateIterator(InternalValueList&& values, IteratorKind kind)
 {
     return CreateValuesAdapter(std::move(values), kind);
+}
+
+ListAdapter ListAdapter::CreateDictView(InternalValueList&& values, IteratorKind kind, InternalValue mapping)
+{
+    return CreateValuesAdapter(std::move(values), kind, &mapping);
 }
 
 InternalValue IListAccessor::LifetimeAnchor(const InternalValue& self) const
@@ -4856,7 +4891,9 @@ constexpr PythonClass PythonClasses[] = {
     { builtinsModule, "dict" },
     { builtinsModule, "dict_items" },
     { builtinsModule, "dict_keys" },
+    { builtinsModule, "dict_reverseitemiterator" },
     { builtinsModule, "dict_reversekeyiterator" },
+    { builtinsModule, "dict_reversevalueiterator" },
     { builtinsModule, "dict_values" },
     { builtinsModule, "float" },
     { builtinsModule, "function" },

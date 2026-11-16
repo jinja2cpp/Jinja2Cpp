@@ -67,6 +67,11 @@ bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
     }
     auto b = GetArgumentValue("b", context);
 
+    // operator.eq and the others, which StrictUndefined refuses with no identity shortcut, and
+    // every undefined value refuses for an ordering (docs/tasks/0495)
+    const auto use = m_op == BinaryExpression::LogicalEq || m_op == BinaryExpression::LogicalNe ? UndefinedUse::Operator : UndefinedUse::Arithmetic;
+    CheckUndefinedUse(baseVal, use);
+    CheckUndefinedUse(b, use);
     auto cmpRes = Apply2<visitors::BinaryMathOperation>(baseVal, b, m_op);
     return ConvertToBool(cmpRes);
 }
@@ -261,6 +266,9 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
     switch (kind)
     {
     case TestKind::Undefined:
+        // Each lookup of a missing name makes another undefined object, which its copies share
+        // (docs/tasks/0495)
+        return GetUndefinedInfo(left) == GetUndefinedInfo(right);
     case TestKind::Empty:
         return true;
     case TestKind::Boolean:
@@ -393,6 +401,41 @@ bool IsInEqual(const InternalValue& item, const InternalValue& value)
     }
     return IsInEqualByValue(item, value);
 }
+// `in` of a dict_keys or dict_items view, as Python's: a lookup of the item's key in the view's
+// dict, so an unhashable key is a TypeError and a StrictUndefined one refuses its hash; an item of
+// dict_items that is no 2-tuple is in no view (docs/tasks/0496)
+JINJA2CPP_COLD_INLINE bool IsValueInDictView(const InternalValue& item, const InternalValue& mapping, bool isItems)
+{
+    if (!isItems)
+    {
+        return IsValueIn(item, mapping);
+    }
+    InternalValue key;
+    InternalValue value;
+    if (const auto* pair = GetIf<KeyValuePair>(&item))
+    {
+        key = pair->key;
+        value = pair->value;
+    }
+    else if (const auto tuple = AsList(item); tuple && tuple->IsTuple() && tuple->GetSize() == std::optional<size_t>(2))
+    {
+        key = tuple->GetValueByIndex(0);
+        value = tuple->GetValueByIndex(1);
+    }
+    else
+    {
+        return false;
+    }
+    CheckUndefinedUse(key, UndefinedUse::Operator);
+    if (const char* type = UnhashableType(key))
+    {
+        ThrowUnhashable(type);
+    }
+    const auto map = AsMap(mapping);
+    const auto found = map ? map->FindItem(key) : std::nullopt;
+    return found && IsInEqualByValue(*found, value);
+}
+
 // `value in list`: a list the template owns is compared in place, any other through one
 // enumerator (ListAdapter::Iterator clones its enumerator on every copy)
 bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
@@ -410,6 +453,13 @@ bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
         list = converted.Ref();
     }
 
+    if (const auto kind = list->GetIteratorKind(); kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems)
+    {
+        if (const auto* mapping = list->GetViewMapping())
+        {
+            return IsValueInDictView(baseVal, *mapping, kind == IteratorKind::DictItems);
+        }
+    }
     if (const auto* items = list->GetMutableItems())
     {
         return IsValueInList(baseVal, *items);
@@ -463,7 +513,9 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     else if (seqKind == TestKind::Map)
     {
         // `key in dict` tests the keys: any hashable value for a dict the template owns, strings
-        // for every other map. A host's mapping answers through its __contains__
+        // for every other map. A host's mapping answers through its __contains__. The key is hashed
+        // first, which StrictUndefined refuses (docs/tasks/0495)
+        CheckUndefinedUse(baseVal, UndefinedUse::Operator);
         auto map = AsMap(seq);
         if (const auto* host = map ? map->GetHostObject() : nullptr)
         {
@@ -599,6 +651,12 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         break;
     case IsIterableMode:
         result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::Map || valKind == TestKind::String;
+        // iter() of an undefined value is empty; StrictUndefined refuses it (docs/tasks/0495)
+        if (valKind == TestKind::Undefined)
+        {
+            CheckUndefinedUse(baseVal, UndefinedUse::Operator);
+            result = true;
+        }
         // Of the objects, only `self` and `loop` are: Jinja2's TemplateReference has
         // __getitem__, LoopContext __iter__
         if (valKind == TestKind::Object)

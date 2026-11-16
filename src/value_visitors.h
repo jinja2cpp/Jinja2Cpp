@@ -1432,8 +1432,59 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             rightHost = right.GetHostObject();
         }
+        if (const auto viewEqual = HostViewEqual(left, right))
+        {
+            return (m_oper == BinaryExpression::LogicalEq) == *viewEqual;
+        }
         const bool equal = host::Equal(leftHost, HostOperand(left), rightHost, HostOperand(right));
         return m_oper == BinaryExpression::LogicalEq ? equal : !equal;
+    }
+
+    // A host's dict_keys or dict_items (a Python module's dict) and a set-like view of the engine,
+    // which goes to the host as a list: Python compares the two as sets, by length and then by
+    // the lookup of each item of one in the other (docs/tasks/0496)
+    template<typename L, typename R>
+    [[nodiscard]] static std::optional<bool> HostViewEqual(const L& left, const R& right)
+    {
+        if constexpr (std::is_same_v<L, MapRef> && std::is_same_v<R, ListRef>)
+        {
+            return HostViewEqual(right, left);
+        }
+        else if constexpr (std::is_same_v<L, ListRef> && std::is_same_v<R, MapRef>)
+        {
+            const auto* host = right.GetHostObject();
+            if (!host || !IsSetView(left))
+            {
+                return std::nullopt;
+            }
+            const std::string_view type = host->TypeName();
+            if (type != "dict_keys" && type != "dict_items")
+            {
+                return std::nullopt;
+            }
+            if (host->Len() != left.GetSize())
+            {
+                return false;
+            }
+            // Each item of the engine's view in the host's, which looks it up as Python does
+            for (const auto& item : left)
+            {
+                const auto found = host->Contains(item);
+                if (!found)
+                {
+                    return std::nullopt;
+                }
+                if (!*found)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        else
+        {
+            return std::nullopt;
+        }
     }
 
     // A host list or tuple as a list of the engine (host::AsSequence); nullopt for every other operand
