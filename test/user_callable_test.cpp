@@ -1664,7 +1664,8 @@ TEST(CallSiteTest, KeptContextStaysExpiredWhenTheNextCallRuns)
                                            expiredReads += error.GetCode() == ErrorCode::TemplateExpired ? "expired," : "other,";
                                        }
                                    }
-                                   if (const auto* keep = params["keep"].GetIf<bool>(); keep && *keep)
+                                   const Value keepArg = params["keep"];
+                                   if (const auto* keep = keepArg.GetIf<bool>(); keep && *keep)
                                    {
                                        kept.push_back(params.context);
                                    }
