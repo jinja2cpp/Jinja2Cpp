@@ -782,6 +782,8 @@ TEST(MacroStopOutputTest, StringTargetTakesTheOutputBack)
     EXPECT_EQ(std::string(700, 'a') + "z", tpl.RenderAsString(ValuesMap{}).value());
 }
 
+namespace
+{
 class WideSink final : public OutputSinkW
 {
 public:
@@ -793,6 +795,19 @@ public:
     std::wstring output;
     size_t writes = 0;
 };
+
+class WriteCountingSink final : public OutputSink
+{
+public:
+    void Write(std::string_view text) override
+    {
+        output.append(text);
+        ++writes;
+    }
+    std::string output;
+    size_t writes = 0;
+};
+} // namespace
 
 TEST(MacroStopOutputTest, SinkTakesTheOutputBack)
 {
@@ -888,6 +903,22 @@ TEST(MacroStopOutputTest, SinkHeldOutputCountsAsWritten)
     result = tpl.RenderTo(failed, ValuesMap{});
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::TemplateRuntimeError, result.error().GetCode());
+}
+
+// A call's held-back output reaches the sink when the next call begins, not at the render's end: calls in a loop
+// stream, and the stream holds one call's output at a time (memory budget)
+TEST(MacroStopOutputTest, SinkGetsEachCallsOutputAfterItReturns)
+{
+    TemplateEnv env;
+    FillStopEnv(env);
+    env.GetSettings().limits.maxRenderMemory = 200000;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% macro m() %}{{ 'x' * 600 }}{% endmacro %}{% for i in range(500) %}[{{ m() }}]{% endfor %}"));
+    WriteCountingSink sink;
+    const auto result = tpl.RenderTo(sink, ValuesMap{});
+    ASSERT_TRUE(result) << result.error().ToString();
+    EXPECT_EQ(500U * 602U, sink.output.size());
+    EXPECT_GE(sink.writes, 400U);
 }
 
 // What a stopped macro left in a scope is gone: the code after it sees the names it saw before

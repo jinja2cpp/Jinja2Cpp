@@ -1297,6 +1297,7 @@ TEST(ErrorsJinjaMessagesTest, RuntimeErrorsNameTheirPythonClass)
         { "{{ '%f' % 'x' }}", "TypeError", "must be real number, not str" },
         { "{{ '%d' % (1e999 - 1e999) }}", "ValueError", "cannot convert float NaN to integer" },
         { "{{ 'x'|format(1) }}", "TypeError", "not all arguments converted during string formatting" },
+        { "{{ nope|format(1) }}", "TypeError", "not all arguments converted during string formatting" },
         { "{{ '%d'|safe % 'x' }}", "ValueError", "invalid literal for int() with base 10: 'x'" },
         { "{{ '%d'|safe % [1] }}", "TypeError", "%d format: a real number is required, not _MarkupEscapeHelper" },
         { "{{ '%u'|safe % none }}", "TypeError", "%u format: a real number is required, not _MarkupEscapeHelper" },

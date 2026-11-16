@@ -13,7 +13,7 @@ shares: [test/errors_test.cpp, python/tests/test_i18n.py]
 `KeyError: 'b'` (src/python_format.cpp `Key`; in src/value_methods.cpp the format field lookup and `dict.pop`), so the
 Python module raises `jinja2cpp.exceptions.TemplateRuntimeError` and its `str()` carries the
 `KeyError: ` prefix that Python's `str(KeyError('b'))` (`'b'`) does not. Left by 0510, whose
-`TemplateRuntimeError::PythonClass` has TypeError and ValueError only.
+`TemplateRuntimeError::PythonClass` has no KeyError (TypeError, ValueError and AttributeError).
 
 **Proposal.** Add `PythonClass::KeyError` (ExtraParams[1] `"KeyError"`), throw it with the key's repr
 as the message at both sites (the C++ text keeps a `KeyError: ` prefix only if ErrorInfo's message

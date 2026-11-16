@@ -185,8 +185,8 @@ public:
     };
     // Where the output stood: for a call whose output Jinja2 buffers and drops when the call stops (docs/tasks/0479).
     // While a mark of a sink stream lives, what would reach the sink is spilled into a string of the stream instead
-    // (docs/tasks/0499): the sink gets it once the outermost mark is gone, at the next write to the sink or flush,
-    // as it gets the buffer. Spilled output counts as written (maxOutputSize, generation spans). Made by GetMark;
+    // (docs/tasks/0499): the sink gets it once the outermost mark is gone, at the next write to the sink, flush or
+    // mark, as it gets the buffer. Spilled output counts as written (maxOutputSize, generation spans). Made by GetMark;
     // it stays where it was made (`const auto mark = os.GetMark();`)
     class Mark
     {
@@ -227,6 +227,12 @@ public:
     {
         if (m_sink && !m_writer)
         {
+            // What an earlier call that returned held back goes first: a call returns into its caller's statement,
+            // so the next call or write after it delivers, and the stream holds at most one outermost call's output
+            if (m_guards == 0 && m_spill)
+            {
+                DeliverSpill();
+            }
             ++m_guards;
             return { this, m_sinkWritten, m_cur, SpillSize() };
         }
