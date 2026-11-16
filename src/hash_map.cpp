@@ -99,9 +99,10 @@ JINJA2CPP_NOINLINE std::size_t HashNameDrawingSecrets(const void* data, std::siz
     return HashName(data, size);
 }
 
-// hash_bytes with the process's secrets, up to 144 bytes: one block of 16 bytes and the last
-// 16, then whole blocks from the front, all independent
-std::uint64_t HashBlocks(const std::uint8_t* p, std::size_t len, const NameHashSecrets& keys) noexcept
+// hash_bytes with the process's secrets, over 17 to 144 bytes: one block of 16 bytes and the
+// last 16, then whole blocks from the front, all independent. `nameSize` is the length of the
+// whole name, which the finalizer takes
+std::uint64_t HashBlocks(const std::uint8_t* p, std::size_t len, std::size_t nameSize, const NameHashSecrets& keys) noexcept
 {
     using hash_impl::mix;
     using hash_impl::r8;
@@ -112,7 +113,7 @@ std::uint64_t HashBlocks(const std::uint8_t* p, std::size_t len, const NameHashS
     {
         x ^= mix(r8(p + offset) ^ lane[idx], r8(p + offset + 8) ^ lane[idx + 1]); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index)
     }
-    return mix(keys.length ^ len, x);
+    return mix(keys.length ^ nameSize, x);
 }
 
 // The longest piece HashBlocks takes
@@ -123,20 +124,22 @@ constexpr std::size_t MaxBlockedBytes = 144;
 JINJA2CPP_NOINLINE std::size_t HashLongName(const void* data, std::size_t size, const NameHashSecrets& keys) noexcept
 {
     const auto* bytes = static_cast<const std::uint8_t*>(data);
+    const auto nameSize = size;
     std::uint64_t state = 0;
     while (size > MaxBlockedBytes)
     {
-        state = hash_impl::mix(state ^ keys.chain, HashBlocks(bytes, MaxBlockedBytes, keys) ^ keys.seed);
+        state = hash_impl::mix(state ^ keys.chain, HashBlocks(bytes, MaxBlockedBytes, MaxBlockedBytes, keys) ^ keys.seed);
         bytes += MaxBlockedBytes; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
         size -= MaxBlockedBytes;
     }
     if (size <= 16)
     {
-        // A short last piece: its 16 bytes are the last of the piece before it and its own
-        bytes -= 16 - size; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-        size = 16 + size;
+        // A last piece of 1 to 16 bytes is read with the 16 before it, which the piece before
+        // hashed too: the length of the whole name keeps it apart from a name 16 bytes longer
+        bytes -= 16; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        size += 16;
     }
-    return static_cast<std::size_t>(HashBlocks(bytes, size, keys) ^ state);
+    return static_cast<std::size_t>(HashBlocks(bytes, size, nameSize, keys) ^ state);
 }
 } // namespace
 

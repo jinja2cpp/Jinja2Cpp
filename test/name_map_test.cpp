@@ -4,9 +4,11 @@
 
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <set>
 #include <string>
 #include <string_view>
@@ -287,20 +289,43 @@ TEST(NameMapTest, NamesThatZeroUnkeyedLanesHashApart)
 }
 
 // Names of every length up to three pieces hash apart from one another, and a change to any one
-// byte changes the hash
+// byte changes the hash. Each name is in a buffer of its own size, so that a sanitizer sees a
+// read past its end, and the hash must not change with the bytes after it
 TEST(NameMapTest, NameHashCoversEveryByte)
 {
     std::set<std::size_t> hashes;
-    for (std::size_t size = 0; size != (3 * 144) + 20; ++size)
+    for (std::size_t size = 1; size != (3 * 144) + 20; ++size)
     {
-        std::string name(size, 'n');
-        const auto hash = HashedName::Hash(name);
+        const auto name = std::make_unique<char[]>(size); // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+        std::fill_n(name.get(), size, 'n');
+        const auto hash = detail::HashName(name.get(), size);
         EXPECT_TRUE(hashes.insert(hash).second) << size;
         for (std::size_t pos = 0; pos != size; ++pos)
         {
             name[pos] = 'm';
-            EXPECT_NE(hash, HashedName::Hash(name)) << size << " at " << pos;
+            EXPECT_NE(hash, detail::HashName(name.get(), size)) << size << " at " << pos;
             name[pos] = 'n';
         }
+        // The same name, followed by other bytes
+        std::string longer(name.get(), size);
+        longer += "tail";
+        EXPECT_EQ(hash, detail::HashName(longer.data(), size)) << size;
+        longer.back() = 'x';
+        EXPECT_EQ(hash, detail::HashName(longer.data(), size)) << size;
     }
+}
+
+// A name of 145 bytes hashes its last byte with the 16 before it, which the first piece of 144
+// hashed too; the name of 161 bytes that repeats those 17 after the first piece hashes the same
+// bytes, and only the length keeps the two apart (verifier of docs/tasks/0507)
+TEST(NameMapTest, LongNamesRepeatingTheirLastWindowHashApart)
+{
+    std::string name;
+    for (std::size_t idx = 0; idx != 145; ++idx)
+    {
+        name += static_cast<char>('a' + ((idx * 7) % 26));
+    }
+    const auto repeated = name.substr(0, 144) + name.substr(128);
+    ASSERT_EQ(161U, repeated.size());
+    EXPECT_NE(HashedName::Hash(name), HashedName::Hash(repeated));
 }

@@ -148,6 +148,7 @@ TEST_F(ParamsTableTest, GenericMapParams)
         EXPECT_EQ(count > 1 ? "0|10||True" : "0|-||True", result.value());
     }
 }
+
 // The fastest of five renders of `tpl` with `params`, in microseconds
 double FastestRender(jinja2::Template& tpl, const jinja2::ValuesMap& params)
 {
