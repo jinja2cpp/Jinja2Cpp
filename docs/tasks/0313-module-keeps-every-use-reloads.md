@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: robustness
 touches: [src/template_impl.h]
@@ -27,4 +27,4 @@ iteration, because a reload was compared by pointer. `RendererCallback::LoadTemp
 same source, name and load settings (`TemplateImpl::SameParseAs`): it never ran, so nothing views it. Test:
 `ModuleCallTest.EveryUseReloadsStayFlat`. Ending the trees of real source changes needs keep-alives in the values
 that view a tree (macro bodies, recursive loops, imported modules), since those hold raw views outside
-`TemplateSlots`; that cross-module part is [0482](0482-module-tree-keep-alives.md).
+`TemplateSlots`; that cross-module part is [0482](0482-module-tree-keep-alives.md), done in #884, which closes this task.
