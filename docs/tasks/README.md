@@ -384,7 +384,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | done |
 | [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | done |
 | [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
-| [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | in-progress |
+| [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | done |
 | [0314](0314-method-sort-format-unicode-case.md) | Methods 0020 left out: list.sort, nested format fields, Unicode case | parity | low | done |
 | [0317](0317-str-numeric-classes-and-missing-methods.md) | str methods: Unicode digit and numeric classes, casefold, isascii, isidentifier, isprintable, format leftovers | parity | low | done |
 | [0318](0318-kept-globals-keep-their-snapshot.md) | A list or map from the globals keeps the globals it was read from | robustness | high | done |
@@ -575,3 +575,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0512](0512-per-render-fixed-costs.md) | Per-render fixed costs: the memory budget's per-object charge and the render's setup | perf | medium | done |
 | [0513](0513-params-table-render-setup.md) | The params of a render as a flat table, and a slimmer per-render setup | perf | medium | done |
 | [0514](0514-shared-library-tls-model.md) | The thread-locals of a shared library: initial-exec TLS model | perf | medium | done |
+| [0515](0515-load-plain-text-fixed-cost.md) | The fixed cost of a Load: `Load/plain_text` against inja | perf | medium | done |
+| [0516](0516-load-fixed-cost-rest.md) | The rest of a Load's fixed cost: settings compare, sealing, template object | perf | medium | open |
+| [0517](0517-nested-load-frees-loading-template.md) | Two Loads from host code inside a template's first Load free the template being loaded | robustness | medium | open |
