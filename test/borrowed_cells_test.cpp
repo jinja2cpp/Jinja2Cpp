@@ -1810,6 +1810,37 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplateAcrossAnotherEnvir
     }
 }
 
+TEST(BorrowedCellsSingle, NestedRenderFirstWriteAcrossAnotherEnvironment)
+{
+    // 0491: the innermost render of A -> B -> A writes a global first: the write goes to the outermost render that
+    // shares its snapshot, past the render of another environment (or of none) between them, which then reads it, as
+    // Python does ([1]); a closure it stores there reads its names
+    for (const bool withEnv : { true, false })
+    {
+        TemplateEnv env;
+        env.AddGlobal("g", ValuesList{});
+        TemplateEnv otherEnv;
+        std::vector<std::string> sources{ "{{ h0() }}{{ g }}|{{ g[-1]() if g|length > 1 }}", "{{ h1() }}",
+                                          "{% set _ = g.append(1) %}{% set x = 'X' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}" };
+        std::vector<TemplateEnv*> envs{ &env, withEnv ? &otherEnv : nullptr, &env };
+        ValuesMap params;
+        for (std::size_t level = 0; level + 1 < sources.size(); ++level)
+        {
+            params["h" + std::to_string(level)] = UserCallable(
+                [&, next = level + 1](const UserCallableParams&) {
+                    auto tpl = std::make_unique<Template>(envs[next]);
+                    EXPECT_TRUE(!!tpl->Load(sources[next]));
+                    auto result = tpl->RenderAsString(params);
+                    EXPECT_TRUE(!!result) << (result ? std::string() : result.error().ToString());
+                    return Value(result ? result.value() : std::string());
+                },
+                {});
+        }
+        const auto result = Render(sources[0], params, &env);
+        EXPECT_EQ("[1, <Macro 'm'>]|X", result) << withEnv;
+    }
+}
+
 TEST(BorrowedCellsSingle, NestedRenderValueCopiedOutThroughALentMacro)
 {
     // 0481: the innermost render writes `g` first, in its own registry (another environment, or

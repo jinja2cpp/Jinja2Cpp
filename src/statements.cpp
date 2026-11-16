@@ -2152,7 +2152,8 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
     {
         return;
     }
-    const auto block = blockContext.GetRendererCallback()->Templates().Resolve(p->second[depth]);
+    // An ended stack of a render that ended before this one resolves in that render's table (SelfBlocksOf)
+    const auto block = (stack.endedSlots ? *stack.endedSlots : blockContext.GetRendererCallback()->Templates()).Resolve(p->second[depth]);
     blockContext.PassOverEntryBindings();
     const ArenaSwitch nodesSwitch(blockContext, block.nodes);
     // Jinja2 renders a block through a generator: a StopIteration out of it is a RuntimeError, not a stopped call
@@ -2249,7 +2250,22 @@ void CopyCaptured(RenderContext& context, const ClosureSite& site, const Closure
 // (SelfBlocks), seeing the names `site` still has. `keepsCapture` false: the `self` does not
 // keep what the site keeps, which keeps it (the copy of an ended include's names,
 // RenderContext::KeepEndedSelf)
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, bool keepsCapture = true);
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, IRendererCallback* callback, bool keepsCapture = true);
+
+// The SelfBlocks of `stack`, made on first use. Its blocks are this render's, of the table `callback` resolves them in:
+// one that ends before an outer render that may call them shares the table with them (SharedTemplates, 0491)
+const std::shared_ptr<SelfBlocks>& SelfBlocksOf(const BlocksStack& stack, IRendererCallback* callback)
+{
+    if (!stack.self)
+    {
+        stack.self = std::make_shared<SelfBlocks>(&stack);
+        if (callback)
+        {
+            stack.self->ended.endedSlots = callback->SharedTemplates();
+        }
+    }
+    return stack.self;
+}
 
 // A block of `self` (MakeTemplateSelf), named `name`: renders it in the template `self` came
 // from while that runs, else where the comment of MakeTemplateSelf says
@@ -2299,7 +2315,7 @@ struct SelfBlockCall
             endedFrame.outer = curFrame;
             // Its scopes have ended too: a `self` in the block renders the ended blocks,
             // seeing what this one sees
-            endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName);
+            endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName, context.GetRendererCallback());
             frame = &endedFrame;
         }
         if (!frame)
@@ -2362,14 +2378,14 @@ struct SuperBlockCall
     }
 };
 
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, bool keepsCapture)
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, IRendererCallback* callback, bool keepsCapture)
 {
     // What the site keeps (ClosureSite::CaptureOnEnd), while the `self` lives; the caller holds it
     const std::shared_ptr<const void> keepAlive = keepsCapture ? site.Capture() : nullptr;
     InternalValueMap self;
-    if (!stack.blocks.empty() && !stack.self)
+    if (!stack.blocks.empty())
     {
-        stack.self = std::make_shared<SelfBlocks>(&stack);
+        SelfBlocksOf(stack, callback);
     }
     for (const auto& block : stack.blocks)
     {
@@ -2421,7 +2437,7 @@ LookupResult RenderContext::FindSelf(const std::string& name)
             keepAlive = site.CaptureOnEnd(*home, {}, true);
         }
         // The blocks keep it (MakeTemplateSelf)
-        return MakeTemplateSelf(*frame->blocks, site, frame->name);
+        return MakeTemplateSelf(*frame->blocks, site, frame->name, GetRendererCallback());
     };
     // In a block that sees more than the template's top level (a scoped one in a loop, or one
     // such a block's `self` renders), `self` passes on what it sees: Jinja2's TemplateReference
@@ -2453,6 +2469,11 @@ BlocksStack::~BlocksStack()
     {
         self->live = nullptr;
         self->ended.blocks = std::move(blocks);
+        // The blocks of an ended stack resolve in the table it has
+        if (endedSlots)
+        {
+            self->ended.endedSlots = endedSlots;
+        }
     }
 }
 
@@ -2715,6 +2736,15 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
     {
         names = std::make_shared<InternalValueMap>();
         CollectNamesDownTo(*names, end.copyFrom, ending, keeps.readsAll ? nullptr : &keeps);
+        // A render's own context that ends while its closures are stored in an outer render's globals
+        // (SetEndsBeforeRender, docs/tasks/0491): they read its params too, below its names
+        if (end.count == 0 && m_params && !m_parent)
+        {
+            for (const auto& param : *m_params)
+            {
+                names->emplace(std::string(param.name), param.value);
+            }
+        }
         // Read as `self` in the scopes over the caller's top level (FindSelf), unless set there
         if (endedSelf)
         {
@@ -2961,10 +2991,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
         {
             // super() may outlive the stack (stored past an include): it renders what the
             // stack held then, as `self` does
-            if (!stack->self)
-            {
-                stack->self = std::make_shared<SelfBlocks>(stack);
-            }
+            SelfBlocksOf(*stack, values.GetRendererCallback());
             ClosureSite site(values);
             // Stored past an include, it sees what the block saw there, as a macro defined in the block does
             // (0373); elsewhere the frames it sees end with the render, and nothing is kept
@@ -3138,7 +3165,7 @@ void TemplateRenderer::KeepEndedSelf(RenderContext& values, const TemplateFrame&
     // The capture of the top level, shared with its closures and held by the frames above it
     // that something outside holds; dropped here when none holds it
     [[maybe_unused]] const auto capture = site.CaptureOnEnd(values, {}, true);
-    values.KeepEndedSelf(MakeTemplateSelf(*frame.blocks, site, frame.name, false));
+    values.KeepEndedSelf(MakeTemplateSelf(*frame.blocks, site, frame.name, values.GetRendererCallback(), false));
 }
 
 template<typename Result, typename Fn>
@@ -3453,6 +3480,11 @@ ImportedModule::ImportedModule(const RenderContext& importer, bool withContext)
     , m_context(importer.CloneWith(m_importerNames))
 {
     m_context.SetModuleImports(&m_imports);
+    // Its context ends with a render an outer one outlives: RenderCore closes over it (CaptureModuleClosures)
+    if (const auto* callback = m_context.GetRendererCallback(); callback && callback->EndsBeforeOuterRender())
+    {
+        m_context.SetEndsBeforeRender();
+    }
 }
 
 ImportedModule::ImportedModule(InternalValueMap names, const InternalValueMap& globals, IRendererCallback* callback, const InternalValueMap* builtins)

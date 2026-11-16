@@ -154,6 +154,12 @@ struct IRendererCallback : IComparable
     // Whether a module imported with context now ends with the host's call that imports it,
     // not with the render: a call of a Template::MakeModule export (docs/tasks/0301)
     [[nodiscard]] virtual bool ModulesEndWithCall() const { return false; }
+    // Whether the render ends before an outer render that shares its globals, which may call the closures it
+    // stores there: its modules' closures keep what they see, as an include's do (docs/tasks/0491)
+    [[nodiscard]] virtual bool EndsBeforeOuterRender() const { return false; }
+    // The table Templates() gives, shared with the `self` and super() values that may outlive this render while an
+    // outer one calls them (EndsBeforeOuterRender); null when nothing outlives the render
+    [[nodiscard]] virtual std::shared_ptr<TemplateSlots> SharedTemplates() const { return nullptr; }
     // A module imported without context renders its top level, which is shared on: what it
     // imports with context lives as long as it does, not with the call (docs/tasks/0301).
     // Returns a token for LeaveSharedModule, told whether the module was shared

@@ -89,6 +89,8 @@ public:
     // `names`: the copy of a frame's names `object` is, or null. Throws std::bad_alloc
     void Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     void Clear() noexcept { m_kept.clear(); }
+    // Moves to `other` what is still of use. Throws std::bad_alloc, and then keeps what it did not move
+    void MoveInto(KeptObjects& other);
     // Notes to the collector running on this thread the values of the kept copies of names: a
     // template module that goes releases them, and a cycle among their containers that a call
     // made has no note left, as it went with that call's collector (docs/tasks/0407). Throws
@@ -265,6 +267,10 @@ public:
     // a param it views. The host may destroy the nested template once its render has returned,
     // so this render keeps it (docs/tasks/0481). A tree is kept once. Throws std::bad_alloc
     void KeepTree(std::shared_ptr<const void> tree);
+    // This render shares `keeper`'s snapshot of the globals (KeepTree): when it ends, what it kept until then
+    // (KeepUntilEnd) goes to `keeper`, as the closures that keep it may be stored in a global the outer render reads
+    // afterwards (docs/tasks/0491)
+    void KeepForOuter(CycleCollector* keeper) noexcept { m_keeper = keeper; }
     // What a container the render running on this thread hands the host keeps, so that the host's
     // copy can tell when it goes whether that render has ended: then nothing walks the container
     // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
@@ -385,11 +391,16 @@ private:
         std::shared_ptr<const void> exportToken;
     };
 
+    // The notes, made now if there are none. Throws std::bad_alloc
+    Notes& NotesForKeep();
+
     CycleCollector* m_outer = s_current;
     std::unique_ptr<Notes> m_notes;
     // The cells and kept objects of a template module, which outlive the call (docs/tasks/0049,
     // 0373); null for a render
     const ModuleScope* m_module = nullptr;
+    // KeepForOuter's; null when this render shares no outer render's globals
+    CycleCollector* m_keeper = nullptr;
 };
 
 // A call of a template module: it runs as a new call of the module's cells (BorrowedCells::BeginCall),
