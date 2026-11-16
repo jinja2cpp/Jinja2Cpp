@@ -5,4 +5,4 @@
 subscripts.tuple_of_slices_chain_step match 0497 the module falls back to Jinja2 for the template the engine cannot parse
 subscripts.tuple_of_slices_chain_step_strict match 0497 the module falls back to Jinja2 for the template the engine cannot parse
 operators.dict_view_subset rejects 0381 a host dict's dict_keys has no ordering in the engine (host objects support only ==)
-operators.dict_view_mapping_proxy match 0521 a host dict's dict_keys has Python's .mapping, a mappingproxy
+operators.dict_view_mapping_proxy match 0523 a host dict's dict_keys has Python's .mapping, a mappingproxy

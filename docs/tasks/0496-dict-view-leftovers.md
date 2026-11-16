@@ -45,4 +45,4 @@ ListAdapter::CreateDictView), `reversed()` of values and items views makes `dict
 `dict_reverseitemiterator` (IteratorKind has five bits now; the global flag moved to ValueObject's spare
 bits), `in` of a keys or items view looks the key up in the dict, a host's `dict_keys`/`dict_items` equals
 an engine view as a set, `random` of a host view fails at the subscript, and reversed() of a host's built-in
-type gets its iterator kind. Items 4, 5 and the rest of 6 moved to 0521.
+type gets its iterator kind. Items 4, 5 and the rest of 6 moved to 0523.
