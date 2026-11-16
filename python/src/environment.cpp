@@ -608,9 +608,7 @@ void PyEnvironment::SetNewstyleGettext(bool newstyle)
     if (m_env)
     {
         // A template keeps the style it was loaded with; the next loads take this one
-        auto settings = m_env->GetSettings();
-        settings.extensions.i18nNewstyle = newstyle;
-        m_env->SetSettings(settings);
+        m_env->ModifySettings([newstyle](jinja2::Settings& settings) { settings.extensions.i18nNewstyle = newstyle; });
     }
 }
 
@@ -687,9 +685,8 @@ jinja2::TemplateEnv& PyEnvironment::Prepared()
         {
             m_sandboxPublicNames = judges;
             // A template keeps the policy it was loaded with; the next loads take this one
-            auto settings = m_env->GetSettings();
-            settings.sandboxPolicy = MakePythonSandboxPolicy(self, judges);
-            m_env->SetSettings(settings);
+            auto policy = MakePythonSandboxPolicy(self, judges);
+            m_env->ModifySettings([&policy](jinja2::Settings& settings) { settings.sandboxPolicy = std::move(policy); });
         }
     }
     // A template binds the filters and tests when it loads, as in Jinja2
