@@ -1469,10 +1469,12 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         }
         // random.choice of a host object with len() but no items to pick (a Python dict_keys) fails
         // at the subscript, as the engine's own view does (docs/tasks/0496)
-        const auto* host = m_mode == RandomMode ? GetHostObject(baseVal) : nullptr;
-        if (host && !host->IsMapping() && host->Len().value_or(0) != 0 && !host->GetAttr("__getitem__"))
+        if (const auto* host = m_mode == RandomMode ? GetHostObject(baseVal) : nullptr)
         {
-            throw TemplateRuntimeError("'"s + host->TypeName() + "' object is not subscriptable");
+            if (!host->IsMapping() && host->Len().value_or(0) != 0 && !host->GetAttr("__getitem__"))
+            {
+                throw TemplateRuntimeError("'"s + host->TypeName() + "' object is not subscriptable");
+            }
         }
     }
     // len() of a string or a mapping needs no list of its characters or keys (docs/tasks/0263)
