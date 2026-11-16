@@ -1732,9 +1732,10 @@ private:
     struct OutputSizeHint
     {
         static constexpr size_t CacheLineSize = 64;
-        std::array<char, CacheLineSize> padBefore{};
+        // Never read, so left uninitialized: a Load does not pay for zeroing them
+        std::array<char, CacheLineSize> padBefore;
         std::atomic<size_t> value{ 0 };
-        std::array<char, CacheLineSize> padAfter{};
+        std::array<char, CacheLineSize> padAfter;
     };
     mutable OutputSizeHint m_outputSizeHint;
     mutable std::optional<GenericMap> m_metadata JINJA2CPP_GUARDED_BY(m_metadataMutex);
