@@ -369,7 +369,7 @@ void OverdrawRenderMemory(std::uint64_t bytes) noexcept
     Overdraw(t_renderLimits, bytes);
 }
 
-void ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept
+bool ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept
 {
     for (auto* limits = &t_renderLimits; limits; limits = limits->interrupted)
     {
@@ -382,12 +382,18 @@ void ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept
             if (bytes > limits->memoryLeft)
             {
                 Overdraw(*limits, bytes);
-                return;
+                return false;
             }
             limits->memoryLeft -= bytes;
         }
-        return;
+        return true;
     }
+    return true;
+}
+
+void ThrowKeptTreeMemory(std::uint64_t bytes)
+{
+    ThrowLimit("maxRenderMemory", "a template of " + std::to_string(bytes) + " bytes, which the render this one runs in keeps until it ends, does not fit in that render's budget");
 }
 
 void ThrowRenderMemory(std::uint64_t bytes)

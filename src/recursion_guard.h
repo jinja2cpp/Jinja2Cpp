@@ -328,8 +328,11 @@ JINJA2CPP_EXPORT void OverdrawRenderMemory(std::uint64_t bytes) noexcept;
 // Counts `bytes` against the memory budget of the running render whose limits `collector` installed, which may be
 // one the running render interrupted (a host callable rendering another template). Past it, that render fails at
 // its next step, as for OverdrawRenderMemory. Nothing without a budget or when no running render's limits are
-// `collector`'s (docs/tasks/0492)
-void ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept;
+// `collector`'s (docs/tasks/0492). False when they did not fit
+bool ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept;
+// Fails the running render with maxRenderMemory: a template kept for the render below it did not fit in that
+// render's budget (CycleCollector::KeepNewTree, docs/tasks/0492)
+[[noreturn]] void ThrowKeptTreeMemory(std::uint64_t bytes);
 } // namespace detail
 
 // Counts `bytes` of a string, list or dict the running render makes or grows against its memory budget

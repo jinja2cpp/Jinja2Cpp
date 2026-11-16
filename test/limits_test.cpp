@@ -849,6 +849,56 @@ TEST_F(LimitsEnvTest, KeptNestedTemplatesCountAgainstTheOuterBudget)
     EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
 }
 
+TEST_F(LimitsEnvTest, KeptTemplatesOfADeeperRenderCountAgainstTheOuterBudget)
+{
+    // The loop runs in a render nested in the outer one, `middle()`: once the templates it keeps for the outer
+    // render no longer fit the outer budget, each further `inner()` fails before its template is kept, so the loop
+    // keeps a bounded number of trees, rather than only the outer render's next step failing, which a template that
+    // ends after the call never takes (0492 verifier)
+    auto settings = UntrustedSettings();
+    settings.limits.maxRenderMemory = std::uint64_t{ 1 } << 20;
+    m_env.SetSettings(settings);
+    m_env.AddGlobal("g", ValuesList{});
+    const std::string body = "{% set x = 1 %}" + std::string(2000, 'x');
+    int rendered = 0;
+    int failed = 0;
+    std::string innerError;
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&](const UserCallableParams&) {
+            Template tpl(&m_env);
+            EXPECT_TRUE(tpl.Load(body).has_value());
+            const auto result = tpl.RenderAsString({});
+            if (result)
+            {
+                ++rendered;
+            }
+            else
+            {
+                ++failed;
+                innerError = ToString(result.error().GetExtraParams()[1]);
+            }
+            return Value(std::string());
+        },
+        {});
+    params["middle"] = UserCallable(
+        [&](const UserCallableParams&) {
+            Template tpl(&m_env);
+            EXPECT_TRUE(tpl.Load("{% for i in range(20000) %}{{ inner() }}{% endfor %}").has_value());
+            const auto result = tpl.RenderAsString(params);
+            EXPECT_TRUE(result.has_value());
+            return Value(std::string());
+        },
+        {});
+    Template outer(&m_env);
+    ASSERT_TRUE(outer.Load("{{ middle() }}").has_value());
+    static_cast<void>(outer.RenderAsString(params));
+    EXPECT_EQ("maxRenderMemory", innerError);
+    // About 2 KB a tree in 1 MiB
+    EXPECT_LT(rendered, 1000);
+    EXPECT_EQ(20000, rendered + failed);
+}
+
 TEST_F(LimitsEnvTest, KeptNestedTemplatesFitABudget)
 {
     // Twenty trees of about 2 KB each fit in 1 MiB

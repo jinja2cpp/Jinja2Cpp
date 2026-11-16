@@ -121,10 +121,16 @@ void CycleCollector::Finish() noexcept
 
 void CycleCollector::KeepTree(std::shared_ptr<const void> tree, std::uint64_t bytes)
 {
-    if (!tree)
+    if (tree && Insert(std::move(tree), bytes))
     {
-        return;
+        // Kept first: a tree past the budget stays alive for the values that name it, and this render fails instead
+        // (a throw here would make Finish's hand-over drop the trees)
+        detail::ChargeRenderMemoryOf(this, bytes);
     }
+}
+
+bool CycleCollector::Insert(std::shared_ptr<const void> tree, std::uint64_t bytes)
+{
     if (!m_notes)
     {
         m_notes = std::make_unique<Notes>();
@@ -133,7 +139,7 @@ void CycleCollector::KeepTree(std::shared_ptr<const void> tree, std::uint64_t by
     const void* key = tree.get();
     if (!notes.treeSet.insert(key).second)
     {
-        return;
+        return false;
     }
     try
     {
@@ -144,8 +150,7 @@ void CycleCollector::KeepTree(std::shared_ptr<const void> tree, std::uint64_t by
         notes.treeSet.erase(key);
         throw;
     }
-    // Kept first: a tree past the budget stays alive for the values that name it, and this render fails instead
-    detail::ChargeRenderMemoryOf(this, bytes);
+    return true;
 }
 
 std::weak_ptr<const void> CycleCollector::ExportToken()
