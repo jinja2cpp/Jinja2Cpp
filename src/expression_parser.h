@@ -159,7 +159,7 @@ public:
     void DropFoldCandidates();
     // A fold candidate's node, which the tree may not hold: a step of a filter chain, made only
     // as a candidate, or an argument a filter drops (docs/tasks/0497). Seal checks them as roots
-    // (TemplateParser::MakeFoldNodeRoots)
+    // (TemplateParser::SealWithFoldNodes)
     void AddFoldNode(NodeRef<Expression> node);
     // Null when there are none
     [[nodiscard]] const std::vector<NodeRef<Expression>>* GetFoldNodes() const { return m_fold ? FoldNodes() : nullptr; }
