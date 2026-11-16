@@ -1295,6 +1295,7 @@ TEST(ErrorsJinjaMessagesTest, RuntimeErrorsNameTheirPythonClass)
         { "{{ '%x' % 1.5 }}", "TypeError", "%x format: an integer is required, not float" },
         { "{{ '%c' % 'ab' }}", "TypeError", "%c requires int or char" },
         { "{{ '%f' % 'x' }}", "TypeError", "must be real number, not str" },
+        // Python folds this one and fails with NameError; a NaN from the context raises the ValueError
         { "{{ '%d' % (1e999 - 1e999) }}", "ValueError", "cannot convert float NaN to integer" },
         { "{{ 'x'|format(1) }}", "TypeError", "not all arguments converted during string formatting" },
         { "{{ nope|format(1) }}", "TypeError", "not all arguments converted during string formatting" },

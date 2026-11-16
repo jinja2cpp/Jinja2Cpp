@@ -330,8 +330,8 @@ private:
     size_t m_charSize = 1;
     // A render that writes each piece gathers a piece in this sink, which stands in for the host's (m_sink) until
     // the piece ends: the sink's path is the usual one, and tests nothing more
-    // Made by WriteEachPiece on a sink stream and owned by the render (HeldPieceOwner), so that a stream's
-    // destruction stays trivial: a stream that writes no piece pays one pointer
+    // Made by WriteEachPiece on a sink stream and owned by the render (HeldPieceOwner): a stream that writes no
+    // piece pays one pointer
     HeldPiece* m_held = nullptr;
     // The output a sink stream holds back while a mark lives (Mark), made at the first spill and reused
     HeldPieceOwner m_spill;
