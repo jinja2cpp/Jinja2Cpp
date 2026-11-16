@@ -1663,10 +1663,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             // last folds even where the next one does not (docs/tasks/0497). The step's filter
             // nodes are shared with the chain, which does not change them; rare: only with a
             // tuple-slice subscript in the steps so far
-            if (result && operand && m_tupleSliceSubscripts != foldFrom)
-            {
-                NoteChainStepFold(operand, result, foldFrom);
-            }
+            NoteChainStep(operand, result, foldFrom);
             const auto& tok = lexer.NextToken();
             if (tok != Token::Identifier)
             {
