@@ -2344,8 +2344,9 @@ struct SuperBlockCall
     std::shared_ptr<SelfBlocks> owner;
     ClosureSite site;
 
-    void operator()(const CallParams& /*params*/, OutStream& stream, RenderContext& context) const
+    void operator()(const CallParams& params, OutStream& stream, RenderContext& context) const
     {
+        CheckBlockCallParams(params);
         // The value of the call, one item of generate() as a macro's output is
         const OutStream::PieceHold pieceHold(stream);
         const auto home = site.Resolve(context);
@@ -3817,12 +3818,27 @@ const Body* MacroBodyOf(const InternalValue& value)
     }
     return callable->GetStatementCallable().target<Body>();
 }
+
+// The site of `value` when it is a closure that may keep a capture: a macro (MacroBody), or super() (SuperBlockCall), which the
+// copy of its block's names holds as `super` (docs/tasks/0501)
+template<typename MacroBody>
+const ClosureSite* ClosureSiteOf(const InternalValue& value)
+{
+    if (const auto* body = MacroBodyOf<MacroBody>(value))
+    {
+        return &body->site;
+    }
+    if (const auto* super = MacroBodyOf<SuperBlockCall>(value))
+    {
+        return &super->site;
+    }
+    return nullptr;
+}
 } // namespace
 
 std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
 {
-    const auto* body = MacroBodyOf<CallableBody>(value);
-    if (!body)
+    if (!ClosureSiteOf<CallableBody>(value))
     {
         return std::nullopt;
     }
@@ -3840,8 +3856,8 @@ std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& 
 
 InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
 {
-    const auto* body = MacroBodyOf<CallableBody>(value);
-    if (!body)
+    const auto* site = ClosureSiteOf<CallableBody>(value);
+    if (!site)
     {
         return value;
     }
@@ -3850,7 +3866,7 @@ InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
     {
         return value;
     }
-    auto capture = body->site.Capture();
+    auto capture = site->Capture();
     if (!capture)
     {
         return value;

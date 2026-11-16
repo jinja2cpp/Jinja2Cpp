@@ -289,3 +289,18 @@ TEST_F(ExtendsTest, SelfHidesGlobalAndParameter)
     EXPECT_EQ("IB<IB>", Render("{% include 'inc.j2tpl' %}", { { "self", "param" } }));
     EXPECT_EQ("1", Render("{% set self = 1 %}{{ self }}", { { "self", "param" } }));
 }
+
+// super() is Jinja2's BlockReference: it takes no arguments (docs/tasks/0501)
+TEST_F(ExtendsTest, SuperTakesNoArguments)
+{
+    m_templateFs->AddFile("sbase.j2tpl", "{% block x %}P{% endblock %}");
+    for (const auto& [source, message] : { std::pair<std::string, std::string>{ R"({% extends "sbase.j2tpl" %}{% block x %}{{ super(1) }}{% endblock %})",
+                                                                                "BlockReference.__call__() takes 1 positional argument but 2 were given" },
+                                           { R"({% extends "sbase.j2tpl" %}{% block x %}{{ super(a=1) }}{% endblock %})", "BlockReference.__call__() got an unexpected keyword argument 'a'" } })
+    {
+        auto tpl = Load(source);
+        auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result) << source;
+        EXPECT_NE(std::string::npos, result.error().ToString().find(message)) << result.error().ToString();
+    }
+}
