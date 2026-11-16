@@ -311,6 +311,81 @@ TEST(TemplateApiTest, FailedReloadKeepsPreviousTemplate)
     EXPECT_EQ(ErrorCode::TemplateNotParsed, unloaded.error().GetCode());
 }
 
+// The first Load of a template parses into the template's own source string (0515). Host code that
+// Load calls may load the same template again (here the autoescape selector): that Load must not
+// reuse the string the first one is parsing, whether it succeeds or fails, and the outer Load's
+// result is the one kept. Both a source inside the small-string buffer and a longer one
+TEST(TemplateApiTest, LoadFromTheSelectorOfTheFirstLoad)
+{
+    for (const std::string& outerText : { std::string("O{{ x }}"), std::string(100, 'O') + "{{ x }}" })
+    {
+        for (const bool innerFails : { false, true })
+        {
+            TemplateEnv env;
+            std::optional<Template> tpl;
+            bool nested = false;
+            bool innerLoaded = false;
+            // Set before the template is made, which takes the environment's settings then
+            env.GetSettings().autoescapeSelector = [&](const std::string&) {
+                if (!nested)
+                {
+                    nested = true;
+                    innerLoaded = !!tpl->Load(innerFails ? std::string("{{ broken") : std::string(60, 'I') + "{{ x }}");
+                }
+                return false;
+            };
+            tpl.emplace(&env);
+            ASSERT_TRUE(!!tpl->Load(outerText));
+            EXPECT_EQ(!innerFails, innerLoaded);
+            EXPECT_EQ(outerText.substr(0, outerText.size() - 7) + "5", tpl->RenderAsString({ { "x", 5 } }).value());
+        }
+    }
+
+    // The outer Load fails after the inner one succeeded: the inner template stays loaded
+    TemplateEnv env;
+    std::optional<Template> tpl;
+    bool nested = false;
+    env.GetSettings().autoescapeSelector = [&](const std::string&) {
+        if (!nested)
+        {
+            nested = true;
+            EXPECT_TRUE(!!tpl->Load("i{{ x }}"));
+        }
+        return false;
+    };
+    tpl.emplace(&env);
+    ASSERT_FALSE(!!tpl->Load("{{ broken"));
+    EXPECT_EQ("i6", tpl->RenderAsString({ { "x", 6 } }).value());
+}
+
+// Reloads of each source size, inside the small-string buffer and outside it, and failed reloads
+// keep rendering the loaded template
+TEST(TemplateApiTest, ReloadsKeepEachSourceSize)
+{
+    const std::string longText(100, 'L');
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("a{{ x }}"));
+    EXPECT_EQ("a1", tpl.RenderAsString({ { "x", 1 } }).value());
+    ASSERT_TRUE(!!tpl.Load(longText + "{{ x }}"));
+    EXPECT_EQ(longText + "2", tpl.RenderAsString({ { "x", 2 } }).value());
+    ASSERT_FALSE(!!tpl.Load("{{ broken"));
+    EXPECT_EQ(longText + "3", tpl.RenderAsString({ { "x", 3 } }).value());
+    ASSERT_TRUE(!!tpl.Load("b{{ x }}"));
+    EXPECT_EQ("b4", tpl.RenderAsString({ { "x", 4 } }).value());
+    ASSERT_FALSE(!!tpl.Load(longText + "{% if %}"));
+    EXPECT_EQ("b5", tpl.RenderAsString({ { "x", 5 } }).value());
+    ASSERT_TRUE(!!tpl.Load("c{{ x }}\r\n"));
+    EXPECT_EQ("c6", tpl.RenderAsString({ { "x", 6 } }).value());
+    ASSERT_TRUE(!!tpl.Load("d{{ x }}"));
+    EXPECT_EQ("d7", tpl.RenderAsString({ { "x", 7 } }).value());
+
+    TemplateW wide;
+    ASSERT_TRUE(!!wide.Load(L"w{{ x }}"));
+    ASSERT_TRUE(!!wide.Load(L"v{{ x }}"));
+    ASSERT_FALSE(!!wide.Load(L"{{ broken"));
+    EXPECT_EQ(L"v8", wide.RenderAsString({ { "x", 8 } }).value());
+}
+
 // Load replaces the template for that object only: copies, the environment's cache, the
 // includes of the name and modules keep the tree they had, as Python's Template objects are
 // immutable (docs/tasks/0321, embedding contract 3.1.5)
