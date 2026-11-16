@@ -2357,17 +2357,13 @@ struct SuperBlockCall
         const BlocksStack* stack = owner->live ? owner->live : &owner->ended;
         // Its chain's frame: the one running it, else one of its own, so that a super() in the parent block finds
         // the block above it in the same chain
-        TemplateFrame* frame = nullptr;
-        for (auto* f = superContext.GetTemplateFrame(); f; f = f->outer)
+        bool inChain = false;
+        for (const auto* f = superContext.GetTemplateFrame(); f && !inChain; f = f->outer)
         {
-            if (f->blocks == stack)
-            {
-                frame = f;
-                break;
-            }
+            inChain = f->blocks == stack;
         }
         TemplateFrame ownFrame;
-        if (!frame)
+        if (!inChain)
         {
             ownFrame.blocks = stack;
             ownFrame.baseDepth = home.link;

@@ -270,7 +270,8 @@ public:
     // This render shares `keeper`'s snapshot of the globals (KeepTree): when it ends, what it kept until then
     // (KeepUntilEnd) goes to `keeper`, as the closures that keep it may be stored in a global the outer render reads
     // afterwards (docs/tasks/0491)
-    void KeepForOuter(CycleCollector* keeper) noexcept { m_keeper = keeper; }
+    // Throws std::bad_alloc
+    void KeepForOuter(CycleCollector* keeper) { NotesForKeep().keeper = keeper; }
     // What a container the render running on this thread hands the host keeps, so that the host's
     // copy can tell when it goes whether that render has ended: then nothing walks the container
     // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
@@ -389,6 +390,8 @@ private:
         BorrowedCells cells;
         // ExportToken: made on the first container the render hands the host
         std::shared_ptr<const void> exportToken;
+        // KeepForOuter's; null when this render shares no outer render's globals
+        CycleCollector* keeper = nullptr;
     };
 
     // The notes, made now if there are none. Throws std::bad_alloc
@@ -399,8 +402,6 @@ private:
     // The cells and kept objects of a template module, which outlive the call (docs/tasks/0049,
     // 0373); null for a render
     const ModuleScope* m_module = nullptr;
-    // KeepForOuter's; null when this render shares no outer render's globals
-    CycleCollector* m_keeper = nullptr;
 };
 
 // A call of a template module: it runs as a new call of the module's cells (BorrowedCells::BeginCall),

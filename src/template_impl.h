@@ -822,8 +822,7 @@ public:
             m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             if (JINJA2CPP_CELL_UNLIKELY(keeper != nullptr))
             {
-                context.CaptureClosures(FrameEnd{ 0, true, 0, 0 });
-                callback.CaptureModuleClosures();
+                callback.CaptureClosuresForOuter(context);
             }
             outStream.Flush();
             if constexpr (hasHooks)
@@ -1247,15 +1246,16 @@ private:
         // Throws std::bad_alloc
         void SetKeeper(CycleCollector* keeper)
         {
-            m_sharedTemplates = std::make_shared<TemplateSlots>();
+            Loaded().sharedTemplates = std::make_shared<TemplateSlots>();
             m_keeper = keeper;
         }
         [[nodiscard]] bool EndsBeforeOuterRender() const override { return m_keeper != nullptr; }
-        [[nodiscard]] std::shared_ptr<TemplateSlots> SharedTemplates() const override { return m_sharedTemplates; }
-        // The modules the render imported end with it: the closures stored past it keep what they see
-        // (EndsBeforeOuterRender). Throws std::bad_alloc
-        void CaptureModuleClosures()
+        [[nodiscard]] std::shared_ptr<TemplateSlots> SharedTemplates() const override { return m_loaded ? m_loaded->sharedTemplates : nullptr; }
+        // The render's context and the modules it imported end with it: the closures stored past it keep what they
+        // see (EndsBeforeOuterRender). Out of line: a render nests in another rarely. Throws std::bad_alloc
+        JINJA2CPP_NOINLINE void CaptureClosuresForOuter(RenderContext& context)
         {
+            context.CaptureClosures(FrameEnd{ 0, true, 0, 0 });
             if (!m_loaded)
             {
                 return;
@@ -1505,7 +1505,7 @@ private:
             for (auto p = loaded.replaced.begin(); p != loaded.replaced.end();)
             {
                 const LoadTemplateResult* result = &*p;
-                if (std::binary_search(named.begin(), named.end(), result, std::less<>()) || HoldsSlot(*result, m_sharedTemplates ? *m_sharedTemplates : loaded.templates))
+                if (std::binary_search(named.begin(), named.end(), result, std::less<>()) || HoldsSlot(*result, loaded.sharedTemplates ? *loaded.sharedTemplates : loaded.templates))
                 {
                     ++p;
                     continue;
@@ -1529,7 +1529,11 @@ private:
             }
         }
 
-        TemplateSlots& Templates() override { return JINJA2CPP_CELL_UNLIKELY(m_sharedTemplates != nullptr) ? *m_sharedTemplates : Loaded().templates; }
+        TemplateSlots& Templates() override
+        {
+            auto& loaded = Loaded();
+            return JINJA2CPP_CELL_UNLIKELY(loaded.sharedTemplates != nullptr) ? *loaded.sharedTemplates : loaded.templates;
+        }
         ImportedModule& AddModule(std::unique_ptr<ImportedModule> module) override { return *Loaded().modules.emplace_back(std::move(module)); }
         void ShareModule(const LoadTemplateResult& tpl, ImportedModule& module) override { Loaded().sharedModules.emplace_back(&tpl, &module); }
         [[nodiscard]] ImportedModule* FindModule(const LoadTemplateResult& tpl) const override
@@ -1673,6 +1677,8 @@ private:
             // Out of line, so that a render that loads nothing only checks for none
             JINJA2CPP_NOINLINE_INLINE ~LoadedTemplates() = default;
 
+            // Templates() under a keeper, shared with the `self` and super() stacks the render ends (SharedTemplates)
+            std::shared_ptr<TemplateSlots> sharedTemplates;
             std::unordered_map<std::string, LoadedTemplate> byName;
             // Results that are not the first for their name: templates reloaded during the render
             std::list<LoadTemplateResult> replaced;
@@ -1703,8 +1709,6 @@ private:
         mutable std::unique_ptr<LoadedTemplates> m_loaded;
         // SetKeeper's: null but for a render nested in another one that shares its globals
         CycleCollector* m_keeper = nullptr;
-        // Templates(), under a keeper: SharedTemplates
-        std::shared_ptr<TemplateSlots> m_sharedTemplates;
         // A template this render loaded, which a value it stores in a shared global may run in or
         // view once this render has ended (docs/tasks/0481). Throws std::bad_alloc
         void KeepLoaded(const LoadTemplateResult& result) const

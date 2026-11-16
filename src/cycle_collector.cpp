@@ -81,11 +81,11 @@ thread_local ExportWalk* ExportWalk::s_held = nullptr;
 void CycleCollector::Finish() noexcept
 {
     // What the closures stored in the outer render's globals still need lives as long as that render (KeepForOuter)
-    if (m_keeper)
+    if (auto* keeper = m_notes->keeper)
     {
         try
         {
-            auto& target = m_keeper->m_module ? m_keeper->m_module->kept : m_keeper->NotesForKeep().kept;
+            auto& target = keeper->m_module ? keeper->m_module->kept : keeper->NotesForKeep().kept;
             m_notes->kept.MoveInto(target);
         }
         catch (...) // NOLINT(bugprone-empty-catch): out of memory; the closures read what was not moved as ended
