@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/915
 priority: medium
 area: perf
