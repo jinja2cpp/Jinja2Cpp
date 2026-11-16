@@ -1,10 +1,10 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: []
 touches: [src/python_format.cpp]
-shares: [python/tests/test_i18n.py]
+shares: [python/tests/test_i18n.py, test/errors_test.cpp, test/filters_test.cpp]
 ---
 # `%` formatting errors carry no Python class
 
@@ -23,3 +23,11 @@ does; check the parity corpus's error cases (`format` filter and `%` operator ar
 
 **Done when.** The Python module raises ValueError/TypeError for those templates as Jinja2 does,
 and the test_i18n.py row expects ValueError again.
+
+**Resolution (batch 8 D).** Every throw site names its class: ValueError for `incomplete format`,
+`incomplete format key`, `unsupported format character`, a NaN `%d` and the Markup helper's
+`int()`/`float()` of a string; TypeError for the rest. Python's OverflowError (`%c` past 0x10FFFF, an
+infinite `%d`) is `IntegerOutOfRangeError` (`ErrorCode::IntegerOutOfRange`, an embedder-visible code
+change from `TemplateRuntimeError`). Markup `%d` of a non-number non-string now reads `%d format: a real
+number is required, not _MarkupEscapeHelper`, as CPython reports `int()`'s TypeError. A missing key
+(`KeyError`) has no class yet: 0511.

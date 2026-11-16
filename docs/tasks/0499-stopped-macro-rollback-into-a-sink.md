@@ -1,10 +1,10 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0479]
-touches: [src/out_stream.h, src/out_stream.cpp]
-shares: [python/tests/test_values.py, docs/python.md]
+touches: [src/out_stream.h, src/out_stream.cpp, src/out_stream_pieces.cpp]
+shares: [python/tests/test_values.py, docs/python.md, docs/api-2.0.md, test/macro_test.cpp]
 ---
 # A macro that stops after its output reached the sink keeps the RuntimeError
 

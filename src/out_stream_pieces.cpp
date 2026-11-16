@@ -4,6 +4,7 @@
 
 #include <jinja2cpp/template.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -51,6 +52,36 @@ public:
         return std::exchange(m_bytes, std::string());
     }
     [[nodiscard]] bool Empty() const { return m_bytes.empty(); }
+    [[nodiscard]] size_t Size() const noexcept { return m_bytes.size(); }
+    // Drops the bytes past `bytes` (at most the size) and gives back what they were charged
+    void Truncate(size_t bytes) noexcept
+    {
+        const auto dropped = static_cast<std::uint64_t>(m_bytes.size() - bytes);
+        const auto released = std::min(dropped, m_charged);
+        m_charged -= released;
+        ReleaseRenderMemory(released);
+        m_bytes.resize(bytes);
+    }
+    // Writes the gathered bytes to `sink`, OutputSink or OutputSinkW by `charSize`, and empties the piece, which
+    // keeps its storage. What they were charged is given back first: a sink that gathers charges them again
+    void WriteTo(void* sink, size_t charSize)
+    {
+        ReleaseRenderMemory(std::exchange(m_charged, 0));
+        WriteBytes(sink, charSize, m_bytes);
+        m_bytes.clear();
+    }
+    static void WriteBytes(void* sink, size_t charSize, const std::string& bytes)
+    {
+        if (charSize == 1)
+        {
+            static_cast<OutputSink*>(sink)->Write(bytes);
+            return;
+        }
+        // Copied out of the byte string, whose buffer need not be aligned for wchar_t (libc++'s short string)
+        std::wstring wide(bytes.size() / sizeof(wchar_t), L'\0');
+        std::memcpy(wide.data(), bytes.data(), wide.size() * sizeof(wchar_t));
+        static_cast<OutputSinkW*>(sink)->Write(wide);
+    }
 
 private:
     // Charged before the piece grows: a piece past the budget fails the render, the last one too
@@ -112,6 +143,10 @@ void OutStream::FlushPiece()
         return;
     }
     FlushBuffer();
+    if (m_spill)
+    {
+        DeliverSpill();
+    }
     if (m_held)
     {
         EndPiece(true);
@@ -127,15 +162,40 @@ void OutStream::EndPiece(bool writeEmpty)
         return;
     }
     const std::string piece = m_held->Take();
-    if (m_charSize == 1)
+    HeldPiece::WriteBytes(m_held->Sink(), m_charSize, piece);
+}
+
+size_t OutStream::SpillSize() const noexcept
+{
+    return m_spill ? m_spill->Size() : 0;
+}
+
+// What a sink stream would give its sink while a mark lives (docs/tasks/0499). Charged to the memory budget as a
+// gathered piece is; the stream counts it as written
+void OutStream::Spill(const void* ptr, size_t bytes)
+{
+    if (!m_spill)
     {
-        static_cast<OutputSink*>(m_held->Sink())->Write(piece);
-        return;
+        m_spill.reset(new HeldPiece(nullptr));
     }
-    // Copied out of the byte string, whose buffer need not be aligned for wchar_t (libc++'s short string)
-    std::wstring wide(piece.size() / sizeof(wchar_t), L'\0');
-    std::memcpy(wide.data(), piece.data(), wide.size() * sizeof(wchar_t));
-    static_cast<OutputSinkW*>(m_held->Sink())->Write(wide);
+    m_spill->Write(std::string_view(static_cast<const char*>(ptr), bytes));
+}
+
+// Once no mark lives, what was spilled goes to the sink (the host's or the gathered piece), counted already
+void OutStream::DeliverSpill()
+{
+    if (m_guards == 0 && !m_spill->Empty())
+    {
+        m_spill->WriteTo(m_sink, m_charSize);
+    }
+}
+
+void OutStream::TruncateSpill(size_t bytes) noexcept
+{
+    if (m_spill)
+    {
+        m_spill->Truncate(bytes);
+    }
 }
 
 } // namespace v2
