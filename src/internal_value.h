@@ -99,7 +99,7 @@ struct GenericAccessorAccess
     static const std::shared_ptr<const IListItemAccessor>& Get(const GenericList& list) noexcept { return list.m_accessor; }
     static const std::shared_ptr<const IMapItemAccessor>& Get(const GenericMap& map) noexcept { return map.m_accessor; }
     // The accessor, which `map` no longer holds
-    static std::shared_ptr<const IMapItemAccessor> Take(GenericMap&& map) noexcept { return std::move(map.m_accessor); }
+    static std::shared_ptr<const IMapItemAccessor> Take(GenericMap& map) noexcept { return std::move(map.m_accessor); }
 };
 
 // The generation of a jinja2::UserCallable, which its copies share: UserCallable::IsEqual as a

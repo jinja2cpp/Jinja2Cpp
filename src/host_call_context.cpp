@@ -149,7 +149,7 @@ void EndContextMap(const IMapItemAccessor* handle, Value& context) noexcept
     {
         return;
     }
-    t_spareContext = detail::GenericAccessorAccess::Take(std::move(*map));
+    t_spareContext = detail::GenericAccessorAccess::Take(*map);
 }
 
 void RethrowAsPublicError()
