@@ -578,6 +578,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0515](0515-load-plain-text-fixed-cost.md) | The fixed cost of a Load: `Load/plain_text` against inja | perf | medium | done |
 | [0516](0516-load-fixed-cost-rest.md) | The rest of a Load's fixed cost: settings compare, sealing, template object | perf | medium | open |
 | [0517](0517-nested-load-frees-loading-template.md) | Two Loads from host code inside a template's first Load free the template being loaded | robustness | medium | open |
-| [0518](0518-loop-scope-swap-without-storage.md) | A loop that sets no names swaps empty scope maps | perf | medium | open |
+| [0518](0518-loop-scope-swap-without-storage.md) | A loop that sets no names swaps empty scope maps | perf | medium | done |
 | [0519](0519-module-call-fixed-cost-creep.md) | A module call's fixed cost grew 4.3% in three weeks, one named exception at a time | perf | low | open |
 | [0520](0520-drift-report-slow-creep.md) | The drift report cannot see creep slower than 3% per 10 merges | perf | low | done |
