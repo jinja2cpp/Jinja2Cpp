@@ -373,9 +373,25 @@ public:
         {
             return SourceTooLongError(tplName);
         }
-        // On the heap, so the tree's pointers into it survive the hand-over to m_template
-        auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
-        NormalizeTemplateNewlines(*source, m_settings->settings.keepTrailingNewline);
+        // Parsed in the slot the loaded template does not use, where it stays: the tree points into
+        // it, and a short source is in the string itself, which a move would copy
+        const std::uint8_t slot = m_sourceSlot == 0 ? 1 : 0;
+        auto& source = m_sources[slot];
+        // A failed Load leaves the slot empty again
+        struct SlotRelease
+        {
+            std::basic_string<CharT>& source;
+            bool loaded = false;
+            ~SlotRelease()
+            {
+                if (!loaded)
+                {
+                    std::basic_string<CharT>().swap(source);
+                }
+            }
+        } release{ source };
+        source = std::move(tpl);
+        NormalizeTemplateNewlines(source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;
         const bool isNamed = !tplName.empty();
         std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
@@ -385,7 +401,7 @@ public:
         // The checks of the tree's handles (NodeRefChecks) in Seal fail only on a bug in the parser.
         try
         {
-            TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
+            TemplateParser<CharT> parser(&source, *m_settings, m_env, name, nodes);
             // Jinja2 passes None for a template from a string. A selector that throws fails the Load
             // as host code, whatever it throws (an ErrorInfo too)
             if (const auto& selector = m_settings->settings.autoescapeSelector)
@@ -428,23 +444,33 @@ public:
                 }
             }
             auto convertedTexts = parser.TakeConvertedTexts();
-            auto metadataInfo = parser.GetMetadataInfo();
+            auto metadataInfo = parser.TakeMetadataInfo();
             m_nodes = std::move(sealed);
             m_renderer = *parseResult;
             m_mayReadLoop = m_nodes[m_renderer].MayReadLoop();
             m_convertedTexts = std::move(convertedTexts);
-            m_metadataInfo = std::move(metadataInfo);
+            // Most templates have no metadata block, and neither had the one they replace: nothing to move
+            if (!metadataInfo.location.fileName.empty() || !m_metadataInfo.location.fileName.empty())
+            {
+                m_metadataInfo = std::move(metadataInfo);
+            }
         }
         catch (...)
         {
             return detail::CurrentExceptionToError<CharT>(name);
         }
-        m_template = std::move(source);
+        release.loaded = true;
+        // The tree that pointed into the other slot is gone
+        if (m_sourceSlot != NoSource)
+        {
+            std::basic_string<CharT>().swap(m_sources[m_sourceSlot]);
+        }
+        m_sourceSlot = slot;
         // Last: the parser refers to the name
         m_templateName = std::move(name);
         m_isNamed = isNamed;
         m_selectedAutoescape = selectedAutoescape;
-        m_origin.source = m_template.get();
+        m_origin.source = &source;
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
         ResetMetadataCache();
@@ -907,6 +933,7 @@ public:
         // Copied before it goes into the expected, whose converting constructor is noexcept:
         // std::bad_alloc must reach the caller, not std::terminate
         MetadataInfo<CharT> info = m_metadataInfo;
+        info.metadataType = m_settings->settings.defaultMetadataType;
         return info;
     }
 
@@ -925,7 +952,7 @@ public:
             return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
         }
         NodeArena nodes;
-        TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
+        TemplateParser<CharT> parser(Source(), *m_settings, m_env, m_templateName, nodes);
         const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -970,7 +997,7 @@ public:
             return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
         }
         NodeArena nodes;
-        TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
+        TemplateParser<CharT> parser(Source(), *m_settings, m_env, m_templateName, nodes);
         parser.CollectReferenced();
         const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
         auto parseResult = parser.Parse();
@@ -1042,7 +1069,7 @@ public:
         }
         // The same source, settings and environment parse to the same tree (but for the
         // autoescape setting an autoescapeSelector chooses by name)
-        const bool sameSource = m_template && other.m_template ? *m_template == *other.m_template : m_template == other.m_template;
+        const bool sameSource = Source() && other.Source() ? *Source() == *other.Source() : Source() == other.Source();
         if (!sameSource)
         {
             return false;
@@ -1079,7 +1106,7 @@ private:
             return GenericMap();
         }
 
-        if (m_metadataInfo.metadataType == "json")
+        if (m_settings->settings.defaultMetadataType == "json")
         {
             // Read as UTF-8: wide metadata is converted first
             std::string converted;
@@ -1638,7 +1665,11 @@ private:
     TemplateEnv* m_env{};
     // Shared with the other templates of the environment
     detail::LoadSettingsPtr m_settings;
-    std::unique_ptr<std::basic_string<CharT>> m_template;
+    // The source the tree points into is m_sources[m_sourceSlot]; the other slot is where the next Load parses
+    static constexpr std::uint8_t NoSource = 2;
+    [[nodiscard]] const std::basic_string<CharT>* Source() const { return m_sourceSlot == NoSource ? nullptr : &m_sources[m_sourceSlot]; }
+    std::array<std::basic_string<CharT>, 2> m_sources;
+    std::uint8_t m_sourceSlot = NoSource;
     // Text the tree points to besides the source (newline_sequence copies), if any
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;
@@ -1662,6 +1693,7 @@ private:
     mutable OutputSizeHint m_outputSizeHint;
     mutable std::optional<GenericMap> m_metadata JINJA2CPP_GUARDED_BY(m_metadataMutex);
     mutable detail::Mutex m_metadataMutex;
+    // The metadata block; its type is the settings' defaultMetadataType, left empty here (GetMetadataRaw fills it)
     MetadataInfo<CharT> m_metadataInfo;
     // The source and name the tree's render errors are located in; read on an error only
     detail::TemplateOrigin m_origin;

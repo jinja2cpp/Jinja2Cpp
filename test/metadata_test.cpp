@@ -152,3 +152,37 @@ TEST(MetadataTest, Metadata_JsonData_Wide)
     EXPECT_FALSE(!renderResult);
     EXPECT_EQ(L"Hello World!", renderResult.value());
 }
+
+// The type comes from the template's settings and the block from its last successful Load: a
+// reload with or without a block, and a failed one, leave what GetMetadataRaw reports consistent
+// (docs/tasks/0515: Load no longer copies the type, nor moves an absent block)
+TEST(MetadataTest, Metadata_FollowsReloads)
+{
+    TemplateEnv env;
+    env.GetSettings().defaultMetadataType = "yaml";
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% meta %}{\"a\": 1}{% endmeta %}x", "first.j2"));
+    auto raw = tpl.GetMetadataRaw().value();
+    EXPECT_EQ("yaml", raw.metadataType);
+    EXPECT_EQ("{\"a\": 1}", raw.metadata);
+    EXPECT_EQ("first.j2", raw.location.fileName);
+
+    ASSERT_TRUE(!!tpl.Load("no block", "second.j2"));
+    raw = tpl.GetMetadataRaw().value();
+    EXPECT_EQ("yaml", raw.metadataType);
+    EXPECT_TRUE(raw.metadata.empty());
+    EXPECT_TRUE(raw.location.fileName.empty());
+    EXPECT_EQ(0u, raw.location.line);
+
+    ASSERT_TRUE(!!tpl.Load("{% meta %}{\"b\": 2}{% endmeta %}y", "third.j2"));
+    ASSERT_FALSE(!!tpl.Load("{% meta %}{\"c\": 3}{% endmeta %}{{ broken", "fourth.j2"));
+    raw = tpl.GetMetadataRaw().value();
+    EXPECT_EQ("{\"b\": 2}", raw.metadata);
+    EXPECT_EQ("third.j2", raw.location.fileName);
+    EXPECT_EQ("y", tpl.RenderAsString({}).value());
+
+    Template json;
+    ASSERT_TRUE(!!json.Load("{% meta %}{\"d\": 4}{% endmeta %}"));
+    EXPECT_EQ("json", json.GetMetadataRaw().value().metadataType);
+    EXPECT_EQ(4, json.GetMetadata().value()["d"].As<int64_t>());
+}

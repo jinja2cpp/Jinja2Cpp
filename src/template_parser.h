@@ -68,7 +68,8 @@ struct ParserTraits;
 template<typename CharT>
 void NormalizeTemplateNewlines(std::basic_string<CharT>& tpl, bool keepTrailingNewline)
 {
-    if (tpl.find(static_cast<CharT>('\r')) != std::basic_string<CharT>::npos)
+    // The traits' find is inlined to a memchr call; basic_string::find is a call into the library first
+    if (std::char_traits<CharT>::find(tpl.data(), tpl.size(), static_cast<CharT>('\r')) != nullptr)
     {
         size_t out = 0;
         for (size_t in = 0; in < tpl.size(); ++in)
@@ -673,7 +674,6 @@ public:
         , m_nodes(nodes)
         , m_delims(setts.GetDelimiters<CharT>())
         , m_unknown(setts.settings.userCallablesAsFilters)
-        , m_metadataType(setts.settings.defaultMetadataType)
         , m_autoescape(setts.settings.autoescape)
     {
     }
@@ -742,12 +742,17 @@ public:
     using ConvertedTexts = std::forward_list<string_t>;
     std::unique_ptr<ConvertedTexts> TakeConvertedTexts() { return std::move(m_convertedTexts); }
 
-    MetadataInfo<CharT> GetMetadataInfo() const
+    // The metadata block and where it is, without its type: the template's settings have that
+    // (Settings::defaultMetadataType), so a Load does not copy the string
+    // A template without the block leaves the location's file name empty
+    MetadataInfo<CharT> TakeMetadataInfo()
     {
         MetadataInfo<CharT> result;
-        result.metadataType = m_metadataType;
-        result.metadata = m_metadata;
-        result.location = m_metadataLocation;
+        if (!m_metadataLocation.fileName.empty())
+        {
+            result.metadata = m_metadata;
+            result.location = std::move(m_metadataLocation);
+        }
         return result;
     }
 
@@ -2543,7 +2548,6 @@ private:
     mutable bool m_unbalancedBrackets = false;
     mutable bool m_unclosedString[2] = { false, false };
     std::basic_string_view<CharT> m_metadata;
-    std::string m_metadataType;
     SourceLocation m_metadataLocation;
     std::unique_ptr<LexBuffers> m_lexBuffers;
     TemplateRootInfo m_root;

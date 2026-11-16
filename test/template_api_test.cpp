@@ -311,6 +311,35 @@ TEST(TemplateApiTest, FailedReloadKeepsPreviousTemplate)
     EXPECT_EQ(ErrorCode::TemplateNotParsed, unloaded.error().GetCode());
 }
 
+// Load parses into the slot of the template's source the loaded tree does not use (0515). The
+// tree points into its slot, a source of up to 15 characters inside the string itself, so each
+// size has to survive a reload of each other size and a failed one
+TEST(TemplateApiTest, ReloadsKeepEachSourceInItsSlot)
+{
+    const std::string longText(100, 'L');
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("a{{ x }}"));
+    EXPECT_EQ("a1", tpl.RenderAsString({ { "x", 1 } }).value());
+    ASSERT_TRUE(!!tpl.Load(longText + "{{ x }}"));
+    EXPECT_EQ(longText + "2", tpl.RenderAsString({ { "x", 2 } }).value());
+    ASSERT_FALSE(!!tpl.Load("{{ broken"));
+    EXPECT_EQ(longText + "3", tpl.RenderAsString({ { "x", 3 } }).value());
+    ASSERT_TRUE(!!tpl.Load("b{{ x }}"));
+    EXPECT_EQ("b4", tpl.RenderAsString({ { "x", 4 } }).value());
+    ASSERT_FALSE(!!tpl.Load(longText + "{% if %}"));
+    EXPECT_EQ("b5", tpl.RenderAsString({ { "x", 5 } }).value());
+    ASSERT_TRUE(!!tpl.Load("c{{ x }}\r\n"));
+    EXPECT_EQ("c6", tpl.RenderAsString({ { "x", 6 } }).value());
+    ASSERT_TRUE(!!tpl.Load("d{{ x }}"));
+    EXPECT_EQ("d7", tpl.RenderAsString({ { "x", 7 } }).value());
+
+    TemplateW wide;
+    ASSERT_TRUE(!!wide.Load(L"w{{ x }}"));
+    ASSERT_TRUE(!!wide.Load(L"v{{ x }}"));
+    ASSERT_FALSE(!!wide.Load(L"{{ broken"));
+    EXPECT_EQ(L"v8", wide.RenderAsString({ { "x", 8 } }).value());
+}
+
 // Load replaces the template for that object only: copies, the environment's cache, the
 // includes of the name and modules keep the tree they had, as Python's Template objects are
 // immutable (docs/tasks/0321, embedding contract 3.1.5)
