@@ -1,10 +1,10 @@
 ---
-status: open
+status: done
 pr:
 priority: medium
 area: robustness
 depends: []
-touches: [src/template.cpp, src/template_module.cpp, src/render_workspace.h, test/template_api_test.cpp]
+touches: [src/template_module.cpp, src/render_workspace.h, src/render_workspace.cpp, test/template_api_test.cpp]
 ---
 # Two Loads from host code inside a template's first Load free the template being loaded
 
@@ -42,3 +42,14 @@ after.
 
 **Acceptance.** The reproducer as a regression test in test/template_api_test.cpp, clean under
 address+undefined sanitizers. No Load row over the bar.
+
+**Resolution.** `LoadReplacing` hands a replaced template whose first Load still runs
+(`m_loading`) to `RenderWorkspace::KeepWhileLoading`, with a pointer to that flag. The thread's
+workspace keeps it, render or not, until a release (the next replacing Load outside a render,
+`ReleaseThreadCaches`, the thread's end) finds the flag cleared. The list is the thread's own and
+`SwapContents` leaves it, so a suspendable render that ends inside the Load does not take it.
+Only a Load that replaces a loading template pays; the first Load and Render paths are unchanged.
+The outer Load still finishes into the template it started on, which is no longer the one the
+`Template` holds: the last Load that replaced it wins. Regression test
+`TemplateApiTest.LoadTwiceFromTheSelectorOfTheFirstLoad` (2 and 3 nested Loads, with and without
+`ReleaseThreadCaches` between them, outer Load succeeding or failing, narrow and wide).
