@@ -10,9 +10,12 @@ and keeps the results on the `bench-data` branch:
       writes DIR/README.md (a table of the latest counts against the previous and the first
       record) and DIR/charts/<benchmark>.svg (instructions and allocations per iteration over
       the recorded commits), which GitHub shows when you open the branch;
-  trend.py drift --history history.jsonl [--window N] [--threshold F] [--out FILE]
-      compares the latest record with the one N records earlier and reports the counts
-      that grew by more than F. The PR gate compares a PR with its base only, so a few
+  trend.py drift --history history.jsonl [--window N | --since-days D] [--threshold F] [--out FILE]
+      compares the latest record with the one N records earlier (or the newest one at least D
+      days older) and reports the counts that grew by more than F, with the merges that moved
+      each by 0.2% or more. At about 40 merges a week the record window spans one or two days, so
+      the job also runs the 7 and 28 day anchors: a row that creeps 0.5% a merge never crosses 3%
+      inside one window. The PR gate compares a PR with its base only, so a few
       merges that each add 2% pass it; this catches their sum. Only cases that newly cross
       the threshold are reported, so one accepted regression is not reported on every merge.
 
@@ -23,6 +26,7 @@ counts come from `count.py --cache-sim`, the README has a second table of cache 
 charts two more panels (D1 read misses, I1 misses); those are reported, drift ignores them.
 """
 import argparse
+import datetime
 import html
 import json
 import pathlib
@@ -255,19 +259,43 @@ def cache_table(names, history):
     return lines
 
 
-def drifted(history, end, window, threshold):
-    """Counts of history[end] more than threshold above history[end - window], as
+def parse_date(record):
+    return datetime.datetime.fromisoformat(record["date"].replace("Z", "+00:00"))
+
+
+def anchor_index(history, end, window, since_days):
+    """Index of the record history[end] is compared with: `window` records back, or with
+    since_days the newest record at least that many days older (None when the history is not
+    that long yet, so a young branch reports nothing instead of comparing with itself)."""
+    if since_days is None:
+        return max(0, end - window)
+    limit = parse_date(history[end]) - datetime.timedelta(days=since_days)
+    for i in range(end - 1, -1, -1):
+        if parse_date(history[i]) <= limit:
+            return i
+    return None
+
+
+def drifted(history, end, window, threshold, since_days=None):
+    """Counts of history[end] more than threshold above its anchor record (see anchor_index), as
     {(name, metric): (base, current)}; a case missing from either record is skipped."""
     if end < 1:
         return {}
-    base, cur = history[max(0, end - window)], history[end]
+    start = anchor_index(history, end, window, since_days)
+    if start is None:
+        return {}
+    cur = history[end]
     found = {}
     for name, value in cur["instructions"].items():
-        before = base["instructions"].get(name)
+        # A case added after the anchor is compared with its first record (a young case is
+        # the one most likely to have crept since it landed)
+        base = next((r for r in history[start:end] if r["instructions"].get(name)), None)
+        before = base["instructions"].get(name) if base else None
         if before and value > before * (1 + threshold):
             found[(name, "instructions")] = (before, value)
     for name, value in cur["allocations"].items():
-        before = (base["allocations"].get(name) or {}).get("count")
+        base = next((r for r in history[start:end] if (r["allocations"].get(name) or {}).get("count")), None)
+        before = (base["allocations"].get(name) or {}).get("count") if base else None
         count = (value or {}).get("count")
         # A handful of allocations is too few for a percentage to mean anything
         if before and count is not None and count > max(before * (1 + threshold), before + 2):
@@ -275,28 +303,54 @@ def drifted(history, end, window, threshold):
     return found
 
 
+def steps_of(history, start, end, name, metric, min_step):
+    """The merges between history[start] and history[end] that moved one count by min_step or
+    more, as (record, change), so that the report names the merges behind a slow creep."""
+    def value(record):
+        if metric == "instructions":
+            return record["instructions"].get(name)
+        return (record["allocations"].get(name) or {}).get("count")
+    steps = []
+    for i in range(start + 1, end + 1):
+        before, after = value(history[i - 1]), value(history[i])
+        if before and after is not None and abs(after / before - 1) >= min_step:
+            steps.append((history[i], after / before - 1))
+    return steps
+
+
 def drift(args):
     history = load_history(args.history)
     end = len(history) - 1
-    now = drifted(history, end, args.window, args.threshold)
-    before = drifted(history, end - 1, args.window, args.threshold)
+    since = args.since_days
+    now = drifted(history, end, args.window, args.threshold, since)
+    before = drifted(history, end - 1, args.window, args.threshold, since)
     new = {k: v for k, v in now.items() if k not in before}
+    span = f"the last {args.window} records" if since is None else f"the last {since:g} days"
     if not new:
-        print(f"No new drift above {args.threshold:.0%} over the last {args.window} records.")
+        print(f"No new drift above {args.threshold:.0%} over {span}.")
         if args.out:
             args.out.write_text("")
         return 0
-    base = history[max(0, end - args.window)]
+    start = anchor_index(history, end, args.window, since)
+    base = history[start]
     last = history[end]
     url = args.repo_url
-    lines = [f"Counts on master grew by more than {args.threshold:.0%} between "
+    lines = [f"Counts on master grew by more than {args.threshold:.0%} over {span}, between "
              f"[{base['sha'][:7]}]({url}/commit/{base['sha']}) and [{last['sha'][:7]}]({url}/commit/{last['sha']}) "
-             f"({min(args.window, end)} recorded merges; latest: {last['subject']}).", "",
+             f"({end - start} recorded merges; latest: {last['subject']}).", "",
              "| Benchmark | Metric | Before | Now | Change |", "|---|---|---:|---:|---:|"]
     for (name, metric), (b, c) in sorted(new.items()):
         lines.append(f"| {name} | {metric} | {b:,.0f} | {c:,.0f} | {change(c, b)} |")
-    commits = ", ".join(f"[{r['sha'][:7]}]({url}/commit/{r['sha']})" for r in history[max(0, end - args.window) + 1:end + 1])
-    lines += ["", f"Commits in the window: {commits}.", "",
+    lines.append("")
+    for (name, metric) in sorted(new):
+        steps = steps_of(history, start, end, name, metric, args.min_step)
+        if steps:
+            lines.append(f"Steps of {args.min_step:.1%} or more in {name} ({metric}): " + ", ".join(
+                f"[{r['sha'][:7]}]({url}/commit/{r['sha']}) {pct * 100:+.2f}% ({r['subject'][:60]})"
+                for r, pct in steps) + ".")
+            lines.append("")
+    commits = ", ".join(f"[{r['sha'][:7]}]({url}/commit/{r['sha']})" for r in history[start + 1:end + 1])
+    lines += [f"Commits in the window: {commits}.", "",
               "A benchmark case that was edited in the window also shows here; check "
               "`git log bench/cases` before bisecting. Charts: the `bench-data` branch."]
     text = "\n".join(lines) + "\n"
@@ -323,6 +377,10 @@ def main():
     d.add_argument("--history", required=True, type=pathlib.Path)
     d.add_argument("--window", type=int, default=10)
     d.add_argument("--threshold", type=float, default=0.03)
+    d.add_argument("--since-days", type=float, help="compare with the newest record at least this "
+                   "many days older instead of the record --window records back")
+    d.add_argument("--min-step", type=float, default=0.002,
+                   help="list the merges that moved a reported count by at least this much")
     d.add_argument("--out", type=pathlib.Path)
     d.add_argument("--repo-url", default="https://github.com/jinja2cpp/Jinja2Cpp")
     args = ap.parse_args()

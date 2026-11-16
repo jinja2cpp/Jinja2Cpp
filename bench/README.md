@@ -377,11 +377,15 @@ python3 bench/trend.py render --history history.jsonl --out trend
 
 The PR gate compares a PR with its base only, so several merges that each add 2% all
 pass it. After each trend update, `trend.py drift` compares the latest record with the
-one ten records back. When a count grew by more than 3% (allocations: also by more than
-two), the job comments on the open issue "Benchmark drift on master", or opens it.
+one ten records back, with the newest record at least 7 days older, and with the one at
+least 28 days older. Ten records are one or two days at about 40 merges a week, so a row
+creeping 0.5% a merge needs the time anchors to show (task 0520). When a count grew by more
+than 3% (28 days: 5%; allocations: also by more than two), the job comments on the open
+issue "Benchmark drift on master", or opens it, and lists the merges that moved the count
+by 0.2% or more. A case that appeared after the anchor is compared with its first record.
 A case reported once is not reported again on the next merges while it stays above the
 threshold. Close the issue once the drift is fixed or accepted. Locally:
-`python3 bench/trend.py drift --history history.jsonl --window 10 --threshold 0.03`.
+`python3 bench/trend.py drift --history history.jsonl --since-days 28 --threshold 0.05`.
 
 ## Profiling
 
