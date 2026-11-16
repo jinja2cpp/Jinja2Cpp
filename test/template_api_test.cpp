@@ -311,10 +311,56 @@ TEST(TemplateApiTest, FailedReloadKeepsPreviousTemplate)
     EXPECT_EQ(ErrorCode::TemplateNotParsed, unloaded.error().GetCode());
 }
 
-// Load parses into the slot of the template's source the loaded tree does not use (0515). The
-// tree points into its slot, a source of up to 15 characters inside the string itself, so each
-// size has to survive a reload of each other size and a failed one
-TEST(TemplateApiTest, ReloadsKeepEachSourceInItsSlot)
+// The first Load of a template parses into the template's own source string (0515). Host code that
+// Load calls may load the same template again (here the autoescape selector): that Load must not
+// reuse the string the first one is parsing, whether it succeeds or fails, and the outer Load's
+// result is the one kept. Both a source inside the small-string buffer and a longer one
+TEST(TemplateApiTest, LoadFromTheSelectorOfTheFirstLoad)
+{
+    for (const std::string& outerText : { std::string("O{{ x }}"), std::string(100, 'O') + "{{ x }}" })
+    {
+        for (const bool innerFails : { false, true })
+        {
+            TemplateEnv env;
+            std::optional<Template> tpl;
+            bool nested = false;
+            bool innerLoaded = false;
+            // Set before the template is made, which takes the environment's settings then
+            env.GetSettings().autoescapeSelector = [&](const std::string&) {
+                if (!nested)
+                {
+                    nested = true;
+                    innerLoaded = !!tpl->Load(innerFails ? std::string("{{ broken") : std::string(60, 'I') + "{{ x }}");
+                }
+                return false;
+            };
+            tpl.emplace(&env);
+            ASSERT_TRUE(!!tpl->Load(outerText));
+            EXPECT_EQ(!innerFails, innerLoaded);
+            EXPECT_EQ(outerText.substr(0, outerText.size() - 7) + "5", tpl->RenderAsString({ { "x", 5 } }).value());
+        }
+    }
+
+    // The outer Load fails after the inner one succeeded: the inner template stays loaded
+    TemplateEnv env;
+    std::optional<Template> tpl;
+    bool nested = false;
+    env.GetSettings().autoescapeSelector = [&](const std::string&) {
+        if (!nested)
+        {
+            nested = true;
+            EXPECT_TRUE(!!tpl->Load("i{{ x }}"));
+        }
+        return false;
+    };
+    tpl.emplace(&env);
+    ASSERT_FALSE(!!tpl->Load("{{ broken"));
+    EXPECT_EQ("i6", tpl->RenderAsString({ { "x", 6 } }).value());
+}
+
+// Reloads of each source size, inside the small-string buffer and outside it, and failed reloads
+// keep rendering the loaded template
+TEST(TemplateApiTest, ReloadsKeepEachSourceSize)
 {
     const std::string longText(100, 'L');
     Template tpl;

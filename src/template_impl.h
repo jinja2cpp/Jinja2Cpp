@@ -373,32 +373,52 @@ public:
         {
             return SourceTooLongError(tplName);
         }
-        // Parsed in the slot the loaded template does not use, where it stays: the tree points into
-        // it, and a short source is in the string itself, which a move would copy
-        const std::uint8_t slot = m_sourceSlot == 0 ? 1 : 0;
-        auto& source = m_sources[slot];
-        // A failed Load leaves the slot empty again
-        struct SlotRelease
+        // The first Load of a template parses into m_source, where the source stays: the tree points
+        // into it, and a short source is in the string itself, which a move would copy. A Load while
+        // that one runs (host code it calls loads the same template) or after it, which only a test
+        // reaches in place, parses into a string of its own on the heap, as every Load did before 0515
+        const bool inlineSource = !m_loading && !m_hasSource;
+        std::unique_ptr<std::basic_string<CharT>> spilled;
+        if (!inlineSource)
         {
-            explicit SlotRelease(std::basic_string<CharT>& slot)
-                : source(slot)
+            spilled = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
+        }
+        auto& source = inlineSource ? m_source : *spilled;
+        // Marks the first Load as running, and empties m_source again if it fails
+        struct InlineLoadScope
+        {
+            InlineLoadScope(TemplateImpl& impl, bool active)
+                : self(impl)
+                , owns(active)
             {
-            }
-            SlotRelease(const SlotRelease&) = delete;
-            SlotRelease& operator=(const SlotRelease&) = delete;
-            SlotRelease(SlotRelease&&) = delete;
-            SlotRelease& operator=(SlotRelease&&) = delete;
-            std::basic_string<CharT>& source;
-            bool loaded = false;
-            ~SlotRelease()
-            {
-                if (!loaded)
+                if (owns)
                 {
-                    std::basic_string<CharT>().swap(source);
+                    self.m_loading = true;
                 }
             }
-        } release(source);
-        source = std::move(tpl);
+            InlineLoadScope(const InlineLoadScope&) = delete;
+            InlineLoadScope& operator=(const InlineLoadScope&) = delete;
+            InlineLoadScope(InlineLoadScope&&) = delete;
+            InlineLoadScope& operator=(InlineLoadScope&&) = delete;
+            ~InlineLoadScope()
+            {
+                if (owns)
+                {
+                    self.m_loading = false;
+                    if (!loaded)
+                    {
+                        std::basic_string<CharT>().swap(self.m_source);
+                    }
+                }
+            }
+            TemplateImpl& self;
+            bool owns;
+            bool loaded = false;
+        } scope(*this, inlineSource);
+        if (inlineSource)
+        {
+            m_source = std::move(tpl);
+        }
         NormalizeTemplateNewlines(source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;
         const bool isNamed = !tplName.empty();
@@ -467,13 +487,17 @@ public:
         {
             return detail::CurrentExceptionToError<CharT>(name);
         }
-        release.loaded = true;
-        // The tree that pointed into the other slot is gone
-        if (m_sourceSlot != NoSource)
+        // The tree that pointed into the other source is gone
+        scope.loaded = true;
+        if (inlineSource)
         {
-            std::basic_string<CharT>().swap(m_sources[m_sourceSlot]);
+            m_spilledSource.reset();
+            m_hasSource = true;
         }
-        m_sourceSlot = slot;
+        else
+        {
+            m_spilledSource = std::move(spilled);
+        }
         // Last: the parser refers to the name
         m_templateName = std::move(name);
         m_isNamed = isNamed;
@@ -941,7 +965,11 @@ public:
         // Copied before it goes into the expected, whose converting constructor is noexcept:
         // std::bad_alloc must reach the caller, not std::terminate
         MetadataInfo<CharT> info = m_metadataInfo;
-        info.metadataType = m_settings->settings.defaultMetadataType;
+        // An unloaded template reports no type, as before 0515
+        if (Source())
+        {
+            info.metadataType = m_settings->settings.defaultMetadataType;
+        }
         return info;
     }
 
@@ -1673,11 +1701,21 @@ private:
     TemplateEnv* m_env{};
     // Shared with the other templates of the environment
     detail::LoadSettingsPtr m_settings;
-    // The source the tree points into is m_sources[m_sourceSlot]; the other slot is where the next Load parses
-    static constexpr std::uint8_t NoSource = 2;
-    [[nodiscard]] const std::basic_string<CharT>* Source() const { return m_sourceSlot == NoSource ? nullptr : &m_sources[m_sourceSlot]; }
-    std::array<std::basic_string<CharT>, 2> m_sources;
-    std::uint8_t m_sourceSlot = NoSource;
+    // The source the tree points into: the one of a Load that ran inside or after the first (spilled), else the
+    // first Load's own (Load)
+    [[nodiscard]] const std::basic_string<CharT>* Source() const
+    {
+        if (m_spilledSource)
+        {
+            return m_spilledSource.get();
+        }
+        return m_hasSource ? &m_source : nullptr;
+    }
+    std::basic_string<CharT> m_source;
+    std::unique_ptr<std::basic_string<CharT>> m_spilledSource;
+    bool m_hasSource = false;
+    // The first Load is running: a Load from host code it calls parses into a source of its own
+    bool m_loading = false;
     // Text the tree points to besides the source (newline_sequence copies), if any
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;

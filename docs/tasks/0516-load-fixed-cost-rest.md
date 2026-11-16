@@ -8,7 +8,7 @@ touches: [src/node_arena.h, src/node_arena.cpp, src/template_env.cpp, src/templa
 ---
 # The rest of a Load's fixed cost: settings compare, sealing, template object
 
-**Problem.** After 0515, `Load/plain_text` is 3,326 instructions and 3 allocations, about 0.72x of
+**Problem.** After 0515, `Load/plain_text` is 3,338 instructions and 3 allocations, about 0.72x of
 inja's Load of the same case (`perf-track/2026-11-15-engines.md`, inja 186 ns). What is left is
 spread over a few fixed costs of every Load, each a few percent:
 

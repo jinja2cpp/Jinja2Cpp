@@ -25,12 +25,15 @@ name-hash key) it is 3,760 instructions and 4 allocations per Load:
 | malloc/free | ~500 | impl, source characters, source box, sealed buffer |
 
 **Change (P1).**
-- The source is parsed in one of two string slots inside `TemplateImpl` rather than in a string on
-  the heap that is moved into a `unique_ptr` once the parse succeeds. A tree points into its source, and
-  a short source lives inside the string object, so the string itself must not move: the new parse
-  goes to the slot the loaded tree does not use, and the other slot is emptied once the new tree
-  replaces the old one. A failed Load empties its slot and keeps the loaded template, as before.
-  One allocation (the box) fewer per Load; the template object is 32 bytes larger.
+- The first Load of a template parses its source in a string inside `TemplateImpl` rather than in a
+  string on the heap that is moved into a `unique_ptr` once the parse succeeds. Only a template
+  nothing else holds and that has no tree yet is loaded in place (`LoadsInPlace`), so the string has
+  no tree pointing into it when the Load starts; a tree points into its source, and a short source
+  lives inside the string object, so the string never moves after that. A failed Load empties it. A
+  Load from host code the first Load calls on the same template (the autoescape selector) parses
+  into a heap string of its own, as every Load did before, and the outer Load's result wins (the
+  verifier's use-after-free on the first draft, which picked one of two slots by state the nested
+  Load changed). One allocation (the box) fewer per Load; the template object is 8 bytes larger.
 - The parser no longer copies `Settings::defaultMetadataType` into itself and then into the
   template's `MetadataInfo`: the template's settings have it, and `GetMetadataRaw` and the metadata
   parse read it from there. The metadata location is moved only when the new or the old template has
@@ -38,8 +41,9 @@ name-hash key) it is 3,760 instructions and 4 allocations per Load:
 - `NormalizeTemplateNewlines` looks for `\r` with `char_traits::find` (an inlined `memchr`) instead
   of `basic_string::find`, a call into the library first.
 
-Result against 3f66175 (local count, pinned key): `Load/plain_text` 3,760 to 3,326 (-11.5%), 4 to 3
-allocations; `Load/substitute` -5.8%, `Load/for_range` -3.3%; the full table is in the PR.
+Result against 3f66175 (local count, pinned key): `Load/plain_text` 3,760 to 3,338 (-11.2%), 4 to 3
+allocations, 8 bytes less retained; `Load/substitute` -5.6%, `Load/for_range` -3.2%, other Loads
+-0.7..-2%, Render rows within +0.14%; the full table is in the PR.
 
 Tried and dropped: copying a `string_view` source straight into its slot (`assign`) instead of
 building a string and moving it in: +38 Ir, as `assign` allocates exactly and the move did not.
@@ -52,6 +56,7 @@ compare loop of a two-character delimiter is already cheap and the switch costs 
 - `Load/plain_text` at least 10% fewer instructions and one allocation fewer, no Load or Render row
   up by more than the bar (0.5%) in the CI count job.
 - Reloads of each source size (inside and outside the small-string buffer) and failed reloads keep
-  rendering the loaded template (`TemplateApiTest.ReloadsKeepEachSourceInItsSlot`); metadata follows
+  rendering the loaded template (`TemplateApiTest.ReloadsKeepEachSourceSize`), and so does a Load
+  from the selector of the first Load (`TemplateApiTest.LoadFromTheSelectorOfTheFirstLoad`); metadata follows
   reloads and failed reloads (`MetadataTest.Metadata_FollowsReloads`).
 - Address/undefined sanitizer run of the template, metadata and reload tests.
