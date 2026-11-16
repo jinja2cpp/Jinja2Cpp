@@ -5,8 +5,11 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <map>
 #include <string>
 #include <vector>
@@ -144,4 +147,46 @@ TEST_F(ParamsTableTest, GenericMapParams)
         EXPECT_EQ(count > 1 ? "0|10||True" : "0|-||True", result.value());
     }
 }
+// The fastest of five renders of `tpl` with `params`, in microseconds
+double FastestRender(jinja2::Template& tpl, const jinja2::ValuesMap& params)
+{
+    auto fastest = std::chrono::steady_clock::duration::max();
+    for (int run = 0; run != 5; ++run)
+    {
+        const auto start = std::chrono::steady_clock::now();
+        const auto result = tpl.RenderAsString(params);
+        const auto took = std::chrono::steady_clock::now() - start;
+        EXPECT_TRUE(!!result && result.value() == "1");
+        fastest = std::min(fastest, took);
+    }
+    return std::chrono::duration<double, std::micro>(fastest).count();
+}
+
+// A host that forwards untrusted keys as params: 4,000 keys of 16 bytes whose first eight are
+// secret[1] of unordered_dense's hash_bytes, which hash alike unkeyed and would put every key in
+// one group of the params index, each insert scanning all before it. Keyed, the render takes
+// about as long as with ordinary keys of the same size (docs/tasks/0507)
+TEST_F(ParamsTableTest, KeysThatZeroUnkeyedLanesStayLinear)
+{
+    constexpr std::uint64_t secret1 = UINT64_C(0xe7037ed1a0b428db);
+    jinja2::ValuesMap crafted{ { "x", 1 } };
+    jinja2::ValuesMap ordinary{ { "x", 1 } };
+    for (size_t idx = 0; idx != 4000; ++idx)
+    {
+        std::string key(16, '\0');
+        std::memcpy(&key[0], &secret1, sizeof(secret1));
+        const auto tail = static_cast<std::uint64_t>(idx);
+        std::memcpy(&key[8], &tail, sizeof(tail));
+        crafted[key] = static_cast<int64_t>(idx);
+        auto name = std::to_string(idx);
+        ordinary["key_" + std::string(12 - name.size(), '0') + name] = static_cast<int64_t>(idx);
+    }
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load("{{ x }}"));
+    const auto plain = FastestRender(tpl, ordinary);
+    const auto attacked = FastestRender(tpl, crafted);
+    // Unkeyed, the crafted render is thousands of times slower; the floor absorbs a slow runner
+    EXPECT_LT(attacked, plain * 10 + 2000) << "ordinary keys " << plain << " us, crafted " << attacked << " us";
+}
+
 } // namespace

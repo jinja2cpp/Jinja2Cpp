@@ -37,10 +37,12 @@ struct ankerl::unordered_dense::detail::key_compare_is_call<std::string> : std::
 // The library's hash of a name: 64 bits, avalanching, keyed per process (hash_map.cpp). The
 // hash of unordered_dense is unseeded and its index never rehashes a crowded group, so without
 // a key names found offline to share one group cost each set or lookup a scan of all of them,
-// in every process (security review of #891, docs/tasks/0231). Out of line: names are hashed
-// when a template is parsed, and inline the hash grew every parser function that hashes enough
-// to change what GCC inlines into it (+1% to +2.6% on every Load, even of plain text). Exported,
-// so that a test linked to the shared library hashes as the library does
+// in every process (security review of #891, docs/tasks/0231). The key is in the secrets the
+// lanes are xored with, not applied after: unkeyed, a lane whose input equals its secret drops
+// its bytes, and host keys of any bytes then share one hash (docs/tasks/0507). Out of line: names
+// are hashed when a template is parsed, and inline the hash grew every parser function that hashes
+// enough to change what GCC inlines into it (+1% to +2.6% on every Load, even of plain text).
+// Exported, so that a test linked to the shared library hashes as the library does
 JINJA2CPP_EXPORT std::size_t HashName(const void* data, std::size_t size) noexcept;
 
 // The index of the lowest set bit of a nonzero `bits`
