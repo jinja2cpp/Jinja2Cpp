@@ -1,5 +1,6 @@
 #include "recursion_guard.h"
 
+#include "cycle_collector.h"
 #include "engine_errors.h"
 
 #include <jinja2cpp/template_env.h>
@@ -251,6 +252,8 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone, const BigI
     m_saved = detail::t_renderLimits;
     detail::RenderLimits state;
     state.bigInts = bigInts;
+    state.interrupted = &*m_saved;
+    state.collector = CycleCollector::Current();
     // A render a polled one starts (a host callable rendering another template) is polled too, also where its
     // template's limits scope sets no limit (a big-integer backend alone installs one outside a boost build)
     if (detail::t_hostPoll && (!limitsOrNone || !HasRenderLimits(*limitsOrNone)))
@@ -345,10 +348,11 @@ void ThrowRangeTooLong(std::uint64_t size)
     ThrowLimit("maxRange", "range() of " + std::to_string(size) + " items is longer than " + std::to_string(t_renderLimits.maxRange));
 }
 
-void OverdrawRenderMemory(std::uint64_t bytes) noexcept
+namespace
 {
-    auto& limits = t_renderLimits;
-    // An object's size: the sum of them stays far from overflowing
+void Overdraw(RenderLimits& limits, std::uint64_t bytes) noexcept
+{
+    // An object's or a kept tree's size: the sum of them stays far from overflowing
     limits.memoryOverdraft += bytes - limits.memoryLeft;
     limits.memoryLeft = 0;
     if (limits.active && limits.stepsLeft > 1)
@@ -356,6 +360,33 @@ void OverdrawRenderMemory(std::uint64_t bytes) noexcept
         // The steps of the countdown taken so far, and this one: StepsSlow then counts what was taken
         limits.chunk -= limits.stepsLeft - 1;
         limits.stepsLeft = 1;
+    }
+}
+} // namespace
+
+void OverdrawRenderMemory(std::uint64_t bytes) noexcept
+{
+    Overdraw(t_renderLimits, bytes);
+}
+
+void ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept
+{
+    for (auto* limits = &t_renderLimits; limits; limits = limits->interrupted)
+    {
+        if (limits->collector != collector)
+        {
+            continue;
+        }
+        if (limits->memoryLeft != UINT64_MAX)
+        {
+            if (bytes > limits->memoryLeft)
+            {
+                Overdraw(*limits, bytes);
+                return;
+            }
+            limits->memoryLeft -= bytes;
+        }
+        return;
     }
 }
 

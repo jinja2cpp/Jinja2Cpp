@@ -960,6 +960,8 @@ public:
 
     // Read on every render, so kept rather than read from the buffer's header
     [[nodiscard]] const ArenaView& View() const { return m_view; }
+    // The bytes of the tree's nodes (docs/tasks/0492)
+    [[nodiscard]] std::size_t Bytes() const { return m_view.m_size; }
     template<typename T>
     T& operator[](NodeRef<T> ref) const
     {

@@ -150,6 +150,11 @@ struct RenderLimits
     // steady_clock ticks since its epoch: a time_point's constructor is not noexcept, which a
     // thread-local's initialiser has to be
     std::chrono::steady_clock::rep deadline = 0;
+    // The limits of the render these interrupted, as RenderLimitsScope saved them, and the collector of the render
+    // that installed these (CycleCollector::Current then): a kept tree is charged to the budget of the render that
+    // keeps it, which may be one these interrupted (ChargeRenderMemoryOf, docs/tasks/0492). Null outside a render
+    RenderLimits* interrupted = nullptr;
+    const void* collector = nullptr;
 };
 static_assert(RenderLimits{}.maxRenderDepth == Settings::Limits{}.maxRenderDepth);
 // Constant-initialised, so that reading it needs no guard
@@ -320,6 +325,11 @@ namespace detail
 // ChargeObjectMemory past the budget: notes the overdraft and makes the next step take the slow path, which fails it
 // Exported: ValueObject's allocation function calls it from code outside a shared library
 JINJA2CPP_EXPORT void OverdrawRenderMemory(std::uint64_t bytes) noexcept;
+// Counts `bytes` against the memory budget of the running render whose limits `collector` installed, which may be
+// one the running render interrupted (a host callable rendering another template). Past it, that render fails at
+// its next step, as for OverdrawRenderMemory. Nothing without a budget or when no running render's limits are
+// `collector`'s (docs/tasks/0492)
+void ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept;
 } // namespace detail
 
 // Counts `bytes` of a string, list or dict the running render makes or grows against its memory budget
