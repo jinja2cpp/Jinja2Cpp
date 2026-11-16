@@ -574,6 +574,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             CallParams callParams;
             if (const auto* posArgs = ucParams.extraPosArgs.GetIf<ValuesList>())
             {
+                callParams.posParams.reserve(posArgs->size());
                 for (const auto& arg : *posArgs)
                 {
                     callParams.posParams.push_back(OwnedArgument(arg));

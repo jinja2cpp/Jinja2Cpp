@@ -639,7 +639,8 @@ public:
     // before
     [[nodiscard]] const std::shared_ptr<CallExports>& Exports() const noexcept { return m_exports; }
     // The first value the call hands out made `exports`, which ExportCallList shares with it
-    void AdoptExports(std::shared_ptr<CallExports> exports) noexcept;
+    // Inline, as ExportCallFirst runs it once a call (Module/keep, docs/tasks/0519)
+    void AdoptExports(std::shared_ptr<CallExports>&& exports) noexcept;
     // A template module's registry: the exports of its calls hand `dropped` the containers the
     // host lets go of (CallExports::Dropped, docs/tasks/0480)
     void SetDroppedExports(std::weak_ptr<DroppedExports> dropped) noexcept { m_dropped = std::move(dropped); }
@@ -707,6 +708,34 @@ inline CallExports::CallExports(const BorrowedCells& registry) noexcept
     : m_registry(&registry)
     , m_dropped(registry.m_dropped)
 {
+}
+
+inline void CallExports::AddCell(const void* identity, bool isList)
+{
+    // A call that hands out the same data again in a row (a loop) notes it once; Record drops
+    // the other repeats
+    if (m_cells.empty() || m_cells.back() != std::pair(identity, isList))
+    {
+        m_cells.emplace_back(identity, isList);
+    }
+}
+
+inline void BorrowedCells::AdoptExports(std::shared_ptr<CallExports>&& exports) noexcept
+{
+    exports->m_self = exports;
+    m_exports = std::move(exports);
+}
+
+inline void BorrowedCells::NoteExport(CallExports& exports, const void* identity, bool isList)
+{
+    if (identity)
+    {
+        exports.AddCell(identity, isList);
+    }
+    else
+    {
+        exports.m_containers = true;
+    }
 }
 
 } // namespace v2

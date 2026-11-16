@@ -1,10 +1,10 @@
 ---
-status: open
+status: in-progress
 pr:
 priority: low
 area: perf
 depends: []
-touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/host_call_context.cpp, src/internal_value.cpp]
+touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/host_call_context.h, src/host_call_context.cpp, src/internal_value.h, src/internal_value.cpp, src/template_module.cpp, test/user_callable_test.cpp]
 ---
 # A module call's fixed cost grew 4.3% in three weeks, one named exception at a time
 
@@ -39,3 +39,46 @@ a context map built when the callee does not read the context.
 
 **Done when.** `Module/keep` is back within +1% of a64c314's count (about 6,900 instructions), or
 the remaining cost is recorded here with its cause and the fix that paid for it.
+
+## Result (2026-11-16)
+
+Callgrind of `Module/keep` (local Release, 20 iterations, `JINJA2CPP_NAME_HASH_KEY` pinned as CI),
+instructions per call at each step:
+
+| Commit | Ir/call | Allocs | Bytes |
+|---|---:|---:|---:|
+| a64c314 (#673, the 10-28 anchor) | 6,811 | 8 | 368 |
+| c299890 (#800) | 7,003 | 7 | 536 |
+| eeb221c (#813) | 7,046 | 7 | 552 |
+| d908607 (#849) | 7,083 | 7 | 552 |
+| 1f489e5 (#884) | 7,182 | 7 | 568 |
+| 9541b58 (master) | 7,110 | 7 | 568 |
+| this change | 6,863 | 6 | 520 |
+
+Where the creep came from, by inclusive cost against a64c314 (function by function; much of it
+moved between frames as inlining changed):
+- The 0335 pin path (#695, decision D8): the call's export view in one block with its
+  `CallExports` (`ExportCallFirst`, about 270 Ir) and `PinExports` at the call's end (about 210 Ir).
+  0348's -1 allocation (#699) hid it when it landed; every step after added to it.
+- #709 (0338 D, failure-atomic pins), about +48.
+- #813 moved `MakeContextMap` out of internal_value.cpp: the same allocation and dispose, about
+  200 Ir a call, out of line.
+- #849 (0459) and #884 (0480/0482): `UserCallableParams` destruction out of line, `CallExports`
+  keeps the module's `DroppedExports` (a weak_ptr copy, an expiry check and two weak releases a
+  call, about 60), and `CallParams`' vector freed out of line.
+
+What this change makes cheaper (Module/keep -3.47%, -1 allocation; keep_written -0.27%):
+- The host-call context map (`UserCallableParams::context`) is used again by the next call on the
+  thread when the host kept no copy (`IsSoleOwner`, as 0339 asks); a kept copy still expires and
+  the next call makes a new map. -165 Ir with the next item, and the allocation.
+- `TemplateModuleState::Call` reserves its positional arguments instead of growing the vector.
+- `NoteExport`, `AddCell` and `AdoptExports` are inline (once per call, from `ExportCallFirst`): -59.
+- `BorrowedCell::IsUnheld` checks the owner's count before the accessor's two virtual calls, so a
+  cell of data the module's names hold stops there (`DropUnheld` runs at every call's end): -23.
+
+Remaining: +0.76% over a64c314 locally (+52 Ir), which is the pin path (0335, D8) and the
+0480 dropped-exports link, each a fix the cost paid for. Further cuts would need the host-facing
+`UserCallableParams` to allocate less (`extraPosArgs`/`extraKwArgs` each allocate an empty
+container's `indirect`, `args` a list node), a public-API choice, or an inline buffer for
+`CallParams::posParams`, which every macro and callable call shares and would need its own
+measurement across the Render rows.

@@ -23,15 +23,18 @@ using LendFn = Value (*)(const InternalValue& value, RenderContext& context, voi
 struct ContextMap
 {
     GenericMap map;
-    // Expired with ExpireContextMap when the call ends
+    // Expired with EndContextMap when the call ends
     const IMapItemAccessor* handle = nullptr;
 };
 
-// The render's lookup as a map, lending what it gives through `lend`
+// The render's lookup as a map, lending what it gives through `lend`. The map of the call that ended last on this
+// thread is used again when the host kept no copy of it (EndContextMap), which saves the call an allocation
 ContextMap MakeContextMap(RenderContext& context, void* scope, LendFn lend);
 
-// The host's call the context was given to ended: a copy the host kept fails with TemplateExpired
-void ExpireContextMap(const IMapItemAccessor* handle) noexcept;
+// The host's call the context was given to ended: a copy the host kept fails with TemplateExpired. `context` is the
+// call's own copy (UserCallableParams::context), which goes with the call: the map is kept for the next call on this
+// thread, which uses it again only if the host kept no copy
+void EndContextMap(const IMapItemAccessor* handle, Value& context) noexcept;
 
 // Called in a catch handler: rethrows the current exception as the host sees it, the public ErrorInfo for the
 // engine's errors (a located RenderFailure keeps its code) and a host's own exception as it is
