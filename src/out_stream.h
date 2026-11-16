@@ -195,7 +195,7 @@ public:
         {
             if (m_os)
             {
-                --m_os->m_guards;
+                m_os->m_hold -= HoldPerMark;
             }
         }
         Mark(const Mark&) = delete;
@@ -229,11 +229,11 @@ public:
         {
             // What an earlier call that returned held back goes first: a call returns into its caller's statement,
             // so the next call or write after it delivers, and the stream holds at most one outermost call's output
-            if (m_guards == 0 && m_spill)
+            if (m_hold == HoldSpilled)
             {
                 DeliverSpill();
             }
-            ++m_guards;
+            m_hold += HoldPerMark;
             return { this, m_sinkWritten, m_cur, SpillSize() };
         }
         return { nullptr, m_target ? TargetSize() : 0, m_cur, 0 };
@@ -310,6 +310,8 @@ private:
     // What a mark keeps from the sink (Mark): the bytes in the spill, and the spill's ends
     [[nodiscard]] size_t SpillSize() const noexcept;
     void Spill(const void* ptr, size_t bytes);
+    // A write to the sink while the stream holds output back: spilled (true) or written after the spill (false)
+    bool HoldBack(const void* ptr, size_t bytes);
     void DeliverSpill();
     void TruncateSpill(size_t bytes) noexcept;
     template<typename CharT>
@@ -333,8 +335,11 @@ private:
     HeldPiece* m_held = nullptr;
     // The output a sink stream holds back while a mark lives (Mark), made at the first spill and reused
     HeldPieceOwner m_spill;
-    // The marks of a sink stream that live
-    size_t m_guards = 0;
+    // What a sink stream holds back (Mark): HoldPerMark for each mark that lives, plus HoldSpilled while the spill
+    // may hold output. One word, so that a write to the sink tests one value
+    static constexpr size_t HoldSpilled = 1;
+    static constexpr size_t HoldPerMark = 2;
+    size_t m_hold = 0;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer

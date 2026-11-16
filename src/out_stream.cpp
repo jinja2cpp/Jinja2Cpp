@@ -21,9 +21,14 @@ void OutStream::Flush()
 {
     if (!m_writer)
     {
-        FlushBuffer();
-        // What a mark spilled goes to the sink too, after the buffer that came before it
-        if (m_spill)
+        // What a mark spilled goes to the sink too, before the buffer that came after it: a sink write delivers it
+        // first, so only an empty buffer needs the test
+        if (m_cur != m_buffer)
+        {
+            AppendToTarget(m_buffer, static_cast<size_t>(m_cur - m_buffer));
+            m_cur = m_buffer;
+        }
+        else if ((m_hold & HoldSpilled) != 0)
         {
             DeliverSpill();
         }
@@ -99,25 +104,19 @@ void OutStream::AppendToTarget(const void* ptr, size_t bytes)
     }
 }
 
-void OutStream::WriteToSink(const void* ptr, size_t bytes)
+inline void OutStream::WriteToSink(const void* ptr, size_t bytes)
 {
     // A sink is never given an empty chunk
     if (bytes == 0)
     {
         return;
     }
-    const size_t length = bytes / m_charSize;
     // While a mark lives the sink gets nothing; once the last is gone, what it spilled comes first
-    if (m_guards != 0)
+    if (m_hold != 0 && HoldBack(ptr, bytes))
     {
-        Spill(ptr, bytes);
-        m_sinkWritten += length;
         return;
     }
-    if (m_spill)
-    {
-        DeliverSpill();
-    }
+    const size_t length = bytes / m_charSize;
     if (m_charSize == 1)
     {
         static_cast<OutputSink*>(m_sink)->Write(std::string_view(static_cast<const char*>(ptr), length));

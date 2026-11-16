@@ -143,7 +143,7 @@ void OutStream::FlushPiece()
         return;
     }
     FlushBuffer();
-    if (m_spill)
+    if ((m_hold & HoldSpilled) != 0)
     {
         DeliverSpill();
     }
@@ -179,15 +179,33 @@ void OutStream::Spill(const void* ptr, size_t bytes)
         m_spill.reset(new HeldPiece(nullptr));
     }
     m_spill->Write(std::string_view(static_cast<const char*>(ptr), bytes));
+    m_hold |= HoldSpilled;
+}
+
+bool OutStream::HoldBack(const void* ptr, size_t bytes)
+{
+    if (m_hold >= HoldPerMark)
+    {
+        Spill(ptr, bytes);
+        m_sinkWritten += bytes / m_charSize;
+        return true;
+    }
+    DeliverSpill();
+    return false;
 }
 
 // Once no mark lives, what was spilled goes to the sink (the host's or the gathered piece), counted already
 void OutStream::DeliverSpill()
 {
-    if (m_guards == 0 && !m_spill->Empty())
+    if (m_hold != HoldSpilled)
+    {
+        return;
+    }
+    if (!m_spill->Empty())
     {
         m_spill->WriteTo(m_sink, m_charSize);
     }
+    m_hold = 0;
 }
 
 void OutStream::TruncateSpill(size_t bytes) noexcept
