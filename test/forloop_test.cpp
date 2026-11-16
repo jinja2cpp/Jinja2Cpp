@@ -393,6 +393,18 @@ b[1] = image[1];
     };
 }
 
+// A loop keeps its scope maps from run to run and enters a map without storage without a swap
+// (docs/tasks/0518). Here the bodies set names in some passes and some runs only, and one run
+// has no pass: no name is left over for the next pass or run
+MULTISTR_TEST(ForLoopTest, NestedLoopSetsNamesInSomeRuns, R"({% for r in rows %}{% for c in r %}{% if c is odd %}{% set k = c * 10 %}{% endif %}{{ k|default('-') }},{% endfor %}{% if loop.index is even %}{% set m = r|length %}{% endif %}{{ m|default('.') }};{% endfor %}{% for r in rows %}{% for c in r %}{{ c }}{% endfor %}{% endfor %})",
+              //-----------
+              R"(10,-,30,.;-,1;.;50,-,2;70,-,90,-,.;12345678910)")
+{
+    params = {
+        { "rows", ValuesList{ ValuesList{ 1, 2, 3 }, ValuesList{ 4 }, ValuesList{}, ValuesList{ 5, 6 }, ValuesList{ 7, 8, 9, 10 } } }
+    };
+}
+
 // Map and list items of the caller's list are lent from one block of adapters per list
 // (docs/tasks/0154): an item kept past the loop, read again by index or enumerated a second
 // time stays the same item
