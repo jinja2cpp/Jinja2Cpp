@@ -65,7 +65,7 @@ Tests (`test/limits_test.cpp`): `KeptNestedTemplatesCountAgainstTheOuterBudget` 
 of a new 2 KB template under `UntrustedSettings` with a 1 MiB budget fail the outer render with
 `maxRenderMemory`; on master they rendered), `WideKeptNestedTemplatesCountAgainstTheOuterBudget`,
 `KeptTemplatesOfADeeperRenderCountAgainstTheOuterBudget` (the loop one level down: fewer than 1000 of 20000 `inner()` renders keep a tree, the rest fail with `maxRenderMemory`),
-`KeptNestedTemplatesFitABudget` (20 fit) and `KeptCachedTemplateCountsOnce` (5000 renders of the
+`KeptIncludesOfANestedRenderCountAgainstTheOuterBudget` (a nested loop of includes, through `KeepLoaded`), `KeptNestedTemplatesFitABudget` (20 fit) and `KeptCachedTemplateCountsOnce` (5000 renders of the
 environment's cached template fit).
 
 Not done here, filed as 0521: giving trees back before the keeper ends (ownership rather than
