@@ -1563,6 +1563,16 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
     return nodes[m_filter].Filter(baseVal, context);
 }
 
+InternalValue ExpressionFilter::EvaluateLast(const InternalValue& parentValue, RenderContext& context)
+{
+    CheckStack();
+    if (!m_argsError.empty())
+    {
+        ThrowArgumentsError(context.Nodes().Text(m_argsError));
+    }
+    return context.Nodes()[m_filter].Filter(parentValue, context);
+}
+
 NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered, bool* unknown, bool canFold)
 {
     if (GetIf<Callable>(&registered))
@@ -1648,6 +1658,20 @@ bool IfExpression::IsFoldableAt(RenderContext& values, NodeRef<Expression> value
         return false;
     }
     return *test ? OperandFoldsAt(values, value, m_valueFold) : (GetAltValue() && OperandFoldsAt(values, m_altValue, m_altFold));
+}
+
+bool IfExpression::TestFoldsAt(RenderContext& values) const
+{
+    return !FoldWalkTooDeep() && OperandFoldsAt(values, m_testExpr, m_testFold);
+}
+
+bool IfExpression::BranchFoldsAt(RenderContext& values, NodeRef<Expression> value, bool truth) const
+{
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
+    return truth ? OperandFoldsAt(values, value, m_valueFold) : (GetAltValue() && OperandFoldsAt(values, m_altValue, m_altFold));
 }
 
 std::uint8_t FullExpressionEvaluator::PrepareFold(const NodeArena& nodes)

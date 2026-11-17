@@ -337,6 +337,10 @@ public:
     // The expression, or a null link when a condition guards it (`a if c`): for a tag that
     // names a template, whose names Jinja2 reads only when they are literal
     [[nodiscard]] NodeRef<Expression> GetUnguarded() const { return m_tester ? NodeRef<Expression>() : m_expression; }
+    // The value and the condition of `value if test else alt`, the latter null without one: the
+    // Load's fold check follows the conditional step by step (FoldCheckPasses)
+    [[nodiscard]] NodeRef<Expression> GetExpression() const { return m_expression; }
+    [[nodiscard]] NodeRef<IfExpression> GetTester() const { return m_tester; }
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? values.Nodes()[m_expression].EvaluateRef(values) : LookupResult(); }
     [[nodiscard]] bool IsPure(const NodeArena& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
@@ -568,6 +572,10 @@ public:
     // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
     std::uint8_t PrepareFold(const NodeArena& nodes) override;
     [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
+    // The operand and the chain applied to it, for the Load's fold check, which evaluates a
+    // chain's steps one filter at a time (FoldCheckPasses)
+    [[nodiscard]] NodeRef<Expression> GetOperand() const { return m_expression; }
+    [[nodiscard]] NodeRef<ExpressionFilter> GetFilter() const { return m_filter; }
 
 private:
     NodeRef<Expression> m_expression;
@@ -1201,6 +1209,9 @@ public:
     }
 
     InternalValue Evaluate(const InternalValue& baseVal, RenderContext& context);
+    // This filter alone, on the value of the filters before it (the parent's Evaluate)
+    InternalValue EvaluateLast(const InternalValue& parentValue, RenderContext& context);
+    [[nodiscard]] NodeRef<ExpressionFilter> GetParentFilter() const { return m_parentFilter; }
     void SetParentFilter(NodeRef<ExpressionFilter> parentFilter)
     {
         m_parentFilter = parentFilter;
@@ -1251,6 +1262,12 @@ public:
     [[nodiscard]] bool IsFoldableAt(RenderContext& values, NodeRef<Expression> value) const;
     // The `else` branch; none without `else`
     [[nodiscard]] NodeRef<Expression> GetAltValue() const { return m_noElse ? NodeRef<Expression>() : m_altValue; }
+    // For the Load's fold check, which follows Jinja2's CondExpr.as_const step by step: the
+    // test; whether it folds; whether the branch a test of this truth picks folds (false
+    // without one) (FoldCheckPasses, docs/tasks/0527)
+    [[nodiscard]] NodeRef<Expression> GetTestExpr() const { return m_testExpr; }
+    [[nodiscard]] bool TestFoldsAt(RenderContext& values) const;
+    [[nodiscard]] bool BranchFoldsAt(RenderContext& values, NodeRef<Expression> value, bool truth) const;
 
 private:
     NodeRef<Expression> m_testExpr;

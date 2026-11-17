@@ -169,7 +169,9 @@ bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
     return true;
 }
 
-// Whether Jinja2's as_const of the node turns an exception into Impossible (FoldCandidate::failsLoad)
+// Whether Jinja2's as_const of the node turns an exception into Impossible (FoldCandidate::failsLoad).
+// A conditional's as_const lets out what its test's truth raises, which the Load's evaluation
+// of it decides (FoldEvaluator::ConditionalOf)
 bool FoldCatchesFailure(const NodeArena& nodes, NodeRef<Expression> node)
 {
     switch (nodes[node].GetKind())
@@ -186,6 +188,8 @@ bool FoldCatchesFailure(const NodeArena& nodes, NodeRef<Expression> node)
         return true;
     case NodeKind::BinaryExpr:
         return !nodes.Get<BinaryExpression>(node).IsLogical();
+    case NodeKind::FullExpr:
+        return static_cast<bool>(nodes.Get<FullExpressionEvaluator>(node).GetTester());
     default:
         return false;
     }
@@ -1863,42 +1867,216 @@ enum class FoldOutcome : std::uint8_t
 {
     Folds,
     DoesNotFold,
-    // Its evaluation failed
+    // Its evaluation failed: what Jinja2's as_const turns into Impossible or, depending on the
+    // candidate's kind, lets out as UndefinedError (FoldCandidate::failsLoad)
     Fails,
+    // Its evaluation let out an UndefinedError whatever its kind: the strict undefined a
+    // conditional tests (docs/tasks/0527)
+    FailsLoad,
 };
 
-FoldOutcome FoldOf(const FoldCandidate& candidate, RenderContext& context, bool strictUndefined)
+// What a candidate evaluates to, or that the evaluation failed with an error Jinja2's fold
+// turns into Impossible or UndefinedError; a limit of the render, a recursion limit or a bug
+// fails the Load as it is
+struct FoldValue
+{
+    InternalValue value;
+    bool failed = false;
+};
+
+template<typename Evaluate>
+FoldValue TryFoldValue(Evaluate&& evaluate)
 {
     try
     {
-        auto& node = context.Nodes()[candidate.node];
-        if ((candidate.fold & FoldAlways) == 0 && !node.IsFoldableAt(context))
-        {
-            return FoldOutcome::DoesNotFold;
-        }
-        const auto value = node.Evaluate(context);
-        // An output folds into str(value), which fails for a strict undefined
-        if (candidate.output)
-        {
-            return strictUndefined && value.IsUndefined() ? FoldOutcome::Fails : FoldOutcome::Folds;
-        }
-        return HasSafeRepr(value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+        return FoldValue{ std::forward<Evaluate>(evaluate)(), false };
     }
-    // What Jinja2's as_const turns into Impossible or UndefinedError; a limit of the render, a
-    // recursion limit or a bug fails the Load as it is
     catch (const TemplateRuntimeError&)
     {
-        return FoldOutcome::Fails;
+        return FoldValue{ InternalValue(), true };
     }
     catch (const UndefinedError&)
     {
-        return FoldOutcome::Fails;
+        return FoldValue{ InternalValue(), true };
     }
     catch (const IntegerOutOfRangeError&)
     {
-        return FoldOutcome::Fails;
+        return FoldValue{ InternalValue(), true };
     }
 }
+
+// Evaluates the fold candidates of one check (FoldCheckPasses). The steps of a filter chain
+// are candidates each, `x|a`, `x|a|b`, ...: a step's value is the filter on the value of the
+// step before it, kept from that step's evaluation, so a chain of N filters runs N filters,
+// not N^2/2, and a host filter runs once (docs/tasks/0527)
+class FoldEvaluator
+{
+public:
+    FoldEvaluator(const FoldCheck& check, RenderContext& context)
+        : m_check(check)
+        , m_context(context)
+        , m_steps(check.candidates.size())
+    {
+        LinkChainSteps();
+    }
+
+    FoldOutcome Of(std::size_t index)
+    {
+        const auto& candidate = m_check.candidates[index];
+        const auto& nodes = m_context.Nodes();
+        // Not an output's: an output folds whole into str(value), which may fail where the
+        // conditional's as_const does not (visit_Output)
+        if (!candidate.output)
+        {
+            if (const auto full = nodes.As<FullExpressionEvaluator>(candidate.node); full && nodes[full].GetTester())
+            {
+                return ConditionalOf(nodes[full]);
+            }
+        }
+        if ((candidate.fold & FoldAlways) == 0 && !nodes[candidate.node].IsFoldableAt(m_context))
+        {
+            return FoldOutcome::DoesNotFold;
+        }
+        const auto& result = ValueOf(index);
+        if (result.failed)
+        {
+            return FoldOutcome::Fails;
+        }
+        // An output folds into str(value), which fails for a strict undefined
+        if (candidate.output)
+        {
+            return m_check.strictUndefined && result.value.IsUndefined() ? FoldOutcome::Fails : FoldOutcome::Folds;
+        }
+        return HasSafeRepr(result.value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+    }
+
+private:
+    struct Step
+    {
+        // The candidate that is this step's chain without its last filter, if any
+        std::size_t previous = NoStep;
+        // Whether value is this step's, evaluated
+        bool known = false;
+        FoldValue value;
+    };
+    static constexpr std::size_t NoStep = static_cast<std::size_t>(-1);
+
+    void LinkChainSteps()
+    {
+        // A step is recorded after the one before it, as its parse ends
+        const auto& nodes = m_context.Nodes();
+        std::vector<std::pair<const void*, std::size_t>> chains;
+        for (std::size_t index = 0; index != m_check.candidates.size(); ++index)
+        {
+            const auto filtered = nodes.As<FilteredExpression>(m_check.candidates[index].node);
+            if (!filtered)
+            {
+                continue;
+            }
+            const auto& step = nodes[filtered];
+            if (const auto parent = nodes[step.GetFilter()].GetParentFilter())
+            {
+                const void* parentChain = &nodes[parent];
+                const auto found = std::find_if(chains.rbegin(), chains.rend(), [parentChain](const auto& chain) { return chain.first == parentChain; });
+                if (found != chains.rend() && &nodes[nodes.Get<FilteredExpression>(m_check.candidates[found->second].node).GetOperand()] == &nodes[step.GetOperand()])
+                {
+                    m_steps[index].previous = found->second;
+                }
+            }
+            chains.emplace_back(&nodes[step.GetFilter()], index);
+        }
+    }
+
+    // The candidate's value, a chain step's from the step before it
+    const FoldValue& ValueOf(std::size_t index)
+    {
+        if (m_steps[index].known)
+        {
+            return m_steps[index].value;
+        }
+        // The steps down to one whose value is known, or the chain's first, evaluated whole
+        std::vector<std::size_t> pending{ index };
+        while (m_steps[pending.back()].previous != NoStep && !m_steps[m_steps[pending.back()].previous].known)
+        {
+            pending.push_back(m_steps[pending.back()].previous);
+        }
+        const auto& nodes = m_context.Nodes();
+        const auto first = pending.back();
+        pending.pop_back();
+        if (const auto previous = m_steps[first].previous; previous != NoStep)
+        {
+            m_steps[first].value = NextStep(m_steps[previous].value, first);
+        }
+        else
+        {
+            m_steps[first].value = TryFoldValue([this, &nodes, first] { return nodes[m_check.candidates[first].node].Evaluate(m_context); });
+        }
+        m_steps[first].known = true;
+        while (!pending.empty())
+        {
+            const auto step = pending.back();
+            pending.pop_back();
+            m_steps[step].value = NextStep(m_steps[m_steps[step].previous].value, step);
+            m_steps[step].known = true;
+        }
+        return m_steps[index].value;
+    }
+
+    FoldValue NextStep(const FoldValue& previous, std::size_t index)
+    {
+        if (previous.failed)
+        {
+            return previous;
+        }
+        const auto& nodes = m_context.Nodes();
+        const auto chain = nodes.Get<FilteredExpression>(m_check.candidates[index].node).GetFilter();
+        return TryFoldValue([this, &nodes, chain, &previous] { return nodes[chain].EvaluateLast(previous.value, m_context); });
+    }
+
+    // Jinja2's CondExpr.as_const: the test's as_const, whose truth fails for a strict undefined
+    // and lets the UndefinedError out; then that of the branch it picks, Impossible without one
+    FoldOutcome ConditionalOf(const FullExpressionEvaluator& full)
+    {
+        CheckStack();
+        const auto& nodes = m_context.Nodes();
+        const auto& conditional = nodes[full.GetTester()];
+        if (!conditional.TestFoldsAt(m_context))
+        {
+            return FoldOutcome::DoesNotFold;
+        }
+        const auto test = TryFoldValue([this, &nodes, &conditional] { return nodes[conditional.GetTestExpr()].Evaluate(m_context); });
+        // A failing test or branch is Impossible: what Jinja2 lets out of one is the strict
+        // undefined's error of an `and`, `or` or `~` in it, a candidate of its own
+        if (test.failed)
+        {
+            return FoldOutcome::Fails;
+        }
+        if (m_check.strictUndefined && test.value.IsUndefined())
+        {
+            return FoldOutcome::FailsLoad;
+        }
+        const bool truth = ConvertToBool(test.value);
+        if (!conditional.BranchFoldsAt(m_context, full.GetExpression(), truth))
+        {
+            return FoldOutcome::DoesNotFold;
+        }
+        const auto branch = truth ? full.GetExpression() : conditional.GetAltValue();
+        if (const auto chained = nodes.As<FullExpressionEvaluator>(branch); chained && nodes[chained].GetTester())
+        {
+            return ConditionalOf(nodes[chained]);
+        }
+        const auto value = TryFoldValue([this, &nodes, branch] { return nodes[branch].Evaluate(m_context); });
+        if (value.failed)
+        {
+            return FoldOutcome::Fails;
+        }
+        return HasSafeRepr(value.value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+    }
+
+    const FoldCheck& m_check;
+    RenderContext& m_context;
+    std::vector<Step> m_steps;
+};
 } // namespace
 
 bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
@@ -1908,6 +2086,7 @@ bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
     // inside one that folds need no evaluation of their own: their subscripts are covered, and
     // nested brackets do not evaluate the inner levels again and again
     std::vector<FoldOutcome> outcomes(check.candidates.size(), FoldOutcome::DoesNotFold);
+    FoldEvaluator evaluator(check, context);
     unsigned foldedFrom = check.to;
     unsigned outputFoldedFrom = check.to;
     for (std::size_t index = check.candidates.size(); index-- != 0;)
@@ -1922,8 +2101,8 @@ bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
         {
             continue;
         }
-        outcomes[index] = FoldOf(candidate, context, check.strictUndefined);
-        if (check.strictUndefined && outcomes[index] == FoldOutcome::Fails && candidate.failsLoad)
+        outcomes[index] = evaluator.Of(index);
+        if (check.strictUndefined && (outcomes[index] == FoldOutcome::FailsLoad || (outcomes[index] == FoldOutcome::Fails && candidate.failsLoad)))
         {
             return false;
         }

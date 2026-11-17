@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0497]
@@ -36,3 +36,15 @@ the next step's candidate instead of evaluating the chain again, within the Load
 
 **Done when.** The two `tuple_of_slices_strict_conditional_*` divergence lines are gone, and a
 strict chain of N filters around a tuple-of-slices subscript evaluates O(N) filters at Load.
+
+**Resolution (batch 9 B).** A non-output conditional candidate is evaluated as Jinja2's
+`CondExpr.as_const` runs (FoldEvaluator::ConditionalOf in src/expression_parser.cpp): a test or
+branch that does not fold is Impossible; a failing test or branch is Impossible for a kind whose
+as_const catches it (FoldCatchesFailure) and fails the Load otherwise; a strict undefined test
+fails the Load (its truth raises); without `else` a false test is Impossible; an `else` chain is
+followed. Filter-chain steps link to the step before them (same operand, parent chain), and a
+step's value is its last filter on the kept value of that step (ExpressionFilter::EvaluateLast),
+so a strict chain of N filters runs N filters at Load (`LimitsEnvTest.StrictFilterChainFoldsInLinearSteps`,
+400 filters under maxRenderSteps 20000, fails on master). The two divergence lines are gone; new
+corpus cases `tuple_of_slices_strict_conditional_*` and `tuple_of_slices_strict_filter_chain`.
+Generator folds, operator chains, nested brackets and the per-render constant moved to 0536.
