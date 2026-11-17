@@ -1042,15 +1042,16 @@ TEST_F(LimitsEnvTest, KeptModulesCountAgainstTheBudget)
 }
 
 // 0508: a closure kept past the call that defined it keeps a copy of the names it sees; 50,000 took 136 MB under
-// UntrustedSettings, of which the budget counted about 150 bytes each. The copy now counts, about 1.4 KB each
+// UntrustedSettings, of which the budget counted about 150 bytes each. The copy now counts, about 1.3 KB each: 20,000
+// of them pass 8 MiB with a 3x margin
 TEST_F(LimitsEnvTest, KeptClosureCopiesCountAgainstTheBudget)
 {
     const std::string loop = "{% macro mk(x) %}{% macro inner() %}{{ x }}{% endmacro %}{% set _ = l.append(inner) %}{% endmacro %}"
                              "{% set l = [] %}{% for i in range(20000) %}{{ mk(i) }}{% endfor %}done";
-    auto narrow = RenderWithModuleX<char>(loop, std::uint64_t{ 16 } << 20);
+    auto narrow = RenderWithModuleX<char>(loop, std::uint64_t{ 8 } << 20);
     ASSERT_FALSE(narrow.has_value());
     EXPECT_EQ("maxRenderMemory", ToString(narrow.error().GetExtraParams()[1]));
-    auto wide = RenderWithModuleX<wchar_t>(loop, std::uint64_t{ 16 } << 20);
+    auto wide = RenderWithModuleX<wchar_t>(loop, std::uint64_t{ 8 } << 20);
     ASSERT_FALSE(wide.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wide.error().GetCode());
     // Scopes that end give their storage back: the calls' scopes and the closures they drop take nothing for long

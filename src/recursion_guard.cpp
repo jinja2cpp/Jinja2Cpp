@@ -360,6 +360,10 @@ void* AllocateCountedBlock(std::size_t bytes)
 
 void FreeCountedBlock(void* ptr) noexcept
 {
+    if (!ptr)
+    {
+        return;
+    }
     auto* block = static_cast<unsigned char*>(ptr) - CountedBlockHeader;
     std::uint64_t charged = 0;
     std::memcpy(&charged, block, sizeof(charged));
