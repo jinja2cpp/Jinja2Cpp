@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/927
 priority: low
 area: parity
 depends: [0479]
@@ -23,3 +24,8 @@ binds may read differently from Jinja2 when `ns.f()` runs after the call:
 (CaptureClosures(Soft) before the frame goes). Probe the case first: it may already match.
 
 **Done when.** The case above matches Jinja2 with a MacroStopTest row, under ASan+UBSan.
+
+**Resolution (batch 8 C).** Probed: Jinja2 keeps the body's names on the stop path (it never reaches the end of
+the body, which resets them), for loops too. A stop out of a `with`, `filter` or loop body now closes over it
+with `FrameEnd::Stopped`, a soft frame that copies its names (loop targets included); the normal end stays
+`Soft`. Rows in `MacroStopTest` (with, filter, nested, loop).

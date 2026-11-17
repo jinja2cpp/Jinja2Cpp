@@ -7,6 +7,7 @@
 
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list_iterator.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
@@ -1624,6 +1625,9 @@ std::string RenderWithDestroyedNested(const std::string& outer, const std::strin
     TemplateEnv env;
     auto fs = std::make_shared<MemoryFileSystem>();
     fs->AddFile("lib.j2", "{% macro lm() %}lib-{{ 'x' }}{% endmacro %}");
+    fs->AddFile("modB.j2", "{% macro m2() %}deep{% endmacro %}");
+    fs->AddFile("mod.j2", "{% from 'modB.j2' import m2 %}{% macro f() %}f:{{ m2() }}{% endmacro %}");
+    fs->AddFile("par.j2", "{% block b %}PB{% endblock %}");
     env.AddFilesystemHandler(std::string(), fs);
     // Nothing caches lib.j2: only the nested render holds it
     env.GetSettings().cacheSize = 0;
@@ -1650,7 +1654,7 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
     // one outlives it here: a macro or `caller` that runs in its tree, a loop or a module of a
     // template it imported, a copy of its params. The host destroys the nested template and its
     // params once the nested render returns; this render keeps them alive until it ends. The
-    // expectations are Python Jinja2's, but where noted (task 0491)
+    // expectations are Python Jinja2's
     struct Case
     {
         const char* outer;
@@ -1672,9 +1676,16 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
         { "{% set _ = g.append(0) %}{% for x in g %}{% if loop.index < 3 %}{{ inner() }}{% endif %}{{ x is number }}{% endfor %}{{ g[-1]() }}", macro,
           "TrueFalseFalsehi" },
         { "{% for i in range(3) %}{{ inner() }}{% endfor %}{{ g|length }}{{ g[0]() }}{{ g[2]() }}", macro, "3hihi" },
-        // Python reads the closure's names: "cl" and "capk" (0491)
-        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}", "" },
-        { "{{ inner() }}{{ g[-1]('k') }}", "{% macro o(n) %}{% macro i(k) %}{{ n }}{{ k }}{% endmacro %}{% set _ = g.append(i) %}{% endmacro %}{{ o('cap') }}", "k" },
+        // The closure sees the names of the nested render's frames, which ended with it (0491)
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}", "cl" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'a' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{% set x = 'b' %}", "b" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% macro m() %}{{ p[0] }}{% endmacro %}{% set _ = g.append(m) %}", "param-str" },
+        { "{{ inner() }}{{ g[-1]('k') }}", "{% macro o(n) %}{% macro i(k) %}{{ n }}{{ k }}{% endmacro %}{% set _ = g.append(i) %}{% endmacro %}{{ o('cap') }}", "capk" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% macro s() %}S{% endmacro %}{% macro m() %}{{ s() }}{% endmacro %}{% set _ = g.append(m) %}", "S" },
+        { "{{ inner() }}{{ g[-1]() }}{{ g[-1]() }}", "{% macro m2() %}{{ caller(5) }}{% endmacro %}{% macro m() %}{% call(q) m2() %}c{{ q }}{% endcall %}{% endmacro %}{% set _ = g.append(m) %}", "c5c5" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% import 'mod.j2' as mod %}{% set _ = g.append(mod.f) %}", "f:deep" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% extends 'par.j2' %}{% block b %}{% set _ = g.append(super) %}CB{% endblock %}", "PB" },
+        { "{{ inner() }}{{ g[-1].b() }}", "{% block b %}blk{% endblock %}{% set _ = g.append(self) %}", "blk" },
     };
     for (const auto& c : cases)
     {
@@ -1721,10 +1732,95 @@ TEST(BorrowedCellsSingle, NestedGenericRenderAsksTheHostOnce)
     EXPECT_EQ(1, accessor.calls);
 }
 
+TEST(BorrowedCellsSingle, NestedRenderGenericParamsOutliveTheHost)
+{
+    // 0524: a nested render's GenericList and GenericMap params, whose containers the host frees once that render
+    // returns, stored in a shared global directly and through a closure, are read by the outer render as Python
+    // reads them: the render took their items
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{});
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&env](const UserCallableParams&) {
+            Template tpl(&env);
+            EXPECT_TRUE(!!tpl.Load("{% set _ = g.append(p) %}{% set _ = g.append(d) %}"
+                                   "{% macro m() %}{{ p|join }}{{ d.n }}{% endmacro %}{% set _ = g.append(m) %}"));
+            const std::vector<int64_t> items{ 1, 2 };
+            CountingMapAccessor accessor;
+            ValuesMap nested{ { "p", MakeGenericList(items.begin(), items.end()) }, { "d", GenericMap([&accessor]() { return &accessor; }) } };
+            auto result = tpl.RenderAsString(nested);
+            EXPECT_TRUE(!!result) << (result ? std::string() : result.error().ToString());
+            return Value(std::string());
+        },
+        {});
+    EXPECT_EQ("12|1|121", Render("{{ inner() }}{{ g[0]|join }}|{{ g[1].n }}|{{ g[2]() }}", params, &env));
+}
+
+namespace
+{
+// A host object with one attribute, `x`
+class SevenObject final : public IHostObject
+{
+public:
+    [[nodiscard]] const char* TypeName() const override { return "Seven"; }
+    [[nodiscard]] std::string Str() const override { return "seven"; }
+    [[nodiscard]] std::string Repr() const override { return "seven"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view name) const override
+    {
+        return name == "x" ? std::optional<Value>(Value(int64_t{ 7 })) : std::nullopt;
+    }
+};
+
+// A map whose every item is the map itself, as a reflected struct that points back at its parent is
+struct CyclicMapAccessor : IMapItemAccessor
+{
+    [[nodiscard]] size_t GetSize() const override { return 2; }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return name == "a" || name == "b"; }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    {
+        return HasValue(name) ? Value(GenericMap([this]() { return this; })) : Value();
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "a", "b" }; }
+};
+} // namespace
+
+TEST(BorrowedCellsSingle, NestedRenderGenericParamsTheHostKeepsAlive)
+{
+    // 0524 (verifier of #927): a host object, an undefined value and a cyclic map a nested render stores in a shared
+    // global stay what they are, not a dict of their items: the bridge keeps the first two alive, and the host the
+    // map it views
+    UndefinedDescription strict;
+    strict.policy = UndefinedPolicy::Strict;
+    strict.name = "p";
+    CyclicMapAccessor cyclic;
+    const std::vector<std::pair<Value, std::string>> rows{
+        { MakeHostValue(std::make_shared<const SevenObject>()), "{{ g[0].x }}|{{ g[0] }}" },
+        { MakeUndefined(strict), "{{ g[0] is defined }}" },
+        { GenericMap([&cyclic]() { return &cyclic; }), "{{ g[0].a.b is mapping }}" },
+    };
+    const std::vector<std::string> expected{ "7|seven", "False", "True" };
+    for (std::size_t row = 0; row < rows.size(); ++row)
+    {
+        TemplateEnv env;
+        env.AddGlobal("g", ValuesList{});
+        ValuesMap params;
+        params["inner"] = UserCallable(
+            [&env, &rows, row](const UserCallableParams&) {
+                Template tpl(&env);
+                EXPECT_TRUE(!!tpl.Load("{% set _ = g.append(p) %}"));
+                auto result = tpl.RenderAsString(ValuesMap{ { "p", rows[row].first } });
+                EXPECT_TRUE(!!result) << row << ": " << (result ? std::string() : result.error().ToString());
+                return Value(std::string());
+            },
+            {});
+        EXPECT_EQ(expected[row], Render("{{ inner() }}" + rows[row].second, params, &env)) << row;
+    }
+}
+
 TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
 {
-    // 0481: a nested render's `self` stored in a global and called once that render ended fails
-    // rather than read the destroyed template; Python prints "blk" (0491)
+    // 0481, 0491: a nested render's `self` stored in a global and called once that render ended
+    // renders the blocks the outer render keeps, as Python does
     TemplateEnv env;
     env.AddGlobal("g", ValuesList{});
     ValuesMap params;
@@ -1738,7 +1834,7 @@ TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
         {});
     Template outer(&env);
     ASSERT_TRUE(!!outer.Load("{{ inner() }}{{ g[-1].b() }}"));
-    EXPECT_FALSE(outer.RenderAsString(params));
+    EXPECT_EQ("blk", outer.RenderAsString(params).value());
 }
 
 TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplateInsideAnotherEnvironment)
@@ -1797,6 +1893,37 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplateAcrossAnotherEnvir
                 {});
         }
         EXPECT_EQ("[hi]", Render(sources[0], params, &env)) << withEnv;
+    }
+}
+
+TEST(BorrowedCellsSingle, NestedRenderFirstWriteAcrossAnotherEnvironment)
+{
+    // 0491: the innermost render of A -> B -> A writes a global first: the write goes to the outermost render that
+    // shares its snapshot, past the render of another environment (or of none) between them, which then reads it, as
+    // Python does ([1]); a closure it stores there reads its names
+    for (const bool withEnv : { true, false })
+    {
+        TemplateEnv env;
+        env.AddGlobal("g", ValuesList{});
+        TemplateEnv otherEnv;
+        std::vector<std::string> sources{ "{{ h0() }}{{ g }}|{{ g[-1]() if g|length > 1 }}", "{{ h1() }}",
+                                          "{% set _ = g.append(1) %}{% set x = 'X' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}" };
+        std::vector<TemplateEnv*> envs{ &env, withEnv ? &otherEnv : nullptr, &env };
+        ValuesMap params;
+        for (std::size_t level = 0; level + 1 < sources.size(); ++level)
+        {
+            params["h" + std::to_string(level)] = UserCallable(
+                [&, next = level + 1](const UserCallableParams&) {
+                    auto tpl = std::make_unique<Template>(envs[next]);
+                    EXPECT_TRUE(!!tpl->Load(sources[next]));
+                    auto result = tpl->RenderAsString(params);
+                    EXPECT_TRUE(!!result) << (result ? std::string() : result.error().ToString());
+                    return Value(result ? result.value() : std::string());
+                },
+                {});
+        }
+        const auto result = Render(sources[0], params, &env);
+        EXPECT_EQ("[1, <Macro 'm'>]|X", result) << withEnv;
     }
 }
 

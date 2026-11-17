@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/927
 priority: low
 area: parity
 depends: [0482]
@@ -20,3 +21,7 @@ recursive-loop row avoids it with `loop.depth == 1`.
 
 **Done when** a `TemplateModuleChangingSourceTest` row with the `loop.first` variant prints what
 Jinja2 3.1.6 prints, ASan clean.
+
+**Resolution (batch 8 C).** A recursive loop whose site outlives its frames takes a capture of them
+(`ClosureSite::CaptureOnEnd`, every name), held by its loop state, so `loop(...)` called after the include
+ended resolves the body's names in what the include kept.

@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/927
 priority: low
 area: parity
 depends: [0482]
@@ -23,3 +24,9 @@ because a tree with blocks always holds a slot (0482 never frees it).
 **Done when** a `TemplateModuleChangingSourceTest` row with the template above (stored by call 1,
 called by call 2 and 3) prints what Jinja2 3.1.6's `make_module()` prints, narrow and wide, ASan
 clean.
+
+**Resolution (batch 8 C).** `super()` is a `SuperBlockCall`: an owned block name, the chain's `SelfBlocks` and
+level, and a frame of that chain when the caller's frames have none, so the parent block's own `super()` finds
+the level above it. Under an include it keeps a capture of the block's frame, as a macro defined in the block
+does (0373), so the parent blocks read the include's names; the block's frame end now covers every scope of
+the block context, which ends that capture.
