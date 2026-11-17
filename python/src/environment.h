@@ -116,7 +116,8 @@ private:
     void SetExtensions(nb::handle value);
     // Adds `object` to BoundObjects: the engine environment borrows it
     void Keep(nb::handle object);
-    void ApplyGettext();
+    // everyEngine: also into the earlier engine environments (an install); a rebuild installs into its new one only
+    void ApplyGettext(bool everyEngine);
     // m_env goes, for the next load to start another. While templates loaded from it live (its list of BoundObjects
     // does), it is kept for ApplyGettext: Jinja2's install changes env.globals, which every template reads, so a later
     // install reaches the templates of every engine environment

@@ -687,7 +687,7 @@ void PyEnvironment::Rebuild()
     }
     m_boundFilters.clear();
     m_boundTests.clear();
-    ApplyGettext();
+    ApplyGettext(false);
 }
 
 void PyEnvironment::ApplyChatTemplates()
@@ -725,7 +725,7 @@ void PyEnvironment::SetChatTemplates(nb::handle clock)
 #endif
 }
 
-void PyEnvironment::ApplyGettext()
+void PyEnvironment::ApplyGettext(bool everyEngine)
 {
     // A callable left out stays unset: the message is not translated
     const auto callable = [](const nb::object& object) { return object.is_none() ? jinja2::UserCallable() : BorrowedCallable(object); };
@@ -741,6 +741,10 @@ void PyEnvironment::ApplyGettext()
     if (m_env)
     {
         install(*m_env, m_bound);
+    }
+    if (!everyEngine)
+    {
+        return;
     }
     // The templates of the engine environments before, as Jinja2's templates all read env.globals
     const auto retired = m_retired;
@@ -774,7 +778,7 @@ void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::hand
     // The gettext globals of every template take the style of this install, as the globals Jinja2's install puts in
     // env.globals do (docs/tasks/0509); `{% trans %}` blocks keep the style they were loaded with
     m_gettextStyle = m_newstyleGettext ? jinja2::GettextStyle::Newstyle : jinja2::GettextStyle::Oldstyle;
-    ApplyGettext();
+    ApplyGettext(true);
 }
 
 nb::tuple PyEnvironment::GettextGlobals() const
