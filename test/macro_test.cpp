@@ -921,6 +921,25 @@ TEST(MacroStopOutputTest, SinkGetsEachCallsOutputAfterItReturns)
     EXPECT_GE(sink.writes, 400U);
 }
 
+// Held output is bounded as a value is (MaxSequenceSize characters): past that it reaches the sink while the call
+// runs, and a call that then stops fails as it did before the output was held (Codex on #928)
+TEST(MacroStopOutputTest, SinkHeldOutputIsBounded)
+{
+    TemplateEnv env;
+    FillStopEnv(env);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("[{% macro m(stop) %}{% for i in range(700) %}{{ 'x' * 100000 }}{% endfor %}{% if stop %}{{ 1|stop }}{% endif %}{% endmacro %}{{ m(stop) }}]"));
+    WriteCountingSink sink;
+    ASSERT_TRUE(tpl.RenderTo(sink, ValuesMap{ { "stop", false } }));
+    EXPECT_EQ(700U * 100000U + 2U, sink.output.size());
+    EXPECT_GE(sink.writes, 3U);
+    WriteCountingSink stopped;
+    auto result = tpl.RenderTo(stopped, ValuesMap{ { "stop", true } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    EXPECT_THROW(std::rethrow_exception(result.error().GetException()), TestStop);
+}
+
 // What a stopped macro left in a scope is gone: the code after it sees the names it saw before
 TEST(MacroStopOutputTest, ContextIsRestored)
 {

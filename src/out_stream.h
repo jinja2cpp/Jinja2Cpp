@@ -205,11 +205,12 @@ public:
 
     private:
         friend class OutStream;
-        Mark(OutStream* os, size_t base, unsigned char* cur, size_t spill) noexcept
+        Mark(OutStream* os, size_t base, unsigned char* cur, size_t spill, size_t overflows) noexcept
             : m_os(os)
             , m_base(base)
             , m_cur(cur)
             , m_spill(spill)
+            , m_overflows(overflows)
         {
         }
 
@@ -221,6 +222,8 @@ public:
         unsigned char* m_cur;
         // The bytes spilled
         size_t m_spill;
+        // The spill's overflows so far (m_spillOverflows)
+        size_t m_overflows;
     };
     // A stream with a target string has no sink, as WriteLong relies on
     [[nodiscard]] Mark GetMark()
@@ -234,9 +237,9 @@ public:
                 DeliverSpill();
             }
             m_hold += HoldPerMark;
-            return { this, m_sinkWritten, m_cur, SpillSize() };
+            return { this, m_sinkWritten, m_cur, SpillSize(), m_spillOverflows };
         }
-        return { nullptr, m_target ? TargetSize() : 0, m_cur, 0 };
+        return { nullptr, m_target ? TargetSize() : 0, m_cur, 0, 0 };
     }
     // Drops what was written since `mark`; false for a writer stream. A string target takes it back from the string,
     // a sink stream from the buffer and what it spilled
@@ -335,6 +338,9 @@ private:
     HeldPiece* m_held = nullptr;
     // The output a sink stream holds back while a mark lives (Mark), made at the first spill and reused
     HeldPieceOwner m_spill;
+    // The times the spill outgrew MaxSequenceSize characters and went to the sink while marks lived: a mark taken
+    // before can no longer take its output back, so that a call's held output stays bounded as a value is
+    size_t m_spillOverflows = 0;
     // What a sink stream holds back (Mark): HoldPerMark for each mark that lives, plus HoldSpilled while the spill
     // may hold output. One word, so that a write to the sink tests one value
     static constexpr size_t HoldSpilled = 1;

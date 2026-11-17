@@ -43,6 +43,11 @@ bool OutStream::RollbackTo(const Mark& mark)
     }
     if (m_sink)
     {
+        // The held output outgrew its cap and reached the sink since the mark: it cannot be taken back
+        if (m_spillOverflows != mark.m_overflows)
+        {
+            return false;
+        }
         // Nothing left the buffer since: it still holds what it held, up to the mark
         if (m_sinkWritten == mark.m_base)
         {
