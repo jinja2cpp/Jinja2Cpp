@@ -45,5 +45,5 @@ Measured in Debug, `UntrustedSettings`: 100,000 `{% import "x" as m with context
 `KeptModulesCountAgainstTheBudget` and `KeptClosureCopiesCountAgainstTheBudget` (both fail on master, narrow and
 wide), with dropped scopes and the shared without-context module rendering in 1 MiB.
 
-Still uncounted: what a macro's `std::function` holds apart from its `Callable` (about 124 bytes a macro) and the
+Still uncounted (filed as 0530): what a macro's `std::function` holds apart from its `Callable` (about 124 bytes a macro) and the
 vectors inside a module's `RenderContext`; the budget remains an estimate, as docs/security.md says.
