@@ -47,6 +47,47 @@ namespace jinja2
 inline namespace v2
 {
 
+namespace detail
+{
+namespace
+{
+// Few at once: one per Load that host code replaced during the Load, until that Load returns
+struct LoadingKeepList
+{
+    Mutex mutex;
+    std::vector<std::shared_ptr<const ITemplateImpl>> kept JINJA2CPP_GUARDED_BY(mutex);
+};
+
+LoadingKeepList& LoadingKept()
+{
+    static LoadingKeepList list;
+    return list;
+}
+} // namespace
+
+void KeepTemplateWhileLoading(std::shared_ptr<const ITemplateImpl> impl)
+{
+    auto& list = LoadingKept();
+    const WriterLock lock(list.mutex);
+    list.kept.push_back(std::move(impl));
+}
+
+std::shared_ptr<const ITemplateImpl> TakeTemplateKeptWhileLoading(const ITemplateImpl* impl) noexcept
+{
+    std::shared_ptr<const ITemplateImpl> taken;
+    auto& list = LoadingKept();
+    const WriterLock lock(list.mutex);
+    const auto found = std::find_if(list.kept.begin(), list.kept.end(), [impl](const auto& kept) { return kept.get() == impl; });
+    if (found != list.kept.end())
+    {
+        taken = std::move(*found);
+        list.kept.erase(found);
+    }
+    // Dropped by the caller, outside the lock: its destructor may run host code that loads
+    return taken;
+}
+} // namespace detail
+
 namespace
 {
 // Copies a value of the module into one the host owns, so that nothing the host keeps refers

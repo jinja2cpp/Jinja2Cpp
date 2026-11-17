@@ -508,6 +508,77 @@ TEST(TemplateApiTest, ReplaceFromTheSelectorOfTheFirstLoad)
     ReplaceFromTheSelectorOfTheFirstLoad<wchar_t>();
 }
 
+// The same, from the selector of a Load nested in the first one: the template stays kept until the
+// first Load returned, not the nested one
+template<typename CharT>
+void ReplaceFromTheSelectorOfANestedLoad()
+{
+    using Tpl = std::conditional_t<std::is_same_v<CharT, char>, Template, TemplateW>;
+    using Str = std::basic_string<CharT>;
+    const auto widen = [](const std::string& text) { return Str(text.begin(), text.end()); };
+    const auto padded = [](const std::string& head, char pad) { return head + std::string(40, pad); };
+    enum class Replace
+    {
+        Assign,
+        LoadTwice,
+        LoadTwiceOnWorker
+    };
+    for (const auto replace : { Replace::Assign, Replace::LoadTwice, Replace::LoadTwiceOnWorker })
+    {
+        SCOPED_TRACE(static_cast<int>(replace));
+        TemplateEnv env;
+        std::optional<Tpl> tpl;
+        Tpl other;
+        ASSERT_TRUE(!!other.Load(widen(padded("other", 'o') + "{{ x }}")));
+        int calls = 0;
+        env.GetSettings().autoescapeSelector = [&](const std::string&) {
+            ++calls;
+            if (calls == 1)
+            {
+                // From the first Load: a nested Load, whose selector is the second call
+                EXPECT_TRUE(!!tpl->Load(widen(padded("nested", 'n') + "{{ x }}")));
+            }
+            else if (calls == 2)
+            {
+                const auto loadTwice = [&] {
+                    EXPECT_TRUE(!!tpl->Load(widen(padded("a", 'a') + "{{ x }}")));
+                    EXPECT_TRUE(!!tpl->Load(widen(padded("b", 'b') + "{{ x }}")));
+                };
+                switch (replace)
+                {
+                case Replace::Assign:
+                    *tpl = other;
+                    break;
+                case Replace::LoadTwice:
+                    loadTwice();
+                    break;
+                case Replace::LoadTwiceOnWorker:
+                    std::thread([&] {
+                        loadTwice();
+                        EXPECT_TRUE(ReleaseThreadCaches());
+                    }).join();
+                    break;
+                }
+                EXPECT_TRUE(ReleaseThreadCaches());
+            }
+            return false;
+        };
+        tpl.emplace(&env);
+        EXPECT_TRUE(!!tpl->Load(widen(padded("OUT", 'u') + "{{ x }}")));
+        const auto expected = replace == Replace::Assign ? padded("other", 'o') : padded("b", 'b');
+        EXPECT_EQ(widen(expected + "5"), tpl->RenderAsString({ { "x", 5 } }).value());
+        EXPECT_TRUE(ReleaseThreadCaches());
+        ASSERT_TRUE(!!tpl->Load(widen("again{{ x }}")));
+        EXPECT_EQ(widen("again7"), tpl->RenderAsString({ { "x", 7 } }).value());
+    }
+}
+
+TEST(TemplateApiTest, ReplaceFromTheSelectorOfANestedLoad)
+{
+    ReplaceFromTheSelectorOfANestedLoad<char>();
+    ReplaceFromTheSelectorOfANestedLoad<wchar_t>();
+}
+
 // Reloads of each source size, inside the small-string buffer and outside it, and failed reloads
 // keep rendering the loaded template
 TEST(TemplateApiTest, ReloadsKeepEachSourceSize)

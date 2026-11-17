@@ -97,26 +97,50 @@ JINJA2CPP_COLD_INLINE Result<void, CharT> LoadReplacing(std::shared_ptr<ITemplat
     return ToResult(TemplateImpl<CharT>::LoadReplacing(impl, std::forward<Source>(source), std::move(name)));
 }
 
-// Lets go of the reference a template replaced during its own first Load kept to itself
-// (TemplateImpl::KeepWhileLoading), once that Load returned: the template may go with it
+// Lets go of the reference the process-wide list holds to a template replaced during its own
+// first Load (TemplateImpl::KeepWhileLoading), once that Load returned: the template may go with it
 template<typename CharT>
 JINJA2CPP_COLD_INLINE void ReleaseKeptWhileLoading(TemplateImpl<CharT>* impl) noexcept
 {
     const auto kept = impl->TakeKeptWhileLoading();
 }
 
-// The first Load, in place. Host code it calls may replace the template it parses into (a Load of
-// it, maybe on another thread, or an assignment): that template then holds itself until the
+// Releases the template KeepWhileLoading kept when the first Load returns or throws (bad_alloc).
+// A Load nested in it, from host code it calls, leaves it to that first Load, which still parses
+template<typename CharT>
+class ReleaseAfterFirstLoad
+{
+public:
+    explicit ReleaseAfterFirstLoad(TemplateImpl<CharT>* impl) noexcept
+        : m_impl(impl)
+        , m_first(!impl->Loading())
+    {
+    }
+    ReleaseAfterFirstLoad(const ReleaseAfterFirstLoad&) = delete;
+    ReleaseAfterFirstLoad& operator=(const ReleaseAfterFirstLoad&) = delete;
+    ReleaseAfterFirstLoad(ReleaseAfterFirstLoad&&) = delete;
+    ReleaseAfterFirstLoad& operator=(ReleaseAfterFirstLoad&&) = delete;
+    ~ReleaseAfterFirstLoad()
+    {
+        if (m_first && m_impl->KeptWhileLoading())
+        {
+            ReleaseKeptWhileLoading(m_impl);
+        }
+    }
+
+private:
+    TemplateImpl<CharT>* m_impl;
+    bool m_first;
+};
+
+// A Load in place. Host code the first Load calls may replace the template it parses into (a Load
+// of it, maybe on another thread, or an assignment): that template is then kept until the first
 // Load returned (docs/tasks/0517, 0522)
 template<typename CharT>
 Result<void, CharT> LoadInPlace(TemplateImpl<CharT>* impl, std::basic_string<CharT>&& source, std::string&& name)
 {
-    auto result = ToResult(impl->Load(std::move(source), std::move(name)));
-    if (impl->KeptWhileLoading())
-    {
-        ReleaseKeptWhileLoading(impl);
-    }
-    return result;
+    const ReleaseAfterFirstLoad<CharT> release(impl);
+    return ToResult(impl->Load(std::move(source), std::move(name)));
 }
 
 template<typename CharT>
@@ -149,8 +173,11 @@ BasicTemplate<CharT>& BasicTemplate<CharT>::operator=(const BasicTemplate& other
 {
     // Host code the first Load of this template calls may assign it: that Load still parses into
     // the template this lets go of (docs/tasks/0522)
-    TemplateImpl<CharT>::KeepWhileLoading(m_impl);
-    m_impl = other.m_impl;
+    if (this != &other)
+    {
+        TemplateImpl<CharT>::KeepWhileLoading(m_impl);
+        m_impl = other.m_impl;
+    }
     return *this;
 }
 

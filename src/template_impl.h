@@ -205,6 +205,14 @@ public:
     virtual ~ITemplateImpl() = default;
 };
 
+namespace detail
+{
+// The process-wide list of templates replaced during their own first Load
+// (TemplateImpl::KeepWhileLoading): adds one, and takes the one at `impl` out
+void KeepTemplateWhileLoading(std::shared_ptr<const ITemplateImpl> impl);
+[[nodiscard]] std::shared_ptr<const ITemplateImpl> TakeTemplateKeptWhileLoading(const ITemplateImpl* impl) noexcept;
+} // namespace detail
+
 template<typename U>
 struct TemplateLoader;
 
@@ -371,21 +379,28 @@ public:
 
     // Keeps the template `impl` holds alive while its first Load runs, when host code that Load
     // called (an autoescape selector) is about to replace it: a Load of the same template, on this
-    // thread or one it joins, or an assignment to it. The template holds itself, so that neither
+    // thread or one it joins, or an assignment to it. A process-wide list holds it, so that neither
     // the thread nor the object that held it decides when it goes (docs/tasks/0517, 0522). Only
-    // the rare replace of a loading template pays for it
+    // the rare replace of a loading template pays for it; a first Load checks a flag
     static void KeepWhileLoading(const std::shared_ptr<ITemplateImpl>& impl)
     {
-        if (auto* loading = static_cast<TemplateImpl*>(impl.get()); loading && loading->m_loading)
+        if (auto* loading = static_cast<TemplateImpl*>(impl.get()); loading && loading->m_loading && !loading->m_keptWhileLoading)
         {
-            loading->m_keptWhileLoading = impl;
+            detail::KeepTemplateWhileLoading(impl);
+            loading->m_keptWhileLoading = true;
         }
     }
+    // Whether the first Load of this template runs: a Load from host code it calls is nested in it
+    [[nodiscard]] bool Loading() const noexcept { return m_loading; }
     // Whether host code replaced this template while its first Load ran (KeepWhileLoading)
-    [[nodiscard]] bool KeptWhileLoading() const noexcept { return !!m_keptWhileLoading; }
+    [[nodiscard]] bool KeptWhileLoading() const noexcept { return m_keptWhileLoading; }
     // Takes the reference KeepWhileLoading made, once the Load returned: the template goes with
     // the reference the caller drops, after the caller is done with it
-    [[nodiscard]] std::shared_ptr<const ITemplateImpl> TakeKeptWhileLoading() noexcept { return std::move(m_keptWhileLoading); }
+    [[nodiscard]] std::shared_ptr<const ITemplateImpl> TakeKeptWhileLoading() noexcept
+    {
+        m_keptWhileLoading = false;
+        return detail::TakeTemplateKeptWhileLoading(this);
+    }
 
     std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
@@ -1810,9 +1825,9 @@ private:
     bool m_hasSource = false;
     // The first Load is running: a Load from host code it calls parses into a source of its own
     bool m_loading = false;
-    // This template itself, while its first Load runs, once host code that Load called replaced it
-    // (KeepWhileLoading): the Load still parses into it. BasicTemplate::Load lets go of it
-    std::shared_ptr<const ITemplateImpl> m_keptWhileLoading;
+    // Host code the first Load called replaced this template, which the process-wide list keeps
+    // until the Load returned (KeepWhileLoading)
+    bool m_keptWhileLoading = false;
     // Text the tree points to besides the source (newline_sequence copies), if any
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;
