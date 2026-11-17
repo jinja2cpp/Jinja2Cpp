@@ -43,7 +43,6 @@ enum class UndefinedPolicy
     Debug,     //!< As Default, but prints as `{{ name }}` (Jinja2 `DebugUndefined`)
 };
 
-//! When `include`, `extends` and `import` look up the template they name (\ref Settings::templateLookup)
 //! The style of the gettext globals of an environment (\ref TemplateEnv::InstallGettextCallables, docs/tasks/0509)
 enum class GettextStyle : unsigned char
 {
@@ -55,6 +54,7 @@ enum class GettextStyle : unsigned char
     Newstyle
 };
 
+//! When `include`, `extends` and `import` look up the template they name (\ref Settings::templateLookup)
 enum class TemplateLookup
 {
     OncePerRender, //!< The first use of a name in a render looks it up; later uses in the same render reuse it

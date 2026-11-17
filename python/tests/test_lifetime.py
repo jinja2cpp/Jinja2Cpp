@@ -143,6 +143,29 @@ def test_replaced_filters_go_while_templates_loaded_before_keep_theirs():
     assert env.from_string("{% include 'inc' %}{{ 1 is t }}").render() == "[9999]False"
 
 
+@pytest.mark.parametrize("how", ["make_module", "module"])
+def test_a_macro_keeps_the_callables_of_its_template(how):
+    # docs/tasks/0406: a macro of a module outlives its template; the filter and finalize it was compiled with
+    # stay alive after the environment replaced them
+    env = jinja2cpp.Environment(finalize=lambda v: "<" + str(v) + ">")
+    filter_ = lambda v: "first"
+    finalize = env.finalize
+    env.filters["f"] = filter_
+    tpl = env.from_string("{% macro m() %}{{ 1|f }}{{ 2 }}{% endmacro %}")
+    macro = (tpl.make_module({}) if how == "make_module" else tpl.module).m
+    refs = [weakref.ref(filter_), weakref.ref(finalize)]
+    del tpl, filter_, finalize
+    env.filters["f"] = lambda v: "second"
+    env.finalize = None
+    assert env.from_string("{{ 1|f }}").render() == "second"
+    gc.collect()
+    assert all(ref() is not None for ref in refs)
+    assert str(macro()) == "<first><2>"
+    del macro
+    gc.collect()
+    assert all(ref() is None for ref in refs)
+
+
 def test_reinstalled_translations_go():
     import gettext as gettext_module
 

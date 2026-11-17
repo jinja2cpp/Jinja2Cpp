@@ -33,4 +33,6 @@ its `Write` (renderer.h `MarkOutputPiece` for an output node, `{% filter %}` and
 loop for their own piece), and the held piece publishes the mark. The module's sinks (`CallbackSink`, the lazy
 render's) make those items `Markup`. Pinned by `OutputTest.SinkLearnsWhichPiecesAreMarkup` (both character
 types) and `test_items_are_markup_where_jinja2s_are` (both generate modes). Left: a filter block whose filter
-returns a non-string (`length`) yields its `str()` where Jinja2 yields the int (docs/python.md).
+returns a non-string (`length`) yields its `str()` where Jinja2 yields the int (docs/python.md); a constant
+expression that is not a literal (`{{ 1 + 1 }}`) is a Markup item of its own under autoescape, where Jinja2 folds it
+into a `str` run (0535).
