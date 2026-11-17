@@ -118,6 +118,16 @@ public:
         return std::any_of(m_slots.begin(), m_slots.end(), [&nodes](const ArenaView& slot) { return slot == nodes; });
     }
 
+    // Lets go of every slot, when no handle of the table can be used again: no render runs with
+    // it and nothing that outlives one (`self`, a module) holds one (docs/tasks/0503). The next
+    // handle takes a new generation, so that a handle made before resolves to no slot made after
+    void Clear() noexcept
+    {
+        m_slots.clear();
+        m_bySlot.clear();
+        m_generation = 0;
+    }
+
     // Throws for a handle another render made (but with NodeRefChecks OFF, only for one past
     // the table's end): its template may be gone. No handle has generation 0, the one of a
     // table that has made none

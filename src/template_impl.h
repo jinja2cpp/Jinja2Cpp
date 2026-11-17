@@ -1466,10 +1466,10 @@ private:
         // Whether a source change replaced a tree this render loaded (PruneReplaced)
         [[nodiscard]] bool HasReplaced() const noexcept { return m_loaded && !m_loaded->replaced.empty(); }
         // Ends the trees a source change replaced that nothing of the render's own reaches: not the latest of their
-        // name, a shared module's template, a statement's `bySite` result or a tree with a slot, which handles
-        // link to. What else views one (a macro, a recursive loop, an imported module) holds its owner
+        // name, a shared module's template, a statement's `bySite` result or, while a handle may link to it, a
+        // tree with a slot. What else views one (a macro, a recursive loop, an imported module) holds its owner
         // (docs/tasks/0482). Called when the outermost call of a module ends
-        void PruneReplaced() noexcept
+        void PruneReplaced(bool callerHoldsHandles) noexcept
         {
             if (!HasReplaced())
             {
@@ -1505,10 +1505,21 @@ private:
             // The released trees that went since
             loaded.released.erase(std::remove_if(loaded.released.begin(), loaded.released.end(), [](const auto& entry) { return entry.second.expired(); }),
                                   loaded.released.end());
+            // No handle of the slots can be used again when no `self` or `super` lives and neither the module
+            // that calls (`callerHoldsHandles`) nor one its calls keep holds one: then the slots go, and a
+            // tree with one goes as the others (docs/tasks/0503)
+            // A table shared with the stacks a render under a keeper ends is never cleared here (SharedTemplates)
+            const bool slotsFree = !callerHoldsHandles && !loaded.sharedTemplates && !SelfBlocks::AnyLive()
+                                   && std::none_of(loaded.modules.begin(), loaded.modules.end(), [](const auto& module) { return module && module->HoldsTemplateHandles(); });
+            if (slotsFree)
+            {
+                loaded.templates.Clear();
+            }
             for (auto p = loaded.replaced.begin(); p != loaded.replaced.end();)
             {
                 const LoadTemplateResult* result = &*p;
-                if (std::binary_search(named.begin(), named.end(), result, std::less<>()) || HoldsSlot(*result, loaded.sharedTemplates ? *loaded.sharedTemplates : loaded.templates))
+                if (std::binary_search(named.begin(), named.end(), result, std::less<>())
+                    || (!slotsFree && HoldsSlot(*result, loaded.sharedTemplates ? *loaded.sharedTemplates : loaded.templates)))
                 {
                     ++p;
                     continue;

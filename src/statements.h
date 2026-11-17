@@ -12,6 +12,7 @@
 #include "span.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -520,13 +521,29 @@ struct SelfBlocks
     explicit SelfBlocks(const BlocksStack* stack)
         : live(stack)
     {
+        s_count.fetch_add(1, std::memory_order_relaxed);
     }
+    SelfBlocks(const SelfBlocks&) = delete;
+    SelfBlocks(SelfBlocks&&) = delete;
+    SelfBlocks& operator=(const SelfBlocks&) = delete;
+    SelfBlocks& operator=(SelfBlocks&&) = delete;
+    ~SelfBlocks() { s_count.fetch_sub(1, std::memory_order_relaxed); }
+
+    // Whether any `self` or `super` of any render still lives: the handles of an ended one link
+    // to slots of the table its render used, so that a module frees no tree with a slot while
+    // one does (TemplateSlots::Clear, docs/tasks/0503). Read by a module's call under its lock,
+    // after the call: one made or let go of on another thread meanwhile is of another render,
+    // or of a value that thread holds of this one, which the module's lock orders
+    [[nodiscard]] static bool AnyLive() noexcept { return s_count.load(std::memory_order_acquire) != 0; }
 
     // The stack, until it ends; only compared then, to find the frames of its template
     const BlocksStack* live;
     // Its blocks once it has ended. Made with the `self`: the stack's destructor, which fills
     // it, must not allocate, and MSVC's unordered_map allocates when default constructed
     BlocksStack ended;
+
+private:
+    static inline std::atomic<std::size_t> s_count{ 0 };
 };
 
 // The root of a parsed template
@@ -646,6 +663,9 @@ public:
     [[nodiscard]] RenderContext& Context() { return m_context; }
     // Keeps the tree the module's template runs in alive, while a module frees replaced trees (docs/tasks/0482)
     void SetTreeOwner(std::shared_ptr<const void> owner) { m_treeOwner = std::move(owner); }
+    // Whether the module holds handles of a render's table of templates: its blocks, or the parent
+    // its template extends, which a module's slots must keep (docs/tasks/0503)
+    [[nodiscard]] bool HoldsTemplateHandles() const noexcept { return !m_blocks.blocks.empty() || static_cast<bool>(m_frame.parent); }
 
 private:
     // Declared first, so that it goes last: the module's names and macros view the tree it keeps

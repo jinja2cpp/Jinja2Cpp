@@ -732,6 +732,42 @@ TEST_F(TemplateModuleChangingSourceTest, StoredSelfRunsItsOldBlocks)
     EXPECT_EQ((std::vector<std::string>{ "[]OLD", "[OLD]NEW", "[NEW]NEW2" }), results);
 }
 
+// Trees that take a slot go too once no `self`, `super` or module holds a handle of one (docs/tasks/0503): the
+// module's own blocks keep the slots, a stored `super` or `self` keeps them while it lives, and a parent that
+// changes under a child that extends it is the new one each call (3.1.6 make_module() results)
+TEST_F(TemplateModuleChangingSourceTest, ModuleWithBlocksIncludesChangingBlocks)
+{
+    const auto results = CallWithLibs("{% block t %}T{% endblock %}{% macro m() %}{{ self.t() }}{% include 'lib' %}{% endmacro %}",
+                                      { "{% block b %}L1{% endblock %}", "{% block b %}L2{% endblock %}", "{% block b %}L3{% endblock %}" });
+    EXPECT_EQ((std::vector<std::string>{ "TL1", "TL2", "TL3" }), results);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, StoredSuperRunsItsOldParentUntilLetGo)
+{
+    AddFile("base", "<{% block b %}B{% endblock %}>");
+    const auto results = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% extends 'base' %}{% block b %}{% set ns.s = super %}OLD{% endblock %}",
+                                        "{% extends 'base' %}{% block b %}{% set ns.s = super %}NEW{% endblock %}",
+                                        "{% extends 'base' %}{% block b %}{% set ns.s = none %}NEW2{% endblock %}", "{% extends 'base' %}{% block b %}NEW3{% endblock %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]<OLD>", "[B]<NEW>", "[B]<NEW2>", "[]<NEW3>" }), results);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, ChildOfAChangingParent)
+{
+    AddFile("child", "{% extends 'lib' %}{% block b %}C{{ super() }}{% endblock %}");
+    const auto results = CallWithLibs("{% macro m() %}{% include 'child' %}{% endmacro %}",
+                                      { "<{% block b %}L1{% endblock %}>", "<{% block b %}L2{% endblock %}>", "[{% block b %}L3{% endblock %}]" });
+    EXPECT_EQ((std::vector<std::string>{ "<CL1>", "<CL2>", "[CL3]" }), results);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, StoredSelfLetGoOfFreesItsSlots)
+{
+    const auto results = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% block b %}OLD{% endblock %}{% set ns.s = self %}", "{% block b %}NEW{% endblock %}{% set ns.s = none %}",
+                                        "{% block b %}NEW2{% endblock %}", "{% block b %}NEW3{% endblock %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]OLD", "[OLD]NEW", "[]NEW2", "[]NEW3" }), results);
+}
+
 TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopRunsItsOldBody)
 {
     const std::string body = "{{ i }}{{ loop(i) if i is iterable and i is not string }}";
