@@ -1,5 +1,3 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
-subscripts.tuple_of_slices_strict_conditional_branch rejects 0527 with StrictUndefined the conditional's fold candidate fails the Load by its node kind; Jinja2's filter in the branch gives Impossible and the `if` renders b
-subscripts.tuple_of_slices_strict_conditional_test accepts 0527 with StrictUndefined Jinja2's fold tests the truth of the strict undefined in the conditional's test and fails the compile; the engine's candidate does not fold and the Load passes

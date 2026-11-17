@@ -161,6 +161,16 @@ CASES = [
     # the filter or test in a branch of a conditional (0527)
     ("tuple_of_slices_strict_conditional_branch", "{% if false and ([1][:, :]|length if 1 else x) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_conditional_test", "{% if false and (1 if [1][:, :] else x) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
+    # 0527: the conditional's fold follows CondExpr.as_const: the test, whose truth fails for a strict
+    # undefined, then the branch it picks, whose filter or test gives Impossible; an else chain too
+    ("tuple_of_slices_strict_conditional_test_filter", "{% if false and (1 if [1][:, :]|length else x) %}a{% else %}b{% endif %}|{% if false and (1 if [1][:, :] is defined else 2) %}a{% else %}b{% endif %}|{% if false and (1 if [1][:, :]|default(1) else x) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_else_branch", "{% if false and (1 if 0 else [1][:, :]|length) %}a{% else %}b{% endif %}|{% if false and (1 if 0 else 2 if 0 else [1][:, :]|length) %}a{% else %}b{% endif %}|{% if false and ([1][:, :] if 0) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_chained_test", "{% if false and (1 if 0 else 2 if [1][:, :] else 3) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_or_test", "{% if false and (1 if ([1][:, :] or 1) else 2) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_set", "{% set q = 1 if ()[:, :] else 2 %}[{{ q }}]", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_output_concat", "[{{ x ~ (1 if ()[:, :] else 2) }}]", {"env": {"undefined": "strict"}}),
+    # a strict filter chain: each step is a candidate, evaluated from the step before it (0527)
+    ("tuple_of_slices_strict_filter_chain", "{% set q = [1][:, :]|default([3, 1])|sort|first|string %}[{{ q }}]", {"env": {"undefined": "strict"}}),
     # a filter drops an argument it does not take; the argument's fold is still checked (0497)
     ("tuple_of_slices_dropped_filter_argument", "{{ x|first([1][:, :]) }}"),
     ("tuple_of_slices_dropped_filter_argument_folds", "{{ x|first([1][:, :]|sort) }}"),

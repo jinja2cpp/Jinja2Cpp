@@ -326,6 +326,31 @@ TEST_F(LimitsEnvTest, FoldsAtLoad)
     EXPECT_EQ(L"True", wide.RenderAsString({}).value());
 }
 
+// Under StrictUndefined every step of a filter chain around a tuple of slices is a fold
+// candidate; a step's value is the filter on the step before it, so the Load runs each filter
+// once, not N^2/2 times (docs/tasks/0527)
+TEST_F(LimitsEnvTest, StrictFilterChainFoldsInLinearSteps)
+{
+    Settings settings;
+    settings.undefinedPolicy = UndefinedPolicy::Strict;
+    settings.limits.maxRenderSteps = 20000;
+    m_env.SetSettings(settings);
+    std::string source = "{% set q = [1][:, :]|default(-1)";
+    for (int filter = 0; filter != 400; ++filter)
+    {
+        source += "|abs";
+    }
+    source += " %}[{{ q }}]";
+    Template tpl(&m_env);
+    auto loaded = tpl.Load(source);
+    ASSERT_TRUE(loaded.has_value()) << ErrorToString(loaded.error());
+    EXPECT_EQ("[1]", tpl.RenderAsString({}).value());
+
+    TemplateW wide(&m_env);
+    ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end())).has_value());
+    EXPECT_EQ(L"[1]", wide.RenderAsString({}).value());
+}
+
 TEST_F(LimitsEnvTest, ReprOfSharedItems)
 {
     Settings settings;
