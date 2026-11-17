@@ -187,9 +187,10 @@ bool OutStream::HoldBack(const void* ptr, size_t bytes)
 {
     if (m_hold >= HoldPerMark)
     {
-        // Held output is bounded as a value is (MaxSequenceSize characters): past that it goes to the sink, what was
-        // held first, and the calls that live can no longer take theirs back (they fail as before docs/tasks/0499)
-        if ((SpillSize() / m_charSize) + (bytes / m_charSize) > MaxSequenceSize)
+        // Held output is bounded as a value is (MaxSequenceSize characters, or the render's lower maxSequenceSize):
+        // past that it goes to the sink, what was held first, and the calls that live can no longer take theirs back
+        // (they fail as before docs/tasks/0499)
+        if (static_cast<std::uint64_t>(SpillSize() / m_charSize) + (bytes / m_charSize) > detail::t_renderLimits.maxSequenceSize)
         {
             ++m_spillOverflows;
             if (m_spill && !m_spill->Empty())
