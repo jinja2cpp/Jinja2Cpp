@@ -139,7 +139,14 @@ def test_include_of_several_missing_templates_is_templates_not_found():
         assert str(info.value) == "none of the templates given were found: missing, missing2"
 
 
-_PY312_TEXT = {"{{ dict([[1, 2], 3]) }}": "cannot convert dictionary update sequence element #1 to a sequence"}
+# Python 3.14 reworded these; the pinned oracle is 3.12. Jinja2's cache key (loader ref, name) is a tuple, so
+# 3.14 names it: "cannot use 'tuple' as a dict key (unhashable type: 'list')".
+_PY312_TEXT = {
+    "{{ dict([[1, 2], 3]) }}": "cannot convert dictionary update sequence element #1 to a sequence",
+    "{% include [[]] %}": "unhashable type: 'list'",
+    "{% include [{}] ignore missing %}": "unhashable type: 'dict'",
+    "{% include ['missing', []] %}": "unhashable type: 'list'",
+}
 
 
 @pytest.mark.parametrize(
@@ -154,6 +161,13 @@ _PY312_TEXT = {"{{ dict([[1, 2], 3]) }}": "cannot convert dictionary update sequ
         "{% include 5 ignore missing %}",
         "{% include 1.5 %}",
         "{% include nope %}",
+        # docs/tasks/0494: Jinja2's template cache hashes each name
+        "{% include [[]] %}",
+        "{% include [{}] ignore missing %}",
+        "{% include ['missing', []] %}",
+        # docs/tasks/0498: an undefined name keeps its message
+        "{% include [nope] %}",
+        "{% include [nope, 'missing', none.x] %}",
         "{{ dict(5) }}",
         "{{ dict('ab') }}",
         "{{ dict([[1, 2], 3]) }}",
@@ -178,7 +192,11 @@ def test_include_and_constructor_errors_have_jinja2s_class(source):
     oracle_text = _PY312_TEXT.get(source) if sys.version_info >= (3, 14) else None
     assert str(ours) == (oracle_text or str(theirs)), source
     if isinstance(theirs, jinja2.TemplatesNotFound):
-        assert ours.templates == theirs.templates
+        # Each module's Undefined equals only its own class: an undefined name is compared by its class and message
+        def names(error, module):
+            return [(type(n).__name__, n._undefined_message) if isinstance(n, module.Undefined) else n for n in error.templates]
+
+        assert names(ours, jinja2cpp) == names(theirs, jinja2)
 
 
 @pytest.mark.parametrize("source", ["{{ dict(pairs) }}", "{{ dict(empty) }}", "{{ lst|xmlattr }}", "{{ obj|xmlattr }}", "{{ dict(1, 2) }}"])

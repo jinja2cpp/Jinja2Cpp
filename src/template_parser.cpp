@@ -14,6 +14,7 @@
 #include "render_context.h"
 #include "renderer.h"
 #include "small_vector.h"
+#include "slot_frame.h"
 #include "statements.h"
 
 #include <jinja2cpp/error_info.h>
@@ -835,11 +836,13 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     }
 
     NodeRef<IRendererBase> elseRenderer;
+    ArenaSpan<SlotName> elseResets;
     auto bodyEndReads = m_nodes.Marks().loopReads;
     if (statementsInfo.back().type == StatementInfo::ElseIfStatement)
     {
         auto elseInfo = PopStatement(statementsInfo);
         bodyEndReads = elseInfo.marks.loopReads;
+        elseResets = m_names.NamesResetAtEnd(elseInfo.frame, m_nodes);
         // The body of a frame of its own (ParseElse)
         m_nodes.Get<ElseBranchStatement>(elseInfo.renderer).SetMainBody(m_names.MayBindAtEntry(elseInfo.frame) ? TakeFrameBody(elseInfo) : TakeBody(elseInfo));
         elseRenderer = elseInfo.renderer;
@@ -853,6 +856,11 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     auto info = PopStatement(statementsInfo);
     auto& renderer = m_nodes.Get<ForStatement>(info.renderer);
     renderer.SetMainBody(TakeBody(info));
+    // A recursive loop's body is a function in Jinja2, whose names its closures keep (FrameEnd::Stopped)
+    if (!renderer.IsRecursive())
+    {
+        renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
+    }
     renderer.SetBodyReadsLoop(renderer.IsRecursive() || bodyEndReads != info.marks.loopReads);
     // An included template reads the loop it is included from only outside its own loops' bodies
     const bool inFor = std::any_of(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& outer) { return outer.type == StatementInfo::ForStatement; });
@@ -863,6 +871,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     if (elseRenderer)
     {
         renderer.SetElseBody(elseRenderer);
+        renderer.SetElseResetsAtEnd(elseResets);
     }
 
     m_bodies.Add(info.renderer, info.tagOffset);
@@ -1058,6 +1067,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
     auto info = PopStatement(statementsInfo);
     auto& statement = m_nodes.Get<SetBlockStatement>(info.renderer);
     statement.SetBody(TakeBody(info));
+    statement.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
     // Stored once the body has rendered, which may read the name itself
     const auto& outer = statementsInfo.back();
     const auto kind = StatementInfo::OwnsFrame(outer.type) || IsLoopElse(statementsInfo) ? NameResolver::StoreKind::Store : NameResolver::StoreKind::Branch;
@@ -1982,6 +1992,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
     auto info = PopStatement(statementsInfo);
     auto& renderer = m_nodes.Get<WithStatement>(info.renderer);
     renderer.SetMainBody(TakeBody(info));
+    renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
 
     m_bodies.Add(info.renderer, info.tagOffset);
 
@@ -2001,6 +2012,12 @@ StatementsParser::ParseResult StatementsParser::ParseGeneration(LexScanner& lexe
     }
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::GenerationStatement, stmtTok, m_tagOffset);
     statementInfo.frame = m_names.PushWith(m_names.Current());
+    // Its own `caller`, `varargs` and `kwargs` (GenerationStatement::AddSpecialNames): a read of them is by name, not
+    // from the slot of an enclosing macro's
+    for (const std::string_view name : { "caller", "varargs", "kwargs" })
+    {
+        m_names.AddStore(statementInfo.frame, name, NameResolver::StoreKind::Target);
+    }
     statementInfo.renderer = m_nodes.Make<GenerationStatement>();
     Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
@@ -2013,7 +2030,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndGeneration(LexScanner& /
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
     auto info = PopStatement(statementsInfo);
-    m_nodes.Get<GenerationStatement>(info.renderer).SetMainBody(TakeBody(info));
+    auto& renderer = m_nodes.Get<GenerationStatement>(info.renderer);
+    renderer.SetMainBody(TakeBody(info));
+    renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
     m_bodies.Add(info.renderer, info.tagOffset);
     return ParseResult();
 }
@@ -2054,6 +2073,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
     auto info = PopStatement(statementsInfo);
     auto& renderer = m_nodes.Get<FilterStatement>(info.renderer);
     renderer.SetBody(TakeBody(info));
+    renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
 
     m_bodies.Add(info.renderer, info.tagOffset);
 
@@ -2097,6 +2117,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndAutoescape(LexScanner&, 
     auto info = PopStatement(statementsInfo);
     auto& renderer = m_nodes.Get<AutoescapeStatement>(info.renderer);
     renderer.SetBody(TakeBody(info));
+    renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
 
     m_bodies.Add(info.renderer, info.tagOffset);
 

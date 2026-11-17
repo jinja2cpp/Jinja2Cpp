@@ -166,6 +166,11 @@ public:
     // and a read in a frame inside it. Most frames have neither, and the check stays inline,
     // as the call costs more than it (docs/tasks/0205)
     [[nodiscard]] bool MayBindAtEntry(FrameId frame) const { return m_frames[frame].firstStore != m_stores.size() && m_frames.size() != std::size_t{ frame } + 1; }
+    // Called when the body of `frame` (a loop or a `with`, `filter`, `autoescape`, block `set` or `generation`
+    // body) ends: the names it stores, in a branch too, which Jinja2 resets as the body ends, so that a closure
+    // defined inside and kept past it reads them as undefined (FrameEnd::resets, docs/tasks/0526). Empty when
+    // no macro or call block is defined inside, which most frames are
+    [[nodiscard]] ArenaSpan<SlotName> NamesResetAtEnd(FrameId frame, NodeArena& nodes) const;
 
     // Assigns the slots; called once, after a parse without errors. A template with no entry
     // binding and no macro or loop that binds slots has nothing to resolve

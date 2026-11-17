@@ -17700,6 +17700,126 @@
    "output": "missingmissing"
   },
   {
+   "id": "statements.macro_kept_past_filter_body_rebinding",
+   "template": "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% filter upper %}{% set v = 'F' %}{% macro m() %}[{{ v }}]{% endmacro %}{% set ns.f = m %}x{% endfilter %}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "X[]"
+  },
+  {
+   "id": "statements.macro_kept_past_loop_body_rebinding",
+   "template": "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1, 2] %}{% if i == 1 %}{% set v = 'L' %}{% endif %}{% macro m() %}[{{ v }}]{% endmacro %}{% set ns.f = m %}{% endfor %}{{ ns.f() }}{{ v }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]V"
+  },
+  {
+   "id": "statements.macro_kept_past_with_body_not_rebinding",
+   "template": "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% with %}{% macro m() %}[{{ v }}]{% endmacro %}{% set ns.f = m %}{% endwith %}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[V]"
+  },
+  {
    "id": "statements.nested_macro_escapes_its_call",
    "template": "{% set ns = namespace(l=[]) %}{% macro o(a) %}{% macro i() %}{{ a }}{% endmacro %}{% set _ = ns.l.append(i) %}{% endmacro %}{{ o(1) }}{{ o(2) }}{% for f in ns.l %}{{ f() }}{% endfor %}",
    "context": {
