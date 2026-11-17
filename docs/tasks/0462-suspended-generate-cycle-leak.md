@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0457]
@@ -21,3 +21,15 @@ from a GC pass on another thread does not resume there (close it eagerly or defe
 
 **Done when.** A cycle through a suspended generator is collected by `gc.collect()` (a weakref callback
 fires) with destructors run, under the ASan module job.
+
+
+**Resolution (batch 9 D).** `_LazyRender` takes part in the garbage collector: its traverse reports the template,
+the arguments and, while the render runs or is suspended, each object a PyHost of the render's params and
+globals holds on the fiber (`PieceOptions::held`, cleared before those values go). The render takes its
+arguments by reference so no other reference to them sits on the fiber. Its clear closes the render (on the
+owner thread it unwinds on the fiber; elsewhere the fiber is freed, as close() does). In practice the Python
+generator's finalizer closes it first. Pinned by `test_a_cycle_through_a_suspended_generator_is_collected`
+(keyword, positional, global, closure: a weakref callback fires) and
+`test_a_cycle_collected_on_another_thread_does_not_resume_there`. Left: a cycle through a value the template
+made while it runs (`{% set y = x.y %}` holding the generator) is still collected only when the generator is
+closed (docs/python.md).

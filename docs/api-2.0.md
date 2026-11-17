@@ -367,6 +367,22 @@ user. Considered: an additive `RenderTo(sink, params, options, const RenderSuspe
 core would gain platform assembly and stack management, docs/design/0457-lazy-generate-plan.md option b).
 Like `generationSpans`, the growth of `RenderOptions` must land before G1.
 
+**Markup items and the style of the gettext globals (tasks 0493, 0509, batch 9 D, additive while G1 is
+postponed).** `RenderOptions` grows by `bool* pieceIsMarkup`: with `writeEachPiece`, the render sets it before
+each `Write` to whether Jinja2's `generate()` yields that piece as `Markup` (an evaluated `{{ }}` under
+autoescape, volatile text while autoescape is on, a call block's or recursive loop's output under the runtime
+autoescape, a filter block whose result is Markup), so the module's items are `Markup` where Jinja2's are. Null
+costs nothing: the flag rides the held piece, which only a render writing each piece makes. Considered: a second
+`Write` overload with the flag (the sink interface takes no new virtual function in 2.x) and a per-piece
+callback (one more indirect call a piece). `TemplateEnv` gains an overload
+`InstallGettextCallables(GettextStyle, ...)` and `enum class GettextStyle : unsigned char { FollowLoad,
+Oldstyle, Newstyle }`: an install with a style gives every template's `gettext`, `ngettext`, `pgettext` and
+`npgettext` globals that style until the next install, as Jinja2's `install_gettext_*` put globals of the style
+in `env.globals`; the existing overload is `FollowLoad`, the 0415 behaviour (each template's load setting).
+`{% trans %}` blocks keep their load style either way. Considered: recording `i18nNewstyle` at every install
+(changes the C++ meaning of the existing call, whose users set the style after installing) and module-side
+Python wrappers in `env.globals` (their `%` would bypass the engine's format caps).
+
 **Prompt escaping and token budgets (tasks 0358, 0359, decided by Ruslan 2026-11-05).** A new,
 always installed header `jinja2cpp/prompt.h` (core, included by `template_env.h`, not behind
 `JINJA2CPP_WITH_CHAT_TEMPLATES`, whose switch must not change the core ABI) adds:

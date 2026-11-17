@@ -142,7 +142,11 @@ public:
     };
     // The piece a render that writes each piece gathers: the render keeps it while the stream writes
     using HeldPieceOwner = std::unique_ptr<HeldPiece, HeldPieceDelete>;
-    [[nodiscard]] HeldPieceOwner WriteEachPiece();
+    // `markupOut`: where the end of each piece says whether it is Markup (RenderOptions::pieceIsMarkup), or null
+    [[nodiscard]] HeldPieceOwner WriteEachPiece(bool* markupOut = nullptr);
+    // The piece that ends next is Markup in Jinja2's generate() (docs/tasks/0493); the end of a piece forgets it.
+    // Asked only where the stream writes each piece (WritesEachPiece): a held piece of a macro ignores it
+    void MarkPiece(bool markup) noexcept;
     // The end of a body's statement in a render that writes each piece: Flush, and the end of a piece unless
     // one is held (PieceHold). Only such a render calls it, so Flush stays as the usual render has it
     void FlushStatement();

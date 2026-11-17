@@ -139,6 +139,42 @@ def test_a_template_keeps_the_style_it_was_loaded_with():
     assert got[0] == got[1] == ("100%", "100%%")
 
 
+@pytest.mark.parametrize("first", [False, True], ids=["oldstyle-then-newstyle", "newstyle-then-oldstyle"])
+@pytest.mark.parametrize(
+    "source",
+    # A format with a missing key is 0511 (KeyError here is TemplateRuntimeError)
+    ["{{ gettext('%(a)s', a=1) }}", "{{ _('x') }}|{{ ngettext('%(num)s x', '%(num)s xs', 2) }}", "{% trans %}100%%{% endtrans %}", "{% trans %}100%{% endtrans %}"],
+)
+def test_the_gettext_calls_take_the_style_of_the_last_install(first, source):
+    # Jinja2's globals are what the last install put in env.globals, whatever newstyle_gettext was when the template
+    # was compiled (0509); its {% trans %} blocks keep the style they were compiled with
+    def install(env):
+        env.install_null_translations(newstyle=first)
+        tpl = env.from_string(source)
+        env.install_null_translations(newstyle=not first)
+        return tpl
+
+    got = []
+    for module in MODULES:
+        tpl = install(module.Environment(extensions=["jinja2.ext.i18n"]))
+        try:
+            got.append(tpl.render())
+        except Exception as error:  # noqa: BLE001 - compared by class name
+            got.append(type(error).__name__)
+    assert got[0] == got[1]
+
+
+def test_a_newstyle_install_formats_the_calls_of_a_template_loaded_under_oldstyle():
+    got = []
+    for module in MODULES:
+        env = module.Environment(extensions=["jinja2.ext.i18n"])
+        env.install_gettext_translations(Fake(), newstyle=False)
+        tpl = env.from_string("{{ gettext('%(a)s', a=1) }}|{{ _('x %(a)s', a='<') }}")
+        env.install_gettext_translations(Fake(), newstyle=True)
+        got.append(tpl.render())
+    assert got[0] == got[1]
+
+
 def test_oldstyle_is_the_default_and_newstyle_gettext_is_an_attribute():
     for module in MODULES:
         env = module.Environment(extensions=["jinja2.ext.i18n"])

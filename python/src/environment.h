@@ -18,9 +18,10 @@
 namespace jinja2cpp_py
 {
 // jinja2cpp.Environment. Python objects the engine calls (filters, tests, finalize, the
-// autoescape callable, the loader) are owned here and borrowed by the engine: the environment
-// lives while anything of it runs, since every Template holds it. tp_traverse reports them, so
-// a cycle through a closure in env.filters or env.globals is collected (0248 D4)
+// autoescape callable, the loader) are borrowed by the engine and kept by a list of them for each
+// engine environment (BoundObjects), which the environment and every Template loaded from that engine
+// environment hold. tp_traverse reports them, so a cycle through a closure in env.filters or
+// env.globals is collected (0248 D4)
 class PyEnvironment
 {
 public:
@@ -72,6 +73,9 @@ public:
     // them when it loads
     jinja2::TemplateEnv& Prepared();
     [[nodiscard]] PyObject* UndefinedClass() const noexcept { return m_undefined.ptr(); }
+    // A list of what the engine environment templates load from now borrows: a template keeps it, so the callables
+    // it was compiled with live while it does, and the environment lets go of one replaced since (docs/tasks/0406)
+    [[nodiscard]] const nb::object& BoundObjects() const noexcept { return m_bound; }
     // A SandboxedEnvironment: whether its hooks (call, getattr, getitem, intercepted operators) are the engine's
     // are checked again, as at a load, before a template renders or makes a module (an override set after the
     // load must not be ignored); nothing for another environment
@@ -96,6 +100,7 @@ private:
     void SetLoader(nb::handle loader);
     void SetAutoescape(nb::handle value);
     void SetExtensions(nb::handle value);
+    // Adds `object` to BoundObjects: the engine environment borrows it
     void Keep(nb::handle object);
     void ApplyGettext();
     void ApplyChatTemplates();
@@ -116,23 +121,38 @@ private:
     nb::object m_extensions;
     nb::object m_options; // the other keyword arguments, accepted as Jinja2 takes them
     LoaderPtr m_loaderHandler;
-    // Every callable the engine was given: a template keeps the filters it bound when it
-    // loaded, so none is dropped while the environment lives
-    std::vector<nb::object> m_kept;
+    // What m_env borrows (BoundObjects): a new list with each new m_env. A filter or test replaced or removed starts
+    // a new m_env, since the templates loaded before keep the callables they bound; the translations, which a render
+    // reads from the environment at each call, are item 0, replaced in place by a new install
+    nb::object m_bound;
     std::vector<std::pair<std::string, PyObject*>> m_boundFilters;
     std::vector<std::pair<std::string, PyObject*>> m_boundTests;
-    // The i18n callables, borrowed from m_kept; null for none
-    PyObject* m_gettext[4] = {};
-    // The oldstyle globals, borrowed from m_kept; null for none
-    PyObject* m_gettextGlobals[4] = {};
+    // The i18n callables; None for none
+    nb::object m_gettext[4];
+    // The oldstyle globals; None for none
+    nb::object m_gettextGlobals[4];
     bool m_newstyleGettext = false;
-    // SetChatTemplates: on, and its clock, borrowed from m_kept (null for the system clock)
+    // The style of the gettext globals, fixed by the last install (SetGettext)
+    jinja2::GettextStyle m_gettextStyle = jinja2::GettextStyle::FollowLoad;
+    // SetChatTemplates: on, and its clock (None for the system clock)
     bool m_chatTemplates = false;
 #if JINJA2CPP_HAS_CHAT_TEMPLATES
-    PyObject* m_chatClock = nullptr;
+    nb::object m_chatClock = nb::none();
 #endif
     std::shared_ptr<const jinja2::ValuesMap> m_engineGlobals;
     bool m_cleared = false;
+};
+
+// A render that writes each of Jinja2's items to a sink (PyTemplate::RenderSuspended)
+struct PieceOptions
+{
+    // The stack of the fiber the render may be suspended on (RenderOptions::suspension), or null
+    const jinja2::RenderSuspension* suspension = nullptr;
+    // Gets whether each item is Markup (RenderOptions::pieceIsMarkup), or null
+    bool* pieceIsMarkup = nullptr;
+    // Gets each Python object a value of the render's params and globals holds a reference to while the render
+    // runs, once for each reference, and is cleared before they go; null for none (a lazy render's tp_traverse)
+    std::vector<PyObject*>* held = nullptr;
 };
 
 // jinja2cpp.Template
@@ -149,14 +169,15 @@ public:
     PyTemplate(PyTemplate&&) = delete;
     PyTemplate& operator=(PyTemplate&&) = delete;
 
-    nb::object Render(nb::args args, nb::kwargs kwargs) const;
+    nb::object Render(const nb::args& args, const nb::kwargs& kwargs) const;
     // Template.generate: renders with the arguments of render(), calling `write` with each piece of
-    // output in order, Jinja2's items (RenderOptions::writeEachPiece); an error comes after the items
+    // output in order, Jinja2's items (RenderOptions::writeEachPiece), Markup where Jinja2's are; an error comes after the items
     // written before it
-    void RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const;
-    // The same to an engine sink that may suspend the render in its Write: a lazy generate() on a fiber
+    void RenderTo(nb::handle write, const nb::args& args, const nb::kwargs& kwargs) const;
+    // The same to an engine sink, which may suspend the render in its Write: a lazy generate() on a fiber
     // (lazy_render.cpp, docs/tasks/0457)
-    void RenderSuspended(jinja2::OutputSink& sink, nb::args args, nb::kwargs kwargs, const jinja2::RenderSuspension& suspension) const;
+    // By reference: a lazy render's traverse reports the references its object holds, and none other may be on the fiber
+    void RenderSuspended(jinja2::OutputSink& sink, const nb::args& args, const nb::kwargs& kwargs, const PieceOptions& pieces) const;
     // The environment, checked to be alive
     PyEnvironment& LiveEnvironment() const;
     // Template.make_module of the Python layer (template_module.cpp): (body, exports) for the
@@ -179,7 +200,8 @@ public:
 
 private:
     template<typename Target>
-    void RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bool eachPiece = false, const jinja2::RenderSuspension* suspension = nullptr) const;
+    // `pieces`: a render that writes each item (RenderTo, RenderSuspended); null for a render to a string
+    void RenderWith(Target& target, const nb::args& args, const nb::kwargs& kwargs, const PieceOptions* pieces = nullptr) const;
     jinja2::Template m_template;
     nb::object m_environment;
     nb::object m_globals;
@@ -188,6 +210,9 @@ private:
     nb::object m_envGlobals;
     nb::object m_name;
     nb::object m_filename;
+    // What the engine environment the template was loaded from borrows (PyEnvironment::BoundObjects): its filters
+    // and tests among them, which the template's tree borrows
+    nb::object m_bound;
 };
 
 // Registers Environment and Template

@@ -134,6 +134,14 @@ private:
     mutable LoadSettingsPtr m_loadSettings JINJA2CPP_GUARDED_BY(m_loadSettingsGuard);
     // MutableSettings was called: `settings` may have changed since m_loadSettings was made. Never reset
     bool m_settingsLent JINJA2CPP_GUARDED_BY(m_loadSettingsGuard) = false;
+
+public:
+    // The style of the gettext globals the last TemplateEnv::InstallGettextCallables fixed (docs/tasks/0509). Next to
+    // m_settingsLent, in the padding that ends the object
+    GettextStyle gettextStyle JINJA2CPP_GUARDED_BY(guard) = GettextStyle::FollowLoad;
+    // The translation installed under `name`, if any, and in `newstyle` the style the last install fixed, when it fixed
+    // one (left as it is otherwise)
+    std::optional<UserCallable> FindTranslation(const std::string& name, bool& newstyle) const;
 };
 
 struct TemplateEnvAccess

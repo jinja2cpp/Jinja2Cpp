@@ -106,6 +106,28 @@ def test_items_are_jinja2s(source, mode):
     assert items[1] == items[0]
 
 
+@pytest.mark.parametrize("autoescape", [False, True], ids=["plain", "autoescape"])
+@pytest.mark.parametrize(
+    "source",
+    [
+        "a{{ x }}b{{ 'c' }}d{{ x|safe }}",
+        "{% autoescape y %}a{{ x }}b{{ 'k' }}c{% endautoescape %}{% autoescape true %}a{{ x }}{% endautoescape %}",
+        "{% autoescape false %}a{{ x }}{% endautoescape %}",
+        "{% macro m() %}<{{ x }}{{ caller() if caller }}{% endmacro %}{{ m() }}{% call m() %}c{% endcall %}",
+        "{% filter upper %}a{{ x }}{% endfilter %}{% filter e %}<{% endfilter %}{% set s %}a{{ x }}{% endset %}{{ s }}",
+        "{% for i in [1] %}{{ i }}{% endfor %}{% for i in [1] recursive %}{{ i }}{% endfor %}",
+        "{% block b %}B{{ x }}{% endblock %}{{ self.b() }}{% include 'inc' %}{% if 1 %}t{% endif %}{{ y }}",
+    ],
+)
+def test_items_are_markup_where_jinja2s_are(source, autoescape, mode):
+    # docs/tasks/0493: under autoescape Jinja2 yields escape(value), Markup, for a value it evaluates at run time
+    items = []
+    for module in (jinja2, jinja2cpp):
+        env = module.Environment(autoescape=autoescape, loader=module.DictLoader({"inc": "I{{ x }}J"}))
+        items.append([(type(item).__name__, str(item)) for item in env.from_string(source).generate(x="<", y=True)])
+    assert items[1] == items[0]
+
+
 # What the template does and what the consumer gets, in order: the same as Jinja2's for each template
 ON_DEMAND = [
     "a{{ f(1) }}b{{ f(2) }}",
@@ -225,6 +247,58 @@ def test_an_abandoned_generator_lets_go_of_its_params():
     gc.collect()
     assert collected == [True]
     assert ref() is None
+
+
+@lazy_only
+@pytest.mark.parametrize("how", ["keyword", "positional", "global", "closure"])
+def test_a_cycle_through_a_suspended_generator_is_collected(how):
+    # docs/tasks/0462: the generator is stored in a value its own render holds
+    class Holder:
+        x = 1
+
+    holder = Holder()
+    collected = []
+    ref = weakref.ref(holder, lambda _: collected.append(True))
+    source = "{{ h.x }}{% for i in range(3) %}{{ i }}{% endfor %}"
+    if how == "global":
+        env = jinja2cpp.Environment()
+        env.globals["h"] = holder
+        generator = env.from_string(source).generate()
+    elif how == "closure":
+        generator = jinja2cpp.Template(source).generate(h=holder, f=lambda: generator)
+    elif how == "positional":
+        generator = jinja2cpp.Template(source).generate({"h": holder})
+    else:
+        generator = jinja2cpp.Template(source).generate(h=holder)
+    holder.generator = generator
+    assert next(generator) == "1"
+    assert next(generator) == "0"
+    del holder, generator
+    if how == "global":
+        del env
+    gc.collect()
+    assert collected == [True]
+    assert ref() is None
+
+
+@lazy_only
+def test_a_cycle_collected_on_another_thread_does_not_resume_there():
+    class Holder:
+        x = 1
+
+    def make():
+        holder = Holder()
+        holder.generator = jinja2cpp.Template("{{ h.x }}{{ h.x }}").generate(h=holder)
+        assert next(holder.generator) == "1"
+        return weakref.ref(holder)
+
+    ref = make()
+    thread = threading.Thread(target=gc.collect)
+    thread.start()
+    thread.join()
+    gc.collect()
+    # Freed without running on the other thread: what its frames held stays (docs/python.md)
+    assert ref() is None or ref().x == 1
 
 
 @lazy_only

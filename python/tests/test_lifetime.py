@@ -120,6 +120,63 @@ def test_objects_kept_by_a_python_callable_outlive_the_render():
     assert kept[0] == ({"x": 1}, [1], [1, 2], {"a": "b"})
 
 
+def test_replaced_filters_go_while_templates_loaded_before_keep_theirs():
+    # docs/tasks/0406: a template keeps the callables it was compiled with; the environment lets go of a replaced one
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"inc": "[{{ 1|f }}]"}))
+    env.filters["f"] = lambda v: "first"
+    env.tests["t"] = lambda v: True
+    first = env.from_string("{{ 1|f }}{% include 'inc' %}{{ 1 is t }}")
+    assert first.render() == "first[first]True"
+    replaced = []
+    for i in range(10000):
+        f = (lambda n: lambda v: str(n))(i)
+        replaced.append(weakref.ref(f))
+        env.filters["f"] = f
+        if i % 2:
+            env.tests["t"] = lambda v: False
+        assert env.from_string("{{ 1|f }}").render() == str(i)
+    del f
+    gc.collect()
+    # The current filter, and no other: the templates of the loop went
+    assert sum(ref() is not None for ref in replaced) == 1
+    assert first.render() == "first[first]True"
+    assert env.from_string("{% include 'inc' %}{{ 1 is t }}").render() == "[9999]False"
+
+
+def test_reinstalled_translations_go():
+    import gettext as gettext_module
+
+    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
+    tpl = env.from_string("{{ _('a') }}")
+    replaced = []
+    for _ in range(2000):
+        translations = gettext_module.NullTranslations()
+        replaced.append(weakref.ref(translations))
+        env.install_gettext_translations(translations, newstyle=True)
+        assert tpl.render() == "a"
+    del translations
+    gc.collect()
+    assert sum(ref() is not None for ref in replaced) == 1
+
+
+def test_translations_reinstalled_by_their_own_call():
+    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
+
+    def make(depth):
+        def gettext(message):
+            if depth < 50:
+                # Drops this callable from the environment while it runs
+                env.install_gettext_callables(make(depth + 1), lambda s, p, n: s, newstyle=True)
+            gc.collect()
+            return f"{message}{depth}"
+
+        return gettext
+
+    env.install_gettext_callables(make(0), lambda s, p, n: s, newstyle=True)
+    tpl = env.from_string("{{ _('a') }}")
+    assert [tpl.render() for _ in range(3)] == ["a0", "a1", "a2"]
+
+
 def test_keyboard_interrupt_stops_a_long_render():
     if threading.current_thread() is not threading.main_thread():
         pytest.skip("signals reach the main thread only")

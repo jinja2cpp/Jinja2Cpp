@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0415]
@@ -30,3 +30,15 @@ A public-API option needs a recorded decision; the module-only route does not.
 
 **Done when.** `python/tests/test_i18n.py` has a row that loads under oldstyle, installs newstyle,
 renders `gettext('%(a)s', a=1)` and matches Jinja2, and the docs/python.md line is removed.
+
+
+**Resolution (batch 9 D).** The public-API route, additive: `TemplateEnv::InstallGettextCallables(GettextStyle,
+...)` (docs/api-2.0.md). The module installs with the style of each `install_gettext_*` call, so the globals of
+every template take it, as Jinja2's do; `{% trans %}` blocks keep their load style. The C++ overload without a
+style keeps 0415's behaviour. Rows: `test_the_gettext_calls_take_the_style_of_the_last_install` (both orders,
+calls and blocks) and `test_a_newstyle_install_formats_the_calls_of_a_template_loaded_under_oldstyle`;
+`I18nOldstyleTest.InstallFixesTheStyleOfTheGlobals`. The docs/python.md line is gone. The C++ case of the 0415
+verifier (a cached include keeps its oldstyle `{% trans %}` tree under newstyle globals) fails as Jinja2 does
+with the same mix (`KeyError`, `incomplete format`), so it is not a divergence. A missing key is still
+`TemplateRuntimeError` where Jinja2 raises `KeyError`: task 0511. Not done here: a fuzz settings byte for
+`i18nNewstyle` (fuzz/ is outside this group's files; worth adding with the next fuzz task).

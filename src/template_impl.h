@@ -574,6 +574,8 @@ public:
         std::vector<GenerationSpan>* generationSpans = nullptr;
         // A sink's Write for each piece of output (RenderOptions::writeEachPiece)
         bool writeEachPiece = false;
+        // Where a render that writes each piece says whether the piece is Markup (RenderOptions::pieceIsMarkup), or null
+        bool* pieceIsMarkup = nullptr;
         // The stack of a render whose sink may suspend it (RenderOptions::suspension), or null
         const RenderSuspension* suspension = nullptr;
     };
@@ -807,7 +809,7 @@ public:
             {
                 if (hooks->writeEachPiece)
                 {
-                    heldPiece = outStream.WriteEachPiece();
+                    heldPiece = outStream.WriteEachPiece(hooks->pieceIsMarkup);
                     eachPieceScope.emplace();
                 }
                 if (hooks->generationSpans)

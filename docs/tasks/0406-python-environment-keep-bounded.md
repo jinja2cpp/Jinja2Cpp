@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0353]
@@ -23,3 +23,15 @@ filter 10k times while old templates still render.
 
 **Acceptance.** Memory stays flat in the stress case; templates loaded before a replacement
 still render with their old callables; ASan clean.
+
+
+**Resolution (batch 9 D).** Each engine environment of a `PyEnvironment` has a Python list of what it borrows
+(`BoundObjects`: translations, loader, finalize, autoescape callable, chat clock, filters, tests), and every
+template loaded from it holds that list (traversed: a list is a GC container, so references are counted once).
+A load that finds a bound filter or test replaced or removed starts a new engine environment and list, so a
+replaced callable goes with the last template that binds it. The translations, read from the environment at
+each call, are item 0 of the current list and replaced in place by a new install; a borrowed callable holds
+itself while it runs. Pinned by `test_replaced_filters_go_while_templates_loaded_before_keep_theirs` (10k
+replacements, old templates and includes still render their filter) and `test_reinstalled_translations_go`,
+`test_translations_reinstalled_by_their_own_call`. Side effect: a `get_template` after a filter is replaced reads
+the loader again and gives a new Template (Jinja2 gives the cached one, which looks the new filter up at render).

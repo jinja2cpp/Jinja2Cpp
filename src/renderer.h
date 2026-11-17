@@ -64,6 +64,8 @@ enum class PieceKind : unsigned char
     Folded
 };
 PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values);
+// Marks the output piece `node` just wrote as Markup where Jinja2's generate() yields it so (docs/tasks/0493)
+void MarkOutputPiece(NodeRef<IRendererBase> node, OutStream& os, RenderContext& values);
 
 class ComposedRenderer final : public IRendererBase
 {
@@ -142,6 +144,10 @@ private:
                         }
                         else
                         {
+                            if (piece == PieceKind::Output)
+                            {
+                                MarkOutputPiece(*child, os, values);
+                            }
                             os.FlushPiece();
                         }
                     }
@@ -477,6 +483,21 @@ inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
         return nodes[nodes.As<StaticOutputRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
     default:
         return PieceKind::Statement;
+    }
+}
+
+inline void MarkOutputPiece(NodeRef<IRendererBase> node, OutStream& os, RenderContext& values)
+{
+    switch (values.Nodes()[node].GetKind())
+    {
+    case NodeKind::FilterStmt:
+    case NodeKind::MacroCallStmt:
+        // Jinja2 yields the filter's or the call's result as it is: the statement marks it
+        return;
+    default:
+        // escape(value) under autoescape, str(value) without; in volatile code text too, by the runtime setting
+        os.MarkPiece(values.IsOutputAutoescape());
+        return;
     }
 }
 } // namespace v2

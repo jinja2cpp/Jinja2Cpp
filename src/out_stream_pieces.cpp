@@ -30,8 +30,9 @@ class OutStream::HeldPiece final
     , public OutputSinkW
 {
 public:
-    explicit HeldPiece(void* sink)
+    explicit HeldPiece(void* sink, bool* markupOut = nullptr)
         : m_sink(sink)
+        , m_markupOut(markupOut)
     {
     }
     HeldPiece(const HeldPiece&) = delete;
@@ -53,6 +54,16 @@ public:
         return std::exchange(m_bytes, std::string());
     }
     [[nodiscard]] bool Empty() const { return m_bytes.empty(); }
+    void Mark(bool markup) noexcept { m_markup = markup; }
+    // Tells the host whether the piece it gets next is Markup, and forgets the mark for the piece after it
+    void PublishMark() noexcept
+    {
+        if (m_markupOut)
+        {
+            *m_markupOut = m_markup;
+        }
+        m_markup = false;
+    }
     [[nodiscard]] size_t Size() const noexcept { return m_bytes.size(); }
     // Drops the bytes past `bytes` (at most the size) and gives back what they were charged
     void Truncate(size_t bytes) noexcept
@@ -97,8 +108,10 @@ private:
     }
 
     void* m_sink;
+    bool* m_markupOut;
     std::string m_bytes;
     std::uint64_t m_charged = 0;
+    bool m_markup = false;
 };
 
 void OutStream::HeldPieceDelete::operator()(HeldPiece* held) const noexcept
@@ -106,7 +119,7 @@ void OutStream::HeldPieceDelete::operator()(HeldPiece* held) const noexcept
     delete held;
 }
 
-OutStream::HeldPieceOwner OutStream::WriteEachPiece()
+OutStream::HeldPieceOwner OutStream::WriteEachPiece(bool* markupOut)
 {
     m_eachPiece = true;
     // Only a sink gets pieces: a string target takes the output as it comes
@@ -114,10 +127,18 @@ OutStream::HeldPieceOwner OutStream::WriteEachPiece()
     {
         return {};
     }
-    HeldPieceOwner held(new HeldPiece(m_sink));
+    HeldPieceOwner held(new HeldPiece(m_sink, markupOut));
     m_held = held.get();
     m_sink = m_charSize == 1 ? static_cast<void*>(static_cast<OutputSink*>(m_held)) : static_cast<void*>(static_cast<OutputSinkW*>(m_held));
     return held;
+}
+
+void OutStream::MarkPiece(bool markup) noexcept
+{
+    if (m_held && m_eachPiece)
+    {
+        m_held->Mark(markup);
+    }
 }
 
 void OutStream::FlushStatement()
@@ -160,8 +181,10 @@ void OutStream::EndPiece(bool writeEmpty)
 {
     if (m_held->Empty() && !writeEmpty)
     {
+        m_held->Mark(false);
         return;
     }
+    m_held->PublishMark();
     const std::string piece = m_held->Take();
     HeldPiece::WriteBytes(m_held->Sink(), m_charSize, piece);
 }

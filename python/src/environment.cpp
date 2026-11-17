@@ -16,8 +16,8 @@
 #include <jinja2cpp/chat_template.h>
 #endif
 
+#include <algorithm>
 #include <chrono>
-
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -95,14 +95,64 @@ std::vector<std::pair<std::string, PyObject*>> Entries(nb::handle mapping, const
     return entries;
 }
 
+// The object a value holds a strong reference to when it is a Python object read by the engine (PyHost)
+PyObject* HeldObject(const jinja2::Value& value)
+{
+    const auto* map = value.GetIf<jinja2::GenericMap>();
+    const auto* host = map && map->GetAccessor() ? dynamic_cast<const PyHost*>(map->GetAccessor()->AsHostObject()) : nullptr;
+    return host ? host->Object() : nullptr;
+}
+
+// slot = ToEngine(value), keeping `held`, when it is not null, the list of the objects the values of the render
+// hold (PyTemplate::RenderWith): what the slot held before goes from it
+void AssignHeld(jinja2::Value& slot, nb::handle value, std::vector<PyObject*>* held)
+{
+    if (!held)
+    {
+        slot = ToEngine(value);
+        return;
+    }
+    if (auto* before = HeldObject(slot))
+    {
+        held->erase(std::find(held->begin(), held->end(), before));
+    }
+    slot = ToEngine(value);
+    if (auto* object = HeldObject(slot))
+    {
+        held->push_back(object);
+    }
+}
+
+// Clears the list of what a render's values hold (PieceOptions::held) when the render's params and globals start to go
+struct HeldForget
+{
+    explicit HeldForget(std::vector<PyObject*>* list) noexcept
+        : held(list)
+    {
+    }
+    HeldForget(const HeldForget&) = delete;
+    HeldForget& operator=(const HeldForget&) = delete;
+    HeldForget(HeldForget&&) = delete;
+    HeldForget& operator=(HeldForget&&) = delete;
+    ~HeldForget()
+    {
+        if (held)
+        {
+            held->clear();
+        }
+    }
+
+    std::vector<PyObject*>* held;
+};
+
 // The params of a render: the str keys of a mapping as values of the engine
-void AddParams(jinja2::ValuesMap& params, nb::handle mapping)
+void AddParams(jinja2::ValuesMap& params, nb::handle mapping, std::vector<PyObject*>* held)
 {
     for (auto [name, value] : nb::borrow<nb::dict>(mapping))
     {
         if (PyUnicode_Check(name.ptr()))
         {
-            params[std::string(Utf8View(name))] = ToEngine(value);
+            AssignHeld(params[std::string(Utf8View(name))], value, held);
         }
     }
 }
@@ -110,7 +160,7 @@ void AddParams(jinja2::ValuesMap& params, nb::handle mapping)
 // The globals of a render. A sandbox replaces the global `range` (jinja2cpp.sandbox.safe_range, marked
 // `_native_range`) by the engine's own, which stops at the environment's Limits::maxRange without a call
 // to Python
-void AddGlobals(jinja2::ValuesMap& params, nb::handle mapping, bool sandboxed)
+void AddGlobals(jinja2::ValuesMap& params, nb::handle mapping, bool sandboxed, std::vector<PyObject*>* held = nullptr)
 {
     for (auto [name, value] : nb::borrow<nb::dict>(mapping))
     {
@@ -122,7 +172,7 @@ void AddGlobals(jinja2::ValuesMap& params, nb::handle mapping, bool sandboxed)
         {
             continue;
         }
-        params[std::string(Utf8View(name))] = ToEngine(value);
+        AssignHeld(params[std::string(Utf8View(name))], value, held);
     }
 }
 
@@ -181,6 +231,11 @@ PyEnvironment::PyEnvironment(nb::kwargs kwargs)
     , m_extensions(nb::list())
     , m_options(nb::dict())
 {
+    for (size_t i = 0; i < 4; ++i)
+    {
+        m_gettext[i] = nb::none();
+        m_gettextGlobals[i] = nb::none();
+    }
     // Counts the steps of every render, so that Ctrl-C is polled (PollSignals): UINT64_MAX
     // steps is no limit, but a limit is set
     m_settings.limits.maxRenderSteps = UINT64_MAX;
@@ -197,14 +252,10 @@ PyEnvironment::~PyEnvironment() = default;
 
 void PyEnvironment::Keep(nb::handle object)
 {
-    for (const auto& kept : m_kept)
+    if (PyList_Append(m_bound.ptr(), object.ptr()) != 0)
     {
-        if (kept.ptr() == object.ptr())
-        {
-            return;
-        }
+        throw nb::python_error();
     }
-    m_kept.push_back(nb::borrow(object));
 }
 
 void PyEnvironment::SetOption(const std::string& name, nb::handle value)
@@ -285,7 +336,7 @@ void PyEnvironment::SetOption(const std::string& name, nb::handle value)
         }
         else
         {
-            Keep(value);
+            // Kept by m_finalize, and by the list of each engine environment made with it (Rebuild)
             settings.finalize = BorrowedCallable(value);
         }
     }
@@ -432,7 +483,7 @@ void PyEnvironment::SetAutoescape(nb::handle value)
     m_autoescape = nb::borrow(value);
     if (PyCallable_Check(value.ptr()))
     {
-        Keep(value);
+        // Kept by m_autoescape, and by the list of each engine environment made with it (Rebuild)
         PyObject* selector = value.ptr();
         // Jinja2 passes the template's name, None for a template from a string
         m_settings.autoescapeSelector = [selector](const std::string& templateName) {
@@ -499,11 +550,7 @@ void PyEnvironment::SetExtensions(nb::handle value)
 void PyEnvironment::SetLoader(nb::handle loader)
 {
     m_loader = nb::borrow(loader);
-    // Templates loaded with an earlier loader keep reading it
-    if (!loader.is_none())
-    {
-        Keep(loader);
-    }
+    // Templates loaded with an earlier loader keep reading it: the lists of the engine environments it was in keep it
     // A template loaded before may keep the old handler, where the environment's traverse no longer
     // reaches: what it keeps of a miss goes now (Loader::ForgetMissed)
     if (m_loaderHandler)
@@ -516,6 +563,21 @@ void PyEnvironment::SetLoader(nb::handle loader)
 void PyEnvironment::Rebuild()
 {
     m_env = std::make_unique<jinja2::TemplateEnv>();
+    // What it borrows: the translations first (ApplyGettext), then the callables of the settings and the loader, and the
+    // filters and tests as Prepared binds them. The templates loaded from the engine environment before keep its list
+    m_bound = nb::list();
+    Keep(nb::none());
+    for (const auto* object : { &m_loader, &m_finalize })
+    {
+        if (!object->is_none())
+        {
+            Keep(*object);
+        }
+    }
+    if (PyCallable_Check(m_autoescape.ptr()) != 0)
+    {
+        Keep(m_autoescape);
+    }
     auto settings = m_settings;
     bool immutable = false;
     bool sandboxed = false;
@@ -563,10 +625,11 @@ void PyEnvironment::ApplyChatTemplates()
 {
 #if JINJA2CPP_HAS_CHAT_TEMPLATES
     jinja2::ChatTemplateOptions options;
-    if (m_chatClock)
+    if (!m_chatClock.is_none())
     {
+        Keep(m_chatClock);
         // Called on the rendering thread, which holds the GIL (the render does)
-        options.now = [clock = m_chatClock] {
+        options.now = [clock = m_chatClock.ptr()] {
             const double seconds = nb::cast<double>(nb::handle(clock)());
             return std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::duration<double>(seconds)));
         };
@@ -583,11 +646,7 @@ void PyEnvironment::SetChatTemplates(nb::handle clock)
 {
     CheckAlive();
 #if JINJA2CPP_HAS_CHAT_TEMPLATES
-    if (!clock.is_none())
-    {
-        Keep(clock);
-    }
-    m_chatClock = clock.is_none() ? nullptr : clock.ptr();
+    m_chatClock = nb::borrow(clock);
     m_chatTemplates = true;
     // Templates loaded before keep their environment; the next load rebuilds it with the preset
     m_env.reset();
@@ -604,8 +663,14 @@ void PyEnvironment::ApplyGettext()
         return;
     }
     // A callable left out stays unset: the message is not translated
-    const auto callable = [](PyObject* object) { return object ? BorrowedCallable(object) : jinja2::UserCallable(); };
-    m_env->InstallGettextCallables(callable(m_gettext[0]), callable(m_gettext[1]), callable(m_gettext[2]), callable(m_gettext[3]));
+    const auto callable = [](const nb::object& object) { return object.is_none() ? jinja2::UserCallable() : BorrowedCallable(object); };
+    m_env->InstallGettextCallables(m_gettextStyle, callable(m_gettext[0]), callable(m_gettext[1]), callable(m_gettext[2]), callable(m_gettext[3]));
+    // Item 0 of the list: the engine environment no longer calls the ones it replaces. A call running now holds the
+    // callable it runs (BorrowedCallable)
+    if (PyList_SetItem(m_bound.ptr(), 0, nb::make_tuple(m_gettext[0], m_gettext[1], m_gettext[2], m_gettext[3]).release().ptr()) != 0)
+    {
+        throw nb::python_error();
+    }
 }
 
 void PyEnvironment::SetNewstyleGettext(bool newstyle)
@@ -624,23 +689,20 @@ void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::hand
     const nb::handle callables[4] = { gettext, ngettext, pgettext, npgettext };
     for (size_t i = 0; i < 4; ++i)
     {
-        if (callables[i].is_none())
-        {
-            m_gettext[i] = nullptr;
-            continue;
-        }
-        Keep(callables[i]);
-        m_gettext[i] = callables[i].ptr();
+        m_gettext[i] = nb::borrow(callables[i]);
     }
+    // The gettext globals of every template take the style of this install, as the globals Jinja2's install puts in
+    // env.globals do (docs/tasks/0509); `{% trans %}` blocks keep the style they were loaded with
+    m_gettextStyle = m_newstyleGettext ? jinja2::GettextStyle::Newstyle : jinja2::GettextStyle::Oldstyle;
     ApplyGettext();
 }
 
 nb::tuple PyEnvironment::GettextGlobals() const
 {
     nb::list result;
-    for (auto* object : m_gettextGlobals)
+    for (const auto& object : m_gettextGlobals)
     {
-        result.append(object ? nb::borrow(object) : nb::none());
+        result.append(object);
     }
     return nb::tuple(result);
 }
@@ -655,15 +717,11 @@ void PyEnvironment::SetGettextGlobals(nb::handle callables)
         {
             RaiseTypeError("_gettext_globals takes four callables or None");
         }
-        if (!callable.is_none())
-        {
-            Keep(callable);
-        }
-        m_gettextGlobals[idx++] = callable.is_none() ? nullptr : callable.ptr();
+        m_gettextGlobals[idx++] = nb::borrow(callable);
     }
     for (; idx < 4; ++idx)
     {
-        m_gettextGlobals[idx] = nullptr;
+        m_gettextGlobals[idx] = nb::none();
     }
 }
 
@@ -696,26 +754,44 @@ jinja2::TemplateEnv& PyEnvironment::Prepared()
         }
     }
     // A template binds the filters and tests when it loads, as in Jinja2
-    auto sync = [this](nb::handle dict, const char* what, std::vector<std::pair<std::string, PyObject*>>& bound, bool filters) {
-        auto entries = Entries(dict, what);
+    auto filters = Entries(m_filters, "filters");
+    auto tests = Entries(m_tests, "tests");
+    // One that was bound and is not now, replaced or removed: the templates loaded before keep it, in the list of
+    // the engine environment they were loaded from, and a new engine environment with a list of its own binds the
+    // dicts as they are, so that a replaced callable goes with the last template that binds it (docs/tasks/0406)
+    const auto dropsOne = [](const std::vector<std::pair<std::string, PyObject*>>& bound, const std::vector<std::pair<std::string, PyObject*>>& now) {
+        return std::any_of(bound.begin(), bound.end(), [&now](const auto& entry) { return std::find(now.begin(), now.end(), entry) == now.end(); });
+    };
+    if (filters == m_boundFilters && tests == m_boundTests)
+    {
+        return *m_env;
+    }
+    if (dropsOne(m_boundFilters, filters) || dropsOne(m_boundTests, tests))
+    {
+        // Rebuild may run Python, which may change the dicts: read again after it
+        Rebuild();
+        filters = Entries(m_filters, "filters");
+        tests = Entries(m_tests, "tests");
+    }
+    auto sync = [this](std::vector<std::pair<std::string, PyObject*>>& entries, std::vector<std::pair<std::string, PyObject*>>& bound, bool isFilter) {
         if (entries == bound)
         {
             return;
         }
-        for (const auto& [name, object] : bound)
-        {
-            filters ? m_env->RemoveFilter(name) : m_env->RemoveTest(name);
-        }
         for (const auto& [name, object] : entries)
         {
+            if (std::find(bound.begin(), bound.end(), std::make_pair(name, object)) != bound.end())
+            {
+                continue;
+            }
             Keep(object);
             auto callable = BorrowedCallable(object);
-            filters ? m_env->AddFilter(name, std::move(callable)) : m_env->AddTest(name, std::move(callable));
+            isFilter ? m_env->AddFilter(name, std::move(callable)) : m_env->AddTest(name, std::move(callable));
         }
         bound = std::move(entries);
     };
-    sync(m_filters, "filters", m_boundFilters, true);
-    sync(m_tests, "tests", m_boundTests, false);
+    sync(filters, m_boundFilters, true);
+    sync(tests, m_boundTests, false);
     return *m_env;
 }
 
@@ -862,9 +938,12 @@ int PyEnvironment::Traverse(visitproc visit, void* arg) const
     {
         Py_VISIT(object->ptr());
     }
-    for (const auto& object : m_kept)
+    Py_VISIT(m_bound.ptr());
+    Py_VISIT(m_chatClock.ptr());
+    for (size_t i = 0; i < 4; ++i)
     {
-        Py_VISIT(object.ptr());
+        Py_VISIT(m_gettext[i].ptr());
+        Py_VISIT(m_gettextGlobals[i].ptr());
     }
     if (m_loaderHandler)
     {
@@ -894,7 +973,13 @@ void PyEnvironment::Clear() noexcept
     m_autoescape = nb::none();
     m_extensions = nb::none();
     m_options = nb::none();
-    m_kept.clear();
+    m_bound = nb::none();
+    m_chatClock = nb::none();
+    for (size_t i = 0; i < 4; ++i)
+    {
+        m_gettext[i] = nb::none();
+        m_gettextGlobals[i] = nb::none();
+    }
 }
 
 PyTemplate::PyTemplate(nb::handle source, nb::handle environment, nb::kwargs kwargs)
@@ -907,6 +992,7 @@ PyTemplate::PyTemplate(nb::handle source, nb::handle environment, nb::kwargs kwa
     auto& env = nb::cast<PyEnvironment&>(m_environment);
     m_template = env.Load(source);
     m_envGlobals = env.Globals();
+    m_bound = env.BoundObjects();
 }
 
 PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object globals, nb::object name, nb::object filename)
@@ -916,27 +1002,40 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
     , m_envGlobals(nb::cast<PyEnvironment&>(m_environment).Globals())
     , m_name(std::move(name))
     , m_filename(std::move(filename))
+    , m_bound(nb::cast<PyEnvironment&>(m_environment).BoundObjects())
 {
 }
 
 template<typename Target>
-void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bool eachPiece, const jinja2::RenderSuspension* suspension) const
+void PyTemplate::RenderWith(Target& target, const nb::args& args, const nb::kwargs& kwargs, const PieceOptions* pieces) const
 {
     ++g_renders;
     auto& env = LiveEnvironment();
     env.CheckSandboxHooks();
     // dict(*args, **kwargs), as Jinja2's render
     jinja2::ValuesMap params;
+    jinja2::RenderOptions options;
+    std::vector<PyObject*>* held = pieces ? pieces->held : nullptr;
+    // What the values of params and globals hold is no longer theirs to report once they start to go: before them
+    const HeldForget forget(held);
     if (args.size() > 1)
     {
         RaiseTypeError("dict expected at most 1 argument, got " + std::to_string(args.size()));
     }
     if (args.size() == 1)
     {
-        nb::object first = args[0];
-        AddParams(params, PyDict_CheckExact(first.ptr()) ? first : Names().dictType(first));
+        // Borrowed from `args`: a lazy render holds no reference of its own on its fiber (PyLazyRender::Traverse)
+        const nb::handle first = PyTuple_GetItem(args.ptr(), 0);
+        if (PyDict_CheckExact(first.ptr()))
+        {
+            AddParams(params, first, held);
+        }
+        else
+        {
+            AddParams(params, Names().dictType(first), held);
+        }
     }
-    AddParams(params, kwargs);
+    AddParams(params, kwargs, held);
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
     InitRenderState(state, m_environment);
@@ -944,16 +1043,19 @@ void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bo
     state.maxSequenceSize = env.MaxSequenceSize();
     // The globals: the environment's, then the template's over them
     auto globals = env.EngineGlobals() ? std::make_shared<jinja2::ValuesMap>(*env.EngineGlobals()) : std::make_shared<jinja2::ValuesMap>();
-    AddGlobals(*globals, m_envGlobals, state.sandbox != nullptr);
+    AddGlobals(*globals, m_envGlobals, state.sandbox != nullptr, held);
     if (!m_globals.is_none())
     {
-        AddGlobals(*globals, m_globals, state.sandbox != nullptr);
+        AddGlobals(*globals, m_globals, state.sandbox != nullptr, held);
     }
-    jinja2::RenderOptions options;
     options.globals = std::move(globals);
     options.poll = RenderPoll();
-    options.writeEachPiece = eachPiece;
-    options.suspension = suspension;
+    if (pieces)
+    {
+        options.writeEachPiece = true;
+        options.suspension = pieces->suspension;
+        options.pieceIsMarkup = pieces->pieceIsMarkup;
+    }
     auto result = [&] {
         const RenderScope scope(state);
         return m_template.RenderTo(target, params, options);
@@ -973,17 +1075,17 @@ void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs, bo
     }
 }
 
-nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
+nb::object PyTemplate::Render(const nb::args& args, const nb::kwargs& kwargs) const
 {
     std::string output;
-    RenderWith(output, std::move(args), std::move(kwargs));
+    RenderWith(output, args, kwargs);
     return MakeStr(output);
 }
 
 namespace
 {
-// Each chunk of the render to a Python callable; what the callable raises ends the render and is
-// raised again as itself (the engine keeps a sink's exception)
+// Each item of the render to a Python callable, a str or, where Jinja2's is, a Markup (docs/tasks/0493); what the
+// callable raises ends the render and is raised again as itself (the engine keeps a sink's exception)
 class CallbackSink final : public jinja2::OutputSink
 {
 public:
@@ -991,22 +1093,27 @@ public:
         : m_write(write)
     {
     }
-    void Write(std::string_view text) override { m_write(MakeStr(text)); }
+    void Write(std::string_view text) override { m_write(m_markup ? Names().markupType(MakeStr(text)) : MakeStr(text)); }
+    // Set by the render before each Write (RenderOptions::pieceIsMarkup)
+    bool* Markup() noexcept { return &m_markup; }
 
 private:
     nb::handle m_write;
+    bool m_markup = false;
 };
 } // namespace
 
-void PyTemplate::RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const
+void PyTemplate::RenderTo(nb::handle write, const nb::args& args, const nb::kwargs& kwargs) const
 {
     CallbackSink sink(write);
-    RenderWith(sink, std::move(args), std::move(kwargs), true);
+    PieceOptions pieces;
+    pieces.pieceIsMarkup = sink.Markup();
+    RenderWith(sink, args, kwargs, &pieces);
 }
 
-void PyTemplate::RenderSuspended(jinja2::OutputSink& sink, nb::args args, nb::kwargs kwargs, const jinja2::RenderSuspension& suspension) const
+void PyTemplate::RenderSuspended(jinja2::OutputSink& sink, const nb::args& args, const nb::kwargs& kwargs, const PieceOptions& pieces) const
 {
-    RenderWith(sink, std::move(args), std::move(kwargs), true, &suspension);
+    RenderWith(sink, args, kwargs, &pieces);
 }
 
 int PyTemplate::Traverse(visitproc visit, void* arg) const
@@ -1016,6 +1123,7 @@ int PyTemplate::Traverse(visitproc visit, void* arg) const
     Py_VISIT(m_envGlobals.ptr());
     Py_VISIT(m_name.ptr());
     Py_VISIT(m_filename.ptr());
+    Py_VISIT(m_bound.ptr());
     return 0;
 }
 
@@ -1026,6 +1134,7 @@ void PyTemplate::Clear() noexcept
     m_envGlobals = nb::none();
     m_name = nb::none();
     m_filename = nb::none();
+    m_bound = nb::none();
 }
 
 void BindEnvironment(nb::module_& module)

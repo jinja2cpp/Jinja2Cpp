@@ -141,6 +141,15 @@ struct RenderOptions
      */
     bool writeEachPiece = false;
     /*!
+     * With \ref writeEachPiece, receives before each `Write` whether Jinja2's `generate()` yields that
+     * piece as `Markup` rather than `str` (docs/tasks/0493): the value of a `{{ }}` it evaluates at run time
+     * under autoescape, text in code whose autoescape is not constant (`{% autoescape x %}`) while
+     * autoescape is on, the output of a `{% call %}` block or a recursive loop while autoescape is on, and
+     * a `{% filter %}` block whose result is Markup. Text and constants Jinja2 folds are `str`. The text
+     * is the same either way. Null, the default, records nothing; the pointee must live through the call.
+     */
+    bool* pieceIsMarkup = nullptr;
+    /*!
      * Makes a render to a sink (\ref BasicOutputSink) suspendable: its sink's `Write` may switch the
      * thread to other code and back before it returns, as a fiber does (docs/tasks/0457). Null, the
      * default, costs nothing. A render to a string ignores it.

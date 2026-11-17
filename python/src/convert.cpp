@@ -37,12 +37,17 @@ namespace
 thread_local RenderState* t_render = nullptr;
 thread_local LeaseScope* t_lease = nullptr;
 
-// The function of a callable the module made for a Python object (BorrowedCallable): it borrows the object
+// The function of a callable the module made for a Python object (BorrowedCallable): it borrows the object, and
+// holds it while it runs, since the call may replace what keeps it (a new install of the translations, docs/tasks/0406)
 struct PyCallable
 {
     PyObject* object;
 
-    Value operator()(const jinja2::UserCallableParams& params) const { return CallPython(object, params); }
+    Value operator()(const jinja2::UserCallableParams& params) const
+    {
+        const nb::object held = nb::borrow(object);
+        return CallPython(held.ptr(), params);
+    }
 };
 
 // Calls Py_EnterRecursiveCall for a nested conversion: a template can nest lists without nested syntax
