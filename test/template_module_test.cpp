@@ -733,8 +733,9 @@ TEST_F(TemplateModuleChangingSourceTest, StoredSelfRunsItsOldBlocks)
 }
 
 // Trees that take a slot go too once no `self`, `super` or module holds a handle of one (docs/tasks/0503): the
-// module's own blocks keep the slots, a stored `super` or `self` keeps them while it lives, and a parent that
-// changes under a child that extends it is the new one each call (3.1.6 make_module() results)
+// module's own blocks keep the slots, a stored `super` or `self` keeps them while it lives (and, until 0529, for
+// the module's life), and a parent that changes under a child that extends it is the new one each call (3.1.6
+// make_module() results)
 TEST_F(TemplateModuleChangingSourceTest, ModuleWithBlocksIncludesChangingBlocks)
 {
     const auto results = CallWithLibs("{% block t %}T{% endblock %}{% macro m() %}{{ self.t() }}{% include 'lib' %}{% endmacro %}",
@@ -742,7 +743,28 @@ TEST_F(TemplateModuleChangingSourceTest, ModuleWithBlocksIncludesChangingBlocks)
     EXPECT_EQ((std::vector<std::string>{ "TL1", "TL2", "TL3" }), results);
 }
 
-TEST_F(TemplateModuleChangingSourceTest, StoredSuperRunsItsOldParentUntilLetGo)
+// The module's handles: a block inline in its macro, and one a plain import's module holds, keep the slots
+TEST_F(TemplateModuleChangingSourceTest, BlockInAModuleMacroKeepsTheSlots)
+{
+    const auto results = CallWithLibs("{% macro m() %}{% block t %}T{% endblock %}{% include 'lib' %}{% endmacro %}", { "L1", "L2", "L3" });
+    EXPECT_EQ((std::vector<std::string>{ "TL1", "TL2", "TL3" }), results);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, BlockOfASharedModuleKeepsTheSlots)
+{
+    AddFile("lib", "{% macro x() %}{% block b %}B1{% endblock %}{% endmacro %}");
+    AddFile("child", "C0");
+    auto module = Make("{% macro m() %}{% import 'lib' as l %}{{ l.x() }}{% include 'child' %}{% endmacro %}");
+    std::vector<std::string> results;
+    for (const char* child : { "C0", "C1", "C2", "C3" })
+    {
+        AddFile("child", child);
+        results.push_back(Call(module.exports["m"]).AsString());
+    }
+    EXPECT_EQ((std::vector<std::string>{ "B1C0", "B1C1", "B1C2", "B1C3" }), results);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, StoredSuperRunsItsOldParent)
 {
     AddFile("base", "<{% block b %}B{% endblock %}>");
     const auto results = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
@@ -784,7 +806,7 @@ TEST_F(TemplateModuleChangingSourceTest, StoredSuperWithNoParentNamesItsBlock)
     }
 }
 
-TEST_F(TemplateModuleChangingSourceTest, StoredSelfLetGoOfFreesItsSlots)
+TEST_F(TemplateModuleChangingSourceTest, StoredSelfLetGoOfStopsRendering)
 {
     const auto results = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
                                       { "{% block b %}OLD{% endblock %}{% set ns.s = self %}", "{% block b %}NEW{% endblock %}{% set ns.s = none %}",

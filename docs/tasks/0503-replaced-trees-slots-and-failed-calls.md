@@ -36,7 +36,11 @@ and they stay flat.
     module nor a module its calls keep holds a handle, `PruneReplaced` clears the slots
     (`TemplateSlots::Clear`, a new generation on the next `Add`) and frees slot-holding trees like
     the others. Otherwise they stay, as before.
-  - Remaining limit: a module whose own template has blocks or extends never clears its slots.
+  - Remaining limits: a module whose own template has blocks or extends never clears its slots.
+    A stored `self` or `super()` that is let go of stays counted, so the module keeps its slot
+    trees from then on (0529).
+  - Cost: a no-parent `super()` asks `TreeOwner` inside module calls, which scans the loaded
+    names. It is free elsewhere.
   - The no-parent `super()` views its block name in the tree, and it keeps the tree's owner
     (`SetKeepAlive(TreeOwner())`, null outside a module).
 - (b) A failed call prunes after its error is made and the exception is gone
@@ -48,5 +52,5 @@ and they stay flat.
   - `ModuleCallTest.EveryUseChangingSourceStaysFlat` gets rows for an extends child, an included
     or imported template with blocks, and failing calls.
   - `TemplateModuleChangingSourceTest` gets rows (checked against Jinja2 3.1.6) for a module with
-    its own blocks, a stored `super` until it is let go of, a child of a changing parent, a stored
-    `self` that is let go of, and a stored no-parent `super`.
+    its own blocks, a block inline in a module macro, a shared module's block, a stored `super`, a
+    child of a changing parent, a stored `self` that is let go of, and a stored no-parent `super`.
