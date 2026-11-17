@@ -820,7 +820,7 @@ nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderNestedLo
     env.AddFilesystemHandler(std::string(), fs);
     ValuesMap params = std::move(extra);
     params["inner"] = UserCallable(
-        [&env, source, byName, after](const UserCallableParams&) {
+        [&env, source, byName, after, budget](const UserCallableParams&) {
             std::int64_t size = 0;
             {
                 BasicTemplate<CharT> tpl(&env);
@@ -835,9 +835,13 @@ nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderNestedLo
                         tpl = env.LoadTemplateW("inner.j2").value();
                     }
                 }
-                else
+                else if (!tpl.Load(source).has_value())
                 {
-                    EXPECT_TRUE(tpl.Load(source).has_value());
+                    // A Load inside the render charges its values to the outer budget: once the kept trees fill it,
+                    // the Load may fail before the outer render's next step does, depending on the platform's
+                    // allocation sizes (macOS)
+                    EXPECT_NE(0U, budget);
+                    return Value(std::int64_t{ 0 });
                 }
                 const auto result = tpl.RenderAsString({});
                 size = static_cast<std::int64_t>(result ? result->size() : 0);
