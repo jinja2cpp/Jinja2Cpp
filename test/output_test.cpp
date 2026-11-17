@@ -370,6 +370,84 @@ TEST(OutputTest, SinkGetsThePiecesJinja2Folds)
     EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "A", "<", "P1Q", ">", "Z" }));
 }
 
+// Records each piece with whether the render said it is Markup (RenderOptions::pieceIsMarkup)
+template<typename CharT>
+class MarkupRecordingSink final : public BasicOutputSink<CharT>
+{
+public:
+    void Write(std::basic_string_view<CharT> text) override
+    {
+        pieces.emplace_back(std::basic_string<CharT>(text), markup);
+        // Set again before the next Write
+        markup = !markup;
+    }
+
+    bool markup = false;
+    std::vector<std::pair<std::basic_string<CharT>, bool>> pieces;
+};
+
+TEST(OutputTest, SinkLearnsWhichPiecesAreMarkup)
+{
+    // docs/tasks/0493, Jinja2 3.1.6's generate(): a value it evaluates at run time is escape(value), Markup, under
+    // autoescape; folded text and constants are str; a call block, a recursive loop and a filter block yield their
+    // result as it is
+    struct Row
+    {
+        std::string source;
+        bool autoescape;
+        std::vector<std::pair<std::string, bool>> expected;
+    };
+    const std::vector<Row> rows = {
+        { "a{{ x }}b", true, { { "a", false }, { "&lt;", true }, { "b", false } } },
+        { "a{{ x }}b", false, { { "a", false }, { "<", false }, { "b", false } } },
+        { "a{{ 'c' }}b", true, { { "acb", false } } },
+        { "{% autoescape v %}a{{ x }}b{% endautoescape %}", true, { { "a", true }, { "&lt;", true }, { "b", true } } },
+        { "{% autoescape v %}a{{ x }}b{% endautoescape %}", false, { { "a", true }, { "&lt;", true }, { "b", true } } },
+        { "{% autoescape v %}a{{ 'k' }}b{% endautoescape %}", true, { { "a", true }, { "k", false }, { "b", true } } },
+        { "{% autoescape true %}a{{ x }}b{% endautoescape %}", false, { { "a", false }, { "&lt;", true }, { "b", false } } },
+        { "{% autoescape false %}a{{ x }}b{% endautoescape %}", true, { { "a", false }, { "<", false }, { "b", false } } },
+        { "{% macro m() %}<{{ x }}{% endmacro %}{{ m() }}", true, { { "<&lt;", true } } },
+        { "{% filter upper %}a{{ x }}{% endfilter %}", true, { { "A&LT;", true } } },
+        { "{% filter upper %}a{% endfilter %}", false, { { "A", false } } },
+        { "{% filter e %}<{% endfilter %}", false, { { "&lt;", true } } },
+        { "{% set s %}a{{ x }}{% endset %}{{ s }}", true, { { "a&lt;", true } } },
+        { "{% for i in [1] %}{{ i }}{% endfor %}", true, { { "1", true } } },
+        { "{{ x|safe }}", true, { { "<", true } } },
+        { "{{ x|safe }}", false, { { "<", false } } },
+        { "{% macro m() %}a{{ caller() }}{% endmacro %}{% call m() %}{% endcall %}", true, { { "a", true } } },
+        { "{% macro m() %}a{{ caller() }}{% endmacro %}{% call m() %}{% endcall %}", false, { { "a", false } } },
+        { "{% macro m() %}a{{ caller() }}{% endmacro %}{% autoescape true %}{% call m() %}{% endcall %}{% endautoescape %}", false, { { "a", true } } },
+        { "{% for i in [1] recursive %}{{ i }}{% endfor %}", true, { { "1", true } } },
+        { "{% for i in [1] recursive %}{{ i }}{% endfor %}", false, { { "1", false } } },
+        { "{% if true %}a{% endif %}{{ y }}", true, { { "a", false }, { "", true } } },
+    };
+    const ValuesMap params = { { "x", "<" }, { "v", true } };
+    for (const auto& row : rows)
+    {
+        TemplateEnv env;
+        env.GetSettings().autoescape = row.autoescape;
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(row.source)) << row.source;
+        MarkupRecordingSink<char> sink;
+        RenderOptions options;
+        options.writeEachPiece = true;
+        options.pieceIsMarkup = &sink.markup;
+        ASSERT_TRUE(tpl.RenderTo(sink, params, options)) << row.source;
+        EXPECT_EQ(sink.pieces, row.expected) << row.source << " autoescape " << row.autoescape;
+
+        TemplateW wide(&env);
+        ASSERT_TRUE(wide.Load(std::wstring(row.source.begin(), row.source.end()))) << row.source;
+        MarkupRecordingSink<wchar_t> wideSink;
+        options.pieceIsMarkup = &wideSink.markup;
+        ASSERT_TRUE(wide.RenderTo(wideSink, params, options)) << row.source;
+        ASSERT_EQ(wideSink.pieces.size(), row.expected.size()) << row.source;
+        for (std::size_t idx = 0; idx != row.expected.size(); ++idx)
+        {
+            EXPECT_EQ(wideSink.pieces[idx].second, row.expected[idx].second) << row.source << " " << idx;
+        }
+    }
+}
+
 TEST(OutputTest, EachPieceRenderKeepsItsPiecesAroundOthersOnTheThread)
 {
     // The piece flush rides the stack check's slow path (EachPieceScope): a render with limits, and a render a

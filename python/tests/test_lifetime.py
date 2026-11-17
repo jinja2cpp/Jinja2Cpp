@@ -120,6 +120,105 @@ def test_objects_kept_by_a_python_callable_outlive_the_render():
     assert kept[0] == ({"x": 1}, [1], [1, 2], {"a": "b"})
 
 
+def test_replaced_filters_go_while_templates_loaded_before_keep_theirs():
+    # docs/tasks/0406: a template keeps the callables it was compiled with; the environment lets go of a replaced one
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"inc": "[{{ 1|f }}]"}))
+    env.filters["f"] = lambda v: "first"
+    env.tests["t"] = lambda v: True
+    first = env.from_string("{{ 1|f }}{% include 'inc' %}{{ 1 is t }}")
+    assert first.render() == "first[first]True"
+    replaced = []
+    for i in range(10000):
+        f = (lambda n: lambda v: str(n))(i)
+        replaced.append(weakref.ref(f))
+        env.filters["f"] = f
+        if i % 2:
+            env.tests["t"] = lambda v: False
+        assert env.from_string("{{ 1|f }}").render() == str(i)
+    del f
+    gc.collect()
+    # The current filter, and no other: the templates of the loop went
+    assert sum(ref() is not None for ref in replaced) == 1
+    assert first.render() == "first[first]True"
+    assert env.from_string("{% include 'inc' %}{{ 1 is t }}").render() == "[9999]False"
+
+
+@pytest.mark.parametrize("how", ["make_module", "module"])
+def test_a_macro_keeps_the_callables_of_its_template(how):
+    # docs/tasks/0406: a macro of a module outlives its template; the filter and finalize it was compiled with
+    # stay alive after the environment replaced them
+    env = jinja2cpp.Environment(finalize=lambda v: "<" + str(v) + ">")
+    filter_ = lambda v: "first"
+    finalize = env.finalize
+    env.filters["f"] = filter_
+    tpl = env.from_string("{% macro m() %}{{ 1|f }}{{ 2 }}{% endmacro %}")
+    macro = (tpl.make_module({}) if how == "make_module" else tpl.module).m
+    refs = [weakref.ref(filter_), weakref.ref(finalize)]
+    del tpl, filter_, finalize
+    env.filters["f"] = lambda v: "second"
+    env.finalize = None
+    assert env.from_string("{{ 1|f }}").render() == "second"
+    gc.collect()
+    assert all(ref() is not None for ref in refs)
+    assert str(macro()) == "<first><2>"
+    del macro
+    gc.collect()
+    assert all(ref() is None for ref in refs)
+
+
+@pytest.mark.parametrize("newstyle", [False, True])
+def test_an_install_reaches_templates_loaded_before_a_filter_was_replaced(newstyle):
+    # docs/tasks/0406, 0509: a replaced filter starts a new engine environment; a later install reaches the templates
+    # of the one before too, as Jinja2's install changes env.globals, which every template reads
+    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
+    env.install_gettext_callables(lambda s: "one:" + s, lambda s, p, n: "one", newstyle=newstyle)
+    env.filters["f"] = lambda v: "first"
+    first = env.from_string("{{ gettext('a') }}{{ 1|f }}")
+    env.filters["f"] = lambda v: "second"
+    second = env.from_string("{{ gettext('a') }}{{ 1|f }}")
+    assert (first.render(), second.render()) == ("one:afirst", "one:asecond")
+    env.install_gettext_callables(lambda s: "two:" + s, lambda s, p, n: "two", newstyle=newstyle)
+    assert (first.render(), second.render()) == ("two:afirst", "two:asecond")
+    env.uninstall_gettext_translations(None)
+    gc.collect()
+    # Untranslated, here as before an install (docs/python.md, 0417), in both
+    assert (first.render(), second.render()) == ("afirst", "asecond")
+
+
+def test_reinstalled_translations_go():
+    import gettext as gettext_module
+
+    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
+    tpl = env.from_string("{{ _('a') }}")
+    replaced = []
+    for _ in range(2000):
+        translations = gettext_module.NullTranslations()
+        replaced.append(weakref.ref(translations))
+        env.install_gettext_translations(translations, newstyle=True)
+        assert tpl.render() == "a"
+    del translations
+    gc.collect()
+    assert sum(ref() is not None for ref in replaced) == 1
+
+
+def test_translations_reinstalled_by_their_own_call():
+    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
+
+    def make(depth):
+        def gettext(message):
+            if depth < 50:
+                # Drops this callable from the environment while it runs
+                env.install_gettext_callables(make(depth + 1), lambda s, p, n: s, newstyle=True)
+            gc.collect()
+            return f"{message}{depth}"
+
+        return gettext
+
+    env.install_gettext_callables(make(0), lambda s, p, n: s, newstyle=True)
+    tpl = env.from_string("{{ _('a') }}")
+    assert [tpl.render() for _ in range(3)] == ["a0", "a1", "a2"]
+
+
 def test_keyboard_interrupt_stops_a_long_render():
     if threading.current_thread() is not threading.main_thread():
         pytest.skip("signals reach the main thread only")
@@ -187,3 +286,86 @@ def test_loader_uptodate_closure_over_environment_is_collected():
         del env
     gc.collect()
     assert [ref() for ref in refs] == [None] * 5
+
+
+@pytest.mark.parametrize("how", ["loader", "selector"])
+def test_a_filter_replaced_while_a_template_loads_stays_with_it(how):
+    # docs/tasks/0406: Python the load runs replaces the filter and loads again, so that a new engine environment
+    # binds the new one; the template that was loading keeps the filter it was compiled with
+    env = None
+    replaced = []
+
+    def replace():
+        if replaced:
+            return
+        replaced.append(True)
+        env.filters["f"] = lambda v: "second"
+        assert env.from_string("{{ 1|f }}").render() == "second"
+
+    class Loader(jinja2cpp.BaseLoader):
+        def get_source(self, environment, name):
+            if how == "loader":
+                replace()
+            return "{{ 1|f }}", None, lambda: True
+
+    def select(name):
+        if how == "selector":
+            replace()
+        return False
+
+    env = jinja2cpp.Environment(loader=Loader(), autoescape=select)
+    first = lambda v: "first"
+    env.filters["f"] = first
+    ref = weakref.ref(first)
+    del first
+    tpl = env.get_template("a")
+    gc.collect()
+    assert ref() is not None
+    assert tpl.render() == "first"
+    del tpl
+    env.cache.clear() if env.cache is not None else None
+    gc.collect()
+    assert env.from_string("{{ 1|f }}").render() == "second"
+
+
+def test_the_chat_clock_of_the_globals_stays_while_they_do():
+    # docs/tasks/0406: the environment's globals keep the clock of their strftime_now after another clock
+    # replaced it and the engine environment it was bound in went
+    env = jinja2cpp.Environment()
+    if not hasattr(env, "_set_chat_templates"):
+        pytest.skip("no chat templates")
+    try:
+        env._set_chat_templates(lambda: 0.0)
+    except TypeError:
+        pytest.skip("built without chat templates")
+    tpl = env.from_string("{{ strftime_now('%Y') }}")
+    second = lambda: 86400.0 * 366
+    ref = weakref.ref(second)
+    env._set_chat_templates(second)
+    del second
+    env.from_string("x")
+    env._set_chat_templates(lambda: 86400.0 * 366 * 2)
+    gc.collect()
+    assert ref() is not None
+    assert tpl.render() == "1971"
+
+
+def test_an_environment_whose_loader_closes_over_it_is_collected():
+    # docs/tasks/0406: an engine environment kept for later installs goes with its templates, so a loader handler it
+    # holds does not keep the environment alive
+    class Loader(jinja2cpp.BaseLoader):
+        def __init__(self, env_ref):
+            self.env_ref = env_ref
+
+        def get_source(self, environment, name):
+            return "x", None, lambda: environment is not None
+
+    env = jinja2cpp.Environment(cache_size=0)
+    env.loader = Loader(None)
+    env.get_template("a")
+    env.loader = Loader(None)
+    env.get_template("a")
+    ref = weakref.ref(env)
+    del env
+    gc.collect()
+    assert ref() is None

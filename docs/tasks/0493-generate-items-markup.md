@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/936
 priority: low
 area: parity
 depends: [0456]
@@ -26,3 +27,13 @@ wrote, or from the output node's autoescape setting) and make those items `Marku
 record it as deliberate.
 
 **Done when.** The example yields Jinja2's item types, with a case in python/tests/test_generate.py.
+
+
+**Resolution (batch 9 D).** `RenderOptions::pieceIsMarkup` (docs/api-2.0.md): the render marks a piece before
+its `Write` (renderer.h `MarkOutputPiece` for an output node, `{% filter %}` and `{% call %}` and a recursive
+loop for their own piece), and the held piece publishes the mark. The module's sinks (`CallbackSink`, the lazy
+render's) make those items `Markup`. Pinned by `OutputTest.SinkLearnsWhichPiecesAreMarkup` (both character
+types) and `test_items_are_markup_where_jinja2s_are` (both generate modes). Left: a filter block whose filter
+returns a non-string (`length`) yields its `str()` where Jinja2 yields the int (docs/python.md); a constant
+expression that is not a literal (`{{ 1 + 1 }}`) is a Markup item of its own under autoescape, where Jinja2 folds it
+into a `str` run (0535).

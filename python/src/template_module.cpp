@@ -188,12 +188,14 @@ bool IsEvalContext(nb::handle object)
 // A macro of a module (Template.make_module, Template.module): it runs in its module, which
 // the callable keeps alive with the template, so it stays callable after the template, the
 // module object and every other reference to them are gone (docs/tasks/0284). It holds the
-// environment too, whose filters, tests and globals the macro may call
+// environment too, whose filters, tests and globals the macro may call, and what the engine environment the template
+// was loaded from borrows (PyEnvironment::BoundObjects): the environment may have moved on to a new list since
 class ModuleMacro
 {
 public:
-    ModuleMacro(jinja2::UserCallable callable, nb::object environment, nb::object templateGlobals, nb::object templateName, std::string name)
-        : m_callable(std::move(callable))
+    ModuleMacro(jinja2::UserCallable callable, nb::object bound, nb::object environment, nb::object templateGlobals, nb::object templateName, std::string name)
+        : m_bound(std::move(bound))
+        , m_callable(std::move(callable))
         , m_environment(std::move(environment))
         , m_templateGlobals(std::move(templateGlobals))
         , m_templateName(std::move(templateName))
@@ -319,6 +321,7 @@ public:
 
     int Traverse(visitproc visit, void* arg) const
     {
+        Py_VISIT(m_bound.ptr());
         Py_VISIT(m_environment.ptr());
         Py_VISIT(m_templateGlobals.ptr());
         Py_VISIT(m_templateName.ptr());
@@ -326,13 +329,17 @@ public:
     }
     void Clear() noexcept
     {
+        // The callable first: it borrows from m_bound
+        m_callable = jinja2::UserCallable();
+        m_bound = nb::none();
         m_environment = nb::none();
         m_templateGlobals = nb::none();
         m_templateName = nb::none();
-        m_callable = jinja2::UserCallable();
     }
 
 private:
+    // Declared before m_callable, so it goes after it
+    nb::object m_bound;
     jinja2::UserCallable m_callable;
     nb::object m_environment;
     nb::object m_templateGlobals;
@@ -364,19 +371,19 @@ public:
 
 // An exported value as Python: the macros, also in lists and dicts, stay callable
 // (ModuleMacro); the rest as the engine's values become Python's (ToPython)
-nb::object ExportToPython(const jinja2::Value& value, const nb::object& environment, const nb::object& templateGlobals, const nb::object& templateName, const std::string& name)
+nb::object ExportToPython(const jinja2::Value& value, const nb::object& bound, const nb::object& environment, const nb::object& templateGlobals, const nb::object& templateName, const std::string& name)
 {
     const ExportDepth depth;
     if (const auto* callable = value.GetIf<jinja2::UserCallable>())
     {
-        return nb::cast(new ModuleMacro(*callable, environment, templateGlobals, templateName, name), nb::rv_policy::take_ownership);
+        return nb::cast(new ModuleMacro(*callable, bound, environment, templateGlobals, templateName, name), nb::rv_policy::take_ownership);
     }
     if (const auto* list = value.GetIf<jinja2::ValuesList>())
     {
         nb::list result;
         for (const auto& item : *list)
         {
-            result.append(ExportToPython(item, environment, templateGlobals, templateName, name));
+            result.append(ExportToPython(item, bound, environment, templateGlobals, templateName, name));
         }
         return result;
     }
@@ -385,7 +392,7 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& environm
         nb::list result;
         for (const auto& item : *list)
         {
-            result.append(ExportToPython(item, environment, templateGlobals, templateName, name));
+            result.append(ExportToPython(item, bound, environment, templateGlobals, templateName, name));
         }
         return result;
     }
@@ -394,7 +401,7 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& environm
         nb::dict result;
         for (const auto& [key, item] : *map)
         {
-            result[MakeStr(key)] = ExportToPython(item, environment, templateGlobals, templateName, name);
+            result[MakeStr(key)] = ExportToPython(item, bound, environment, templateGlobals, templateName, name);
         }
         return result;
     }
@@ -403,7 +410,7 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& environm
         nb::dict result;
         for (const auto& [key, item] : *map)
         {
-            result[MakeStr(key)] = ExportToPython(item, environment, templateGlobals, templateName, name);
+            result[MakeStr(key)] = ExportToPython(item, bound, environment, templateGlobals, templateName, name);
         }
         return result;
     }
@@ -484,7 +491,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     nb::dict exports;
     for (auto& [name, value] : module.exports)
     {
-        exports[MakeStr(name)] = ExportToPython(value, m_environment, m_globals, m_name, name);
+        exports[MakeStr(name)] = ExportToPython(value, m_bound, m_environment, m_globals, m_name, name);
     }
     return nb::make_tuple(MakeStr(module.body), exports);
 }

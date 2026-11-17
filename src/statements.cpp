@@ -74,9 +74,10 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
             const OutStream::PieceHold pieceHold(os);
             RenderLoop(loopVal, os, values, 0);
         }
-        // An item even when empty: Jinja2 yields the loop's buffer
+        // An item even when empty: Jinja2 yields the loop's buffer, Markup under the runtime autoescape
         if (os.WritesEachPiece())
         {
+            os.MarkPiece(values.IsAutoescape());
             os.FlushPiece();
         }
         return;
@@ -4389,6 +4390,11 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
             throw TemplateRuntimeError("expected str instance, "s + Apply<visitors::PythonTypeNameGetter>(result) + " found");
         }
         WriteOutput(os, result, values);
+        if (os.WritesEachPiece())
+        {
+            // generate() yields the call's result as it is (docs/tasks/0493); a plain string escaped here is Markup
+            os.MarkPiece(result.IsMarkup() || values.IsOutputAutoescape());
+        }
         return;
     }
     // A call block's caller runs into a buffer in Jinja2
@@ -4398,6 +4404,11 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     try
     {
         callable->GetStatementCallable()(callParams, os, values);
+        if (os.WritesEachPiece())
+        {
+            // A macro's result: Markup under the runtime autoescape (docs/tasks/0493)
+            os.MarkPiece(values.IsAutoescape());
+        }
         return;
     }
     catch (...)
@@ -4552,6 +4563,11 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     body.SetMarkup(values.IsOutputAutoescape());
     const auto result = values.Nodes()[m_expr].Evaluate(body, values);
     os.WriteValue(result);
+    if (os.WritesEachPiece())
+    {
+        // generate() yields the filter's result: Markup when it is (docs/tasks/0493)
+        os.MarkPiece(result.IsMarkup());
+    }
 }
 
 void AutoescapeStatement::Render(OutStream& os, RenderContext& values)

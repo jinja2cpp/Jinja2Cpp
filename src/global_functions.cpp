@@ -5,6 +5,7 @@
 #include "python_format.h"
 #include "recursion_guard.h"
 #include "template_dict.h"
+#include "template_env_impl.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
@@ -575,7 +576,7 @@ bool IsOne(const InternalValue& n)
 // _make_new_gettext and friends: translates the message, then formats it with the keyword
 // arguments (`num` defaults to the count); under autoescape the result is Markup and the
 // variables are escaped
-InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, RenderContext& context)
+InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, RenderContext& context, const std::optional<UserCallable>& userFn)
 {
     size_t argsCount = 1U + (fn.hasContext ? 1U : 0U) + (fn.hasPlural ? 2U : 0U);
     if (params.posParams.size() != argsCount)
@@ -586,8 +587,6 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     InternalDict variables = params.kwParams;
 
     InternalValue translated;
-    auto* env = context.GetEnv();
-    auto userFn = env ? env->FindGettextCallable(fn.name) : std::optional<UserCallable>();
     if (userFn)
     {
         auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn);
@@ -631,10 +630,9 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
 // Oldstyle (Jinja2's default, newstyle_gettext off): the global is the installed callable itself, called with the
 // arguments of the call and returning what it returns. Without one, gettext.NullTranslations: the message, or the
 // plural one when the count is not 1
-InternalValue CallOldGettext(const GettextFunction& fn, const CallParams& params, RenderContext& context)
+InternalValue CallOldGettext(const GettextFunction& fn, const CallParams& params, RenderContext& context, const std::optional<UserCallable>& userFn)
 {
-    auto* env = context.GetEnv();
-    if (auto userFn = env ? env->FindGettextCallable(fn.name) : std::optional<UserCallable>())
+    if (userFn)
     {
         auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn);
         return GetIf<Callable>(&callable)->GetExpressionCallable()(params, context);
@@ -697,6 +695,20 @@ InternalValue CallOldGettext(const GettextFunction& fn, const CallParams& params
     return IsOne(*args[message + 2]) ? *args[message] : *args[message + 1];
 }
 
+// A gettext global of a template loaded with the style `loadNewstyle`: it takes the style of the last
+// InstallGettextCallables of the environment, as Jinja2's globals are what the last install_gettext_* put
+// (docs/tasks/0509), and the load's when the environment installed none
+InternalValue CallGettextGlobal(const GettextFunction& fn, const CallParams& params, RenderContext& context, bool loadNewstyle)
+{
+    bool newstyle = loadNewstyle;
+    std::optional<UserCallable> userFn;
+    if (const auto* env = context.GetEnv())
+    {
+        userFn = detail::TemplateEnvAccess::GetImpl(*env)->FindTranslation(fn.name, newstyle);
+    }
+    return newstyle ? CallGettext(fn, params, context, userFn) : CallOldGettext(fn, params, context, userFn);
+}
+
 // jinja2.ext._gettext_alias: `_` calls whatever `gettext` is at the call site
 InternalValue CallGettextAlias(const CallParams& params, RenderContext& context)
 {
@@ -712,14 +724,7 @@ void SetupI18nGlobals(InternalValueMap& globalParams, bool newstyle)
     static const GettextFunction functions[] = { { "gettext", false, false }, { "ngettext", false, true }, { "pgettext", true, false }, { "npgettext", true, true } };
     for (const auto& fn : functions)
     {
-        if (newstyle)
-        {
-            globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallGettext(fn, params, context); }));
-        }
-        else
-        {
-            globalParams.emplace(fn.name, MakeFunction([&fn](const CallParams& params, RenderContext& context) { return CallOldGettext(fn, params, context); }));
-        }
+        globalParams.emplace(fn.name, MakeFunction([&fn, newstyle](const CallParams& params, RenderContext& context) { return CallGettextGlobal(fn, params, context, newstyle); }));
     }
     globalParams.emplace("_", MakeFunction(CallGettextAlias));
 }

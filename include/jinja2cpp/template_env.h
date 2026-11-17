@@ -43,6 +43,17 @@ enum class UndefinedPolicy
     Debug,     //!< As Default, but prints as `{{ name }}` (Jinja2 `DebugUndefined`)
 };
 
+//! The style of the gettext globals of an environment (\ref TemplateEnv::InstallGettextCallables, docs/tasks/0509)
+enum class GettextStyle : unsigned char
+{
+    //! Each template's globals take the style it was loaded with (\ref Settings::Extensions::i18nNewstyle)
+    FollowLoad,
+    //! Jinja2's oldstyle: the globals return what the installed callable returns, unformatted
+    Oldstyle,
+    //! Jinja2's newstyle: the globals format the translation with their keyword arguments
+    Newstyle
+};
+
 //! When `include`, `extends` and `import` look up the template they name (\ref Settings::templateLookup)
 enum class TemplateLookup
 {
@@ -515,6 +526,17 @@ public:
      * Method is thread-safe.
      */
     void InstallGettextCallables(UserCallable gettext, UserCallable ngettext, UserCallable pgettext = UserCallable(), UserCallable npgettext = UserCallable());
+    /*!
+     * \brief The same, with the style of the `gettext`, `ngettext`, `pgettext` and `npgettext` globals fixed by the install
+     *
+     * Jinja2's `install_gettext_callables(newstyle=...)` puts globals of that style in `env.globals`, so every template
+     * calls them so, whatever `newstyle_gettext` was when it was compiled (docs/tasks/0509). With \ref GettextStyle::Newstyle
+     * or \ref GettextStyle::Oldstyle the globals of every template of the environment take that style, until the next
+     * install; \ref GettextStyle::FollowLoad, what the overload above installs, leaves it to the setting each template
+     * was loaded with (\ref Settings::Extensions::i18nNewstyle). `{% trans %}` blocks keep the style they were loaded
+     * with either way, as Jinja2's compiled blocks do. Method is thread-safe.
+     */
+    void InstallGettextCallables(GettextStyle style, UserCallable gettext, UserCallable ngettext, UserCallable pgettext = UserCallable(), UserCallable npgettext = UserCallable());
     //! The translation callable installed with \ref InstallGettextCallables under this name, if any. Method is thread-safe.
     [[nodiscard]] std::optional<UserCallable> FindGettextCallable(const std::string& name) const;
 
