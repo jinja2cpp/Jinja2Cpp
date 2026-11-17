@@ -7,6 +7,7 @@
 
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list_iterator.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
@@ -1753,6 +1754,67 @@ TEST(BorrowedCellsSingle, NestedRenderGenericParamsOutliveTheHost)
         },
         {});
     EXPECT_EQ("12|1|121", Render("{{ inner() }}{{ g[0]|join }}|{{ g[1].n }}|{{ g[2]() }}", params, &env));
+}
+
+namespace
+{
+// A host object with one attribute, `x`
+class SevenObject final : public IHostObject
+{
+public:
+    [[nodiscard]] const char* TypeName() const override { return "Seven"; }
+    [[nodiscard]] std::string Str() const override { return "seven"; }
+    [[nodiscard]] std::string Repr() const override { return "seven"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view name) const override
+    {
+        return name == "x" ? std::optional<Value>(Value(int64_t{ 7 })) : std::nullopt;
+    }
+};
+
+// A map whose every item is the map itself, as a reflected struct that points back at its parent is
+struct CyclicMapAccessor : IMapItemAccessor
+{
+    [[nodiscard]] size_t GetSize() const override { return 2; }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return name == "a" || name == "b"; }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    {
+        return HasValue(name) ? Value(GenericMap([this]() { return this; })) : Value();
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "a", "b" }; }
+};
+} // namespace
+
+TEST(BorrowedCellsSingle, NestedRenderGenericParamsTheHostKeepsAlive)
+{
+    // 0524 (verifier of #927): a host object, an undefined value and a cyclic map a nested render stores in a shared
+    // global stay what they are, not a dict of their items: the bridge keeps the first two alive, and the host the
+    // map it views
+    UndefinedDescription strict;
+    strict.policy = UndefinedPolicy::Strict;
+    strict.name = "p";
+    CyclicMapAccessor cyclic;
+    const std::vector<std::pair<Value, std::string>> rows{
+        { MakeHostValue(std::make_shared<const SevenObject>()), "{{ g[0].x }}|{{ g[0] }}" },
+        { MakeUndefined(strict), "{{ g[0] is defined }}" },
+        { GenericMap([&cyclic]() { return &cyclic; }), "{{ g[0].a.b is mapping }}" },
+    };
+    const std::vector<std::string> expected{ "7|seven", "False", "True" };
+    for (std::size_t row = 0; row < rows.size(); ++row)
+    {
+        TemplateEnv env;
+        env.AddGlobal("g", ValuesList{});
+        ValuesMap params;
+        params["inner"] = UserCallable(
+            [&env, &rows, row](const UserCallableParams&) {
+                Template tpl(&env);
+                EXPECT_TRUE(!!tpl.Load("{% set _ = g.append(p) %}"));
+                auto result = tpl.RenderAsString(ValuesMap{ { "p", rows[row].first } });
+                EXPECT_TRUE(!!result) << row << ": " << (result ? std::string() : result.error().ToString());
+                return Value(std::string());
+            },
+            {});
+        EXPECT_EQ(expected[row], Render("{{ inner() }}" + rows[row].second, params, &env)) << row;
+    }
 }
 
 TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
