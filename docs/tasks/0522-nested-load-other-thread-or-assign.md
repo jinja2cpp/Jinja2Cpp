@@ -37,13 +37,15 @@ the bar.
 **Decision (2026-11-17, R3 thread).** One mechanism for both patterns, with no cost on a first
 Load beyond a check of a flag that is already in cache:
 
-- A template replaced while its own first Load runs keeps itself
-  (`TemplateImpl::m_keptWhileLoading`, a reference to itself), whichever thread replaced it and
-  however: a Load (`LoadReplacing`) or an assignment. `BasicTemplate::Load` lets go of that
-  reference once the in-place Load returned. It replaces the thread-level list of 0517
-  (`RenderWorkspace::KeepWhileLoading`), which a worker thread's exit freed.
+- A template replaced while its own first Load runs is kept in a process-wide, mutex-guarded
+  list (`TemplateImpl::KeepWhileLoading`, flag `m_keptWhileLoading`), whichever thread replaced
+  it and however: a Load (`LoadReplacing`) or an assignment. `BasicTemplate::Load` takes it out
+  once the Load that owns `m_loading` returned or threw, not a Load nested in it (verifier r1).
+  It replaces the thread-level list of 0517 (`RenderWorkspace::KeepWhileLoading`), which a
+  worker thread's exit freed. A first Load pays a flag check (+7 instructions, 0 bytes on
+  Load/plain_text); only the rare replace of a loading template locks.
 - `template.h`: `BasicTemplate` declares its copy assignment (out of line, the same keep, then
-  the copy) and defaults its copy constructor. No move operations are added, so a moved-from
+  the copy; not noexcept any more, since the keep may allocate) and defaults its copy constructor. No move operations are added, so a moved-from
   template stays what it is today (a copy). Behaviour is unchanged for every caller; the ABI
   change is one exported function in place of an inline one, allowed while the G1 freeze is
   postponed. Destroying the template object (`tpl.reset()`, `delete`) from host code its own

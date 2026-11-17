@@ -106,7 +106,9 @@ JINJA2CPP_COLD_INLINE void ReleaseKeptWhileLoading(TemplateImpl<CharT>* impl) no
 }
 
 // Releases the template KeepWhileLoading kept when the first Load returns or throws (bad_alloc).
-// A Load nested in it, from host code it calls, leaves it to that first Load, which still parses
+// A Load nested in it, from host code it calls, leaves it to that first Load, which still parses.
+// Host code the first Load calls may replace the template it parses into (a Load of it, maybe on
+// another thread, or an assignment): that template is kept until here (docs/tasks/0517, 0522)
 template<typename CharT>
 class ReleaseAfterFirstLoad
 {
@@ -132,16 +134,6 @@ private:
     TemplateImpl<CharT>* m_impl;
     bool m_first;
 };
-
-// A Load in place. Host code the first Load calls may replace the template it parses into (a Load
-// of it, maybe on another thread, or an assignment): that template is then kept until the first
-// Load returned (docs/tasks/0517, 0522)
-template<typename CharT>
-Result<void, CharT> LoadInPlace(TemplateImpl<CharT>* impl, std::basic_string<CharT>&& source, std::string&& name)
-{
-    const ReleaseAfterFirstLoad<CharT> release(impl);
-    return ToResult(impl->Load(std::move(source), std::move(name)));
-}
 
 template<typename CharT>
 struct FileStream;
@@ -191,7 +183,8 @@ Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::strin
     }
     if (LoadsInPlace<CharT>(m_impl))
     {
-        return LoadInPlace(impl, StringType(source), std::move(name));
+        const ReleaseAfterFirstLoad<CharT> release(impl);
+        return ToResult(impl->Load(StringType(source), std::move(name)));
     }
     return LoadReplacing<CharT>(m_impl, source, std::move(name));
 }
@@ -221,7 +214,9 @@ Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream
 
     if (LoadsInPlace<CharT>(m_impl))
     {
-        return LoadInPlace(GetImpl<CharT>(m_impl), std::move(t), std::move(name));
+        auto* impl = GetImpl<CharT>(m_impl);
+        const ReleaseAfterFirstLoad<CharT> release(impl);
+        return ToResult(impl->Load(std::move(t), std::move(name)));
     }
     return LoadReplacing<CharT>(m_impl, std::move(t), std::move(name));
 }
