@@ -671,12 +671,12 @@ public:
             detail::KeepFailure();
         }
         auto failure = failed ? detail::TakeKept() : std::exception_ptr();
-        // A failure leaves the scopes of the frames it went out of: they end first, innermost first, keeping the
-        // names they held, as Jinja2 never reaches their ends (FrameEnd::Stopped)
-        while (context.GetScopesCount() > topScopes)
+        // A failure leaves the scopes of the frames it went out of, in the render's context and in a module's it
+        // was importing: they end first
+        if (failure)
         {
-            context.CaptureClosures(FrameEnd::Stopped(context.GetScopesCount()));
-            context.ExitScope();
+            context.EndScopesLeftByFailure(topScopes);
+            callback.EndModuleScopesLeftByFailure();
         }
         callback.CaptureClosuresForOuter(context);
         if (failure)
@@ -1304,6 +1304,22 @@ private:
                 if (module)
                 {
                     module->Context().CaptureClosures(FrameEnd{ 0, true, 0, 0 });
+                }
+            }
+        }
+        // The module contexts' own scopes above their top levels, which a failure left (RenderForOuter)
+        JINJA2CPP_NOINLINE void EndModuleScopesLeftByFailure()
+        {
+            if (!m_loaded)
+            {
+                return;
+            }
+            for (auto& module : m_loaded->modules)
+            {
+                if (module)
+                {
+                    auto& moduleContext = module->Context();
+                    moduleContext.EndScopesLeftByFailure(moduleContext.FirstOwnScope());
                 }
             }
         }

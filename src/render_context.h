@@ -1272,6 +1272,23 @@ public:
         m_views.pop_back();
         UpdateFullWalk();
     }
+    // Ends the scopes above the first `scopes` that a failure left, with the views on them, innermost first: the
+    // closures defined there keep the names the scopes held, as Jinja2 never reaches their ends (FrameEnd::Stopped).
+    // For a render that fails while an outer one may still call its closures (docs/tasks/0525). Throws std::bad_alloc
+    void EndScopesLeftByFailure(size_t scopes)
+    {
+        auto views = m_views.size();
+        while (views != 0 && m_views[views - 1].scopeIndex >= scopes)
+        {
+            --views;
+        }
+        TruncateViews(views);
+        while (m_scopes.size() > scopes)
+        {
+            CaptureClosures(FrameEnd::Stopped(m_scopes.size()));
+            ExitScope();
+        }
+    }
     // The views pushed here, so that a statement leaving by an exception can drop its own
     [[nodiscard]] size_t ViewCount() const { return m_views.size(); }
     void TruncateViews(size_t count)

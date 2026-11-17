@@ -5,6 +5,7 @@
 
 #include "../src/borrowed_cells.h"
 
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/host_object.h>
@@ -22,8 +23,10 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -1693,44 +1696,93 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
     }
 }
 
+namespace
+{
+// A host error marked as Python's StopIteration (docs/tasks/0479)
+struct NestedStop
+    : std::runtime_error
+    , StopIteration
+{
+    NestedStop()
+        : std::runtime_error("stop")
+    {
+    }
+};
+
+// A TemplateEnv whose `inner()` renders `inner` nested in the render that calls it and swallows its failure, as a
+// host that catches the error does; `stop` is a filter that throws NestedStop (docs/tasks/0525)
+template<typename TemplateT>
+struct FailingNestedEnv
+{
+    TemplateEnv env;
+    ValuesMap params;
+
+    explicit FailingNestedEnv(std::string inner)
+    {
+        auto fs = std::make_shared<MemoryFileSystem>();
+        fs->AddFile("lib.j2", "{% set y = 'Y' %}{% macro m() %}{{ y }}{% endmacro %}");
+        fs->AddFile("libstop.j2",
+                    "{% set q = 'M' %}{% macro mk() %}{{ q }}{% endmacro %}{% set _ = g.append(mk) %}"
+                    "{% for i in [1] %}{% set q = 'M2' %}{{ 1|stop }}{% endfor %}");
+        fs->AddFile("libfail.j2",
+                    "{% set q = 'M' %}{% macro mk() %}{{ q }}{% endmacro %}{% set _ = g.append(mk) %}"
+                    "{% for i in [1] %}{% set q = 'M2' %}{{ 1 // 0 }}{% endfor %}");
+        env.AddFilesystemHandler(std::string(), fs);
+        env.GetSettings().cacheSize = 0;
+        env.AddGlobal("g", ValuesList{});
+        env.AddFilter("stop", MakeCallable([](const Value&) -> Value { throw NestedStop(); }, ArgInfo{ "v" }));
+        params["inner"] = UserCallable(
+            [this, inner = std::move(inner)](const UserCallableParams&) {
+                auto tpl = std::make_unique<TemplateT>(&env);
+                if constexpr (std::is_same_v<TemplateT, TemplateW>)
+                {
+                    EXPECT_TRUE(!!tpl->Load(std::wstring(inner.begin(), inner.end())));
+                }
+                else
+                {
+                    EXPECT_TRUE(!!tpl->Load(inner));
+                }
+                EXPECT_FALSE(!!tpl->RenderAsString({}));
+                return Value(std::string());
+            },
+            {});
+    }
+};
+} // namespace
+
 TEST(BorrowedCellsSingle, NestedRenderThatFailsKeepsItsClosures)
 {
     // 0525: a nested render that fails after it stored a closure in a shared global, the host swallowing the
     // error: the closure sees the names its frames had, as Python Jinja2's does. The expectations are Python's
-    struct Case
-    {
-        const char* inner;
-        const char* expected;
-    };
-    const Case cases[] = {
-        { "{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{{ 1 // 0 }}", "cl" },
+    const char* const stored = "{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}";
+    const std::string cases[][2] = {
+        { std::string(stored) + "{{ 1 // 0 }}", "cl" },
         { "{% set x = 'a' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{% set x = 'b' %}"
           "{% for i in [1] %}{% set x = 'c' %}{{ 1 // 0 }}{% endfor %}",
           "b" },
         { "{% import 'lib.j2' as lib %}{% set _ = g.append(lib.m) %}{{ 1 // 0 }}", "Y" },
         { "{% set x = 't' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{% with x = 'w' %}{{ 1 // 0 }}{% endwith %}", "t" },
+        // A failure out of a loop's slots or a macro's linked view, which stay on the scopes it left (verifier)
+        { std::string(stored) + "{% for i in [1] %}{{ 1|stop }}{% endfor %}", "cl" },
+        { std::string(stored) + "{% for i in [1] %}{% for j in [2] %}{{ 1|stop }}{% endfor %}{% endfor %}", "cl" },
+        { std::string(stored) + "{% for i in [1] %}{% filter upper %}{{ 1|stop }}{% endfilter %}{% endfor %}", "cl" },
+        { std::string(stored) + "{% macro f() %}{{ 1 // 0 }}{% endmacro %}{% for i in [1] recursive %}{{ f() }}{% endfor %}", "cl" },
+        // A module that fails while it is imported: its top level sees its own names, not those of the loop it left
+        { "{% import 'libstop.j2' as l %}", "M" },
+        { "{% import 'libfail.j2' as l %}", "M" },
     };
     // A closure defined in a frame the failure went out of (a macro call, a loop, a `with`) reads that frame's names
     // as ended, where Python prints them: docs/tasks/0531
     for (const auto& c : cases)
     {
-        TemplateEnv env;
-        auto fs = std::make_shared<MemoryFileSystem>();
-        fs->AddFile("lib.j2", "{% set y = 'Y' %}{% macro m() %}{{ y }}{% endmacro %}");
-        env.AddFilesystemHandler(std::string(), fs);
-        env.GetSettings().cacheSize = 0;
-        env.AddGlobal("g", ValuesList{});
-        ValuesMap params;
-        params["inner"] = UserCallable(
-            [&env, &c](const UserCallableParams&) {
-                auto tpl = std::make_unique<Template>(&env);
-                EXPECT_TRUE(!!tpl->Load(c.inner));
-                EXPECT_FALSE(!!tpl->RenderAsString({}));
-                return Value(std::string());
-            },
-            {});
-        EXPECT_EQ(c.expected, Render("{{ inner() }}{{ g[-1]() }}", params, &env)) << c.inner;
+        FailingNestedEnv<Template> nested(c[0]);
+        EXPECT_EQ(c[1], Render("{{ inner() }}{{ g[-1]() }}", nested.params, &nested.env)) << c[0];
     }
+    // The wide template
+    FailingNestedEnv<TemplateW> nested(std::string(stored) + "{% for i in [1] %}{{ 1|stop }}{% endfor %}");
+    TemplateW outer(&nested.env);
+    ASSERT_TRUE(!!outer.Load(L"{{ inner() }}{{ g[-1]() }}"));
+    EXPECT_EQ(L"cl", outer.RenderAsString(nested.params).value());
 }
 
 namespace
