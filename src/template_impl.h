@@ -531,7 +531,8 @@ public:
             return 0;
         }
         const InternalValueMap noValues;
-        // A fold may compute as much as a render: under the template's limits
+        // A fold may compute as much as a render: under the template's limits. Inside a render (a host's Load) these
+        // limits name that render's collector (RenderLimits::collector), which a fold never keeps a tree for
         const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
         RendererCallback callback(this);
         RenderContext context(noValues, noValues, &callback, &GetBuiltinGlobals(m_settings->settings.extensions));
@@ -644,7 +645,7 @@ public:
         auto* keeper = SharedSnapshotKeeper(workspace, &globals);
         if (keeper)
         {
-            keeper->KeepTree(this->weak_from_this().lock());
+            keeper->KeepNewTree(this->weak_from_this().lock());
         }
         return keeper;
     }
@@ -1682,7 +1683,7 @@ private:
                     {
                         if (loaded)
                         {
-                            m_keeper->KeepTree(loaded.value());
+                            m_keeper->KeepNewTree(loaded.value());
                         }
                     }
                 },
@@ -1701,6 +1702,27 @@ private:
     TemplateEnv* m_env{};
     // Shared with the other templates of the environment
     detail::LoadSettingsPtr m_settings;
+public:
+    // What a render that keeps this template past its own render counts against its memory budget: the object, its
+    // nodes and the text they point into (CycleCollector::KeepTree, docs/tasks/0492)
+    [[nodiscard]] std::uint64_t TreeBytes() const noexcept
+    {
+        std::uint64_t bytes = sizeof(*this) + m_nodes.Bytes() + (m_source.capacity() * sizeof(CharT));
+        if (m_spilledSource)
+        {
+            bytes += sizeof(*m_spilledSource) + (m_spilledSource->capacity() * sizeof(CharT));
+        }
+        if (m_convertedTexts)
+        {
+            for (const auto& text : *m_convertedTexts)
+            {
+                bytes += sizeof(text) + (text.capacity() * sizeof(CharT));
+            }
+        }
+        return bytes;
+    }
+
+private:
     // The source the tree points into: the one of a Load that ran inside or after the first (spilled), else the
     // first Load's own (Load)
     [[nodiscard]] const std::basic_string<CharT>* Source() const
