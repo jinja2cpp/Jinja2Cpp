@@ -271,7 +271,7 @@ CASES = [
     ('dict_view_set_tojson', "{{ (d.keys() - []) | tojson }}"),
     ('dict_view_set_plus', "{{ (d.keys() - []) + [] }}"),
     ('dict_view_set_random', "{{ (d.keys() - []) | random }}"),
-    # task 0533: what 0523 left (a walk reads its items at its start; a dict itself walked does not check its size)
+    # task 0538: what 0523 left (a walk reads its items at its start; a dict itself walked does not check its size)
     ('dict_view_iter_value_change', "{% set e = {'a': 1, 'b': 2} %}{% for k, v in e.items() %}{% do e.update({'b': 9}) %}{{ v }}{% endfor %}", {"env": {"extensions": ["do"]}}),
     ('dict_view_iter_replace', "{% set e = {'a': 1, 'b': 2} %}{% for k in e.keys() %}{% do e.pop('b', 0) %}{% do e.update({'c': 3}) %}{{ k }}{% endfor %}", {"env": {"extensions": ["do"]}}),
     ('dict_iter_grow', "{% set e = {'a': 1} %}{% for k in e %}{% do e.update({k ~ 'x': 1}) %}{% endfor %}", {"env": {"extensions": ["do"]}}),

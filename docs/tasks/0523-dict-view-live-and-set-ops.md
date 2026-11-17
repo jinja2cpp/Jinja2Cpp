@@ -46,5 +46,5 @@ divergence line goes) and new cases for live views and the set operators.
   subscriptable or reversible, compares as a set with views and sets, and has `isdisjoint` and `-`
   with another set or view. Jinja2 has no `|` (a filter), `&` or `^` operator, so `-` is the only one.
 
-Items 4-6, and what the walk still reads from its start, are task 0533 (pinned by corpus cases).
+Items 4-6, and what the walk still reads from its start, are task 0538 (pinned by corpus cases).
 
