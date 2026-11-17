@@ -3735,7 +3735,10 @@ InternalValue SetDifference(const ListRef& left, const ListRef& right)
         {
             ThrowUnhashable(unhashable);
         }
-        kept.try_emplace(std::move(*token), item);
+        if (kept.try_emplace(std::move(*token), item).second)
+        {
+            CheckSequenceSize(uint64_t{ kept.size() }, "a set");
+        }
     }
     for (const auto& item : right)
     {
@@ -3748,7 +3751,7 @@ InternalValue SetDifference(const ListRef& left, const ListRef& right)
         kept.erase(*token);
     }
     InternalValueList result;
-    result.reserve(kept.size());
+    ReserveHint(result, kept.size());
     for (auto& entry : kept)
     {
         result.push_back(std::move(entry.second));

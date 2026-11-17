@@ -83,6 +83,9 @@ std::vector<LimitCase> Cases()
         // `loop` iterated or collected: a generator with no size, held to the limit as it grows
         { "LoopListOver", "{% for x in range(2000) %}{% set rest = loop|list %}{% endfor %}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "LoopListAt", "{% for x in range(1001) %}{{ loop|list|length }}{% endfor %}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
+        { "SetDifferenceOver", "{{ (range(1001) - {}.keys())|length }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "SetDifferenceAt", "{{ (range(1000) - {}.keys())|length }}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
+        { "SetDifferenceDuplicatesAt", "{{ ((range(1000)|list + range(1000)|list) - {}.keys())|length }}", [](auto& l) { l.maxSequenceSize = 2000; }, "" },
         // !a escapes grow the repr: 'é' plus 11 ASCII characters is 15 UTF-8 units, 17 escaped (0317)
         { "AsciiConversionOver", "{{ '{!a}'.format('\xc3\xa9' ~ 'x' * 11) }}", [](auto& l) { l.maxSequenceSize = 16; }, "maxSequenceSize" },
         { "AsciiConversionAt", "{{ '{!a}'.format('\xc3\xa9' ~ 'x' * 11) }}", [](auto& l) { l.maxSequenceSize = 17; }, "" },
