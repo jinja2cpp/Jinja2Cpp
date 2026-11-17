@@ -21,7 +21,17 @@ void OutStream::Flush()
 {
     if (!m_writer)
     {
-        FlushBuffer();
+        // What a mark spilled goes to the sink too, before the buffer that came after it: a sink write delivers it
+        // first, so only an empty buffer needs the test
+        if (m_cur != m_buffer)
+        {
+            AppendToTarget(m_buffer, static_cast<size_t>(m_cur - m_buffer));
+            m_cur = m_buffer;
+        }
+        else if ((m_hold & HoldSpilled) != 0)
+        {
+            DeliverSpill();
+        }
     }
 }
 
@@ -33,30 +43,41 @@ bool OutStream::RollbackTo(const Mark& mark)
     }
     if (m_sink)
     {
-        // Nothing reached the sink since: the buffer still holds what it held, up to the mark
-        if (m_sinkWritten != mark.base)
+        // The held output outgrew its cap and reached the sink since the mark: it cannot be taken back
+        if (m_spillOverflows != mark.m_overflows)
         {
             return false;
         }
-        m_cur = mark.cur;
+        // Nothing left the buffer since: it still holds what it held, up to the mark
+        if (m_sinkWritten == mark.m_base)
+        {
+            m_cur = mark.m_cur;
+            return true;
+        }
+        // Everything that left it went to the spill while the mark lived, the buffer first and whole: its part before
+        // the mark follows what the spill held at the mark, and the buffer starts anew
+        const auto kept = static_cast<size_t>(mark.m_cur - m_buffer);
+        TruncateSpill(mark.m_spill + kept);
+        m_sinkWritten = mark.m_base + (kept / m_charSize);
+        m_cur = m_buffer;
         return true;
     }
     // The buffer was appended to the target whole (FlushBuffer, WriteLong) if the target grew since the mark: its
     // part before the mark is then at the end of what the target held, and the buffer starts anew
     const size_t size = TargetSize();
-    if (size == mark.base)
+    if (size == mark.m_base)
     {
-        m_cur = mark.cur;
+        m_cur = mark.m_cur;
         return true;
     }
-    const size_t kept = static_cast<size_t>(mark.cur - m_buffer) / m_charSize;
+    const size_t kept = static_cast<size_t>(mark.m_cur - m_buffer) / m_charSize;
     if (m_charSize == 1)
     {
-        static_cast<std::string*>(m_target)->resize(mark.base + kept);
+        static_cast<std::string*>(m_target)->resize(mark.m_base + kept);
     }
     else
     {
-        static_cast<std::wstring*>(m_target)->resize(mark.base + kept);
+        static_cast<std::wstring*>(m_target)->resize(mark.m_base + kept);
     }
     m_cur = m_buffer;
     return true;
@@ -88,10 +109,15 @@ void OutStream::AppendToTarget(const void* ptr, size_t bytes)
     }
 }
 
-void OutStream::WriteToSink(const void* ptr, size_t bytes)
+inline void OutStream::WriteToSink(const void* ptr, size_t bytes)
 {
     // A sink is never given an empty chunk
     if (bytes == 0)
+    {
+        return;
+    }
+    // While a mark lives the sink gets nothing; once the last is gone, what it spilled comes first
+    if (m_hold != 0 && HoldBack(ptr, bytes))
     {
         return;
     }

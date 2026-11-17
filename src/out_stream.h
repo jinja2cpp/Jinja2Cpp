@@ -183,20 +183,66 @@ public:
         OutStream& m_os;
         bool m_eachPiece;
     };
-    // Where the output stood: for a call whose output Jinja2 buffers and drops when the call stops (docs/tasks/0479)
-    struct Mark
+    // Where the output stood: for a call whose output Jinja2 buffers and drops when the call stops (docs/tasks/0479).
+    // While a mark of a sink stream lives, what would reach the sink is spilled into a string of the stream instead
+    // (docs/tasks/0499): the sink gets it once the outermost mark is gone, at the next write to the sink, flush or
+    // mark, as it gets the buffer. Spilled output counts as written (maxOutputSize, generation spans). Made by GetMark;
+    // it stays where it was made (`const auto mark = os.GetMark();`)
+    class Mark
     {
-        // The target string's size, or the characters written to the sink
-        size_t base = 0;
+    public:
+        ~Mark()
+        {
+            if (m_os)
+            {
+                m_os->m_hold -= HoldPerMark;
+            }
+        }
+        Mark(const Mark&) = delete;
+        Mark(Mark&&) = delete;
+        Mark& operator=(const Mark&) = delete;
+        Mark& operator=(Mark&&) = delete;
+
+    private:
+        friend class OutStream;
+        Mark(OutStream* os, size_t base, unsigned char* cur, size_t spill, size_t overflows) noexcept
+            : m_os(os)
+            , m_base(base)
+            , m_cur(cur)
+            , m_spill(spill)
+            , m_overflows(overflows)
+        {
+        }
+
+        // The sink stream whose spilling the mark keeps on; null for a string target or a writer
+        OutStream* m_os;
+        // The target string's size, or the characters written to the sink, spilled ones included
+        size_t m_base;
         // The end of the buffered part
-        unsigned char* cur = nullptr;
+        unsigned char* m_cur;
+        // The bytes spilled
+        size_t m_spill;
+        // The spill's overflows so far (m_spillOverflows)
+        size_t m_overflows;
     };
     // A stream with a target string has no sink, as WriteLong relies on
-    [[nodiscard]] Mark GetMark() const { return { m_target ? TargetSize() : m_sinkWritten, m_cur }; }
-    // Drops what was written since `mark`; false when it cannot be: a writer stream, or a sink that has been
-    // given output since. A string target takes it back in full. A sink fails whenever the buffer reached the sink
-    // since the call began, which depends on where the 512-character buffer boundary falls, not only on how much
-    // the call wrote: `{{ 'p' * 510 }}[{{ m() }}]` with a macro of two characters fails (docs/tasks/0499)
+    [[nodiscard]] Mark GetMark()
+    {
+        if (m_sink && !m_writer)
+        {
+            // What an earlier call that returned held back goes first: a call returns into its caller's statement,
+            // so the next call or write after it delivers, and the stream holds at most one outermost call's output
+            if (m_hold == HoldSpilled)
+            {
+                DeliverSpill();
+            }
+            m_hold += HoldPerMark;
+            return { this, m_sinkWritten, m_cur, SpillSize(), m_spillOverflows };
+        }
+        return { nullptr, m_target ? TargetSize() : 0, m_cur, 0, 0 };
+    }
+    // Drops what was written since `mark`; false for a writer stream. A string target takes it back from the string,
+    // a sink stream from the buffer and what it spilled
     [[nodiscard]] bool RollbackTo(const Mark& mark);
     // The sink a writer stream made from this one passes on (ReachesSink)
     [[nodiscard]] void* SinkToPassOn() const { return m_sink; }
@@ -264,6 +310,13 @@ private:
     void AppendToTarget(const void* ptr, size_t bytes);
     void WriteToSink(const void* ptr, size_t bytes);
     void EndPiece(bool writeEmpty);
+    // What a mark keeps from the sink (Mark): the bytes in the spill, and the spill's ends
+    [[nodiscard]] size_t SpillSize() const noexcept;
+    void Spill(const void* ptr, size_t bytes);
+    // A write to the sink while the stream holds output back: spilled (true) or written after the spill (false)
+    bool HoldBack(const void* ptr, size_t bytes);
+    void DeliverSpill();
+    void TruncateSpill(size_t bytes) noexcept;
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
     template<typename CharT>
@@ -280,9 +333,19 @@ private:
     size_t m_charSize = 1;
     // A render that writes each piece gathers a piece in this sink, which stands in for the host's (m_sink) until
     // the piece ends: the sink's path is the usual one, and tests nothing more
-    // Made by WriteEachPiece on a sink stream and owned by the render (HeldPieceOwner), so that a stream's
-    // destruction stays trivial: a stream that writes no piece pays one pointer
+    // Made by WriteEachPiece on a sink stream and owned by the render (HeldPieceOwner): a stream that writes no
+    // piece pays one pointer
     HeldPiece* m_held = nullptr;
+    // The output a sink stream holds back while a mark lives (Mark), made at the first spill and reused
+    HeldPieceOwner m_spill;
+    // The times the spill outgrew MaxSequenceSize characters and went to the sink while marks lived: a mark taken
+    // before can no longer take its output back, so that a call's held output stays bounded as a value is
+    size_t m_spillOverflows = 0;
+    // What a sink stream holds back (Mark): HoldPerMark for each mark that lives, plus HoldSpilled while the spill
+    // may hold output. One word, so that a write to the sink tests one value
+    static constexpr size_t HoldSpilled = 1;
+    static constexpr size_t HoldPerMark = 2;
+    size_t m_hold = 0;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so
     // every write takes the slow path to the writer

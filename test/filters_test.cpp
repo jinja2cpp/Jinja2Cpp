@@ -1094,7 +1094,8 @@ TEST(FilterErrors, TypeErrorsLikePython)
     EXPECT_EQ("Exception: not all arguments converted during string formatting\n", RenderError("{{ 'x'|format(1) }}"));
     EXPECT_EQ("Exception: not all arguments converted during string formatting\n", RenderError("{{ '{}'|format(1) }}"));
     EXPECT_EQ("Exception: cannot convert float NaN to integer\n", RenderError("{{ '%d'|format(1e999 - 1e999) }}"));
-    EXPECT_EQ("Exception: cannot convert float infinity to integer\n", RenderError("{{ '%d'|format(1e999) }}"));
+    // Python's OverflowError (docs/tasks/0510)
+    EXPECT_NE(std::string::npos, RenderError("{{ '%d'|format(1e999) }}").find("error: Integer out of range: cannot convert float infinity to integer\n"));
     EXPECT_EQ("Exception: %x format: an integer is required, not float\n", RenderError("{{ '%x'|format(1e30) }}"));
 }
 

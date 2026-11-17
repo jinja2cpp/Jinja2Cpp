@@ -13,6 +13,7 @@
 #include "span.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -522,12 +523,33 @@ struct SelfBlocks
         : live(stack)
     {
     }
+    SelfBlocks(const SelfBlocks&) = delete;
+    SelfBlocks(SelfBlocks&&) = delete;
+    SelfBlocks& operator=(const SelfBlocks&) = delete;
+    SelfBlocks& operator=(SelfBlocks&&) = delete;
+    ~SelfBlocks()
+    {
+        if (holders)
+        {
+            holders->fetch_sub(1, std::memory_order_release);
+        }
+    }
+
+    // Counts this one among the holders of handles of `slots`, the table its blocks resolve in, so that a module
+    // does not clear that table while it lives (TemplateSlots::Clear, docs/tasks/0503). Throws std::bad_alloc
+    void HoldHandlesOf(TemplateSlots& slots)
+    {
+        holders = slots.Holders();
+        holders->fetch_add(1, std::memory_order_relaxed);
+    }
 
     // The stack, until it ends; only compared then, to find the frames of its template
     const BlocksStack* live;
     // Its blocks once it has ended. Made with the `self`: the stack's destructor, which fills
     // it, must not allocate, and MSVC's unordered_map allocates when default constructed
     BlocksStack ended;
+    // The count of the table's holders this one is among (HoldHandlesOf)
+    std::shared_ptr<std::atomic<std::size_t>> holders;
 };
 
 // The root of a parsed template
@@ -657,6 +679,9 @@ public:
     [[nodiscard]] RenderContext& Context() { return m_context; }
     // Keeps the tree the module's template runs in alive, while a module frees replaced trees (docs/tasks/0482)
     void SetTreeOwner(std::shared_ptr<const void> owner) { m_treeOwner = std::move(owner); }
+    // Whether the module holds handles of a render's table of templates: its blocks, or the parent
+    // its template extends, which a module's slots must keep (docs/tasks/0503)
+    [[nodiscard]] bool HoldsTemplateHandles() const noexcept { return !m_blocks.blocks.empty() || static_cast<bool>(m_frame.parent); }
 
 private:
     // Declared first, so that it goes last: the module's names and macros view the tree it keeps

@@ -2258,11 +2258,17 @@ const std::shared_ptr<SelfBlocks>& SelfBlocksOf(const BlocksStack& stack, IRende
 {
     if (!stack.self)
     {
-        stack.self = std::make_shared<SelfBlocks>(&stack);
+        auto self = std::make_shared<SelfBlocks>(&stack);
         if (callback)
         {
-            stack.self->ended.endedSlots = callback->SharedTemplates();
+            self->ended.endedSlots = callback->SharedTemplates();
+            // A module, which frees replaced trees, frees none with a slot while it lives (docs/tasks/0503)
+            if (callback->KeepsTreesByValue())
+            {
+                self->HoldHandlesOf(callback->Templates());
+            }
         }
+        stack.self = std::move(self);
     }
     return stack.self;
 }
@@ -3006,6 +3012,12 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             parentBlock.emplace(Callable::Macro, [name](const CallParams&, OutStream&, RenderContext&) {
                 throw TemplateRuntimeError("there is no parent block called '" + std::string(name) + "'.");
             });
+            // The name is in the block's tree, which a module may free once no handle links to it (docs/tasks/0503):
+            // stored past the call, the callable keeps the tree. Null, and free, unless the render frees trees
+            if (auto owner = values.TreeOwner())
+            {
+                parentBlock->SetKeepAlive(std::move(owner));
+            }
         }
     }
     const size_t prevSelfDepth = values.SetSelfDepth(values.GetScopesCount());

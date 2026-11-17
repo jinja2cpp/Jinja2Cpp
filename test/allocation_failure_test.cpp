@@ -610,11 +610,15 @@ class ModuleCallTest : public AllocationFailureTest
 protected:
     jinja2::TemplateModule MakeModule(const std::string& body)
     {
-        auto fs = std::make_shared<MemoryFileSystem>();
-        fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}");
-        fs->AddFile("fails", "{% import 'lib' as l with context %}{{ 1 // 0 }}");
-        m_env.AddFilesystemHandler(std::string(), fs);
-        m_fs = fs;
+        // One file system for every module the test makes: the environment looks a name up in
+        // its handlers in order, so that a second one would never be asked for 'lib'
+        if (!m_fs)
+        {
+            m_fs = std::make_shared<MemoryFileSystem>();
+            m_env.AddFilesystemHandler(std::string(), m_fs);
+        }
+        m_fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}");
+        m_fs->AddFile("fails", "{% import 'lib' as l with context %}{{ 1 // 0 }}");
         EXPECT_TRUE(!!m_tpl.Load("{% macro m() %}" + body + "{% endmacro %}"));
         auto module = m_tpl.MakeModule();
         EXPECT_TRUE(!!module);
@@ -703,7 +707,8 @@ TEST_F(ModuleCallTest, EveryUseReloadsStayFlat)
 }
 
 // The same with a source that changes before every call: each call parses a tree that differs from the last, and the
-// module frees the one it replaced when the call ends, as nothing of the call refers to it (docs/tasks/0482)
+// module frees the one it replaced when the call ends, as nothing of the call refers to it (docs/tasks/0482). Also a
+// tree that takes a slot (an `extends` child, an include with blocks) and the trees of a call that fails (0503)
 TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
@@ -713,18 +718,43 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
     m_env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
     m_env.GetSettings().cacheSize = 0;
     m_tpl = Template(&m_env);
-    for (const char* body : { "{% include 'lib' %}{{ 1 }}", "{% import 'lib' as l with context %}{{ l.x() }}", "{% import 'lib' as l %}{{ l.x() }}",
-                              "{% from 'lib' import x with context %}{{ x() }}", "{% from 'lib' import x %}{{ x() }}", "{% for i in range(3) %}{% include 'lib' %}{% endfor %}" })
+    struct Row
+    {
+        const char* body;
+        bool fails;
+    };
+    // Not a plain import (without context): the module shares the imported template's module, one per source change
+    // (docs/tasks/0528)
+    for (const auto& [body, fails] : { Row{ "{% include 'lib' %}{{ 1 }}", false }, Row{ "{% import 'lib' as l with context %}{{ l.x() }}", false },
+                                       Row{ "{% from 'lib' import x with context %}{{ x() }}", false },
+                                       Row{ "{% for i in range(3) %}{% include 'lib' %}{% endfor %}", false },
+                                       // A tree that takes a slot: an `extends` child, an included or imported template with blocks
+                                       Row{ "{% include 'child' %}", false }, Row{ "{% include 'blocks' %}", false },
+                                       Row{ "{% import 'child' as c with context %}", false }, Row{ "{% import 'blocks' as b with context %}", false },
+                                       // Calls that fail
+                                       Row{ "{% include 'lib' %}{{ 1 // 0 }}", true }, Row{ "{% include 'child' %}{{ 1 // 0 }}", true },
+                                       Row{ "{% import 'lib' as l with context %}{{ l.x() }}{{ 1 // 0 }}", true } })
     {
         auto module = MakeModule(body);
+        m_fs->AddFile("base", "<{% block b %}base{% endblock %}>");
         const auto& m = module.exports["m"];
         int serial = 0;
-        const auto callMany = [&](int count) {
+        const auto callMany = [&, failing = fails](int count) {
             for (int i = 0; i != count; ++i)
             {
                 // The same text length, so that every tree is the same size
-                m_fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}{# " + std::to_string(1000000 + ++serial) + " #}");
-                Call(m);
+                const auto mark = "{# " + std::to_string(1000000 + ++serial) + " #}";
+                m_fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}" + mark);
+                m_fs->AddFile("child", "{% extends 'base' %}{% block b %}child{% endblock %}" + mark);
+                m_fs->AddFile("blocks", "{% block b %}B{% endblock %}{% block c %}C{% endblock %}" + mark);
+                if (failing)
+                {
+                    EXPECT_THROW(Call(m), jinja2::BadResultAccess<>);
+                }
+                else
+                {
+                    Call(m);
+                }
             }
         };
         callMany(100);
