@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/927
 priority: high
 area: robustness
 depends: [0481]
@@ -22,3 +23,8 @@ alive with the value when it is shared (`GenericList` holds a shared accessor).
 
 **Done when.** A `BorrowedCellsSingle` row with a destroyed `GenericList` and `GenericMap` param, stored
 directly and through a closure, prints Python's output under ASan.
+
+**Resolution.** Fixed in #927 (Codex review, P0): under a keeper `OwnedArgument(value, true)` takes a generic
+list's or map's items once into a `ValuesList` or `ValuesMap`, nested lists and maps too, at most
+`MaxSequenceSize` items a list (`ResourceLimitError` past it). `NestedRenderGenericParamsOutliveTheHost` stores
+both directly and through a macro.

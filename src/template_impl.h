@@ -195,7 +195,9 @@ inline CycleCollector* SharedSnapshotKeeper(const RenderWorkspace& workspace, co
 
 // A host Value as a value the template owns, copied and converted by value, so that a value it
 // is stored in never refers to the host's (template_module.cpp)
-InternalValue OwnedArgument(const Value& value);
+// With `generic`, a GenericList or GenericMap as a list or dict of its items, which the host may free once a render
+// nested in another one returns (docs/tasks/0524)
+InternalValue OwnedArgument(const Value& value, bool generic = false);
 
 class ITemplateImpl
 {
@@ -738,7 +740,7 @@ public:
             }
             // The params refer to the host's values and names, or own copies under a keeper
             auto convertParam = [keeper](const Value& value) {
-                return JINJA2CPP_CELL_UNLIKELY(keeper != nullptr) ? OwnedArgument(value) : visit(visitors::InputValueConvertor(false, true), value.GetData());
+                return JINJA2CPP_CELL_UNLIKELY(keeper != nullptr) ? OwnedArgument(value, true) : visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
             if constexpr (std::is_same_v<ParamsMap, GenericMap>)
             {

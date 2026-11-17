@@ -1731,6 +1731,30 @@ TEST(BorrowedCellsSingle, NestedGenericRenderAsksTheHostOnce)
     EXPECT_EQ(1, accessor.calls);
 }
 
+TEST(BorrowedCellsSingle, NestedRenderGenericParamsOutliveTheHost)
+{
+    // 0524: a nested render's GenericList and GenericMap params, whose containers the host frees once that render
+    // returns, stored in a shared global directly and through a closure, are read by the outer render as Python
+    // reads them: the render took their items
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{});
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&env](const UserCallableParams&) {
+            Template tpl(&env);
+            EXPECT_TRUE(!!tpl.Load("{% set _ = g.append(p) %}{% set _ = g.append(d) %}"
+                                   "{% macro m() %}{{ p|join }}{{ d.n }}{% endmacro %}{% set _ = g.append(m) %}"));
+            const std::vector<int64_t> items{ 1, 2 };
+            CountingMapAccessor accessor;
+            ValuesMap nested{ { "p", MakeGenericList(items.begin(), items.end()) }, { "d", GenericMap([&accessor]() { return &accessor; }) } };
+            auto result = tpl.RenderAsString(nested);
+            EXPECT_TRUE(!!result) << (result ? std::string() : result.error().ToString());
+            return Value(std::string());
+        },
+        {});
+    EXPECT_EQ("12|1|121", Render("{{ inner() }}{{ g[0]|join }}|{{ g[1].n }}|{{ g[2]() }}", params, &env));
+}
+
 TEST(BorrowedCellsSingle, NestedRenderSelfOutsideItsRender)
 {
     // 0481, 0491: a nested render's `self` stored in a global and called once that render ended
