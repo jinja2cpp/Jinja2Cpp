@@ -248,6 +248,14 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 Write(out, Print(val, m_context));
                 return;
             }
+            // pprint's _pprint_mappingproxy (docs/tasks/0523)
+            if (const auto* proxied = map->GetProxiedMapping())
+            {
+                out += "mappingproxy(";
+                FormatTo(out, *proxied, indent + 13, allowance + 1, level);
+                out += ')';
+                return;
+            }
             auto entries = map->GetEntries();
             SortEntriesByKey(entries);
             out += '{';
@@ -594,6 +602,11 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             // An object (namespace(), cycler(), joiner()) prints as its repr
             visitors::ValueRenderer<char>(str, true)(map);
             return str;
+        }
+        // mappingproxy({...}) (docs/tasks/0523)
+        if (const auto* proxied = map.GetProxiedMapping())
+        {
+            return "mappingproxy(" + Print(*proxied, m_context) + ")";
         }
         auto os = std::back_inserter(str);
 
@@ -1068,6 +1081,11 @@ private:
             {
                 // namespace(), cycler() and joiner() are objects, which json.dumps rejects
                 throw TemplateRuntimeError("Object of type "s + objectClass + " is not JSON serializable");
+            }
+            // Nor is a mappingproxy a dict to it (docs/tasks/0523)
+            if (map->GetProxiedMapping())
+            {
+                throw TemplateRuntimeError("Object of type mappingproxy is not JSON serializable");
             }
             auto entries = map->GetEntries();
             std::vector<std::pair<std::string, size_t>> order;

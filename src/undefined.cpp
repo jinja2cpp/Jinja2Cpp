@@ -105,6 +105,35 @@ InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hi
     return MakeUndefinedValue(std::move(info));
 }
 
+std::optional<InternalValue> MakeUndefinedOfClass(std::string_view className, std::string hint)
+{
+    UndefinedInfo info;
+    info.hint = std::move(hint);
+    // Python's name of an undefined that was made by hand is None
+    info.name = "None";
+    if (className == "StrictUndefined")
+    {
+        info.policy = UndefinedPolicy::Strict;
+        if (info.hint.empty())
+        {
+            info.hint = "None is undefined";
+        }
+    }
+    else if (className == "ChainableUndefined")
+    {
+        info.policy = UndefinedPolicy::Chainable;
+    }
+    else if (className == "DebugUndefined")
+    {
+        info.policy = UndefinedPolicy::Debug;
+    }
+    else if (className != "Undefined")
+    {
+        return std::nullopt;
+    }
+    return MakeUndefinedValue(std::move(info));
+}
+
 InternalValue MakeCondExprUndefined(unsigned line)
 {
     UndefinedInfo info;

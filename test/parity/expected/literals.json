@@ -947,6 +947,476 @@
    "env": {},
    "templates": {},
    "output": "{'a': 2}|1"
+  },
+  {
+   "id": "literals.class_is_callable",
+   "template": "{{ (1).__class__ is callable }}|{{ 'a'.__class__ is callable }}|{{ none.__class__ is callable }}|{{ [].__class__ is callable }}|{{ x.__class__ is callable }}|{{ ('a'|safe).__class__ is callable }}|{{ [].keys.__class__ is callable }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|True|True|True|True|True|True"
+  },
+  {
+   "id": "literals.class_call_builtins",
+   "template": "{{ (1).__class__() }}|{{ (1).__class__('5') }}|{{ (1).__class__(' 7 ') }}|{{ (1).__class__(2.9) }}|{{ (1).__class__(true) }}|{{ 'x'.__class__(5) }}|{{ 'x'.__class__() == '' }}|{{ (1.5).__class__('2') }}|{{ (1.5).__class__() }}|{{ (1.5).__class__(3) }}|{{ true.__class__(0) }}|{{ true.__class__([1]) }}|{{ true.__class__() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0|5|7|2|1|5|True|2.0|0.0|3.0|False|True|False"
+  },
+  {
+   "id": "literals.class_call_sequences",
+   "template": "{{ [].__class__('ab') }}|{{ ().__class__('ab') }}|{{ [].__class__() }}|{{ ().__class__() }}|{{ [].__class__((1, 2)) }}|{{ ().__class__([1, 2]) }}|{{ ().__class__(range(3)) }}|{{ [].__class__({'a': 1}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "['a', 'b']|('a', 'b')|[]|()|[1, 2]|(1, 2)|(0, 1, 2)|['a']"
+  },
+  {
+   "id": "literals.class_call_none_and_undefined",
+   "template": "{{ none.__class__() }}|{{ zzz.__class__() }}|{{ zzz.__class__() is defined }}|{{ (zzz.__class__() ~ 'x') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "None||False|x"
+  },
+  {
+   "id": "literals.class_call_int_base",
+   "template": "{{ (1).__class__('ff', 16) }}|{{ (1).__class__('101', base=2) }}|{{ (1).__class__('12', 10) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "255|5|12"
+  },
+  {
+   "id": "literals.class_call_int_bad_string",
+   "template": "{{ (1).__class__('x') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "invalid literal for int() with base 10: 'x'"
+   }
+  },
+  {
+   "id": "literals.class_call_int_bad_base_value",
+   "template": "{{ (1).__class__('9', 8) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "invalid literal for int() with base 8: '9'"
+   }
+  },
+  {
+   "id": "literals.class_call_int_inf",
+   "template": "{{ (1).__class__((1.5).__class__('inf')) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "OverflowError",
+    "message": "cannot convert float infinity to integer"
+   }
+  },
+  {
+   "id": "literals.class_call_int_list",
+   "template": "{{ (1).__class__([]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "int() argument must be a string, a bytes-like object or a real number, not 'list'"
+   }
+  },
+  {
+   "id": "literals.class_call_int_too_many",
+   "template": "{{ (1).__class__(1, 2, 3) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "int() takes at most 2 arguments (3 given)"
+   }
+  },
+  {
+   "id": "literals.class_call_float_bad_string",
+   "template": "{{ (1.5).__class__('x') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "could not convert string to float: 'x'"
+   }
+  },
+  {
+   "id": "literals.class_call_float_too_many",
+   "template": "{{ (1.5).__class__(1, 2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "float expected at most 1 argument, got 2"
+   }
+  },
+  {
+   "id": "literals.class_call_list_not_iterable",
+   "template": "{{ [].__class__(5) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "literals.class_call_list_keyword",
+   "template": "{{ [].__class__(a=1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "list() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "literals.class_call_none_arguments",
+   "template": "{{ none.__class__(1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "NoneType takes no arguments"
+   }
+  },
+  {
+   "id": "literals.class_call_dict_keys_class",
+   "template": "{{ {}.keys().__class__() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "cannot create 'dict_keys' instances"
+   }
+  },
+  {
+   "id": "literals.class_call_markup",
+   "template": "{{ ('a'|safe).__class__('<b>') }}|{{ ('a'|safe).__class__('<b>') is escaped }}|{{ ('a'|safe).__class__(5) }}|{{ ('a'|safe).__class__() == '' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<b>|True|5|True"
+  },
+  {
+   "id": "literals.class_call_markup_autoescape",
+   "template": "{{ ('a'|safe).__class__('<b>') }}|{{ 'x'.__class__('<b>') }}",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>|&lt;b&gt;"
+  },
+  {
+   "id": "literals.class_call_str_of_markup_autoescape",
+   "template": "{{ 'x'.__class__('a'|safe) }}|{{ ('a'|safe).__class__('<i>'|safe) }}",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "a|<i>"
+  },
+  {
+   "id": "literals.class_call_type",
+   "template": "{{ (1).__class__.__class__(1) }}|{{ (1).__class__.__class__('a') == 'a'.__class__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'int'>|True"
+  },
+  {
+   "id": "literals.class_call_strict_undefined",
+   "template": "{{ x.__class__() }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "None is undefined"
+   }
+  },
+  {
+   "id": "literals.class_call_strict_undefined_str",
+   "template": "{{ x.__class__('x') ~ 'a' }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "x"
+   }
+  },
+  {
+   "id": "literals.class_call_debug_undefined",
+   "template": "{{ x.__class__('hint') }}|{{ x.__class__() }}",
+   "context": {},
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "{{ undefined value printed: hint }}|{{ None }}"
+  },
+  {
+   "id": "literals.class_call_chainable_undefined",
+   "template": "{{ x.__class__().y.z }}|{{ x.__class__() is defined }}",
+   "context": {},
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "|False"
+  },
+  {
+   "id": "literals.class_mro",
+   "template": "{{ (1).__class__.__mro__ }}|{{ true.__class__.__mro__ }}|{{ {}.__class__.__mro__ }}|{{ 'a'.__class__.__mro__ }}|{{ ('a'|safe).__class__.__mro__ }}|{{ none.__class__.__mro__ }}|{{ range(1).__class__.__mro__ }}|{{ namespace().__class__.__mro__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "(<class 'int'>, <class 'object'>)|(<class 'bool'>, <class 'int'>, <class 'object'>)|(<class 'dict'>, <class 'object'>)|(<class 'str'>, <class 'object'>)|(<class 'markupsafe.Markup'>, <class 'str'>, <class 'object'>)|(<class 'NoneType'>, <class 'object'>)|(<class 'range'>, <class 'object'>)|(<class 'jinja2.utils.Namespace'>, <class 'object'>)"
+  },
+  {
+   "id": "literals.class_bases",
+   "template": "{{ (1).__class__.__bases__ }}|{{ true.__class__.__bases__ }}|{{ ('a'|safe).__class__.__bases__ }}|{{ (1).__class__.__bases__[0].__bases__ }}|{{ (1).__class__.__bases__[0] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "(<class 'object'>,)|(<class 'int'>,)|(<class 'str'>,)|()|<class 'object'>"
+  },
+  {
+   "id": "literals.class_mro_method",
+   "template": "{{ (1).__class__.mro() }}|{{ true.__class__.mro() }}|{{ (1).__class__.__mro__[1].__name__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[<class 'int'>, <class 'object'>]|[<class 'bool'>, <class 'int'>, <class 'object'>]|object"
+  },
+  {
+   "id": "literals.class_mro_undefined_classes",
+   "template": "{{ x.__class__.__mro__ }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "(<class 'jinja2.runtime.StrictUndefined'>, <class 'jinja2.runtime.Undefined'>, <class 'object'>)"
+  },
+  {
+   "id": "literals.class_mro_undefined_debug",
+   "template": "{{ x.__class__.__mro__ }}|{{ x.__class__.__bases__ }}",
+   "context": {},
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "(<class 'jinja2.runtime.DebugUndefined'>, <class 'jinja2.runtime.Undefined'>, <class 'object'>)|(<class 'jinja2.runtime.Undefined'>,)"
+  },
+  {
+   "id": "literals.class_mro_type",
+   "template": "{{ (1).__class__.__class__.__mro__ }}|{{ (1).__class__.__class__.__bases__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "(<class 'type'>, <class 'object'>)|(<class 'object'>,)"
+  },
+  {
+   "id": "literals.class_mro_of_instance",
+   "template": "{{ (1).__mro__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": ""
+  },
+  {
+   "id": "literals.class_group_tuple",
+   "template": "{% for g in [{'a': 1}]|groupby('a') %}{{ g.__class__ }}|{{ g.__class__.__name__ }}|{{ g.__class__.__module__ }}|{{ g.__class__.__mro__ }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'jinja2.filters._GroupTuple'>|_GroupTuple|jinja2.filters|(<class 'jinja2.filters._GroupTuple'>, <class 'tuple'>, <class 'object'>)"
+  },
+  {
+   "id": "literals.class_lipsum_markup",
+   "template": "{{ lipsum(1).__class__ }}|{{ lipsum(1, false).__class__ }}|{{ lipsum(0).__class__ }}|{{ lipsum(0, false).__class__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'markupsafe.Markup'>|<class 'str'>|<class 'markupsafe.Markup'>|<class 'str'>"
+  },
+  {
+   "id": "literals.class_lipsum_markup_autoescape",
+   "template": "{{ lipsum(1)[:3] }}|{{ lipsum(1, false)[:1]|length }}",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<p>|1"
+  },
+  {
+   "id": "literals.class_block_reference",
+   "template": "{{ self.blk.__class__ }}{% block blk %}{% endblock %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'jinja2.runtime.BlockReference'>"
+  },
+  {
+   "id": "literals.class_block_reference_super",
+   "template": "{% extends 'base' %}{% block blk %}{{ super.__class__ }}{% endblock %}",
+   "context": {},
+   "env": {},
+   "templates": {
+    "base": "{% block blk %}{% endblock %}"
+   },
+   "output": "<class 'jinja2.runtime.BlockReference'>"
+  },
+  {
+   "id": "literals.class_macro_stays_macro",
+   "template": "{% macro m() %}{{ caller.__class__ }}{% endmacro %}{% call m() %}{% endcall %}|{{ m.__class__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'jinja2.runtime.Macro'>|<class 'jinja2.runtime.Macro'>"
+  },
+  {
+   "id": "literals.class_format_of_undefined",
+   "template": "{{ '{0.__class__}'.format(zzz) }}|{{ '{0.__class__.__name__}'.format(zzz) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'jinja2.runtime.Undefined'>|Undefined"
+  },
+  {
+   "id": "literals.class_format_of_strict_undefined",
+   "template": "{{ '{0.__class__}'.format(zzz) }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "<class 'jinja2.runtime.StrictUndefined'>"
+  },
+  {
+   "id": "literals.class_format_of_debug_undefined",
+   "template": "{{ '{0.__class__}'.format(zzz) }}",
+   "context": {},
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "<class 'jinja2.runtime.DebugUndefined'>"
+  },
+  {
+   "id": "literals.class_format_of_chainable_undefined",
+   "template": "{{ '{0.__class__}'.format(zzz) }}",
+   "context": {},
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "<class 'jinja2.runtime.ChainableUndefined'>"
+  },
+  {
+   "id": "literals.class_format_undefined_other_attr",
+   "template": "{{ '{0.foo}'.format(zzz) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'zzz' is undefined"
+   }
+  },
+  {
+   "id": "literals.class_namespace_class_item",
+   "template": "{% set ns = namespace() %}{% set ns.__class__ = 5 %}{{ ns['__class__'] }}|{{ ns.__class__ }}|{{ ns|attr('__class__') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'jinja2.utils.Namespace'>|<class 'jinja2.utils.Namespace'>|<class 'jinja2.utils.Namespace'>"
+  },
+  {
+   "id": "literals.class_namespace_class_attribute_in_constructor",
+   "template": "{% set ns = namespace(__class__=5) %}{{ ns['__class__'] }}|{{ ns.__class__ }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'jinja2.utils.Namespace'>|<class 'jinja2.utils.Namespace'>"
+  },
+  {
+   "id": "literals.class_call_int_prefixes_and_big",
+   "template": "{{ (1).__class__('0x1f', 0) }}|{{ (1).__class__('-0b11', 0) }}|{{ (1).__class__('1_0') }}|{{ (1).__class__('99999999999999999999') }}|{{ (1).__class__('zz', 36) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "31|-3|10|99999999999999999999|1295"
+  },
+  {
+   "id": "literals.class_call_int_none",
+   "template": "{{ (1).__class__(none) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "int() argument must be a string, a bytes-like object or a real number, not 'NoneType'"
+   }
+  },
+  {
+   "id": "literals.class_call_of_undefined_argument",
+   "template": "{{ [].__class__(zzz) }}|{{ 'a'.__class__(zzz) }}|{{ true.__class__(zzz) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[]||False"
+  },
+  {
+   "id": "literals.class_call_stored_class",
+   "template": "{% set c = (1).__class__ %}{{ c('7') + 1 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "8"
   }
  ]
 }

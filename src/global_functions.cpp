@@ -1,5 +1,7 @@
 #include "engine_errors.h"
 #include "expression_evaluator.h"
+#include "filters.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "python_format.h"
@@ -14,7 +16,7 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
-#include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -542,7 +544,13 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
         }
         result += html ? "<p>" + text + "</p>" : text;
     }
-    return InternalValue(std::move(result));
+    // html=True makes Markup, as Jinja2's generate_lorem_ipsum does
+    InternalValue text{ std::string(std::move(result)) };
+    if (html)
+    {
+        text.SetMarkup();
+    }
+    return text;
 }
 
 // The gettext functions of jinja2.ext.i18n, newstyle: (context, singular, plural, count) as the
@@ -785,6 +793,445 @@ std::optional<InternalValue> ClassGlobalOf(std::string_view module, std::string_
         }
     }
     return std::nullopt;
+}
+
+namespace
+{
+using ErrorClass = TemplateRuntimeError::PythonClass;
+
+std::string ReprOf(const InternalValue& value)
+{
+    std::string result;
+    Apply<visitors::ValueRenderer<char>>(value, result, true);
+    return result;
+}
+
+[[noreturn]] void ThrowTypeError(const std::string& message)
+{
+    throw TemplateRuntimeError(ErrorClass::TypeError, message);
+}
+
+// What the class `cls` says of more positional arguments than it takes, as CPython words it
+void CheckClassArguments(std::string_view cls, const CallParams& params, size_t most)
+{
+    const auto given = params.posParams.size();
+    if (given <= most)
+    {
+        return;
+    }
+    if (cls == "int" || cls == "str")
+    {
+        ThrowTypeError(std::string(cls) + "() takes at most " + std::to_string(most) + " argument" + (most == 1 ? "" : "s") + " (" + std::to_string(given) + " given)");
+    }
+    ThrowTypeError(std::string(cls) + " expected at most " + std::to_string(most) + " argument" + (most == 1 ? "" : "s") + ", got " + std::to_string(given));
+}
+
+// The result of the built-in filter `name` of the value, which is how Python's list(), str() and Markup() read it
+InternalValue ApplyBuiltinFilter(std::string_view name, const CallParams& filterParams, const InternalValue& value, RenderContext& context)
+{
+    return CreateFilter(name, FunctionArgs(filterParams))->Filter(value, context);
+}
+
+// The text int() reads in a base: without its space, sign and prefix
+struct IntText
+{
+    std::string_view digits;
+    bool negative = false;
+    int64_t base = 10;
+};
+
+// The base a 0x, 0o or 0b prefix of the text names; 0 for none
+int64_t IntPrefixBase(std::string_view text)
+{
+    if (text.size() < 2 || text.front() != '0')
+    {
+        return 0;
+    }
+    // ASCII only, whatever the C locale
+    const char letter = text[1] >= 'A' && text[1] <= 'Z' ? static_cast<char>(text[1] - 'A' + 'a') : text[1];
+    return letter == 'x' ? 16 : (letter == 'o' ? 8 : (letter == 'b' ? 2 : 0));
+}
+
+// Python's int(text, base) of a base of 0 or 2 to 36 first strips the space around the text, then reads a sign and a
+// 0x, 0o or 0b prefix of the base (any of them for base 0); nullopt when what is left cannot be digits of the base
+std::optional<IntText> SplitIntText(const std::string& raw, int64_t base)
+{
+    // The ASCII space characters, whatever the C locale
+    const auto isSpace = [](char ch) { return ch == ' ' || (ch >= '\t' && ch <= '\r'); };
+    size_t pos = 0;
+    size_t end = raw.size();
+    while (pos < end && isSpace(raw[pos]))
+    {
+        ++pos;
+    }
+    while (end > pos && isSpace(raw[end - 1]))
+    {
+        --end;
+    }
+    IntText result;
+    if (pos < end && (raw[pos] == '+' || raw[pos] == '-'))
+    {
+        result.negative = raw[pos] == '-';
+        ++pos;
+    }
+    const auto prefixBase = IntPrefixBase(std::string_view(raw.data() + pos, end - pos));
+    if (prefixBase != 0 && (base == 0 || base == prefixBase))
+    {
+        base = prefixBase;
+        pos += 2;
+        // 0x_ff is an integer
+        pos += (pos < end && raw[pos] == '_') ? size_t{ 1 } : size_t{ 0 };
+    }
+    else if (base == 0)
+    {
+        base = 10;
+        // A decimal with a leading zero is no integer unless it is all zeros
+        const std::string_view rest(raw.data() + pos, end - pos);
+        if (rest.size() > 1 && rest.front() == '0' && rest.find_first_not_of("0_") != std::string_view::npos)
+        {
+            return std::nullopt;
+        }
+    }
+    result.digits = std::string_view(raw.data() + pos, end - pos);
+    result.base = base;
+    return result;
+}
+
+// The value of the digit `ch` (0-9, a-z, A-Z), or a number no base has
+int64_t DigitValue(char ch)
+{
+    if (ch >= '0' && ch <= '9')
+    {
+        return ch - '0';
+    }
+    if (ch >= 'a' && ch <= 'z')
+    {
+        return ch - 'a' + 10;
+    }
+    if (ch >= 'A' && ch <= 'Z')
+    {
+        return ch - 'A' + 10;
+    }
+    return 99;
+}
+
+// Python's int(text, base): digits with single underscores between them. nullopt when the text is no integer in the
+// base; `overflow` is set for one beyond int64, which the caller builds as the int filter does
+std::optional<int64_t> ParseIntInBase(const std::string& raw, int64_t base, bool& overflow)
+{
+    const auto split = SplitIntText(raw, base);
+    if (!split)
+    {
+        return std::nullopt;
+    }
+    const uint64_t limit = split->negative ? uint64_t{ 9223372036854775808ULL } : uint64_t{ 9223372036854775807ULL };
+    const auto ubase = static_cast<uint64_t>(split->base);
+    uint64_t magnitude = 0;
+    bool afterDigit = false;
+    for (const char ch : split->digits)
+    {
+        if (ch == '_')
+        {
+            if (!afterDigit)
+            {
+                return std::nullopt;
+            }
+            afterDigit = false;
+            continue;
+        }
+        const auto digit = DigitValue(ch);
+        if (digit >= split->base)
+        {
+            return std::nullopt;
+        }
+        afterDigit = true;
+        const auto udigit = static_cast<uint64_t>(digit);
+        overflow = overflow || magnitude > (limit - udigit) / ubase;
+        if (!overflow)
+        {
+            magnitude = (magnitude * ubase) + udigit;
+        }
+    }
+    // A trailing underscore, or no digit at all
+    if (!afterDigit)
+    {
+        return std::nullopt;
+    }
+    return overflow ? int64_t{ 0 } : (split->negative ? static_cast<int64_t>(0 - magnitude) : static_cast<int64_t>(magnitude));
+}
+
+// int(text, base) for an explicit base: a string only, which the base reads
+InternalValue ConstructIntInBase(const InternalValue& arg, const InternalValue& base, RenderContext& context)
+{
+    CheckIntegerArgument(base);
+    if (!IsStringValue(arg))
+    {
+        ThrowTypeError("int() can't convert non-string with explicit base");
+    }
+    const auto baseNumber = ConvertToInt(base);
+    if (baseNumber != 0 && (baseNumber < 2 || baseNumber > 36))
+    {
+        throw TemplateRuntimeError(ErrorClass::ValueError, "int() base must be >= 2 and <= 36, or 0");
+    }
+    const auto text = filters::PythonNumberText(arg);
+    bool overflow = false;
+    if (const auto parsed = text ? ParseIntInBase(*text, baseNumber, overflow) : std::nullopt)
+    {
+        if (!overflow)
+        {
+            return InternalValue(*parsed);
+        }
+        // Beyond int64, which the int filter builds, the text being an integer already
+        CallParams filterParams;
+        filterParams.kwParams.emplace("base", base);
+        filterParams.kwParams.emplace("default", InternalValue());
+        if (auto result = ApplyBuiltinFilter("int", filterParams, arg, context); !result.IsUndefined())
+        {
+            return result;
+        }
+    }
+    throw TemplateRuntimeError(ErrorClass::ValueError, "invalid literal for int() with base " + std::to_string(baseNumber) + ": " + ReprOf(arg));
+}
+
+// int(x) of a value that is no string
+InternalValue ConstructIntOfNumber(const InternalValue& arg, RenderContext& context)
+{
+    if (const auto* flag = GetIf<bool>(&arg))
+    {
+        return InternalValue(int64_t{ *flag ? 1 : 0 });
+    }
+    if (GetIf<int64_t>(&arg) || arg.Kind() == ValueKind::BigInt)
+    {
+        return arg;
+    }
+    if (const auto* number = GetIf<double>(&arg))
+    {
+        if (std::isnan(*number))
+        {
+            throw TemplateRuntimeError(ErrorClass::ValueError, "cannot convert float NaN to integer");
+        }
+        if (std::isinf(*number))
+        {
+            throw TemplateRuntimeError("cannot convert float infinity to integer");
+        }
+        return ApplyBuiltinFilter("int", CallParams(), arg, context);
+    }
+    ThrowTypeError(std::string("int() argument must be a string, a bytes-like object or a real number, not '") + Apply<visitors::PythonTypeNameGetter>(arg) + "'");
+}
+
+InternalValue ConstructInt(const CallParams& params, RenderContext& context)
+{
+    CheckClassArguments("int", params, 2);
+    for (const auto& kw : params.kwParams)
+    {
+        if (kw.first != "base" || params.posParams.size() == 2)
+        {
+            ThrowTypeError("'" + kw.first + "' is an invalid keyword argument for int()");
+        }
+    }
+    if (params.posParams.empty())
+    {
+        if (!params.kwParams.empty())
+        {
+            ThrowTypeError("int() missing string argument");
+        }
+        return InternalValue(int64_t{ 0 });
+    }
+    const auto& arg = params.posParams.front();
+    if (const auto* info = GetUndefinedInfo(arg))
+    {
+        ThrowUndefined(*info);
+    }
+    if (params.posParams.size() == 2)
+    {
+        return ConstructIntInBase(arg, params.posParams[1], context);
+    }
+    if (!params.kwParams.empty())
+    {
+        return ConstructIntInBase(arg, params.kwParams.begin()->second, context);
+    }
+    const auto text = filters::PythonNumberText(arg);
+    if (!text)
+    {
+        return ConstructIntOfNumber(arg, context);
+    }
+    if (auto result = filters::PythonIntOfText(*text))
+    {
+        return std::move(*result);
+    }
+    throw TemplateRuntimeError(ErrorClass::ValueError, "invalid literal for int() with base 10: " + ReprOf(arg));
+}
+
+InternalValue ConstructFloat(const CallParams& params, RenderContext& context)
+{
+    CheckClassArguments("float", params, 1);
+    if (!params.kwParams.empty())
+    {
+        ThrowTypeError("float() takes no keyword arguments");
+    }
+    if (params.posParams.empty())
+    {
+        return InternalValue(0.0);
+    }
+    const auto& arg = params.posParams.front();
+    if (const auto* info = GetUndefinedInfo(arg))
+    {
+        ThrowUndefined(*info);
+    }
+    if (GetIf<double>(&arg) || GetIf<int64_t>(&arg) || GetIf<bool>(&arg) || arg.Kind() == ValueKind::BigInt)
+    {
+        return ApplyBuiltinFilter("float", CallParams(), arg, context);
+    }
+    if (const auto text = filters::PythonNumberText(arg))
+    {
+        if (auto result = filters::PythonFloatOfText(*text))
+        {
+            return InternalValue(*result);
+        }
+        throw TemplateRuntimeError(ErrorClass::ValueError, "could not convert string to float: " + ReprOf(arg));
+    }
+    ThrowTypeError(std::string("float() argument must be a string or a real number, not '") + Apply<visitors::PythonTypeNameGetter>(arg) + "'");
+}
+
+// list(x) and tuple(x): the items of x, which the list filter iterates as Python does
+InternalValue ConstructSequence(std::string_view cls, const CallParams& params, RenderContext& context)
+{
+    CheckClassArguments(cls, params, 1);
+    if (!params.kwParams.empty())
+    {
+        ThrowTypeError(std::string(cls) + "() takes no keyword arguments");
+    }
+    auto result = params.posParams.empty() ? ListAdapter::CreateAdapter(InternalValueList{}) : ApplyBuiltinFilter("list", CallParams(), params.posParams.front(), context);
+    if (cls == "tuple")
+    {
+        if (const auto list = AsList(result))
+        {
+            return ListAdapter::CreateAdapter(list->ToValueList()).MarkAsTuple();
+        }
+    }
+    return result;
+}
+
+InternalValue ConstructString(const CallParams& params, RenderContext& context)
+{
+    CheckClassArguments("str", params, 3);
+    if (!params.kwParams.empty())
+    {
+        ThrowTypeError("'" + params.kwParams.begin()->first + "' is an invalid keyword argument for str()");
+    }
+    if (params.posParams.empty())
+    {
+        return InternalValue(std::string());
+    }
+    // str(Markup) is a plain str
+    auto result = ApplyBuiltinFilter("string", CallParams(), params.posParams.front(), context);
+    result.SetMarkup(false);
+    return result;
+}
+} // namespace
+
+namespace
+{
+InternalValue ConstructBool(const CallParams& params)
+{
+    CheckClassArguments("bool", params, 1);
+    if (!params.kwParams.empty())
+    {
+        ThrowTypeError("bool() takes no keyword arguments");
+    }
+    if (params.posParams.empty())
+    {
+        return InternalValue(false);
+    }
+    if (const auto* undefined = GetIf<UndefinedValue>(&params.posParams.front()))
+    {
+        CheckStrictUndefined(*undefined);
+    }
+    return InternalValue(ConvertToBool(params.posParams.front()));
+}
+
+InternalValue ConstructType(const CallParams& params)
+{
+    if (params.posParams.size() != 1 || !params.kwParams.empty())
+    {
+        ThrowTypeError("type() takes 1 or 3 arguments");
+    }
+    if (auto result = MakeClassObject(params.posParams.front()))
+    {
+        return std::move(*result);
+    }
+    ThrowTypeError("type() of this value is not supported");
+}
+
+// Undefined(hint=None, obj=missing, name=None, exc=UndefinedError) of the class `className`
+InternalValue ConstructUndefined(std::string_view className, const CallParams& params)
+{
+    if (params.posParams.size() > 4)
+    {
+        ThrowTypeError(std::string(className) + ".__init__() takes from 1 to 5 positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+    }
+    std::string hint;
+    if (!params.posParams.empty() && IsStringValue(params.posParams.front()))
+    {
+        hint = AsString(params.posParams.front());
+    }
+    if (auto result = MakeUndefinedOfClass(className, std::move(hint)))
+    {
+        return std::move(*result);
+    }
+    ThrowTypeError("cannot create '" + std::string(className) + "' instances");
+}
+
+bool IsUndefinedClass(std::string_view className)
+{
+    return className == "Undefined" || className == "StrictUndefined" || className == "ChainableUndefined" || className == "DebugUndefined";
+}
+} // namespace
+
+InternalValue CallPythonClass(std::string_view className, const CallParams& params, RenderContext& context)
+{
+    if (className == "int")
+    {
+        return ConstructInt(params, context);
+    }
+    if (className == "float")
+    {
+        return ConstructFloat(params, context);
+    }
+    if (className == "str")
+    {
+        return ConstructString(params, context);
+    }
+    if (className == "list" || className == "tuple")
+    {
+        return ConstructSequence(className, params, context);
+    }
+    if (className == "bool")
+    {
+        return ConstructBool(params);
+    }
+    if (className == "NoneType")
+    {
+        if (!params.posParams.empty() || !params.kwParams.empty())
+        {
+            ThrowTypeError("NoneType takes no arguments");
+        }
+        return InternalValue(NoneValue{});
+    }
+    if (className == "type")
+    {
+        return ConstructType(params);
+    }
+    if (className == "Markup")
+    {
+        CheckClassArguments("Markup", params, 1);
+        return params.posParams.empty() ? InternalValue(std::string()).SetMarkup() : ApplyBuiltinFilter("safe", CallParams(), params.posParams.front(), context);
+    }
+    if (IsUndefinedClass(className))
+    {
+        return ConstructUndefined(className, params);
+    }
+    ThrowTypeError("cannot create '" + std::string(className) + "' instances");
 }
 
 // Jinja2's MarkSafeIfAutoescape node, which an oldstyle `{% trans %}` block wraps its gettext call in: Markup(value)
