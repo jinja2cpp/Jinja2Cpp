@@ -588,7 +588,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0524](0524-nested-render-generic-params-outlive-host.md) | A nested render's GenericList param stored in a shared global is read after the host freed it | robustness | high | done |
 | [0525](0525-nested-render-error-after-storing-closure.md) | A closure stored by a nested render that then fails reads its names as ended | parity | low | open |
 | [0526](0526-soft-frame-closure-reads-outer-name.md) | A closure kept past a `filter`, `with` or loop body reads the wrong value of a name the body rebound | parity | low | open |
-| [0527](0527-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds: StrictUndefined leftovers and the cost of the Load's checks | parity | low | open |
+| [0527](0527-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds: StrictUndefined leftovers and the cost of the Load's checks | parity | low | done |
 | [0528](0528-plain-import-shared-module-per-change.md) | A module that plain-imports a changing template keeps a shared module per source change | robustness | low | open |
 | [0529](0529-stored-self-let-go-stays-counted.md) | A `self` or `super()` stored in a module and let go of keeps the module's slot trees | robustness | low | open |
 | [0530](0530-render-memory-callable-and-context-storage.md) | The render memory budget leaves out a macro's function storage and a module context's vectors | robustness | low | open |
+| [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | open |
