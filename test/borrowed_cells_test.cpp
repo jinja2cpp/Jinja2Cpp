@@ -1749,6 +1749,142 @@ struct FailingNestedEnv
     }
 };
 } // namespace
+TEST(BorrowedCellsSingle, NestedRenderValueOutlivesTheValueThatNamedItsTree)
+{
+    // 0521: the outer render owns no nested tree any more: each value that names one owns it (RenderContext::TreeOwner),
+    // also one made while the outer render runs the nested render's code on its own context (OwnedArenaSwitch). The
+    // value that named the tree first is dropped before the second one is read. The expectations are Python Jinja2's
+    // 3.1.6, the host destroying the nested template and its params as RenderWithDestroyedNested does
+    struct Case
+    {
+        const char* outer;
+        const char* inner;
+        const char* expected;
+    };
+    const Case cases[] = {
+        // A macro defined by an escaped macro, called by the outer render, which then drops the first
+        { "{{ inner() }}{% set mk = g.pop() %}{% set _ = mk() %}{% set m2 = g.pop() %}{% set mk = none %}{{ m2() }}",
+          "{% macro mk() %}{% macro d() %}deep{% endmacro %}{% set _ = g.append(d) %}{% endmacro %}{% set _ = g.append(mk) %}", "deep" },
+        // A recursive loop of an escaped macro
+        { "{{ inner() }}{% set mk = g.pop() %}{% set _ = mk() %}{% set mk = none %}{{ g.pop()([7]) }}",
+          "{% macro mk() %}{% for x in [1] recursive %}{{ x }}{% set _ = g.append(loop) %}{% endfor %}{% endmacro %}{% set _ = g.append(mk) %}", "7" },
+        // A macro defined in a `with` of an escaped macro
+        { "{{ inner() }}{% set mk = g.pop() %}{% set _ = mk() %}{% set mk = none %}{{ g.pop()() }}",
+          "{% macro mk() %}{% with a = 'w' %}{% macro d() %}w{% endmacro %}{% set _ = g.append(d) %}{% endwith %}{% endmacro %}{% set _ = g.append(mk) %}",
+          "w" },
+        // A block of a stored `self` that stores a macro, the `self` dropped before the macro is called
+        { "{{ inner() }}{% set s = g.pop() %}{% set _ = s.b() %}{% set s = none %}{{ g.pop()() }}",
+          "{% block b %}{% macro d() %}blk{% endmacro %}{% set _ = g.append(d) %}{% endblock %}{% set _ = g.append(self) %}", "blk" },
+        // A macro that calls the one beside it, which the outer render dropped
+        { "{{ inner() }}{% set m = g.pop() %}{% set f = g.pop() %}{% set f = none %}{{ m() }}",
+          "{% macro f() %}x{% endmacro %}{% set _ = g.append(f) %}{% macro m() %}{{ f() }}y{% endmacro %}{% set _ = g.append(m) %}", "xy" },
+        // Literals of the tree, and params, are the values' own
+        { "{{ inner() }}{{ g[-1] }}", "{% set _ = g.append(['lit', [1, 'two'], {'k': 'v'}]) %}", "['lit', [1, 'two'], {'k': 'v'}]" },
+        { "{{ inner() }}{{ g[-1] }}{{ g[-2] }}", "{% set _ = g.append('lit') %}{% set _ = g.append(p) %}", "['param-str', [1, 2]]lit" },
+        // A filtered loop read once its render has ended
+        { "{{ inner() }}{{ g[-1].length }}|{{ g[-1].index }}", "{% for x in [1, 2, 3] if x > 1 %}{% set _ = g.append(loop) %}{% endfor %}", "2|2" },
+    };
+    for (const auto& c : cases)
+    {
+        EXPECT_EQ(c.expected, RenderWithDestroyedNested(c.outer, c.inner)) << c.outer << " | " << c.inner;
+    }
+}
+
+TEST(BorrowedCellsSingle, NestedRenderValuesMadeOnTheOuterContextOutliveTheirTemplates)
+{
+    // 0521: what the outer render makes while it runs the code of an escaped macro (or of a stored `self`) is the only
+    // owner of the nested tree once that value is dropped. The closures a nested render's frames end with hold the
+    // tree too until the collector gives them up, which it does once there are many: 200 renders, so that the first
+    // values are kept by nothing else. The expectations are Python Jinja2's 3.1.6
+    struct Case
+    {
+        const char* inner;
+        // What the outer render runs with the escaped value `mk`, which it drops afterwards
+        const char* run;
+        const char* calls;
+        const char* expected;
+    };
+    const char* const callEach = "{{ keep[0]() }}{{ keep[100]() }}{{ keep[199]() }}";
+    const Case cases[] = {
+        { "{% macro mk() %}{% macro d() %}deep{% endmacro %}{% set _ = g.append(d) %}{% endmacro %}{% set _ = g.append(mk) %}",
+          "{% set _ = mk() %}",
+          callEach,
+          "deepdeepdeep" },
+        { "{% macro mk() %}{% for x in [1] recursive %}{% set _ = g.append(loop) %}{{ x }}{% endfor %}{% endmacro %}{% set _ = g.append(mk) %}",
+          "{% set _ = mk() %}",
+          "{{ keep[0]([7]) }}{{ keep[199]([8]) }}",
+          "78" },
+        // A level of a recursive loop the outer render calls defines a macro
+        { "{% macro mk() %}{% for x in [1] recursive %}{% macro d() %}rec{% endmacro %}{% set _ = g.append(d) %}{% set _ = g.append(loop) %}{% endfor %}"
+          "{% endmacro %}{% set _ = g.append(mk) %}",
+          "{% set _ = mk() %}{% set lp = g.pop() %}{% set d1 = g.pop() %}{% set _ = lp([5]) %}{% set l2 = g.pop() %}{% set lp = none %}{% set l2 = none %}"
+          "{% set d1 = none %}",
+          callEach,
+          "recrecrec" },
+        { "{% block b %}{% macro d() %}blk{% endmacro %}{% set _ = g.append(d) %}{% endblock %}{% set _ = g.append(self) %}",
+          "{% set _ = mk.b() %}",
+          callEach,
+          "blkblkblk" },
+    };
+    for (const auto& c : cases)
+    {
+        const std::string outer = std::string("{% set keep = [] %}{% for i in range(200) %}{{ inner() }}{% set mk = g.pop() %}") + c.run
+                                  + "{% set _ = keep.append(g.pop()) %}{% set mk = none %}{% endfor %}" + c.calls;
+        EXPECT_EQ(c.expected, RenderWithDestroyedNested(outer, c.inner)) << c.inner;
+    }
+}
+
+TEST(BorrowedCellsSingle, NestedRenderMacroDefiningAMacroRunsInAModule)
+{
+    // 0521: a module's macro calls an escaped macro of a nested render, lent to it, so that its code runs on another
+    // render's context, where the macro it defines must keep the nested tree alive too, once the nested template and
+    // the macro that defined it are gone. Python: 'deep'
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{});
+    Template modTpl(&env);
+    ASSERT_TRUE(!!modTpl.Load("{% macro go(f) %}{% set _ = f() %}{% endmacro %}"));
+    auto made = modTpl.MakeModule({});
+    ASSERT_TRUE(!!made) << made.error().ToString();
+    auto module = std::move(made.value());
+    ValuesMap params;
+    params["go"] = module.exports["go"];
+    params["inner"] = UserCallable(
+        [&env](const UserCallableParams&) {
+            auto tpl = std::make_unique<Template>(&env);
+            EXPECT_TRUE(!!tpl->Load("{% macro mk() %}{% macro d() %}deep{% endmacro %}{% set _ = g.append(d) %}{% endmacro %}{% set _ = g.append(mk) %}"));
+            EXPECT_TRUE(!!tpl->RenderAsString({}));
+            return Value(std::string());
+        },
+        {});
+    EXPECT_EQ("deep", Render("{{ inner() }}{% set mk = g.pop() %}{% set _ = go(mk) %}{% set mk = none %}{{ g.pop()() }}", params, &env));
+}
+
+TEST(BorrowedCellsSingle, NestedRenderCallsAnEscapedMacroOfAnotherNestedRender)
+{
+    // 0521: A runs B nested, which runs a new A' nested and calls the macro A' stored while A' is gone (verifier round 2
+    // of 0481); the outer A calls it after B is gone too. Python: 'onetwoonetwo'
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{});
+    ValuesMap params;
+    params["a2"] = UserCallable(
+        [&env](const UserCallableParams&) {
+            auto tpl = std::make_unique<Template>(&env);
+            EXPECT_TRUE(!!tpl->Load("{% macro m() %}one{% endmacro %}{% macro n() %}{{ m() }}two{% endmacro %}{% set _ = g.append(n) %}"));
+            EXPECT_TRUE(!!tpl->RenderAsString({}));
+            return Value(std::string());
+        },
+        {});
+    params["b"] = UserCallable(
+        [&env, &params](const UserCallableParams&) {
+            auto tpl = std::make_unique<Template>(&env);
+            EXPECT_TRUE(!!tpl->Load("{{ a2() }}{{ g[-1]() }}"));
+            auto result = tpl->RenderAsString(params);
+            EXPECT_TRUE(!!result);
+            return Value(result ? result.value() : std::string());
+        },
+        {});
+    EXPECT_EQ("onetwoonetwo", Render("{{ b() }}{{ g[-1]() }}", params, &env));
+}
 
 TEST(BorrowedCellsSingle, NestedRenderThatFailsKeepsItsClosures)
 {

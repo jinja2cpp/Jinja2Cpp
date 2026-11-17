@@ -108,13 +108,24 @@ void CycleCollector::Finish() noexcept
         Collect();
         return;
     }
+    // The values this render noted trees for may outlive it in the outer render too. What it cannot note there only
+    // goes uncounted: the values own their trees (docs/tasks/0521)
+    for (const auto& kept : m_notes->trees)
+    {
+        if (kept.tree.expired())
+        {
+            continue;
+        }
+        try
+        {
+            m_outer->KeepTree(kept);
+        }
+        catch (...) // NOLINT(bugprone-empty-catch): out of memory; the tree stays alive, and stays uncounted
+        {
+        }
+    }
     try
     {
-        // The values this render kept trees for may outlive it in the outer render too
-        for (auto& kept : m_notes->trees)
-        {
-            m_outer->KeepTree(kept.tree, kept.bytes);
-        }
         for (const auto& candidate : m_notes->candidates)
         {
             m_outer->Add(candidate);
@@ -131,38 +142,113 @@ void CycleCollector::Finish() noexcept
     }
 }
 
-void CycleCollector::KeepTree(std::shared_ptr<const void> tree, std::uint64_t bytes)
+void CycleCollector::KeepTree(const KeptTree& kept)
 {
-    if (tree && Insert(std::move(tree), bytes))
+    if (auto* note = Insert(kept.address, kept.tree, 0))
     {
-        // Kept first: a tree past the budget stays alive for the values that name it, and this render fails instead
-        // (a throw here would make Finish's hand-over drop the trees)
-        detail::ChargeRenderMemoryOf(this, bytes);
+        // Past the budget the tree is noted all the same, as its values own it: this render fails at its next step
+        detail::ChargeRenderMemoryOf(this, kept.bytes, &note->bytes);
     }
 }
 
-bool CycleCollector::Insert(std::shared_ptr<const void> tree, std::uint64_t bytes)
+void CycleCollector::GiveBack(std::uint64_t bytes) noexcept
+{
+    if (bytes != 0)
+    {
+        detail::ReleaseRenderMemoryOf(this, bytes);
+    }
+}
+
+bool CycleCollector::Keeps(const void* tree) noexcept
+{
+    if (!m_notes)
+    {
+        return false;
+    }
+    auto& notes = *m_notes;
+    const auto found = notes.treeIndex.find(tree);
+    if (found == notes.treeIndex.end())
+    {
+        return false;
+    }
+    auto& note = notes.trees[found->second];
+    if (!note.tree.expired())
+    {
+        return true;
+    }
+    // Gone: what it took is back, once, and the slot is the next tree's at this address
+    GiveBack(note.bytes);
+    note.bytes = 0;
+    return false;
+}
+
+void CycleCollector::GiveBackExpired() noexcept
+{
+    if (!m_notes)
+    {
+        return;
+    }
+    auto& notes = *m_notes;
+    size_t kept = 0;
+    for (size_t i = 0; i != notes.trees.size(); ++i)
+    {
+        auto& note = notes.trees[i];
+        if (note.tree.expired())
+        {
+            GiveBack(note.bytes);
+            notes.treeIndex.erase(note.address);
+            continue;
+        }
+        if (kept != i)
+        {
+            notes.trees[kept] = std::move(note);
+        }
+        notes.treeIndex[notes.trees[kept].address] = kept;
+        ++kept;
+    }
+    notes.trees.erase(notes.trees.begin() + static_cast<std::ptrdiff_t>(kept), notes.trees.end());
+    notes.treePruneAt = std::max(Notes::MinPruneAt, 2 * kept);
+}
+
+size_t CycleCollector::KeptTreeCount() const noexcept
+{
+    if (!m_notes)
+    {
+        return 0;
+    }
+    return static_cast<size_t>(std::count_if(m_notes->trees.begin(), m_notes->trees.end(), [](const KeptTree& note) { return !note.tree.expired(); }));
+}
+
+CycleCollector::KeptTree* CycleCollector::Insert(const void* address, std::weak_ptr<const void> tree, std::uint64_t bytes)
 {
     if (!m_notes)
     {
         m_notes = std::make_unique<Notes>();
     }
     auto& notes = *m_notes;
-    const void* key = tree.get();
-    if (!notes.treeSet.insert(key).second)
+    // The expired notes first, so that a loop of trees that come and go stays at its live size
+    if (notes.trees.size() >= notes.treePruneAt)
     {
-        return false;
+        GiveBackExpired();
     }
-    try
+    const auto found = notes.treeIndex.find(address);
+    if (found != notes.treeIndex.end())
     {
-        notes.trees.push_back({ std::move(tree), bytes });
+        auto& note = notes.trees[found->second];
+        if (!note.tree.expired())
+        {
+            return nullptr;
+        }
+        // A new tree at the address of an expired one
+        GiveBack(note.bytes);
+        note.tree = std::move(tree);
+        note.bytes = bytes;
+        return &note;
     }
-    catch (...)
-    {
-        notes.treeSet.erase(key);
-        throw;
-    }
-    return true;
+    notes.trees.reserve(notes.trees.size() + 1);
+    notes.treeIndex.emplace(address, notes.trees.size());
+    notes.trees.push_back({ std::move(tree), address, bytes });
+    return &notes.trees.back();
 }
 
 std::weak_ptr<const void> CycleCollector::ExportToken()

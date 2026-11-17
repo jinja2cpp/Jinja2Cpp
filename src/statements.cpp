@@ -1477,7 +1477,8 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement,
         // what this level's body caches must not be found by the level that called it
         const HomeCall homeCall(site, context, true);
         auto& home = homeCall.Context();
-        const ArenaSwitch nodesSwitch(home, nodes);
+        // The owner travels with the callable: what the body makes of the tree keeps it, wherever it runs (0521)
+        const OwnedArenaSwitch nodesSwitch(home, nodes, &treeOwner);
         const bool isLinked = homeCall.HidesScopes(home.GetScopesCount());
         const OutputAutoescapeGuard autoescapeGuard(home, autoescape, isVolatile);
         home.EnterScope();
@@ -2155,7 +2156,9 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
     // An ended stack of a render that ended before this one resolves in that render's table (SelfBlocksOf)
     const auto block = (stack.endedSlots ? *stack.endedSlots : blockContext.GetRendererCallback()->Templates()).Resolve(p->second[depth]);
     blockContext.PassOverEntryBindings();
-    const ArenaSwitch nodesSwitch(blockContext, block.nodes);
+    // The table of an ended stack owns its trees, which what the block makes keeps alive (docs/tasks/0521)
+    const std::shared_ptr<const void> tableOwner = stack.endedSlots;
+    const OwnedArenaSwitch nodesSwitch(blockContext, block.nodes, &tableOwner);
     // Jinja2 renders a block through a generator: a StopIteration out of it is a RuntimeError, not a stopped call
     // Sealed outside the handler: MSVC runs a handler on top of the stack of the throw, and a rethrow from it
     // would keep that stack through every template boundary the failure passes
@@ -3791,8 +3794,9 @@ struct MacroStatement::CallableBody
     // The call on its home
     void operator()(RenderContext& home, size_t link, const CallParams& callParams, OutStream& stream) const
     {
-        // A macro called from another template (imported, or passed as `caller`) runs in its own tree
-        const ArenaSwitch nodesSwitch(home, nodes);
+        // A macro called from another template (imported, or passed as `caller`) runs in its own tree, which what it
+        // makes there keeps alive, also on the context of a render that is not the one the tree is of (docs/tasks/0521)
+        const OwnedArenaSwitch nodesSwitch(home, nodes, &treeOwner);
         const OutputAutoescapeGuard autoescapeGuard(home, autoescape, isVolatile);
         macro->InvokeMacroRenderer(callParams, stream, home, link);
     }

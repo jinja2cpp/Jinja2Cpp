@@ -795,11 +795,104 @@ int CountModuleKeep(bool written, int iterations, const ProfileOptions& profile)
     return 0;
 }
 
+// A render whose host callable renders another template nested in it, which shares the environment's globals, ten times
+// a call (docs/tasks/0481, 0521): the outer render notes the trees the nested ones run in. Nested/shared_globals renders
+// one template loaded once, so the outer render notes a tree once; Nested/new_template loads a new one each time and
+// destroys it after the render, so that it notes ten trees and gives them back
+class NestedRender
+{
+public:
+    explicit NestedRender(bool newTemplate)
+        : m_newTemplate(newTemplate)
+    {
+        m_env.AddGlobal("g", jinja2::ValuesList{ 1, 2, 3 });
+        if (!m_outer.Load("{% for i in range(10) %}{{ inner() }}{% endfor %}"))
+        {
+            return;
+        }
+        m_params["inner"] = jinja2::UserCallable(
+            [this](const jinja2::UserCallableParams&) {
+                if (!m_newTemplate)
+                {
+                    return jinja2::Value(RenderInner(m_shared));
+                }
+                jinja2::Template tpl(&m_env);
+                if (!tpl.Load(kInner))
+                {
+                    return jinja2::Value(std::string());
+                }
+                return jinja2::Value(RenderInner(tpl));
+            },
+            {});
+        m_ok = static_cast<bool>(m_shared.Load(kInner));
+    }
+
+    // The callable it made refers to it
+    NestedRender(const NestedRender&) = delete;
+    NestedRender& operator=(const NestedRender&) = delete;
+
+    [[nodiscard]] bool Ok() const { return m_ok; }
+    void Run() { m_ok = m_ok && m_outer.RenderAsString(m_params).has_value(); }
+
+private:
+    static constexpr const char* kInner = "{% macro m(x) %}<{{ x }}>{% endmacro %}{% for v in g %}{{ m(v) }}{% endfor %}{{ g|length }}";
+
+    static std::string RenderInner(jinja2::Template& tpl)
+    {
+        auto result = tpl.RenderAsString({});
+        return result ? result.value() : std::string();
+    }
+
+    bool m_newTemplate;
+    bool m_ok = false;
+    jinja2::TemplateEnv m_env;
+    jinja2::Template m_outer{ &m_env };
+    jinja2::Template m_shared{ &m_env };
+    jinja2::ValuesMap m_params;
+};
+
+void BenchNestedRender(benchmark::State& state, bool newTemplate)
+{
+    NestedRender nested(newTemplate);
+    if (!nested.Ok())
+    {
+        state.SkipWithError("nested render failed");
+        return;
+    }
+    for (auto _ : state)
+    {
+        nested.Run();
+    }
+}
+
+int CountNestedRender(bool newTemplate, int iterations, const ProfileOptions& profile)
+{
+    NestedRender nested(newTemplate);
+    if (!nested.Ok())
+    {
+        std::cerr << "Nested: failed to load\n";
+        return 1;
+    }
+    auto fn = [&nested] { nested.Run(); };
+    fn();
+    if (!nested.Ok())
+    {
+        std::cerr << "Nested: failed to render\n";
+        return 1;
+    }
+    RunCounted(fn, iterations, profile);
+    return 0;
+}
+
 int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& name, int iterations, const ProfileOptions& profile)
 {
     if (name == "Module/keep" || name == "Module/keep_written")
     {
         return CountModuleKeep(name == "Module/keep_written", iterations, profile);
+    }
+    if (name == "Nested/shared_globals" || name == "Nested/new_template")
+    {
+        return CountNestedRender(name == "Nested/new_template", iterations, profile);
     }
     const auto slash = name.find('/');
     const std::string kind = name.substr(0, slash);
@@ -939,6 +1032,8 @@ int main(int argc, char** argv)
     }
     benchmark::RegisterBenchmark("Module/keep", BenchModuleKeep, false);
     benchmark::RegisterBenchmark("Module/keep_written", BenchModuleKeep, true);
+    benchmark::RegisterBenchmark("Nested/shared_globals", BenchNestedRender, false);
+    benchmark::RegisterBenchmark("Nested/new_template", BenchNestedRender, true);
     for (const auto& c : cases)
     {
         if (std::find(OutputTargetCases.begin(), OutputTargetCases.end(), c->name) == OutputTargetCases.end())
