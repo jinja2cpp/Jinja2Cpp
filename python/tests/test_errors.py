@@ -139,7 +139,14 @@ def test_include_of_several_missing_templates_is_templates_not_found():
         assert str(info.value) == "none of the templates given were found: missing, missing2"
 
 
-_PY312_TEXT = {"{{ dict([[1, 2], 3]) }}": "cannot convert dictionary update sequence element #1 to a sequence"}
+# Python 3.14 reworded these; the pinned oracle is 3.12. Jinja2's cache key (loader ref, name) is a tuple, so
+# 3.14 names it: "cannot use 'tuple' as a dict key (unhashable type: 'list')".
+_PY312_TEXT = {
+    "{{ dict([[1, 2], 3]) }}": "cannot convert dictionary update sequence element #1 to a sequence",
+    "{% include [[]] %}": "unhashable type: 'list'",
+    "{% include [{}] ignore missing %}": "unhashable type: 'dict'",
+    "{% include ['missing', []] %}": "unhashable type: 'list'",
+}
 
 
 @pytest.mark.parametrize(
