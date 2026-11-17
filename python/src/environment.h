@@ -98,6 +98,8 @@ public:
     // The globals the engine's environment has of its own (ConfigureForChatTemplates' raise_exception
     // and strftime_now), which a render adds below env.globals; null when there are none
     [[nodiscard]] const std::shared_ptr<const jinja2::ValuesMap>& EngineGlobals() const noexcept { return m_engineGlobals; }
+    // What EngineGlobals borrow: the clock of their strftime_now, which a later SetChatTemplates replaces
+    [[nodiscard]] const nb::object& EngineGlobalsBound() const noexcept { return m_engineGlobalsBound; }
     // Limits::maxSequenceSize of the environment, or the engine's built-in cap
     [[nodiscard]] std::uint64_t MaxSequenceSize() const noexcept { return m_settings.limits.maxSequenceSize != 0 ? m_settings.limits.maxSequenceSize : std::uint64_t{ 1 } << 26; }
     // Where a template the loader gives came from, for its errors and Template.filename
@@ -124,8 +126,9 @@ private:
     void RetireEngine() noexcept;
     struct Retired
     {
-        std::shared_ptr<jinja2::TemplateEnv> env;
-        // A weak reference to its list: the templates own it
+        // Owned by its list (a capsule in it), which its templates own: it goes with them
+        std::weak_ptr<jinja2::TemplateEnv> env;
+        // A weak reference to its list
         nb::object bound;
     };
     void ApplyChatTemplates();
@@ -168,6 +171,7 @@ private:
     nb::object m_chatClock = nb::none();
 #endif
     std::shared_ptr<const jinja2::ValuesMap> m_engineGlobals;
+    nb::object m_engineGlobalsBound = nb::none();
     bool m_cleared = false;
 };
 

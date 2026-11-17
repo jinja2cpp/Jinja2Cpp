@@ -611,10 +611,21 @@ void PyEnvironment::RetireEngine() noexcept
     m_retired.erase(std::remove_if(m_retired.begin(), m_retired.end(), gone), m_retired.end());
     try
     {
-        nb::object ref = nb::steal(PyWeakref_NewRef(m_bound.ptr(), nullptr));
+        // The list owns the engine environment (and the loader's handler and what else it holds), so that it goes
+        // with the templates; the entry only names both
+        std::weak_ptr<jinja2::TemplateEnv> env = m_env;
+        auto owner = std::make_unique<std::shared_ptr<jinja2::TemplateEnv>>(m_env);
+        nb::object capsule = nb::steal(PyCapsule_New(owner.get(), nullptr, [](PyObject* object) {
+            delete static_cast<std::shared_ptr<jinja2::TemplateEnv>*>(PyCapsule_GetPointer(object, nullptr));
+        }));
+        if (capsule.is_valid())
+        {
+            owner.release(); // NOLINT(bugprone-unused-return-value): the capsule owns it now
+        }
+        nb::object ref = capsule.is_valid() && PyList_Append(m_bound.ptr(), capsule.ptr()) == 0 ? nb::steal(PyWeakref_NewRef(m_bound.ptr(), nullptr)) : nb::object();
         if (ref.is_valid())
         {
-            m_retired.push_back(Retired{ std::move(m_env), std::move(ref) });
+            m_retired.push_back(Retired{ std::move(env), std::move(ref) });
         }
         else
         {
@@ -708,6 +719,7 @@ void PyEnvironment::ApplyChatTemplates()
     auto globals = std::make_shared<jinja2::ValuesMap>();
     m_env->ApplyGlobals([&globals](const jinja2::ValuesMap& values) { *globals = values; });
     m_engineGlobals = std::move(globals);
+    m_engineGlobalsBound = m_chatClock;
 #endif
 }
 
@@ -748,9 +760,10 @@ void PyEnvironment::ApplyGettext(bool everyEngine)
     }
     // The templates of the engine environments before, as Jinja2's templates all read env.globals
     const auto retired = m_retired;
-    for (const auto& [env, ref] : retired)
+    for (const auto& [weak, ref] : retired)
     {
-        if (const auto bound = RetiredList(ref); !bound.is_none())
+        const auto bound = RetiredList(ref);
+        if (const auto env = weak.lock(); env && !bound.is_none())
         {
             install(*env, bound);
         }
@@ -1025,6 +1038,7 @@ int PyEnvironment::Traverse(visitproc visit, void* arg) const
         Py_VISIT(object->ptr());
     }
     Py_VISIT(m_bound.ptr());
+    Py_VISIT(m_engineGlobalsBound.ptr());
     Py_VISIT(m_chatClock.ptr());
     for (size_t i = 0; i < 4; ++i)
     {
@@ -1060,7 +1074,9 @@ void PyEnvironment::Clear() noexcept
     m_autoescape = nb::none();
     m_extensions = nb::none();
     m_options = nb::none();
+    m_engineGlobals.reset();
     m_bound = nb::none();
+    m_engineGlobalsBound = nb::none();
     m_chatClock = nb::none();
     for (size_t i = 0; i < 4; ++i)
     {
@@ -1130,6 +1146,8 @@ void PyTemplate::RenderWith(Target& target, const nb::args& args, const nb::kwar
     state.templateGlobals = m_globals.ptr();
     state.maxSequenceSize = env.MaxSequenceSize();
     // The globals: the environment's, then the template's over them
+    // Held for the render: a callable the render runs may start another engine environment
+    const nb::object engineGlobalsBound = env.EngineGlobalsBound();
     auto globals = env.EngineGlobals() ? std::make_shared<jinja2::ValuesMap>(*env.EngineGlobals()) : std::make_shared<jinja2::ValuesMap>();
     AddGlobals(*globals, m_envGlobals, state.sandbox != nullptr, held);
     if (!m_globals.is_none())

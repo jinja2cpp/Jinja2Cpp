@@ -326,3 +326,46 @@ def test_a_filter_replaced_while_a_template_loads_stays_with_it(how):
     env.cache.clear() if env.cache is not None else None
     gc.collect()
     assert env.from_string("{{ 1|f }}").render() == "second"
+
+
+def test_the_chat_clock_of_the_globals_stays_while_they_do():
+    # docs/tasks/0406: the environment's globals keep the clock of their strftime_now after another clock
+    # replaced it and the engine environment it was bound in went
+    env = jinja2cpp.Environment()
+    if not hasattr(env, "_set_chat_templates"):
+        pytest.skip("no chat templates")
+    try:
+        env._set_chat_templates(lambda: 0.0)
+    except TypeError:
+        pytest.skip("built without chat templates")
+    tpl = env.from_string("{{ strftime_now('%Y') }}")
+    second = lambda: 86400.0 * 366
+    ref = weakref.ref(second)
+    env._set_chat_templates(second)
+    del second
+    env.from_string("x")
+    env._set_chat_templates(lambda: 86400.0 * 366 * 2)
+    gc.collect()
+    assert ref() is not None
+    assert tpl.render() == "1971"
+
+
+def test_an_environment_whose_loader_closes_over_it_is_collected():
+    # docs/tasks/0406: an engine environment kept for later installs goes with its templates, so a loader handler it
+    # holds does not keep the environment alive
+    class Loader(jinja2cpp.BaseLoader):
+        def __init__(self, env_ref):
+            self.env_ref = env_ref
+
+        def get_source(self, environment, name):
+            return "x", None, lambda: environment is not None
+
+    env = jinja2cpp.Environment(cache_size=0)
+    env.loader = Loader(None)
+    env.get_template("a")
+    env.loader = Loader(None)
+    env.get_template("a")
+    ref = weakref.ref(env)
+    del env
+    gc.collect()
+    assert ref() is None
