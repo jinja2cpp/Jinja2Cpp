@@ -1282,10 +1282,12 @@ TEST_F(AllocationFailureTest, FreshStableMapAllocatesOnceLessOnItsFirstInsert)
     VectorListMap vectorListMap;
     EXPECT_EQ(firstInsert(vectorListMap) - 1, firstInsert(map));
     EXPECT_EQ(1, map.find("x")->second);
-    // As InternalValueMap's
+    // As InternalValueMap's, whose blocks the library allocates: a Windows DLL's do not reach the counter
+#if !(defined(_WIN32) && defined(JINJA2CPP_LINK_AS_SHARED))
     jinja2::detail::StableMap<std::string, int, Hash, std::equal_to<>, jinja2::CountedAllocator<std::pair<std::string, int>>> scope;
     VectorListMap otherMap;
     EXPECT_EQ(firstInsert(otherMap) - 1, firstInsert(scope));
+#endif
 }
 
 // A map growing past the tail of its first segment, whose list of segments then moves to an array
