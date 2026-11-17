@@ -564,12 +564,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0500](0500-stopiteration-in-gettext-and-format.md) | A StopIteration out of gettext or str.format is undefined in Jinja2 | parity | low | open |
 | [0501](0501-stored-super-deep-chain.md) | A stored `super` called past its block renders without the block's frame | parity | low | done |
 | [0502](0502-stored-loop-namespace-assign.md) | A stored recursive loop that sets a namespace attribute fails after its include ended | parity | low | done |
-| [0503](0503-replaced-trees-slots-and-failed-calls.md) | Replaced trees that hold a slot, or that a failed call loaded, still stay | robustness | low | open |
+| [0503](0503-replaced-trees-slots-and-failed-calls.md) | Replaced trees that hold a slot, or that a failed call loaded, still stay | robustness | low | done |
 | [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | done |
 | [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
 | [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | done |
 | [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | done |
-| [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | open |
+| [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | done |
 | [0509](0509-gettext-call-style-follows-install.md) | The style of a gettext call follows the last install, not the template's load | parity | low | open |
 | [0510](0510-percent-format-errors-python-classes.md) | `%` formatting errors carry no Python class | parity | low | done |
 | [0511](0511-keyerror-class-of-format-keys.md) | A missing format key raises no KeyError | parity | low | open |
@@ -589,3 +589,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0525](0525-nested-render-error-after-storing-closure.md) | A closure stored by a nested render that then fails reads its names as ended | parity | low | open |
 | [0526](0526-soft-frame-closure-reads-outer-name.md) | A closure kept past a `filter`, `with` or loop body reads the wrong value of a name the body rebound | parity | low | open |
 | [0527](0527-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds: StrictUndefined leftovers and the cost of the Load's checks | parity | low | open |
+| [0528](0528-plain-import-shared-module-per-change.md) | A module that plain-imports a changing template keeps a shared module per source change | robustness | low | open |
+| [0529](0529-stored-self-let-go-stays-counted.md) | A `self` or `super()` stored in a module and let go of keeps the module's slot trees | robustness | low | open |
+| [0530](0530-render-memory-callable-and-context-storage.md) | The render memory budget leaves out a macro's function storage and a module context's vectors | robustness | low | open |
