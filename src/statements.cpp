@@ -2950,7 +2950,7 @@ void RenderContext::HideNamesDownTo(InternalValueMap& hidden, size_t lowest, con
             {
                 const auto hash = HashedName::Hash(name);
                 // The names an include's context passes over (PassOverEntryBindings)
-                if (!(depth < entryPassDepth && IsEntryBinding(value, hash)))
+                if (depth >= entryPassDepth || !IsEntryBinding(value, hash))
                 {
                     hide(name, hash);
                 }

@@ -310,7 +310,7 @@ struct FrameEnd
     size_t continuation = 0;
     // The names a loop or a `with`, `filter` or `autoescape` body stores, which its closures read as
     // undefined once it has ended, besides those its scopes hold then (NameResolver::NamesResetAtEnd)
-    Span<const SlotName> resets{};
+    Span<const SlotName> resets{}; // NOLINT(readability-redundant-member-init): GCC warns of the aggregate inits that omit it
 
     // A macro call's scope `count - 1`, which sees the scopes below `link`
     // (ScopeView::NoLink: below its own)

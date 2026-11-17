@@ -6,6 +6,7 @@
 #include "node_arena.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "small_vector.h"
 #include "span.h"
 #include "statements.h"
 
