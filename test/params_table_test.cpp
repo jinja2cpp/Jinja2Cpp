@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <map>
 #include <string>
 #include <vector>
@@ -143,5 +144,34 @@ TEST_F(ParamsTableTest, GenericMapParams)
         ASSERT_TRUE(!!result) << result.error();
         EXPECT_EQ(count > 1 ? "0|10||True" : "0|-||True", result.value());
     }
+}
+
+// A host that forwards untrusted keys as params: 4,000 keys of 16 bytes whose first eight are
+// secret[1] of unordered_dense's hash_bytes, which hash alike unkeyed and would put every key in
+// one run of the params index (docs/tasks/0507). The render still finds its own param among
+// them, narrow and wide; NameMapTest.NamesThatZeroUnkeyedLanesHashApart checks the spread
+TEST_F(ParamsTableTest, KeysThatZeroUnkeyedLanesStillRender)
+{
+    constexpr std::uint64_t secret1 = UINT64_C(0xe7037ed1a0b428db);
+    jinja2::ValuesMap params{ { "x", 1 } };
+    for (size_t idx = 0; idx != 4000; ++idx)
+    {
+        std::string key(16, '\0');
+        std::memcpy(key.data(), &secret1, sizeof(secret1));
+        const auto tail = static_cast<std::uint64_t>(idx);
+        std::memcpy(&key[8], &tail, sizeof(tail));
+        params[key] = static_cast<int64_t>(idx);
+    }
+    ASSERT_EQ(4001U, params.size());
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load("{{ x }}|{{ y is undefined }}"));
+    const auto narrow = tpl.RenderAsString(params);
+    ASSERT_TRUE(!!narrow) << narrow.error();
+    EXPECT_EQ("1|True", narrow.value());
+    jinja2::TemplateW wtpl(&m_env);
+    ASSERT_TRUE(!!wtpl.Load(L"{{ x }}|{{ y is undefined }}"));
+    const auto wide = wtpl.RenderAsString(params);
+    ASSERT_TRUE(!!wide);
+    EXPECT_EQ(L"1|True", wide.value());
 }
 } // namespace
