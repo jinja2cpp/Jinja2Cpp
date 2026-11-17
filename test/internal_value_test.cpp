@@ -528,4 +528,21 @@ TEST(WalkTablesTest, CollectFromEmptiesOnlyGarbage)
     CycleCollector::CollectFrom(std::move(roots));
     EXPECT_EQ(markerRefs - 1, OwnObjectOf(InternalValue(marker))->use_count());
 }
+
+// A dict view holds its dict (docs/tasks/0496): a cycle through the view, as
+// `{% do d.update({'k': d.keys()}) %}` makes, is walked through it and emptied
+TEST(WalkTablesTest, CollectFromWalksThroughDictView)
+{
+    auto marker = ListAdapter::CreateAdapter(InternalValueList{});
+    auto list = ListAdapter::CreateAdapter(InternalValueList{});
+    list.GetMutableItems()->emplace_back(ListAdapter::CreateDictView(InternalValueList{}, IteratorKind::DictKeys, InternalValue(list)));
+    list.GetMutableItems()->emplace_back(marker);
+    const auto markerRefs = OwnObjectOf(InternalValue(marker))->use_count();
+
+    std::vector<ValueObjectPtr> roots;
+    roots.push_back(OwnObjectOf(InternalValue(list)));
+    list = ListAdapter::CreateAdapter(InternalValueList{});
+    CycleCollector::CollectFrom(std::move(roots));
+    EXPECT_EQ(markerRefs - 1, OwnObjectOf(InternalValue(marker))->use_count());
+}
 #endif

@@ -2073,6 +2073,504 @@
    "env": {},
    "templates": {},
    "output": "False|True|False|False"
+  },
+  {
+   "id": "undefined.strict_in_empty",
+   "template": "{{ nope in [] }}|{{ nope in () }}|{% set e = [] %}{{ nope in e }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "False|False|False"
+  },
+  {
+   "id": "undefined.strict_in_identity",
+   "template": "{% set a = nope %}{{ a in [a] }}|{{ a in (a, 1) }}|{{ a not in [a] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "True|True|False"
+  },
+  {
+   "id": "undefined.strict_in_identity_compares_before",
+   "template": "{% set a = nope %}{{ a in (1, a) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_in_dict",
+   "template": "{{ nope in {'a': 1} }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_in_dict_keys",
+   "template": "{{ nope in {'a': 1}.keys() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_in_dict_values",
+   "template": "{{ nope in {'a': 1}.values() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_in_dict_items",
+   "template": "{{ nope in {'a': 1}.items() }}|{{ ['a', nope] in {'a': 1}.items() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "False|False"
+  },
+  {
+   "id": "undefined.strict_in_dict_items_key",
+   "template": "{{ (nope, 1) in {'a': 1}.items() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_in_dict_items_value",
+   "template": "{{ ('a', nope) in {'a': 1}.items() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_compare_evaluates_right",
+   "template": "{{ nope == (1 / 0) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "undefined.strict_compare_chain",
+   "template": "{{ 2 < 1 < nope }}|{{ 1 < 2 > 0 }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "False|True"
+  },
+  {
+   "id": "undefined.strict_compare_chain_raises",
+   "template": "{{ 1 < 2 < nope }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_sameas",
+   "template": "{{ nope is sameas nope }}|{% set a = nope %}{{ a is sameas a }}|{{ [nope] | select('sameas', nope) | list }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "False|True|[]"
+  },
+  {
+   "id": "undefined.strict_select_equalto",
+   "template": "{{ [nope, 1] | select('equalto', 1) | list }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_select_eq",
+   "template": "{{ [1, nope] | select('eq', 1) | list }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_select_ne",
+   "template": "{{ [nope] | select('ne', 1) | list }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_is_eq",
+   "template": "{{ nope is eq(1) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_is_eq_argument",
+   "template": "{{ 1 is eq(nope) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_is_eq_identity",
+   "template": "{% set a = nope %}{{ a is eq(a) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_list_count",
+   "template": "{{ [nope, 1].count(1) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_list_count_argument",
+   "template": "{{ [1, nope].count(nope) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_list_index",
+   "template": "{{ [nope, 1].index(1) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_list_index_stops",
+   "template": "{{ [1, nope].index(1) }}|{% set a = nope %}{{ [a].index(a) }}|{{ [a].count(a) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "0|0|1"
+  },
+  {
+   "id": "undefined.strict_is_iterable",
+   "template": "{{ nope is iterable }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.strict_list_remove",
+   "template": "{{ [nope, 1].remove(1) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.default_is_lt",
+   "template": "{{ nope is lt(1) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.default_is_ge_argument",
+   "template": "{{ 1 is ge(nope) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "undefined.default_tests_compare",
+   "template": "{{ nope in [] }}|{{ nope is sameas nope }}|{{ [nope, 1] | select('equalto', 1) | list }}|{{ nope is eq(1) }}|{{ [nope, 1].count(1) }}|{{ [nope, 1].index(1) }}|{{ nope is iterable }}|{{ nope in {'a': 1}.keys() }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|False|[1]|False|1|1|True|False"
   }
  ]
 }

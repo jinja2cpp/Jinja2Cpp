@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0489]
-touches: [src/value_methods.cpp#DictViewMethods, src/testers.cpp#IsValueIn, src/filters.cpp#Reverse, python/src/adapters.cpp]
+touches: [src/value_methods.cpp#DictViewMethods, src/testers.cpp#IsValueIn, src/filters.cpp#Reverse, src/internal_value.h, src/internal_value.cpp#CreateValuesAdapter, src/value_visitors.h#HostCompare]
 shares: [test/parity/cases/operators.py, test/parity/divergences/operators.txt]
 ---
 # What dict views still lack after 0489
@@ -39,3 +39,10 @@ set-like view hash the item.
 
 **Done when** the three `operators` divergence lines above are gone, and the module's 0496 lines
 in python/tests/parity/module-divergences.txt.
+
+**Result (batch 8 A).** Items 1-3 and the module lines of 6 are fixed: a view keeps its dict (`mapping`,
+ListAdapter::CreateDictView), `reversed()` of values and items views makes `dict_reversevalueiterator` and
+`dict_reverseitemiterator` (IteratorKind has five bits now; the global flag moved to ValueObject's spare
+bits), `in` of a keys or items view looks the key up in the dict, a host's `dict_keys`/`dict_items` equals
+an engine view as a set, `random` of a host view fails at the subscript, and reversed() of a host's built-in
+type gets its iterator kind. Items 4, 5 and the rest of 6 moved to 0523.

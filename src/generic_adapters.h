@@ -199,6 +199,9 @@ class IndexedListAccessorImpl : public IListAccessor
 {
 public:
     using ThisType = IndexedListAccessorImpl<T>;
+    // Whether `list`, of another final type than T, derives from T and reads its items as T does, so
+    // that an enumerator of T rebinds to it (Enumerator::Rebind); T hides this to say so
+    static bool ReadsAsSelf(const IListAccessor& /*list*/) { return false; }
     class Enumerator : public IndexedEnumeratorImpl<Enumerator, ThisType, InternalValue, IListAccessorEnumerator>
     {
     public:
@@ -242,8 +245,9 @@ public:
 
         bool Rebind(const IListAccessor* list) override
         {
-            // Only a list of the same final type: the enumerator reads it through T
-            if (list && typeid(*list) != typeid(T))
+            // Only a list of the same final type, or one T says it reads as its own (a subclass that adds
+            // no items of its own): the enumerator reads it through T
+            if (list && typeid(*list) != typeid(T) && !T::ReadsAsSelf(*list))
             {
                 return false;
             }

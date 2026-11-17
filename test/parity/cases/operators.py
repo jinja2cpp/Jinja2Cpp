@@ -229,4 +229,12 @@ CASES = [
     ('dict_view_mapping', "{{ d.keys().mapping }}"),
     ('dict_view_reversed_class', "{{ (d.items() | reverse).__class__ }}|{{ (d.values() | reverse).__class__ }}"),
     ('dict_view_in_unhashable', "{{ [1] in d.keys() }}"),
+    ('dict_items_in_unhashable', "{{ ([1], 2) in d.items() }}"),
+    ('dict_view_in', "{{ ['a', 1] in d.items() }}|{{ ('a', 1, 2) in d.items() }}|{{ [1] in d.values() }}|{{ 1.0 in d.keys() }}|{{ ('a', 1.0) in d.items() }}|{{ ('a', 2) in d.items() }}|{{ 'b' in d.keys() }}|{{ 'a' not in d.keys() }}"),
+    ('dict_view_mapping_items', "{{ d.items().mapping }}|{{ d.values().mapping }}|{{ d.keys().mapping['a'] }}|{{ d.keys().mapping.a }}|{{ d.keys().mapping | length }}|{{ d.keys().mapping == d }}"),
+    ('dict_view_mapping_stored', "{% set k = d.keys() %}{% set l = [k] %}{{ l[0].mapping }}|{{ {'x': 2}.items().mapping.items() }}"),
+    # task 0523: mapping is the dict itself here, Python's a read-only mappingproxy
+    ('dict_view_mapping_proxy', "{{ d.keys().mapping.__class__ }}"),
+    ('reversed_class_of_context', "{{ (l | reverse).__class__ }}|{{ (d | reverse).__class__ }}|{{ l | reverse | list }}"),
+    ('dict_view_reversed', "{{ d.items() | reverse | list }}|{{ {'a': 1, 'b': 2}.values() | reverse | list }}|{{ ({'a': 1, 'b': 2}.items() | reverse | first) }}|{{ (d.keys() | reverse).__class__ }}"),
 ]
