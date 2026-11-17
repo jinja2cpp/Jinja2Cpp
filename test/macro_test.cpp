@@ -1087,6 +1087,13 @@ INSTANTIATE_TEST_SUITE_P(Jinja2Oracle, MacroKeptPastSoftBodyTest, ::testing::Val
     // with in a for
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% with %}{% set v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% with %}{% set v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // loop else, store in a branch
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [] %}{% else %}{% if false %}{% set v = 'B' %}{% endif %}{% macro inner() %}[{{ v }}{{ i }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "x[I]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [] %}{% else %}{% if false %}{% set v = 'B' %}{% endif %}{% macro inner() %}[{{ v }}{{ i }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // a recursive loop resets nothing: its body is a function in Jinja2
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for a in [1] recursive %}{% if false %}{% set v = 'B' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "[V]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [1] recursive %}{% macro inner() %}[{{ i }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "[1]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [1] recursive %}{% macro inner() %}[{{ i }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "[1]" },
     // block set
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set x %}{% set v = 'S' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endset %}{{ x }}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set x | upper %}{% if false %}{% set v = 'S' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endset %}{{ x }}{{ ns.f() }}", UndefinedPolicy::Default, "X[]" }

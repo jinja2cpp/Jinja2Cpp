@@ -155,19 +155,23 @@ ArenaSpan<SlotName> NameResolver::NamesResetAtEnd(FrameId frameId, NodeArena& no
     {
         return {};
     }
-    SmallVector<SlotName, 8> names;
+    // Sorted and unique, so that a body of many stores loads in linear time
+    SmallVector<std::pair<std::size_t, std::string_view>, 8> stored;
     for (auto idx = static_cast<std::size_t>(frame.firstStore); idx < m_stores.size(); ++idx)
     {
         const auto& store = m_stores[idx];
-        if (store.frame != frameId || store.kind == StoreKind::Hidden)
+        if (store.frame == frameId && store.kind != StoreKind::Hidden)
         {
-            continue;
+            stored.emplace_back(HashedName::Hash(store.name), store.name);
         }
-        const auto hash = HashedName::Hash(store.name);
-        if (std::none_of(names.begin(), names.end(), [&store, hash, &nodes](const SlotName& name) { return name.hash == hash && nodes.Text(name.name) == store.name; }))
-        {
-            names.push_back({ nodes.MakeText(store.name), hash });
-        }
+    }
+    std::sort(stored.begin(), stored.end());
+    stored.erase(std::unique(stored.begin(), stored.end()), stored.end());
+    SmallVector<SlotName, 8> names;
+    names.reserve(stored.size());
+    for (const auto& [hash, name] : stored)
+    {
+        names.push_back({ nodes.MakeText(name), hash });
     }
     return nodes.MakeSpan(names);
 }

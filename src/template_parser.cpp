@@ -835,11 +835,13 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     }
 
     NodeRef<IRendererBase> elseRenderer;
+    ArenaSpan<SlotName> elseResets;
     auto bodyEndReads = m_nodes.Marks().loopReads;
     if (statementsInfo.back().type == StatementInfo::ElseIfStatement)
     {
         auto elseInfo = PopStatement(statementsInfo);
         bodyEndReads = elseInfo.marks.loopReads;
+        elseResets = m_names.NamesResetAtEnd(elseInfo.frame, m_nodes);
         // The body of a frame of its own (ParseElse)
         m_nodes.Get<ElseBranchStatement>(elseInfo.renderer).SetMainBody(m_names.MayBindAtEntry(elseInfo.frame) ? TakeFrameBody(elseInfo) : TakeBody(elseInfo));
         elseRenderer = elseInfo.renderer;
@@ -853,7 +855,11 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     auto info = PopStatement(statementsInfo);
     auto& renderer = m_nodes.Get<ForStatement>(info.renderer);
     renderer.SetMainBody(TakeBody(info));
-    renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
+    // A recursive loop's body is a function in Jinja2, whose names its closures keep (FrameEnd::Stopped)
+    if (!renderer.IsRecursive())
+    {
+        renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
+    }
     renderer.SetBodyReadsLoop(renderer.IsRecursive() || bodyEndReads != info.marks.loopReads);
     // An included template reads the loop it is included from only outside its own loops' bodies
     const bool inFor = std::any_of(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& outer) { return outer.type == StatementInfo::ForStatement; });
@@ -864,6 +870,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     if (elseRenderer)
     {
         renderer.SetElseBody(elseRenderer);
+        renderer.SetElseResetsAtEnd(elseResets);
     }
 
     m_bodies.Add(info.renderer, info.tagOffset);

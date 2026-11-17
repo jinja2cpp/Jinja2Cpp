@@ -1986,8 +1986,9 @@ private:
 // names copied forms no cycle
 struct ClosureCapture
 {
-    // The copy, once a frame that keeps its names has ended; empty before, for a frame whose
-    // names read as undefined once ended (a loop's), and once the render has ended
+    // The copy, once a frame that keeps its names has ended; for a frame whose names read as
+    // undefined once ended (a loop's, FrameEnd::Soft), those names bound to undefined values, or
+    // empty when it bound none of the names its closures read; empty before, and once the render has ended
     std::weak_ptr<const InternalValueMap> names;
     // The frame below, the closures see once this one has ended; null when the copy has all
     std::shared_ptr<ClosureCapture> outer;

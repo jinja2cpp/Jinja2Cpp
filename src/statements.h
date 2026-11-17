@@ -136,6 +136,7 @@ public:
         detail::VisitTargetRefs(refs, m_target);
         detail::VisitSlotNameRefs(refs, m_slotNames);
         detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
+        detail::VisitSlotNameRefs(refs, m_elseResetsAtEnd);
     }
 
     ForStatement(AssignTarget target, NodeRef<Expression> expr, NodeRef<Expression> ifExpr, bool isRecursive)
@@ -184,6 +185,8 @@ public:
     ArenaSpan<SlotName> MakeBinderNames(NodeArena& nodes);
     // The names the body stores, which its closures kept past it read as undefined (NameResolver::NamesResetAtEnd)
     void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
+    // The same for the `else` body
+    void SetElseResetsAtEnd(ArenaSpan<SlotName> names) { m_elseResetsAtEnd = names; }
     [[nodiscard]] ArenaSpan<SlotName> GetBinderNames() const { return m_slotNames; }
     // Gives the names the loop binds slots of its unit's frame from `first`: `loop`, the
     // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
@@ -225,6 +228,7 @@ private:
     UnitId m_unit;
     ArenaSpan<SlotName> m_slotNames;
     ArenaSpan<SlotName> m_resetsAtEnd;
+    ArenaSpan<SlotName> m_elseResetsAtEnd;
 
     static uint64_t NewLoopId();
 };

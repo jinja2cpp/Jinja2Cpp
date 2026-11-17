@@ -1515,7 +1515,7 @@ void ForStatement::RenderElse(OutStream& os, RenderContext& values)
 {
     values.EnterScope();
     values.Nodes()[m_elseBody].Render(os, values);
-    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount()));
+    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount(), values.Nodes()[m_elseResetsAtEnd]));
     values.ExitScope();
 }
 
@@ -1650,9 +1650,10 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         }
         std::rethrow_exception(std::move(failure));
     }
-    // A closure defined in the body and kept past the loop sees the frame below it (0373)
+    // A closure defined in the body and kept past the loop sees the frame below it (0373). A recursive loop's body
+    // is a function in Jinja2, which resets nothing as it ends: its closures keep its names (docs/tasks/0526)
     JINJA2CPP_ASSERT(values.GetScopesCount() - 1 == endScopes);
-    values.CaptureClosures(FrameEnd::Soft(endScopes, values.Nodes()[m_resetsAtEnd]));
+    values.CaptureClosures(m_isRecursive ? FrameEnd::Stopped(endScopes) : FrameEnd::Soft(endScopes, values.Nodes()[m_resetsAtEnd]));
     values.ExitScope(state->bodyScope);
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
