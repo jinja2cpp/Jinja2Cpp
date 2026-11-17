@@ -1890,7 +1890,7 @@ FoldValue TryFoldValue(Evaluate&& evaluate)
 {
     try
     {
-        return FoldValue{ evaluate(), false };
+        return FoldValue{ std::forward<Evaluate>(evaluate)(), false };
     }
     catch (const TemplateRuntimeError&)
     {
@@ -1956,7 +1956,9 @@ private:
     {
         // The candidate that is this step's chain without its last filter, if any
         std::size_t previous = NoStep;
-        std::optional<FoldValue> value;
+        // Whether value is this step's, evaluated
+        bool known = false;
+        FoldValue value;
     };
     static constexpr std::size_t NoStep = static_cast<std::size_t>(-1);
 
@@ -1989,31 +1991,36 @@ private:
     // The candidate's value, a chain step's from the step before it
     const FoldValue& ValueOf(std::size_t index)
     {
-        if (m_steps[index].value)
+        if (m_steps[index].known)
         {
-            return *m_steps[index].value;
+            return m_steps[index].value;
         }
         // The steps down to one whose value is known, or the chain's first, evaluated whole
         std::vector<std::size_t> pending{ index };
-        while (m_steps[pending.back()].previous != NoStep && !m_steps[m_steps[pending.back()].previous].value)
+        while (m_steps[pending.back()].previous != NoStep && !m_steps[m_steps[pending.back()].previous].known)
         {
             pending.push_back(m_steps[pending.back()].previous);
         }
         const auto& nodes = m_context.Nodes();
         const auto first = pending.back();
+        pending.pop_back();
         if (const auto previous = m_steps[first].previous; previous != NoStep)
         {
-            m_steps[first].value = NextStep(*m_steps[previous].value, first);
+            m_steps[first].value = NextStep(m_steps[previous].value, first);
         }
         else
         {
             m_steps[first].value = TryFoldValue([&] { return nodes[m_check.candidates[first].node].Evaluate(m_context); });
         }
-        for (auto step = std::next(pending.rbegin()); step != pending.rend(); ++step)
+        m_steps[first].known = true;
+        while (!pending.empty())
         {
-            m_steps[*step].value = NextStep(*m_steps[m_steps[*step].previous].value, *step);
+            const auto step = pending.back();
+            pending.pop_back();
+            m_steps[step].value = NextStep(m_steps[m_steps[step].previous].value, step);
+            m_steps[step].known = true;
         }
-        return *m_steps[index].value;
+        return m_steps[index].value;
     }
 
     FoldValue NextStep(const FoldValue& previous, std::size_t index)
@@ -2066,7 +2073,7 @@ private:
     }
 
     // A failing operand of a conditional: Impossible for a kind whose as_const catches it
-    FoldOutcome FailureOf(NodeRef<Expression> operand) const { return FoldCatchesFailure(m_context.Nodes(), operand) ? FoldOutcome::Fails : FoldOutcome::FailsLoad; }
+    [[nodiscard]] FoldOutcome FailureOf(NodeRef<Expression> operand) const { return FoldCatchesFailure(m_context.Nodes(), operand) ? FoldOutcome::Fails : FoldOutcome::FailsLoad; }
 
     const FoldCheck& m_check;
     RenderContext& m_context;
