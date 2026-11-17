@@ -529,6 +529,12 @@ void PyEnvironment::Rebuild()
     }
     settings.immutableContainers = immutable;
     settings.extensions.i18nNewstyle = m_newstyleGettext;
+    // The module's tests of the fallback lower the engine's bracket depth, so that a template
+    // Jinja2 compiles fails only the engine's parse (python/tests/test_fallback.py, docs/tasks/0497)
+    if (const auto depth = nb::module_::import_("jinja2cpp.fallback").attr("_test_max_expression_depth"); !depth.is_none())
+    {
+        settings.limits.maxExpressionDepth = nb::cast<std::uint32_t>(depth);
+    }
     m_sandboxed = sandboxed;
     if (sandboxed)
     {

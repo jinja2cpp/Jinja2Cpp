@@ -2442,6 +2442,13 @@ struct BooleanEvaluator : BaseVisitor<bool>
 
     bool operator()(const ListRef& val) const
     {
+        // An iterator, a generator one included, has no len() in Python and so is true whatever
+        // it holds (`[]|select` is true); a dict view has one (docs/tasks/0497)
+        const auto kind = val.GetIteratorKind();
+        if (kind != IteratorKind::None && kind < IteratorKind::DictKeys)
+        {
+            return true;
+        }
         return val.GetSize() != 0ULL;
     }
 

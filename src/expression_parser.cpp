@@ -239,6 +239,7 @@ struct UnknownCallables::FoldState
 {
     std::vector<FoldCheck> checks;
     std::vector<FoldCandidate> candidates;
+    std::vector<NodeRef<Expression>> nodes;
 };
 
 void UnknownCallables::FoldStateDeleter::operator()(FoldState* state) const
@@ -270,6 +271,16 @@ std::vector<FoldCandidate>& UnknownCallables::FoldCandidates()
     return Fold().candidates;
 }
 
+void UnknownCallables::AddFoldNode(NodeRef<Expression> node)
+{
+    Fold().nodes.push_back(node);
+}
+
+const std::vector<NodeRef<Expression>>* UnknownCallables::FoldNodes() const
+{
+    return !m_fold->nodes.empty() ? &m_fold->nodes : nullptr;
+}
+
 void UnknownCallables::DropFoldCandidates()
 {
     if (m_fold)
@@ -287,6 +298,8 @@ void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from,
     if (const auto fold = m_nodes[node].PrepareFold(m_nodes); fold != 0)
     {
         m_unknown.FoldCandidates().push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output, output || !FoldCatchesFailure(m_nodes, node) });
+        // The tree may not hold it: a filter drops the arguments it does not take
+        m_unknown.AddFoldNode(node);
     }
 }
 
@@ -906,16 +919,29 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFilter
                                                                                           unsigned foldFrom)
 {
     ParseResult<NodeRef<Expression>> result = valueRef;
+    bool stepped = false;
     while (result)
     {
         const auto& opTok = lexer.PeekNextToken();
+        // Each step of the chain is a candidate, not only the chain (docs/tasks/0497)
+        if (stepped && (opTok == '|' || opTok == '(' || opTok.keyword == Keyword::Is))
+        {
+            NoteFoldCandidate(*result, foldFrom);
+        }
+        stepped = true;
         if (lexer.EatIfEqual('|'))
         {
             if (!AddOperator())
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, opTok);
             }
+            const auto outerOperand = m_chainOperand;
+            const auto outerFoldFrom = m_chainFoldFrom;
+            m_chainOperand = *result;
+            m_chainFoldFrom = foldFrom;
             auto filter = ParseFilterExpression(lexer);
+            m_chainOperand = outerOperand;
+            m_chainFoldFrom = outerFoldFrom;
             if (!filter)
             {
                 return MakeUnexpected(filter.error());
@@ -945,7 +971,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFilter
     }
 
     // Jinja2's optimizer folds each filter and test of a chain, its operand included (FoldCheck):
-    // the whole chain is the candidate, so that a long chain is evaluated once
+    // the whole chain is the last candidate, so that its steps are evaluated only where it does
+    // not fold (FoldCheckPasses)
     if (result)
     {
         NoteFoldCandidate(*result, foldFrom);
@@ -1615,6 +1642,18 @@ NodeRef<SubscriptExpression> ExpressionParser::MakeSubscript(NodeRef<Expression>
     return m_nodes.Make<SubscriptExpression>(value);
 }
 
+void ExpressionParser::NoteChainStepFold(NodeRef<Expression> operand, NodeRef<ExpressionFilter> chain, unsigned foldFrom)
+{
+    if (!InFoldRoot())
+    {
+        return;
+    }
+    const NodeRef<Expression> step = m_nodes.Make<FilteredExpression>(m_nodes, operand, chain);
+    // A root for Seal even where it is no candidate (UnknownCallables::AddFoldNode)
+    m_unknown.AddFoldNode(step);
+    NoteFoldCandidate(step, foldFrom);
+}
+
 ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer)
 {
     NodeRef<ExpressionFilter> result;
@@ -1624,6 +1663,11 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
     {
         do
         {
+            // Jinja2's optimizer folds each filter of the chain on its own: a step before the
+            // last folds even where the next one does not (docs/tasks/0497). The step's filter
+            // nodes are shared with the chain, which does not change them; rare: only with a
+            // tuple-slice subscript in the steps so far
+            NoteChainStep(m_chainOperand, result, m_chainFoldFrom);
             const auto& tok = lexer.NextToken();
             if (tok != Token::Identifier)
             {

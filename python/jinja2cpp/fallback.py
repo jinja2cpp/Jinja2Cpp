@@ -41,6 +41,9 @@ _counts: t.Dict[str, int] = {
     "renders_fallback": 0,
 }
 _native_base = 0
+# Private, for the module's tests: the engine's Settings::Limits::maxExpressionDepth in the environments
+# built while it is set, so that a template Jinja2 compiles fails only the engine's parse (None: the default)
+_test_max_expression_depth: t.Optional[int] = None
 _lock = threading.Lock()
 # Guards the checks and inserts of the caches below, never user code (loaders, extensions, finalize): a class,
 # a Jinja2 environment or a wrapper is built outside it, and the first to insert wins

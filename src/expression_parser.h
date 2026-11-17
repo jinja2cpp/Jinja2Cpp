@@ -157,6 +157,12 @@ public:
     // Those of the top-level expression being parsed (ExpressionParser::AddFoldCandidate)
     std::vector<FoldCandidate>& FoldCandidates();
     void DropFoldCandidates();
+    // A fold candidate's node, which the tree may not hold: a step of a filter chain, made only
+    // as a candidate, or an argument a filter drops (docs/tasks/0497). Seal checks them as roots
+    // (TemplateParser::SealWithFoldNodes)
+    void AddFoldNode(NodeRef<Expression> node);
+    // Null when there are none
+    [[nodiscard]] const std::vector<NodeRef<Expression>>* GetFoldNodes() const { return m_fold ? FoldNodes() : nullptr; }
 
 private:
     std::vector<Name> m_names;
@@ -167,6 +173,7 @@ private:
     };
     FoldState& Fold();
     [[nodiscard]] const std::vector<FoldCheck>* FoldChecks() const;
+    [[nodiscard]] const std::vector<NodeRef<Expression>>* FoldNodes() const;
     std::unique_ptr<FoldState, FoldStateDeleter> m_fold;
     // m_names.size(), which every expression reads twice: a load, not a division by sizeof(Name)
     // (docs/tasks/0205)
@@ -219,6 +226,8 @@ public:
     ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
     // The arguments of a call, a filter or a test, `*args` and `**kwargs` included
     ParseResult<CallArgsInfo> ParseCallArgs(LexScanner& lexer);
+    // The filters of a chain `|a|b`. In an expression (m_chainOperand) each of its steps but the
+    // last is a fold candidate too
     ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
     // The names a filter `name` called with `params` reads besides its own: `applymacro` reads a
     // macro by name, `map`, `select` and the like a filter or test that may fall back to a value
@@ -284,6 +293,17 @@ private:
     // which do not nest: the rest are nested in one (m_depth counts them)
     [[nodiscard]] bool InFoldRoot() const { return m_outputRoot || m_depth != 0; }
     void AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output);
+    // `operand`, parsed since m_tupleSliceSubscripts was foldFrom, filtered by `chain`, the
+    // filters of a chain before the next one, is a candidate of its own (docs/tasks/0497)
+    void NoteChainStep(NodeRef<Expression> operand, NodeRef<ExpressionFilter> chain, unsigned foldFrom)
+    {
+        if (chain && operand && m_tupleSliceSubscripts != foldFrom)
+        {
+            NoteChainStepFold(operand, chain, foldFrom);
+        }
+    }
+    // Out of line: only with a tuple-slice subscript
+    void NoteChainStepFold(NodeRef<Expression> operand, NodeRef<ExpressionFilter> chain, unsigned foldFrom);
     // At the end of the top-level expression starting at `tok`: an error if one of its subscripts
     // cannot fold, else the check goes to the Load
     nonstd::expected<void, ParseError> FinishFoldRoot(const Token& tok, unsigned rootFrom);
@@ -311,6 +331,10 @@ private:
     // one that may fold its tuple-slice subscripts away go to UnknownCallables::FoldCandidates,
     // which the parsers of one template share, so that a parser, made for each tag, owns no list
     bool m_outputRoot = false;
+    // What the chain ParseFilterExpression parses filters, in an expression, and
+    // m_tupleSliceSubscripts before it (NoteChainStep); null for a filter tag's chain
+    NodeRef<Expression> m_chainOperand;
+    unsigned m_chainFoldFrom = 0;
     // In the else branch of a conditional, parsed as if it were not nested (ParseIfExpression)
     bool m_inElseChain = false;
     // Subscripts by a tuple holding a slice (`[1, 2][1:2, 3]`) made so far: Jinja2 compiles one
