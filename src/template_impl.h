@@ -369,6 +369,24 @@ public:
         return BasicErrorInfo<CharT>(errorData);
     }
 
+    // Keeps the template `impl` holds alive while its first Load runs, when host code that Load
+    // called (an autoescape selector) is about to replace it: a Load of the same template, on this
+    // thread or one it joins, or an assignment to it. The template holds itself, so that neither
+    // the thread nor the object that held it decides when it goes (docs/tasks/0517, 0522). Only
+    // the rare replace of a loading template pays for it
+    static void KeepWhileLoading(const std::shared_ptr<ITemplateImpl>& impl)
+    {
+        if (auto* loading = static_cast<TemplateImpl*>(impl.get()); loading && loading->m_loading)
+        {
+            loading->m_keptWhileLoading = impl;
+        }
+    }
+    // Whether host code replaced this template while its first Load ran (KeepWhileLoading)
+    [[nodiscard]] bool KeptWhileLoading() const noexcept { return !!m_keptWhileLoading; }
+    // Takes the reference KeepWhileLoading made, once the Load returned: the template goes with
+    // the reference the caller drops, after the caller is done with it
+    [[nodiscard]] std::shared_ptr<const ITemplateImpl> TakeKeptWhileLoading() noexcept { return std::move(m_keptWhileLoading); }
+
     std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
         if (SourceTooLong(tpl.size()))
@@ -1792,6 +1810,9 @@ private:
     bool m_hasSource = false;
     // The first Load is running: a Load from host code it calls parses into a source of its own
     bool m_loading = false;
+    // This template itself, while its first Load runs, once host code that Load called replaced it
+    // (KeepWhileLoading): the Load still parses into it. BasicTemplate::Load lets go of it
+    std::shared_ptr<const ITemplateImpl> m_keptWhileLoading;
     // Text the tree points to besides the source (newline_sequence copies), if any
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;

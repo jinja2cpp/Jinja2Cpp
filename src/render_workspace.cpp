@@ -79,7 +79,6 @@ bool RenderWorkspace::ReleaseCaches() noexcept
         const auto frame = std::move(m_loopFrames.back());
         m_loopFrames.pop_back();
     }
-    ReleaseLoadedKept();
     return true;
 }
 
@@ -103,23 +102,6 @@ void RenderWorkspace::ReleaseRetired() noexcept
     // Moved out first: a template's destructor may load, and retire another one
     const auto retired = std::move(m_retired);
     m_retired.clear();
-    ReleaseLoadedKept();
-}
-
-void RenderWorkspace::ReleaseLoadedKept() noexcept
-{
-    // One at a time, taken out of the list before it goes: its destructor may load and keep or
-    // release others. Only the Loads nested in a running one are listed, a handful at most
-    for (;;)
-    {
-        const auto done = std::find_if(m_loadingKept.begin(), m_loadingKept.end(), [](const LoadingKept& kept) { return !*kept.loading; });
-        if (done == m_loadingKept.end())
-        {
-            return;
-        }
-        const auto impl = std::move(done->impl);
-        m_loadingKept.erase(done);
-    }
 }
 
 void RenderWorkspace::EmptyMaps(RenderMaps& maps, bool keepTables) noexcept

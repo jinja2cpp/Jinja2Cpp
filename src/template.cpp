@@ -97,6 +97,28 @@ JINJA2CPP_COLD_INLINE Result<void, CharT> LoadReplacing(std::shared_ptr<ITemplat
     return ToResult(TemplateImpl<CharT>::LoadReplacing(impl, std::forward<Source>(source), std::move(name)));
 }
 
+// Lets go of the reference a template replaced during its own first Load kept to itself
+// (TemplateImpl::KeepWhileLoading), once that Load returned: the template may go with it
+template<typename CharT>
+JINJA2CPP_COLD_INLINE void ReleaseKeptWhileLoading(TemplateImpl<CharT>* impl) noexcept
+{
+    const auto kept = impl->TakeKeptWhileLoading();
+}
+
+// The first Load, in place. Host code it calls may replace the template it parses into (a Load of
+// it, maybe on another thread, or an assignment): that template then holds itself until the
+// Load returned (docs/tasks/0517, 0522)
+template<typename CharT>
+Result<void, CharT> LoadInPlace(TemplateImpl<CharT>* impl, std::basic_string<CharT>&& source, std::string&& name)
+{
+    auto result = ToResult(impl->Load(std::move(source), std::move(name)));
+    if (impl->KeptWhileLoading())
+    {
+        ReleaseKeptWhileLoading(impl);
+    }
+    return result;
+}
+
 template<typename CharT>
 struct FileStream;
 
@@ -123,6 +145,16 @@ template<typename CharT>
 BasicTemplate<CharT>::~BasicTemplate() = default;
 
 template<typename CharT>
+BasicTemplate<CharT>& BasicTemplate<CharT>::operator=(const BasicTemplate& other)
+{
+    // Host code the first Load of this template calls may assign it: that Load still parses into
+    // the template this lets go of (docs/tasks/0522)
+    TemplateImpl<CharT>::KeepWhileLoading(m_impl);
+    m_impl = other.m_impl;
+    return *this;
+}
+
+template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::string name)
 {
     auto* impl = GetImpl<CharT>(m_impl);
@@ -132,7 +164,7 @@ Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::strin
     }
     if (LoadsInPlace<CharT>(m_impl))
     {
-        return ToResult(impl->Load(StringType(source), std::move(name)));
+        return LoadInPlace(impl, StringType(source), std::move(name));
     }
     return LoadReplacing<CharT>(m_impl, source, std::move(name));
 }
@@ -162,7 +194,7 @@ Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream
 
     if (LoadsInPlace<CharT>(m_impl))
     {
-        return ToResult(GetImpl<CharT>(m_impl)->Load(std::move(t), std::move(name)));
+        return LoadInPlace(GetImpl<CharT>(m_impl), std::move(t), std::move(name));
     }
     return LoadReplacing<CharT>(m_impl, std::move(t), std::move(name));
 }
