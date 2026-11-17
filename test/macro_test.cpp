@@ -773,8 +773,8 @@ public:
 };
 } // namespace
 
-// Jinja2 buffers a macro's output and drops it when the call stops; a string takes its output back in full, a sink
-// only while the output has not left the buffer (docs/tasks/0479)
+// Jinja2 buffers a macro's output and drops it when the call stops: a string takes its output back in full, a sink
+// stream holds back what would reach the sink while the call runs (docs/tasks/0479, 0499)
 TEST(MacroStopOutputTest, StringTargetTakesTheOutputBack)
 {
     TemplateEnv env;
@@ -794,26 +794,185 @@ TEST(MacroStopOutputTest, StringTargetTakesTheOutputBack)
     EXPECT_EQ(std::string(700, 'a') + "z", tpl.RenderAsString(ValuesMap{}).value());
 }
 
-TEST(MacroStopOutputTest, SinkTakesTheOutputBackWhileItIsBuffered)
+namespace
+{
+class WideSink final : public OutputSinkW
+{
+public:
+    void Write(std::wstring_view text) override
+    {
+        output.append(text);
+        ++writes;
+    }
+    std::wstring output;
+    size_t writes = 0;
+};
+
+class WriteCountingSink final : public OutputSink
+{
+public:
+    void Write(std::string_view text) override
+    {
+        output.append(text);
+        ++writes;
+    }
+    std::string output;
+    size_t writes = 0;
+};
+} // namespace
+
+TEST(MacroStopOutputTest, SinkTakesTheOutputBack)
 {
     TemplateEnv env;
     FillStopEnv(env);
     Template tpl(&env);
-    ASSERT_TRUE(tpl.Load("[{% macro m(n) %}{{ 'x' * n }}{{ 1|stop }}{% endmacro %}{{ m(n) }}]"));
+    TemplateW wide(&env);
+    const std::string source = "[{% macro m(n) %}{{ 'x' * n }}{{ 1|stop }}{% endmacro %}{{ m(n) }}]";
+    ASSERT_TRUE(tpl.Load(source));
+    ASSERT_TRUE(wide.Load(ConvertString<std::wstring>(source)));
     for (const bool eachPiece : { false, true })
     {
         RenderOptions options;
         options.writeEachPiece = eachPiece;
-        CountingSink shortSink;
-        ASSERT_TRUE(tpl.RenderTo(shortSink, ValuesMap{ { "n", 10 } }, options));
-        EXPECT_EQ("[]", shortSink.output);
-        // The macro's output left the buffer: the render fails as it did before the call stopped
-        CountingSink longSink;
-        auto result = tpl.RenderTo(longSink, ValuesMap{ { "n", 600 } }, options);
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
-        EXPECT_THROW(std::rethrow_exception(result.error().GetException()), TestStop);
+        for (const int count : { 10, 511, 512, 600, 5000 })
+        {
+            CountingSink sink;
+            ASSERT_TRUE(tpl.RenderTo(sink, ValuesMap{ { "n", count } }, options)) << count << eachPiece;
+            EXPECT_EQ("[]", sink.output) << count << eachPiece;
+            WideSink wideSink;
+            ASSERT_TRUE(wide.RenderTo(wideSink, ValuesMap{ { "n", count } }, options)) << count << eachPiece;
+            EXPECT_EQ(L"[]", wideSink.output) << count << eachPiece;
+        }
     }
+}
+
+// Where the buffer boundary falls does not matter: output before the call, after it, a long fragment, a macro that
+// returns between ones that stop, and nested calls
+TEST(MacroStopOutputTest, SinkKeepsTheOutputAroundTheCall)
+{
+    TemplateEnv env;
+    FillStopEnv(env);
+    Template tpl(&env);
+    struct Row
+    {
+        std::string source;
+        std::string expected;
+    };
+    const std::string p510(510, 'p');
+    const std::string b300(300, 'b');
+    const std::string y700(700, 'y');
+    const Row rows[] = {
+        { "{% macro m() %}ab{{ 1|stop }}{% endmacro %}{{ 'p' * 510 }}[{{ m() }}]", p510 + "[]" },
+        { "{{ 'a' * 700 }}{% macro m() %}p{{ 'b' * 300 }}q{{ 1|stop }}{% endmacro %}{{ m() }}z", std::string(700, 'a') + "z" },
+        { "{% macro ok() %}<{{ 'b' * 300 }}>{% endmacro %}{% macro m() %}{{ 'x' * 600 }}{{ 1|stop }}{% endmacro %}{{ 'p' * 510 }}{{ ok() }}[{{ m() }}]{{ ok() }}{{ 'y' * 700 }}",
+          p510 + "<" + b300 + ">[]<" + b300 + ">" + y700 },
+        // The inner call stops, the outer one returns what it wrote around it
+        { "{% macro m() %}{{ 'x' * 600 }}{{ 1|stop }}{% endmacro %}{% macro outer() %}{{ 'b' * 300 }}({{ m() }}){{ 'b' * 300 }}{% endmacro %}[{{ outer() }}]",
+          "[" + b300 + "()" + b300 + "]" },
+        // Both stop
+        { "{% macro m() %}{{ 'x' * 600 }}{{ 1|stop }}{% endmacro %}{% macro outer() %}{{ 'b' * 300 }}({{ m() }}){{ 1|stop }}{% endmacro %}[{{ outer() }}]", "[]" },
+        // A call block's caller
+        { "{% macro m() %}{{ caller() }}{% endmacro %}[{% call m() %}{{ 'x' * 600 }}{{ 1|stop }}{% endcall %}]", "[]" },
+        { "{% macro m() %}<{{ caller() }}>{% endmacro %}{{ 'p' * 510 }}[{% call m() %}{{ 'x' * 600 }}{% endcall %}]", p510 + "[<" + std::string(600, 'x') + ">]" },
+    };
+    for (const bool eachPiece : { false, true })
+    {
+        RenderOptions options;
+        options.writeEachPiece = eachPiece;
+        for (const auto& row : rows)
+        {
+            ASSERT_TRUE(tpl.Load(row.source)) << row.source;
+            CountingSink sink;
+            const auto result = tpl.RenderTo(sink, ValuesMap{}, options);
+            ASSERT_TRUE(result) << row.source << "\n"
+                                << result.error().ToString();
+            EXPECT_EQ(row.expected, sink.output) << row.source << eachPiece;
+            EXPECT_EQ(row.expected, tpl.RenderAsString(ValuesMap{}).value()) << row.source;
+        }
+    }
+}
+
+// What the call holds back counts as written while it runs: the output limit stops it, and a call that fails for
+// another reason fails as before
+TEST(MacroStopOutputTest, SinkHeldOutputCountsAsWritten)
+{
+    TemplateEnv env;
+    FillStopEnv(env);
+    env.GetSettings().limits.maxOutputSize = 1000;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("[{% macro m() %}{% for i in range(100) %}{{ 'x' * 100 }}{% endfor %}{{ 1|stop }}{% endmacro %}{{ m() }}]"));
+    CountingSink sink;
+    auto result = tpl.RenderTo(sink, ValuesMap{});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    // Under the limit, what the call held back reaches the sink when it returns
+    ASSERT_TRUE(tpl.Load("[{% macro m() %}{{ 'x' * 900 }}{% endmacro %}{{ m() }}]"));
+    CountingSink fits;
+    ASSERT_TRUE(tpl.RenderTo(fits, ValuesMap{}));
+    EXPECT_EQ("[" + std::string(900, 'x') + "]", fits.output);
+    ASSERT_TRUE(tpl.Load("[{% macro m() %}{{ 'x' * 600 }}{{ 1 + 'a' }}{% endmacro %}{{ m() }}]"));
+    CountingSink failed;
+    result = tpl.RenderTo(failed, ValuesMap{});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::TemplateRuntimeError, result.error().GetCode());
+}
+
+// A call's held-back output reaches the sink when the next call begins, not at the render's end: calls in a loop
+// stream, and the stream holds one call's output at a time (memory budget)
+TEST(MacroStopOutputTest, SinkGetsEachCallsOutputAfterItReturns)
+{
+    TemplateEnv env;
+    FillStopEnv(env);
+    env.GetSettings().limits.maxRenderMemory = 200000;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% macro m() %}{{ 'x' * 600 }}{% endmacro %}{% for i in range(500) %}[{{ m() }}]{% endfor %}"));
+    WriteCountingSink sink;
+    const auto result = tpl.RenderTo(sink, ValuesMap{});
+    ASSERT_TRUE(result) << result.error().ToString();
+    EXPECT_EQ(500U * 602U, sink.output.size());
+    EXPECT_GE(sink.writes, 400U);
+}
+
+// Held output is bounded as a value is (MaxSequenceSize characters): past that it reaches the sink while the call
+// runs, and a call that then stops fails as it did before the output was held (Codex on #928)
+TEST(MacroStopOutputTest, SinkHeldOutputIsBounded)
+{
+    TemplateEnv env;
+    FillStopEnv(env);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("[{% macro m(stop) %}{% for i in range(700) %}{{ 'x' * 100000 }}{% endfor %}{% if stop %}{{ 1|stop }}{% endif %}{% endmacro %}{{ m(stop) }}]"));
+    WriteCountingSink sink;
+    ASSERT_TRUE(tpl.RenderTo(sink, ValuesMap{ { "stop", false } }));
+    EXPECT_EQ((700U * 100000U) + 2U, sink.output.size());
+    EXPECT_GE(sink.writes, 3U);
+    WriteCountingSink stopped;
+    auto result = tpl.RenderTo(stopped, ValuesMap{ { "stop", true } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    EXPECT_THROW(std::rethrow_exception(result.error().GetException()), TestStop);
+}
+
+// A lower maxSequenceSize bounds it too (Codex on #928)
+TEST(MacroStopOutputTest, SinkHeldOutputIsBoundedByTheSequenceLimit)
+{
+    TemplateEnv env;
+    FillStopEnv(env);
+    env.GetSettings().limits.maxSequenceSize = 1024;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("[{% macro m(stop) %}{% for i in range(100) %}{{ 'x' * 100 }}{% endfor %}{% if stop %}{{ 1|stop }}{% endif %}{% endmacro %}{{ m(stop) }}]"));
+    WriteCountingSink sink;
+    ASSERT_TRUE(tpl.RenderTo(sink, ValuesMap{ { "stop", false } }));
+    EXPECT_EQ((100U * 100U) + 2U, sink.output.size());
+    EXPECT_GE(sink.writes, 5U);
+    WriteCountingSink stopped;
+    const auto result = tpl.RenderTo(stopped, ValuesMap{ { "stop", true } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    // Under the limit the call's output is still taken back
+    ASSERT_TRUE(tpl.Load("[{% macro m() %}{{ 'x' * 900 }}{{ 1|stop }}{% endmacro %}{{ m() }}]"));
+    WriteCountingSink small;
+    ASSERT_TRUE(tpl.RenderTo(small, ValuesMap{}));
+    EXPECT_EQ("[]", small.output);
 }
 
 // What a stopped macro left in a scope is gone: the code after it sees the names it saw before

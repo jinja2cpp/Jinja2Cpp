@@ -191,11 +191,12 @@ render raises `RuntimeError`. A host type derives from it next to its own base
 (`struct MyStop : std::runtime_error, jinja2::StopIteration`); it is not a `std::exception`, has a
 protected default constructor and one out-of-line virtual destructor (a key function: one typeinfo
 across shared libraries). Purely additive. A stopped call's output is taken back from a string target
-in full. A sink target (`RenderTo`, the module's `generate()` and `stream()`) takes it back only while
-the stream's buffer has not reached the sink since the call began; if it has, the render fails as it did
-before. That depends on where the 512-character buffer boundary falls, not only on how much the macro
-wrote: `{{ 'p' * 510 }}[{{ m() }}]` with a two-character macro fails, the same macro after 100
-characters does not. The Python module marks Python's `StopIteration` with it.
+in full. A sink target (`RenderTo`, the module's `generate()` and `stream()`) holds back what would
+reach the sink while such a call runs and gives it to the sink once the call returns (task 0499), so
+it takes a stopped call's output back in full too; the held output counts against `maxOutputSize`
+and the memory budget as it is written. Held output is capped at `MaxSequenceSize` characters (or a lower
+`maxSequenceSize`), as a value is: past that it reaches the sink while the call runs, and a call that then stops fails as it
+did before 0499. The Python module marks Python's `StopIteration` with it.
 
 **Against Python.** Same: syntax, undefined and not-found errors keep their codes, with
 location; `MemoryError` propagates as `bad_alloc` does. Different: errors arrive as `Result`,

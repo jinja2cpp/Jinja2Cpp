@@ -1712,7 +1712,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     // str() of an undefined is empty, and Python's '' % args has an argument left over
     if (GetUndefinedInfo(baseVal) && m_params.HasPositional())
     {
-        throw TemplateRuntimeError("not all arguments converted during string formatting");
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "not all arguments converted during string formatting");
     }
     if (m_params.HasPositional() && m_params.HasKeywords())
     {

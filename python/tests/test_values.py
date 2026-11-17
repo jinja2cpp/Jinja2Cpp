@@ -149,16 +149,18 @@ TYPE_ERRORS = [
     ("{{ a + t }}", {"a": [1], "t": (2,)}),
     ("{{ a - a }}", {"a": [1]}),
     ("{{ d < d }}", {"d": {}}),
-    ("{{ '%s' % t }}", {"t": (1, 2)}),
+    # `%` formatting names its class (0510)
+    ("{{ '%s' % t }}", {"t": (1, 2)}, TypeError),
 ]
 
 
-@pytest.mark.parametrize("source,context", TYPE_ERRORS)
-def test_type_errors_of_lists_and_tuples(source, context):
-    # Jinja2's TypeError is TemplateRuntimeError here, with Python's message (docs/python.md)
+@pytest.mark.parametrize("source,context,raised", [row if len(row) == 3 else (*row, jinja2cpp.TemplateRuntimeError) for row in TYPE_ERRORS])
+def test_type_errors_of_lists_and_tuples(source, context, raised):
+    # Jinja2's TypeError is TemplateRuntimeError here unless the engine names the class, with Python's message
+    # (docs/python.md)
     with pytest.raises(TypeError) as expected:
         jinja2.Environment().from_string(source).render(**context)
-    with pytest.raises(jinja2cpp.TemplateRuntimeError) as got:
+    with pytest.raises(raised) as got:
         jinja2cpp.Environment().from_string(source).render(**context)
     assert str(got.value) == str(expected.value)
 
@@ -495,13 +497,20 @@ def test_stop_iteration_out_of_a_macro_in_generate_and_stream():
         assert [item for item in outcomes[0] if item] == [item for item in outcomes[1] if item] == ["[", "]"], mode
 
 
-def test_stop_iteration_out_of_a_long_macro_in_generate_keeps_the_runtime_error():
-    # The macro's output left the buffer before it stopped: it cannot be taken back (docs/python.md)
-    source = "{% macro m() %}{{ 'x' * 600 }}{{ 1|stop }}{% endmacro %}[{{ m() }}]"
-    assert "".join(_stop_outcome(jinja2, source, mode="generate")) == "[]"
-    with pytest.raises(RuntimeError, match="^generator raised StopIteration$"):
-        raise _stop_outcome(jinja2cpp, source, mode="generate")
-    assert _stop_outcome(jinja2cpp, source) == "[]"
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{% macro m() %}{{ 'x' * 600 }}{{ 1|stop }}{% endmacro %}[{{ m() }}]",
+        # Where the buffer boundary falls does not matter (0499)
+        "{% macro m() %}ab{{ 1|stop }}{% endmacro %}{{ 'p' * 510 }}[{{ m() }}]",
+    ],
+)
+def test_stop_iteration_out_of_a_long_macro_in_generate_and_stream(source):
+    # The output a call writes into a generator's consumer is held back until the call returns (0499)
+    for mode in ("generate", "stream"):
+        expected = "".join(_stop_outcome(jinja2, source, mode=mode))
+        assert "".join(_stop_outcome(jinja2cpp, source, mode=mode)) == expected, mode
+    assert _stop_outcome(jinja2cpp, source) == _stop_outcome(jinja2, source)
 
 
 # What Jinja2 does not give undefined: the call is not Context.call, or a generator ends the render. Jinja2's

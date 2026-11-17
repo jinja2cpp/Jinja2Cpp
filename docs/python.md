@@ -163,10 +163,9 @@ engines on a Release build of the module.
   generator render does (PEP 479, 0477). A `StopIteration` inside a call the template makes (a macro,
   `caller()`, `loop(...)`) is undefined there too, as in Jinja2, whatever raised it in the body
   (a filter, test, `finalize`, a property); out of an included, imported or extended template, a block,
-  `self.b()` or `super()` it stays the `RuntimeError` (0479). A `generate()` or `stream()` keeps the
-  `RuntimeError` whenever the 512-character buffer reached the consumer since the stopped call began,
-  which depends on where the buffer boundary falls, not only on the macro's output (`{{ 'p' * 510 }}[{{ m() }}]`
-  with a two-character macro keeps it).
+  `self.b()` or `super()` it stays the `RuntimeError` (0479). A `generate()` or `stream()` holds a call's
+  output back until the call returns, as Jinja2 buffers it, so a stopped call yields nothing of it there
+  either (0499).
 - `pass_context`, `pass_eval_context` and `pass_environment` (`jinja2cpp.pass_context`, also in
   `jinja2cpp.utils`; a function marked by Jinja2's own decorators works too, the marker
   `jinja_pass_arg` is read by its name). They apply as in Jinja2 to filters, tests, globals,
@@ -445,7 +444,9 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 ## Differences from Jinja2
 
 - Template errors that Jinja2 raises as Python's own exceptions (`ZeroDivisionError`,
-  `TypeError` from an operator) are `TemplateRuntimeError` with the same message.
+  `TypeError` from an operator) are `TemplateRuntimeError` with the same message, except where the engine
+  names the class: `%` formatting (also of `format` and newstyle `gettext`) raises `ValueError`,
+  `TypeError` or `OverflowError` as Python does (0510; a missing key is not a `KeyError` yet, 0511).
 - `tojson` writes any mapping and any list or tuple; Python's `json.dumps` takes only `dict`.
 - A dict literal of the template keyed by a Python object that defines its own `__hash__`
   (a tuple from Python, a frozen dataclass) keys it by identity (0248 plan, section 7).

@@ -290,10 +290,37 @@ def test_formatting_a_translation_checks_what_fits_in_one_pass():
     # a bare dot is precision zero, and %c ignores a precision
     assert env.from_string("{{ gettext('[%(a).s%(a).s]%(c).1000000000c', a=s, c=65) }}").render(s="y" * 30000000) == "[]A"
     started = time.perf_counter()
-    # Jinja2 raises ValueError; the engine's % formatting raises TemplateRuntimeError (0510)
-    with pytest.raises(jinja2cpp.exceptions.TemplateRuntimeError, match="incomplete format key"):
+    with pytest.raises(ValueError, match="incomplete format key"):
         env.from_string("{{ gettext(t, a=1) }}").render(t="%(" * 80000)
     assert time.perf_counter() - started < 2
+
+
+@pytest.mark.parametrize(
+    "source, value",
+    [
+        ("{{ t % {'a': 1} }}", "%(a"),
+        ("{{ t % 1 }}", "%y"),
+        ("{{ t % 1 }}", "%"),
+        ("{{ t % (1,) }}", "%d %d"),
+        ("{{ t % 1 }}", "%(a)s"),
+        ("{{ t % 'x' }}", "%d"),
+        ("{{ t % 1114112 }}", "%c"),
+        ("{{ t|safe % 'x' }}", "%d"),
+        ("{{ t|safe % none }}", "%d"),
+        ("{{ gettext(t, a=1) }}", "%(a"),
+        ("{{ gettext(t, a=1) }}", "%(a)d %s"),
+    ],
+)
+def test_percent_formatting_raises_the_class_jinja2_raises(source, value):
+    # ValueError, TypeError or OverflowError, as Python's % raises it (0510)
+    raised = []
+    for module in (jinja2, jinja2cpp):
+        env = module.Environment(extensions=["jinja2.ext.i18n"])
+        env.install_null_translations(newstyle=True)
+        with pytest.raises(Exception) as error:
+            env.from_string(source).render(t=value)
+        raised.append((type(error.value).__name__, str(error.value)))
+    assert raised[0] == raised[1]
 
 
 def test_an_oldstyle_install_does_not_keep_the_environment_alive():
