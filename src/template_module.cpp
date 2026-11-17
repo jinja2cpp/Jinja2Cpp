@@ -10,6 +10,7 @@
 #include "out_stream.h"
 #include "public_host_object.h"
 #include "recursion_guard.h"
+#include "render_workspace.h"
 #include "render_context.h"
 #include "render_failure.h"
 #include "statements.h"
@@ -859,9 +860,17 @@ std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::sha
     auto error = loaded->Load(std::move(source), std::move(name));
     if (!error)
     {
+        auto& workspace = RenderWorkspace::ForThisThread();
+        // The template this replaces may be parsing still: host code its first Load called (an
+        // autoescape selector) loads it a second time. That Load runs on the template until it
+        // returns, render or not (docs/tasks/0517)
+        if (const auto* replaced = static_cast<const TemplateImpl*>(impl.get()); replaced->m_loading)
+        {
+            workspace.KeepWhileLoading(impl, &replaced->m_loading);
+        }
         // A render on this thread (one that called the host code loading now) may be rendering
         // the template this replaces: the workspace keeps it (RenderWorkspace::Retire)
-        RenderWorkspace::ForThisThread().Retire(impl);
+        workspace.Retire(impl);
         impl = std::move(loaded);
     }
     return error;

@@ -790,6 +790,167 @@ TEST_F(LimitsEnvTest, UntrustedLimitsBoundMemory)
     EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
 }
 
+namespace
+{
+// A render of `outer` whose `inner()` loads a new template of about 2 KB on each call and renders it with the
+// environment's globals, which it shares with the outer render: the outer render keeps each such template until it
+// ends (docs/tasks/0481), and counts it against its memory budget (docs/tasks/0492). With `byName`, `inner()`
+// renders the environment's cached template instead, one tree however often it is called
+template<typename CharT>
+nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderNestedLoads(TemplateEnv& env, const std::string& outer, std::uint64_t budget, bool byName = false)
+{
+    auto settings = UntrustedSettings();
+    settings.limits.maxRenderMemory = budget;
+    env.SetSettings(settings);
+    env.AddGlobal("g", ValuesList{});
+    const std::string body = "{% set x = 1 %}" + std::string(2000, 'x');
+    std::basic_string<CharT> source(body.begin(), body.end());
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("inner.j2", body);
+    env.AddFilesystemHandler(std::string(), fs);
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&env, source, byName](const UserCallableParams&) {
+            BasicTemplate<CharT> tpl(&env);
+            if (byName)
+            {
+                if constexpr (std::is_same_v<CharT, char>)
+                {
+                    tpl = env.LoadTemplate("inner.j2").value();
+                }
+                else
+                {
+                    tpl = env.LoadTemplateW("inner.j2").value();
+                }
+            }
+            else
+            {
+                EXPECT_TRUE(tpl.Load(source).has_value());
+            }
+            const auto result = tpl.RenderAsString({});
+            return Value(static_cast<std::int64_t>(result ? result->size() : 0));
+        },
+        {});
+    BasicTemplate<CharT> tpl(&env);
+    std::basic_string<CharT> outerSource(outer.begin(), outer.end());
+    EXPECT_TRUE(tpl.Load(outerSource).has_value());
+    return tpl.RenderAsString(params);
+}
+} // namespace
+
+// 0492: 20000 nested renders of a new 2 KB template each took the process from 45 to 122 MB under UntrustedLimits:
+// the trees the outer render keeps for them now count against its budget, and fail it rather than the nested render
+TEST_F(LimitsEnvTest, KeptNestedTemplatesCountAgainstTheOuterBudget)
+{
+    const std::string loop = "{% for i in range(20000) %}{{ inner() }}{% endfor %}";
+    auto result = RenderNestedLoads<char>(m_env, loop, std::uint64_t{ 1 } << 20);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
+}
+
+TEST_F(LimitsEnvTest, KeptTemplatesOfADeeperRenderCountAgainstTheOuterBudget)
+{
+    // The loop runs in a render nested in the outer one, `middle()`: once the templates it keeps for the outer
+    // render no longer fit the outer budget, each further `inner()` fails before its template is kept, so the loop
+    // keeps a bounded number of trees, rather than only the outer render's next step failing, which a template that
+    // ends after the call never takes (0492 verifier)
+    auto settings = UntrustedSettings();
+    settings.limits.maxRenderMemory = std::uint64_t{ 1 } << 20;
+    m_env.SetSettings(settings);
+    m_env.AddGlobal("g", ValuesList{});
+    const std::string body = "{% set x = 1 %}" + std::string(2000, 'x');
+    int rendered = 0;
+    int failed = 0;
+    std::string innerError;
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&](const UserCallableParams&) {
+            Template tpl(&m_env);
+            EXPECT_TRUE(tpl.Load(body).has_value());
+            const auto result = tpl.RenderAsString({});
+            if (result)
+            {
+                ++rendered;
+            }
+            else
+            {
+                ++failed;
+                innerError = ToString(result.error().GetExtraParams()[1]);
+            }
+            return Value(std::string());
+        },
+        {});
+    params["middle"] = UserCallable(
+        [&](const UserCallableParams&) {
+            Template tpl(&m_env);
+            EXPECT_TRUE(tpl.Load("{% for i in range(20000) %}{{ inner() }}{% endfor %}").has_value());
+            const auto result = tpl.RenderAsString(params);
+            EXPECT_TRUE(result.has_value());
+            return Value(std::string());
+        },
+        {});
+    Template outer(&m_env);
+    ASSERT_TRUE(outer.Load("{{ middle() }}").has_value());
+    static_cast<void>(outer.RenderAsString(params));
+    EXPECT_EQ("maxRenderMemory", innerError);
+    // About 2 KB a tree in 1 MiB
+    EXPECT_LT(rendered, 1000);
+    EXPECT_EQ(20000, rendered + failed);
+}
+
+TEST_F(LimitsEnvTest, KeptIncludesOfANestedRenderCountAgainstTheOuterBudget)
+{
+    // The templates a nested render includes are kept for the outer render too: one that no longer fits fails the
+    // include before it is kept (RendererCallback::KeepLoaded, 0492 verifier round 2)
+    auto settings = UntrustedSettings();
+    settings.limits.maxRenderMemory = std::uint64_t{ 1 } << 20;
+    m_env.SetSettings(settings);
+    m_env.AddGlobal("g", ValuesList{});
+    for (int i = 0; i != 2000; ++i)
+    {
+        AddFile("f" + std::to_string(i), std::string(2000, 'x'));
+    }
+    std::string innerError;
+    ValuesMap params;
+    params["inner"] = UserCallable(
+        [&](const UserCallableParams&) {
+            Template tpl(&m_env);
+            EXPECT_TRUE(tpl.Load("{% for i in range(2000) %}{% include 'f' ~ i %}{% endfor %}").has_value());
+            const auto result = tpl.RenderAsString({});
+            innerError = result ? std::string() : ToString(result.error().GetExtraParams()[1]);
+            return Value(std::string());
+        },
+        {});
+    Template outer(&m_env);
+    ASSERT_TRUE(outer.Load("{{ inner() }}").has_value());
+    static_cast<void>(outer.RenderAsString(params));
+    EXPECT_EQ("maxRenderMemory", innerError);
+}
+
+TEST_F(LimitsEnvTest, KeptNestedTemplatesFitABudget)
+{
+    // Twenty trees of about 2 KB each fit in 1 MiB
+    auto result = RenderNestedLoads<char>(m_env, "{% for i in range(20) %}{{ inner() }}{% endfor %}", std::uint64_t{ 1 } << 20);
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ(20 * 4U, result->size());
+}
+
+TEST_F(LimitsEnvTest, KeptCachedTemplateCountsOnce)
+{
+    // The environment's cached template is one tree, kept and counted once however often it renders
+    auto result = RenderNestedLoads<char>(m_env, "{% for i in range(5000) %}{{ inner() }}{% endfor %}", std::uint64_t{ 1 } << 20, true);
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ(5000 * 4U, result->size());
+}
+
+TEST_F(LimitsEnvTest, WideKeptNestedTemplatesCountAgainstTheOuterBudget)
+{
+    auto result = RenderNestedLoads<wchar_t>(m_env, "{% for i in range(20000) %}{{ inner() }}{% endfor %}", std::uint64_t{ 1 } << 20);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+}
+
 TEST_F(LimitsEnvTest, LoadsEveryUse)
 {
     // With EveryUse each use loads the template again, and each load counts

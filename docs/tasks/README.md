@@ -553,12 +553,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0489](0489-dict-views-type.md) | `d.items()`, `d.keys()` and `d.values()` are lists, not dict views | parity | low | done |
 | [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | open |
 | [0491](0491-nested-render-closure-and-self-after-its-end.md) | A nested render's closures and `self` stored in a shared global lose their frames | parity | low | open |
-| [0492](0492-nested-render-kept-trees-outside-the-memory-budget.md) | The trees an outer render keeps for its nested renders are outside the memory budget | robustness | high | open |
+| [0492](0492-nested-render-kept-trees-outside-the-memory-budget.md) | The trees an outer render keeps for its nested renders are outside the memory budget | robustness | high | done |
 | [0493](0493-generate-items-markup.md) | generate() items are str where Jinja2 yields Markup | parity | low | open |
 | [0494](0494-include-odd-names.md) | Include names Jinja2 rejects with other classes | parity | low | open |
-| [0495](0495-strict-undefined-compare-leftovers.md) | StrictUndefined in the tests and methods that compare | parity | low | open |
-| [0496](0496-dict-view-leftovers.md) | What dict views still lack after 0489 | parity | low | open |
-| [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | open |
+| [0495](0495-strict-undefined-compare-leftovers.md) | StrictUndefined in the tests and methods that compare | parity | low | done |
+| [0496](0496-dict-view-leftovers.md) | What dict views still lack after 0489 | parity | low | done |
+| [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | done |
 | [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | open |
 | [0499](0499-stopped-macro-rollback-into-a-sink.md) | A macro that stops after its output reached the sink keeps the RuntimeError | parity | low | open |
 | [0500](0500-stopiteration-in-gettext-and-format.md) | A StopIteration out of gettext or str.format is undefined in Jinja2 | parity | low | open |
@@ -568,7 +568,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | open |
 | [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
 | [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | done |
-| [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | open |
+| [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | done |
 | [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | open |
 | [0509](0509-gettext-call-style-follows-install.md) | The style of a gettext call follows the last install, not the template's load | parity | low | open |
 | [0510](0510-percent-format-errors-python-classes.md) | `%` formatting errors carry no Python class | parity | low | open |
@@ -576,8 +576,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0513](0513-params-table-render-setup.md) | The params of a render as a flat table, and a slimmer per-render setup | perf | medium | done |
 | [0514](0514-shared-library-tls-model.md) | The thread-locals of a shared library: initial-exec TLS model | perf | medium | done |
 | [0515](0515-load-plain-text-fixed-cost.md) | The fixed cost of a Load: `Load/plain_text` against inja | perf | medium | done |
-| [0516](0516-load-fixed-cost-rest.md) | The rest of a Load's fixed cost: settings compare, sealing, template object | perf | medium | open |
-| [0517](0517-nested-load-frees-loading-template.md) | Two Loads from host code inside a template's first Load free the template being loaded | robustness | medium | open |
+| [0516](0516-load-fixed-cost-rest.md) | The rest of a Load's fixed cost: settings compare, sealing, template object | perf | medium | done |
+| [0517](0517-nested-load-frees-loading-template.md) | Two Loads from host code inside a template's first Load free the template being loaded | robustness | medium | done |
 | [0518](0518-loop-scope-swap-without-storage.md) | A loop that sets no names swaps empty scope maps | perf | medium | done |
 | [0519](0519-module-call-fixed-cost-creep.md) | A module call's fixed cost grew 4.3% in three weeks, one named exception at a time | perf | low | done |
 | [0520](0520-drift-report-slow-creep.md) | The drift report cannot see creep slower than 3% per 10 merges | perf | low | done |
+| [0521](0521-give-kept-nested-trees-back-early.md) | Give the trees kept for nested renders back before the keeper ends, and copy their params lazily | robustness | medium | open |
+| [0522](0522-nested-load-other-thread-or-assign.md) | Host code inside a first Load that reloads on another thread, or assigns the template, still frees it | robustness | low | open |
+| [0523](0523-dict-view-live-and-set-ops.md) | What dict views still lack after 0496 | parity | low | open |
+| [0527](0527-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds: StrictUndefined leftovers and the cost of the Load's checks | parity | low | open |

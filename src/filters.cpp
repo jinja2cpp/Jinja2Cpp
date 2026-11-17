@@ -1162,15 +1162,18 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     if (const auto source = AsList(baseVal))
     {
         const auto sourceKind = source->GetIteratorKind();
+        // A dict view is reversible (docs/tasks/0489) into the iterator of its kind (0496)
         if (sourceKind == IteratorKind::DictKeys)
         {
-            // A dict view is reversible (docs/tasks/0489); values and items reverse into iterators
-            // Python names dict_reversevalueiterator and dict_reverseitemiterator, which have no kind here
             kind = IteratorKind::DictReverseKey;
         }
-        else if (sourceKind == IteratorKind::DictValues || sourceKind == IteratorKind::DictItems)
+        else if (sourceKind == IteratorKind::DictValues)
         {
-            kind = IteratorKind::ListReverse;
+            kind = IteratorKind::DictReverseValue;
+        }
+        else if (sourceKind == IteratorKind::DictItems)
+        {
+            kind = IteratorKind::DictReverseItem;
         }
         else if (sourceKind != IteratorKind::None)
         {
@@ -1376,6 +1379,37 @@ InternalValue KeepMarkup(const InternalValue& baseVal, InternalValue result)
     }
     return result;
 }
+
+// The iterator Python's reversed() makes of a host object of a built-in type; none for the
+// others, whose __reversed__ may give anything: a list of the items then (docs/tasks/0496)
+IteratorKind HostReverseKind(std::string_view type)
+{
+    if (type == "list")
+    {
+        return IteratorKind::ListReverse;
+    }
+    if (type == "tuple")
+    {
+        return IteratorKind::TupleReverse;
+    }
+    if (type == "range")
+    {
+        return IteratorKind::RangeIterator;
+    }
+    if (type == "dict" || type == "dict_keys")
+    {
+        return IteratorKind::DictReverseKey;
+    }
+    if (type == "dict_values")
+    {
+        return IteratorKind::DictReverseValue;
+    }
+    if (type == "dict_items")
+    {
+        return IteratorKind::DictReverseItem;
+    }
+    return IteratorKind::None;
+}
 } // namespace
 
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -1408,7 +1442,8 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             {
                 item = WithParent(baseVal, std::move(item));
             }
-            return ListAdapter::CreateAdapter(std::move(items));
+            // The iterator Python's reversed() of a built-in type makes, by its class (docs/tasks/0496)
+            return ListAdapter::CreateIterator(std::move(items), HostReverseKind(host->TypeName()));
         }
     }
     // An iterator (a lazy filter's generator, reversed() of a sequence) has no len() and is
@@ -1430,6 +1465,15 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             if (const char* view = m_mode == RandomMode && iterated->GetSize().value_or(0) != 0 ? DictViewTypeName(iterated->GetIteratorKind()) : nullptr)
             {
                 throw TemplateRuntimeError("'"s + view + "' object is not subscriptable");
+            }
+        }
+        // random.choice of a host object with len() but no items to pick (a Python dict_keys) fails
+        // at the subscript, as the engine's own view does (docs/tasks/0496)
+        if (const auto* host = m_mode == RandomMode ? GetHostObject(baseVal) : nullptr)
+        {
+            if (!host->IsMapping() && host->Len().value_or(0) != 0 && !host->GetAttr("__getitem__"))
+            {
+                throw TemplateRuntimeError("'"s + host->TypeName() + "' object is not subscriptable");
             }
         }
     }

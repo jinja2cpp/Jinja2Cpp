@@ -325,7 +325,8 @@ std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
     {
         const auto settings = nlohmann::json::parse(ReadFile(dir / "settings.json"));
         result->wide = settings.value("wide", false);
-        auto& envSettings = result->env->GetSettings();
+        // A copy given back with SetSettings: the mutable GetSettings makes every Load compare the settings (docs/tasks/0516)
+        jinja2::Settings envSettings = std::as_const(*result->env).GetSettings();
         envSettings.trimBlocks = settings.value("trim_blocks", false);
         envSettings.lstripBlocks = settings.value("lstrip_blocks", false);
         envSettings.autoescape = settings.value("autoescape", false);
@@ -351,6 +352,7 @@ std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
                 return words;
             });
         }
+        result->env->SetSettings(envSettings);
         result->maxTokenCalls = settings.value("max_token_calls", std::size_t{ 0 });
 #if JINJA2CPP_HAS_CHAT_TEMPLATES
         // A Hugging Face chat template, rendered as transformers does; strftime_now reads the
