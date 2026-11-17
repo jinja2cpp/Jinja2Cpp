@@ -1195,6 +1195,66 @@
    "output": "{{ undefined value printed: hint }}|{{ None }}"
   },
   {
+   "id": "literals.class_call_debug_undefined_args",
+   "template": "{{ x.__class__(name='customer') }}|{{ x.__class__(hint='custom') }}|{{ x.__class__(none, {}, 'nm') }}|{{ x.__class__(obj=none, name=3) }}|{{ x.__class__(None, none) }}|{{ x.__class__(name=none) }}",
+   "context": {},
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "{{ customer }}|{{ undefined value printed: custom }}|{{ no such element: dict object['nm'] }}|{{ no such element: None[3] }}|{{ no such element: None[None] }}|{{ None }}"
+  },
+  {
+   "id": "literals.class_call_undefined_args_message",
+   "template": "{{ x.__class__(obj={}, name='nm').y }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'nm'"
+   }
+  },
+  {
+   "id": "literals.class_call_undefined_element_message",
+   "template": "{% set u = x.__class__(none, [], 3) %}{{ u + 1 }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "list object has no element 3"
+   }
+  },
+  {
+   "id": "literals.class_call_undefined_bad_keyword",
+   "template": "{{ x.__class__(bogus=1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Undefined.__init__() got an unexpected keyword argument 'bogus'"
+   }
+  },
+  {
+   "id": "literals.class_call_undefined_duplicate_keyword",
+   "template": "{{ x.__class__('h', hint='g') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Undefined.__init__() got multiple values for argument 'hint'"
+   }
+  },
+  {
    "id": "literals.class_call_chainable_undefined",
    "template": "{{ x.__class__().y.z }}|{{ x.__class__() is defined }}",
    "context": {},

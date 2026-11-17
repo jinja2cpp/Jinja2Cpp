@@ -48,8 +48,8 @@ Python's message. 2-5: add when a template needs them; pin each with a case. 6, 
    with `cannot create 'dict_keys' instances`. The class check sits on the path that already raised
    `'type' object is not callable` (`ResolveCallee` finds `operator()` as it does for `joiner()`), so a call of a macro or
    function pays nothing. `is callable` follows from the same slot. Deliberate limits: `int(x, base)` of a base other than
-   10 reads the text through the `int` filter, which also accepts a float literal there; `Undefined(hint)` takes the hint
-   as text only; classes Python can build with arguments that the engine has no value for (`reversed`, `function`,
+   10 reads the text through the `int` filter, which also accepts a float literal there; `Undefined(hint, obj, name)` binds its
+   arguments as Python does (an unknown or repeated keyword is a `TypeError`), but takes the hint as text only and ignores `exc`; classes Python can build with arguments that the engine has no value for (`reversed`, `function`,
    `method`, `LoopContext`, `object()`) report `cannot create` where Python reports a different `TypeError` or builds one.
 2. **Fixed.** `__mro__` and `__bases__` give the tuple of classes, `mro()` a new list, with an `object` class and the parents
    bool to int, Markup to str, `StrictUndefined`, `ChainableUndefined` and `DebugUndefined` to `Undefined`, `_GroupTuple` to

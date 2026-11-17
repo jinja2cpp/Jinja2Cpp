@@ -16,6 +16,7 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -1166,20 +1167,50 @@ InternalValue ConstructType(const CallParams& params)
 // Undefined(hint=None, obj=missing, name=None, exc=UndefinedError) of the class `className`
 InternalValue ConstructUndefined(std::string_view className, const CallParams& params)
 {
+    const std::string cls(className);
     if (params.posParams.size() > 4)
     {
-        ThrowTypeError(std::string(className) + ".__init__() takes from 1 to 5 positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+        ThrowTypeError(cls + ".__init__() takes from 1 to 5 positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+    }
+    constexpr std::array<std::string_view, 4> names = { "hint", "obj", "name", "exc" };
+    std::array<const InternalValue*, 4> args{};
+    for (size_t i = 0; i < params.posParams.size(); ++i)
+    {
+        args[i] = &params.posParams[i];
+    }
+    for (const auto& [key, value] : params.kwParams)
+    {
+        size_t index = 0;
+        while (index < names.size() && names[index] != key)
+        {
+            ++index;
+        }
+        if (index == names.size())
+        {
+            auto message = cls + ".__init__() got an unexpected keyword argument '";
+            message += key;
+            message += '\'';
+            ThrowTypeError(message);
+        }
+        if (args[index])
+        {
+            auto message = cls + ".__init__() got multiple values for argument '";
+            message += key;
+            message += '\'';
+            ThrowTypeError(message);
+        }
+        args[index] = &value;
     }
     std::string hint;
-    if (!params.posParams.empty() && IsStringValue(params.posParams.front()))
+    if (args[0] && IsStringValue(*args[0]))
     {
-        hint = AsString(params.posParams.front());
+        hint = AsString(*args[0]);
     }
-    if (auto result = MakeUndefinedOfClass(className, std::move(hint)))
+    if (auto result = MakeUndefinedOfClass(className, std::move(hint), args[1], args[2]))
     {
         return std::move(*result);
     }
-    ThrowTypeError("cannot create '" + std::string(className) + "' instances");
+    ThrowTypeError("cannot create '" + cls + "' instances");
 }
 
 bool IsUndefinedClass(std::string_view className)

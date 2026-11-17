@@ -105,12 +105,23 @@ InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hi
     return MakeUndefinedValue(std::move(info));
 }
 
-std::optional<InternalValue> MakeUndefinedOfClass(std::string_view className, std::string hint)
+std::optional<InternalValue> MakeUndefinedOfClass(std::string_view className, std::string hint, const InternalValue* obj, const InternalValue* name)
 {
     UndefinedInfo info;
     info.hint = std::move(hint);
     // Python's name of an undefined that was made by hand is None
     info.name = "None";
+    const bool stringName = name ? IsStringValue(*name) : false;
+    if (name && !name->IsNone())
+    {
+        info.name = stringName ? AsString(*name) : Repr(*name);
+    }
+    if (obj)
+    {
+        // Python's _undefined_message: an attribute for a string name, an element otherwise
+        info.objType = ObjectTypeRepr(*obj);
+        info.isAttr = stringName;
+    }
     if (className == "StrictUndefined")
     {
         info.policy = UndefinedPolicy::Strict;
