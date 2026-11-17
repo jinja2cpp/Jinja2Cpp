@@ -167,6 +167,8 @@ CASES = [
     ("tuple_of_slices_strict_conditional_else_branch", "{% if false and (1 if 0 else [1][:, :]|length) %}a{% else %}b{% endif %}|{% if false and (1 if 0 else 2 if 0 else [1][:, :]|length) %}a{% else %}b{% endif %}|{% if false and ([1][:, :] if 0) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_conditional_chained_test", "{% if false and (1 if 0 else 2 if [1][:, :] else 3) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_conditional_or_test", "{% if false and (1 if ([1][:, :] or 1) else 2) %}a{% else %}b{% endif %}", {"env": {"undefined": "strict"}}),
+    # a failing `and`/`or` test is Impossible when its failure is a filter's (verifier on 0527)
+    ("tuple_of_slices_strict_conditional_logical_test", "{% if false and ([1][:, :] if 1 and 1|list) %}a{% endif %}b|{% if false and (x or ([1][:, :] if 1|list and 1)) %}a{% endif %}b|{% if false and (([1][:, :] if 1 and 1|list) if 0 else [1][:, :]) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_conditional_set", "{% set q = 1 if ()[:, :] else 2 %}[{{ q }}]", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_conditional_output_concat", "[{{ x ~ (1 if ()[:, :] else 2) }}]", {"env": {"undefined": "strict"}}),
     # a strict filter chain: each step is a candidate, evaluated from the step before it (0527)

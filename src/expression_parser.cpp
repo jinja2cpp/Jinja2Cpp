@@ -172,8 +172,7 @@ bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
 // Whether Jinja2's as_const of the node turns an exception into Impossible (FoldCandidate::failsLoad).
 // A conditional's as_const lets out what its test's truth raises, which the Load's evaluation
 // of it decides (FoldEvaluator::ConditionalOf)
-template<typename Nodes>
-bool FoldCatchesFailure(const Nodes& nodes, NodeRef<Expression> node)
+bool FoldCatchesFailure(const NodeArena& nodes, NodeRef<Expression> node)
 {
     switch (nodes[node].GetKind())
     {
@@ -188,9 +187,9 @@ bool FoldCatchesFailure(const Nodes& nodes, NodeRef<Expression> node)
     case NodeKind::SliceExpr:
         return true;
     case NodeKind::BinaryExpr:
-        return !nodes.template Get<BinaryExpression>(node).IsLogical();
+        return !nodes.Get<BinaryExpression>(node).IsLogical();
     case NodeKind::FullExpr:
-        return static_cast<bool>(nodes.template Get<FullExpressionEvaluator>(node).GetTester());
+        return static_cast<bool>(nodes.Get<FullExpressionEvaluator>(node).GetTester());
     default:
         return false;
     }
@@ -2010,7 +2009,7 @@ private:
         }
         else
         {
-            m_steps[first].value = TryFoldValue([&] { return nodes[m_check.candidates[first].node].Evaluate(m_context); });
+            m_steps[first].value = TryFoldValue([this, &nodes, first] { return nodes[m_check.candidates[first].node].Evaluate(m_context); });
         }
         m_steps[first].known = true;
         while (!pending.empty())
@@ -2031,7 +2030,7 @@ private:
         }
         const auto& nodes = m_context.Nodes();
         const auto chain = nodes.Get<FilteredExpression>(m_check.candidates[index].node).GetFilter();
-        return TryFoldValue([&] { return nodes[chain].EvaluateLast(previous.value, m_context); });
+        return TryFoldValue([this, &nodes, chain, &previous] { return nodes[chain].EvaluateLast(previous.value, m_context); });
     }
 
     // Jinja2's CondExpr.as_const: the test's as_const, whose truth fails for a strict undefined
@@ -2045,10 +2044,12 @@ private:
         {
             return FoldOutcome::DoesNotFold;
         }
-        const auto test = TryFoldValue([&] { return nodes[conditional.GetTestExpr()].Evaluate(m_context); });
+        const auto test = TryFoldValue([this, &nodes, &conditional] { return nodes[conditional.GetTestExpr()].Evaluate(m_context); });
+        // A failing test or branch is Impossible: what Jinja2 lets out of one is the strict
+        // undefined's error of an `and`, `or` or `~` in it, a candidate of its own
         if (test.failed)
         {
-            return FailureOf(conditional.GetTestExpr());
+            return FoldOutcome::Fails;
         }
         if (m_check.strictUndefined && test.value.IsUndefined())
         {
@@ -2064,16 +2065,13 @@ private:
         {
             return ConditionalOf(nodes[chained]);
         }
-        const auto value = TryFoldValue([&] { return nodes[branch].Evaluate(m_context); });
+        const auto value = TryFoldValue([this, &nodes, branch] { return nodes[branch].Evaluate(m_context); });
         if (value.failed)
         {
-            return FailureOf(branch);
+            return FoldOutcome::Fails;
         }
         return HasSafeRepr(value.value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
     }
-
-    // A failing operand of a conditional: Impossible for a kind whose as_const catches it
-    [[nodiscard]] FoldOutcome FailureOf(NodeRef<Expression> operand) const { return FoldCatchesFailure(m_context.Nodes(), operand) ? FoldOutcome::Fails : FoldOutcome::FailsLoad; }
 
     const FoldCheck& m_check;
     RenderContext& m_context;

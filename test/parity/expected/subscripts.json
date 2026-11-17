@@ -4452,6 +4452,40 @@
    }
   },
   {
+   "id": "subscripts.tuple_of_slices_strict_conditional_logical_test",
+   "template": "{% if false and ([1][:, :] if 1 and 1|list) %}a{% endif %}b|{% if false and (x or ([1][:, :] if 1|list and 1)) %}a{% endif %}b|{% if false and (([1][:, :] if 1 and 1|list) if 0 else [1][:, :]) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b|b|b"
+  },
+  {
    "id": "subscripts.tuple_of_slices_strict_conditional_set",
    "template": "{% set q = 1 if ()[:, :] else 2 %}[{{ q }}]",
    "context": {

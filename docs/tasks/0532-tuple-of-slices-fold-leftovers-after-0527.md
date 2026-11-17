@@ -22,6 +22,17 @@ and evaluates a strict filter chain's steps one filter each:
   Settings::Limits::maxExpressionOperators);
 - a filter chain's steps share values only when each step's chain links to the one before it;
   a step inside a filter's argument is evaluated again by the outer step;
+- with StrictUndefined a filter that reports a value error through ThrowRuntimeError (an
+  ErrorInfo, not a TemplateRuntimeError) fails the Load where Jinja2's fold gives Impossible:
+  `{% if false and (1 if [1][:, :]|abs else 2) %}a{% endif %}b` renders `b` in Jinja2 (pre-0527
+  too; FoldEvaluator's TryFoldValue catches only TemplateRuntimeError, UndefinedError and
+  IntegerOutOfRangeError);
+- a conditional whose branches do not both fold is no fold candidate, so its test's truth is not
+  checked: `{% if false and (1 if 1 else x if [1][:, :] else x) %}` and
+  `{% if false and (0|list if 1 else [1][:, :] ~ x) %}` fail Jinja2's compile (StrictUndefined)
+  and load in the engine, as `(x if [1][:, :] else x)` already did;
+- a kept step value lives until the check ends: a chain of large values (`|center(3000000)` and
+  hundreds of steps) holds them all, bounded by maxExpressionOperators times the largest result;
 - per render: Jinja2 replaces the folded subscript by its constant, while the sealed tree keeps a
   TupleSliceExpression that evaluates its operand and parts and builds the undefined's name each
   time it runs. Caching it needs per-template storage for the constants the Load's fold check
