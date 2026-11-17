@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "node_arena.h"
 #include "out_stream.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "template_slots.h"
 #include "renderer.h"

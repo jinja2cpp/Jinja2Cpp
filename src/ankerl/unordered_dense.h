@@ -1102,9 +1102,13 @@ private:
     // the first block is allocated with room for a few block pointers after its elements, and only a
     // container that outgrows them moves its list to an array of its own, doubling as std::vector
     // does. The list stays on the heap either way, so an iterator, which holds the list's address,
-    // survives a move or a swap of the container as it did. Other allocators keep the std::vector.
+    // survives a move or a swap of the container as it did. So does any allocator without state (one that is empty,
+    // always equal and made by default, as Jinja2C++'s CountedAllocator, docs/tasks/0508); others keep the std::vector.
     static constexpr bool colocate_blocks =
-        std::is_same_v<Allocator, std::allocator<T>> && alignof(T) % alignof(pointer) == 0;
+        (std::is_same_v<Allocator, std::allocator<T>> ||
+         (std::is_empty_v<Allocator> && std::allocator_traits<Allocator>::is_always_equal::value &&
+          std::is_default_constructible_v<Allocator>)) &&
+        alignof(T) % alignof(pointer) == 0;
     // The tail: the unused bytes of a segment of MaxSegmentSizeBytes, or room for four pointers
     // when the elements fill it. A single element larger than the segment leaves no slack: the
     // subtraction would wrap, and the tail would be empty

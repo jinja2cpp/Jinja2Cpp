@@ -408,7 +408,8 @@ static_assert(CountedBlockHeader >= sizeof(std::uint64_t));
 // A block of `bytes` charged as ChargeObjectMemory charges an object's (past the budget the render fails at its next
 // step), with the charge in a header, so that freeing it gives back what it took and nothing more: a block made
 // before the render, without a budget or under UncountedMemoryScope gives nothing back (docs/tasks/0483, 0508)
-// Exported: the maps of code outside a shared library allocate through them
+// Out of line, so that the maps' inlined code stays small. Exported: the maps of code outside a shared library
+// allocate through them
 JINJA2CPP_EXPORT void* AllocateCountedBlock(std::size_t bytes);
 JINJA2CPP_EXPORT void FreeCountedBlock(void* ptr) noexcept;
 } // namespace detail
@@ -420,6 +421,10 @@ template<typename T>
 struct CountedAllocator
 {
     using value_type = T;
+    // As std::allocator's, so that a map moves and swaps its storage as with that: the blocks carry their charge
+    using propagate_on_container_move_assignment = std::true_type;
+    using propagate_on_container_swap = std::true_type;
+    using is_always_equal = std::true_type;
     static_assert(alignof(T) <= detail::CountedBlockHeader);
 
     CountedAllocator() noexcept = default;
@@ -429,6 +434,7 @@ struct CountedAllocator
     {
     }
 
+    // NOLINTNEXTLINE(readability-identifier-naming): the names the standard's allocator requirements use
     [[nodiscard]] T* allocate(std::size_t count)
     {
         if (count > (SIZE_MAX - detail::CountedBlockHeader) / sizeof(T))
@@ -437,6 +443,7 @@ struct CountedAllocator
         }
         return static_cast<T*>(detail::AllocateCountedBlock(count * sizeof(T)));
     }
+    // NOLINTNEXTLINE(readability-identifier-naming)
     void deallocate(T* ptr, std::size_t /*count*/) noexcept { detail::FreeCountedBlock(ptr); }
 
     template<typename U>

@@ -3,7 +3,7 @@ status: in-progress
 priority: medium
 area: robustness
 depends: [0459, 0478]
-touches: [src/recursion_guard.h, src/recursion_guard.cpp, src/hash_map.h, src/internal_value.h, src/statements.h, src/statements.cpp, test/limits_test.cpp]
+touches: [src/recursion_guard.h, src/recursion_guard.cpp, src/hash_map.h, src/internal_value.h, src/internal_value.cpp, src/render_context.h, src/ankerl/unordered_dense.h, src/statements.h, src/statements.cpp, test/limits_test.cpp, test/allocation_failure_test.cpp]
 shares: [docs/security.md]
 ---
 # The render memory budget does not count scope maps, imported modules or closure copies
@@ -31,6 +31,12 @@ allocator) and records its charge in a 16-byte header, so freeing it gives back 
 before the render, without a budget or under `UncountedMemoryScope` gives nothing (0483). `ImportedModule` (about
 1.6 KB with its context) allocates through the same block, and so do a closure's `ClosureCapture` and its copied
 names (`allocate_shared`). No per-map fixed charge, so the per-node path pays one compare per map allocation.
+The allocator propagates as `std::allocator` does, and the vendored ankerl keeps a map's list of segments in its
+first segment for any stateless allocator (it did for `std::allocator` only, 0506), so a scope's first insert
+still allocates twice. Instruction counts (preflight --perf): every row within +0.22% (Render/hf_gpt_oss), no new
+allocations, 16 bytes more per map block; GCC stopped inlining AsString's narrow copy in internal_value.cpp
+(+0.8% on Render/chat_llama), which a flattened helper restores, and `TakeTopScope` is forced inline (plain_text
+rows -1%).
 
 Measured in Debug, `UntrustedSettings`: 100,000 `{% import "x" as m with context %}` now fail with
 `maxRenderMemory` at a 324 MB peak (rendered at 525 MB before); 10,000 of them took 2-5 MB of the budget before and
