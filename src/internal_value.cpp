@@ -3225,6 +3225,9 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
     class Adapter : public IndexedListAccessorImpl<Adapter>
     {
     public:
+        // A dict view (DictView below, the one list that has a mapping) reads its items as this
+        // class does, so that a loop's enumerator rebinds to the next view without a new one
+        static bool ReadsAsSelf(const IListAccessor& list) { return list.GetViewMapping() != nullptr; }
         Adapter(InternalValueList&& values, IteratorKind iteratorKind)
             : m_values(std::move(values))
         {
