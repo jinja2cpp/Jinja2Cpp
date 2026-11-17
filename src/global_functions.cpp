@@ -1116,16 +1116,49 @@ InternalValue ConstructSequence(std::string_view cls, const CallParams& params, 
 InternalValue ConstructString(const CallParams& params, RenderContext& context)
 {
     CheckClassArguments("str", params, 3);
-    if (!params.kwParams.empty())
+    // str(object='', encoding='utf-8', errors='strict')
+    constexpr std::array<std::string_view, 3> names = { "object", "encoding", "errors" };
+    std::array<const InternalValue*, 3> args{};
+    for (size_t i = 0; i < params.posParams.size(); ++i)
     {
-        ThrowTypeError("'" + params.kwParams.begin()->first + "' is an invalid keyword argument for str()");
+        args[i] = &params.posParams[i];
     }
-    if (params.posParams.empty())
+    for (const auto& [key, value] : params.kwParams)
+    {
+        size_t index = 0;
+        while (index < names.size() && names[index] != key)
+        {
+            ++index;
+        }
+        if (index == names.size())
+        {
+            auto message = "'" + key;
+            message += "' is an invalid keyword argument for str()";
+            ThrowTypeError(message);
+        }
+        if (args[index])
+        {
+            auto message = "argument for str() given by name ('" + key;
+            message += "') and position (" + std::to_string(index + 1) + ")";
+            ThrowTypeError(message);
+        }
+        args[index] = &value;
+    }
+    if (!args[0])
     {
         return InternalValue(std::string());
     }
+    if (args[1] || args[2])
+    {
+        // The engine has no bytes, so only Python's refusals of decoding remain
+        if (IsStringValue(*args[0]))
+        {
+            ThrowTypeError("decoding str is not supported");
+        }
+        ThrowTypeError(std::string("decoding to str: need a bytes-like object, ") + Apply<visitors::PythonTypeNameGetter>(*args[0]) + " found");
+    }
     // str(Markup) is a plain str
-    auto result = ApplyBuiltinFilter("string", CallParams(), params.posParams.front(), context);
+    auto result = ApplyBuiltinFilter("string", CallParams(), *args[0], context);
     result.SetMarkup(false);
     return result;
 }

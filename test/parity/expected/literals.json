@@ -1231,6 +1231,98 @@
    }
   },
   {
+   "id": "literals.class_call_str_keywords",
+   "template": "{{ ''.__class__(object=123) }}|{{ ''.__class__(object=[1]) }}|{{ ''.__class__(object=none) }}|{{ ''.__class__(encoding='x') }}|{{ ''.__class__() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "123|[1]|None||"
+  },
+  {
+   "id": "literals.class_call_str_keyword_and_position",
+   "template": "{{ ''.__class__(123, object=1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument for str() given by name ('object') and position (1)"
+   }
+  },
+  {
+   "id": "literals.class_call_str_bad_keyword",
+   "template": "{{ ''.__class__(x=1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'x' is an invalid keyword argument for str()"
+   }
+  },
+  {
+   "id": "literals.class_call_str_decode_int",
+   "template": "{{ ''.__class__(1, 'utf-8') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "decoding to str: need a bytes-like object, int found"
+   }
+  },
+  {
+   "id": "literals.class_call_str_decode_str",
+   "template": "{{ ''.__class__('a', errors='x') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "decoding str is not supported"
+   }
+  },
+  {
+   "id": "literals.class_call_float_keyword",
+   "template": "{{ (1.5).__class__(x=1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "float() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "literals.class_call_tuple_keyword",
+   "template": "{{ ().__class__(iterable=[1]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "tuple() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "literals.class_call_bool_keyword",
+   "template": "{{ true.__class__(x=1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "bool() takes no keyword arguments"
+   }
+  },
+  {
    "id": "literals.class_call_undefined_bad_keyword",
    "template": "{{ x.__class__(bogus=1) }}",
    "context": {},
