@@ -422,8 +422,10 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     class CallScope
     {
     public:
-        explicit CallScope(Callback& callback)
+        // `holdsHandles`: the module holds handles of the callback's table of templates (its blocks)
+        CallScope(Callback& callback, bool holdsHandles)
             : m_callback(callback)
+            , m_holdsHandles(holdsHandles)
             , m_mark(callback.MarkCall())
             , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
         {
@@ -439,10 +441,11 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             m_callback.sharedDepth = m_sharedDepth;
             const auto& owner = m_callback;
             m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
-            // A call that failed leaves what its error views as it is (docs/tasks/0482)
+            // A call that failed leaves what its error views as it is until the error is made,
+            // then prunes (PruneAfterFailedCall, docs/tasks/0503)
             if (m_succeeded && m_callback.calls == 0 && m_callback.HasReplaced())
             {
-                m_callback.PruneReplaced();
+                m_callback.PruneReplaced(m_holdsHandles);
             }
         }
 
@@ -451,6 +454,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
 
     private:
         Callback& m_callback;
+        bool m_holdsHandles;
         typename Callback::CallMark m_mark;
         // A call made from a shared module's top level (a host callable there) imports for
         // itself: its modules end with it
@@ -612,6 +616,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams)
     {
         const std::scoped_lock lock(mutex);
+        std::optional<BasicErrorInfo<CharT>> error;
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
@@ -620,7 +625,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // among them (docs/tasks/0480)
             NoteDropped();
             // Then what the call loads, which its collector sees go
-            CallScope callScope(*callback);
+            CallScope callScope(*callback, module->HoldsTemplateHandles());
             // Then the module's context as the call found it, which a failed call would leave
             // with its scopes pushed
             const HomeCall::Restore restore(module->Context());
@@ -670,11 +675,25 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         }
         catch (const detail::RenderFailure& failure)
         {
-            throw BadResultAccess<CharT>(Named(failure.ErrorAs<CharT>(), name));
+            error.emplace(Named(failure.ErrorAs<CharT>(), name));
         }
         catch (...)
         {
-            throw BadResultAccess<CharT>(Named(detail::CurrentExceptionToError<CharT>(impl->m_templateName), name));
+            error.emplace(Named(detail::CurrentExceptionToError<CharT>(impl->m_templateName), name));
+        }
+        // Out of the handler, the exception gone: it may view a replaced tree (its message or
+        // values), the error made of it is owned
+        PruneAfterFailedCall();
+        throw BadResultAccess<CharT>(std::move(*error));
+    }
+
+    // A call that failed frees the trees a source change replaced as one that returned does
+    // (CallScope), once its error is made (docs/tasks/0503)
+    void PruneAfterFailedCall() noexcept
+    {
+        if (callback->calls == 0 && callback->HasReplaced())
+        {
+            callback->PruneReplaced(module->HoldsTemplateHandles());
         }
     }
 
