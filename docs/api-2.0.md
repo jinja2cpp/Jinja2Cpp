@@ -194,7 +194,9 @@ across shared libraries). Purely additive. A stopped call's output is taken back
 in full. A sink target (`RenderTo`, the module's `generate()` and `stream()`) holds back what would
 reach the sink while such a call runs and gives it to the sink once the call returns (task 0499), so
 it takes a stopped call's output back in full too; the held output counts against `maxOutputSize`
-and the memory budget as it is written. The Python module marks Python's `StopIteration` with it.
+and the memory budget as it is written. Held output is capped at `MaxSequenceSize` characters, as a
+value is: past that it reaches the sink while the call runs, and a call that then stops fails as it
+did before 0499. The Python module marks Python's `StopIteration` with it.
 
 **Against Python.** Same: syntax, undefined and not-found errors keep their codes, with
 location; `MemoryError` propagates as `bad_alloc` does. Different: errors arrive as `Result`,
