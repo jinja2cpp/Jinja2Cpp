@@ -4,8 +4,12 @@
 
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <memory>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -206,4 +210,146 @@ TEST(NameMapTest, LongNamesThatCollideUnkeyedHashApart)
     // A name of exactly one piece and one just past it hash as names of their own
     const std::string piece(144, 'x');
     EXPECT_NE(HashedName::Hash(piece), HashedName::Hash(piece + "x"));
+}
+
+namespace
+{
+// Names of `size` bytes, `count` of them, with the eight bytes `word` at each offset of
+// `fixed` and a counter in the other bytes
+std::vector<std::string> NamesPinning(std::size_t count, std::size_t size, std::uint64_t word, const std::vector<std::size_t>& fixed)
+{
+    std::vector<std::string> names;
+    names.reserve(count);
+    for (std::size_t idx = 0; idx != count; ++idx)
+    {
+        std::string name(size, '\0');
+        for (std::size_t pos = 0; pos != size; ++pos)
+        {
+            name[pos] = static_cast<char>((idx >> ((pos % 2) * 8)) & 0xFF);
+        }
+        for (const auto offset : fixed)
+        {
+            std::memcpy(&name[offset], &word, sizeof(word));
+        }
+        names.push_back(std::move(name));
+    }
+    return names;
+}
+
+std::size_t DistinctUnkeyed(const std::vector<std::string>& names)
+{
+    std::set<std::uint64_t> hashes;
+    for (const auto& name : names)
+    {
+        hashes.insert(detail::ankerl::unordered_dense::detail::hash_bytes(name.data(), name.size()));
+    }
+    return hashes.size();
+}
+
+// How many distinct keyed hashes, and how many distinct values of their low 13 bits
+std::pair<std::size_t, std::size_t> DistinctKeyed(const std::vector<std::string>& names)
+{
+    std::set<std::size_t> hashes;
+    std::set<std::size_t> low;
+    for (const auto& name : names)
+    {
+        const auto hash = HashedName::Hash(name);
+        hashes.insert(hash);
+        low.insert(hash & 0x1FFF);
+    }
+    return { hashes.size(), low.size() };
+}
+
+// The most positions a lookup probes when `names` fill a linearly probed index of 8,192 by
+// their keyed hash, as ParamsTable's does: what an insert or lookup costs, with no clock
+std::size_t LongestProbe(const std::vector<std::string>& names)
+{
+    constexpr std::size_t mask = 0x1FFF;
+    std::vector<bool> used(mask + 1);
+    std::size_t longest = 0;
+    for (const auto& name : names)
+    {
+        std::size_t probes = 1;
+        auto pos = HashedName::Hash(name) & mask;
+        while (used[pos])
+        {
+            pos = (pos + 1) & mask;
+            ++probes;
+        }
+        used[pos] = true;
+        longest = std::max(longest, probes);
+    }
+    return longest;
+}
+} // namespace
+
+// hash_bytes xors fixed secrets into its lanes and multiplies, so a lane whose eight bytes
+// equal its secret drops the bytes it covers: every name of 8 to 16 bytes that starts with
+// secret[1] hashes alike, and so does every 32 byte name with secret[1] at 0 and secret[3] at
+// 16. The name hash keys the secrets themselves per process, so the same names spread over the
+// whole table (docs/tasks/0507). 4,000 random 64-bit hashes all differ, take about 3,100 of the
+// 8,192 values of 13 bits, and in a linearly probed index of 8,192 no lookup walks far
+TEST(NameMapTest, NamesThatZeroUnkeyedLanesHashApart)
+{
+    constexpr std::uint64_t secret1 = UINT64_C(0xe7037ed1a0b428db);
+    constexpr std::uint64_t secret3 = UINT64_C(0x589965cc75374cc3);
+    // The 32 byte names zero the first block with secret[1] and the last with secret[3]
+    auto blocks = NamesPinning(4000, 32, secret1, { 0 });
+    for (auto& name : blocks)
+    {
+        std::memcpy(&name[16], &secret3, sizeof(secret3));
+    }
+    const std::vector<std::string> sets[] = { NamesPinning(4000, 16, secret1, { 0 }), NamesPinning(4000, 12, secret1, { 0 }), std::move(blocks) }; // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+    for (const auto& names : sets)
+    {
+        SCOPED_TRACE(std::to_string(names.front().size()) + " bytes");
+        ASSERT_EQ(1U, DistinctUnkeyed(names));
+        const auto [distinct, low] = DistinctKeyed(names);
+        EXPECT_EQ(4000U, distinct);
+        EXPECT_GT(low, 2500U);
+        // Random hashes at half load probe a few dozen positions at worst; one group, 4,000
+        EXPECT_LT(LongestProbe(names), 200U);
+    }
+}
+
+// Names of every length up to three pieces hash apart from one another, and a change to any one
+// byte changes the hash. Each name is in a buffer of its own size, so that a sanitizer sees a
+// read past its end, and the hash must not change with the bytes after it
+TEST(NameMapTest, NameHashCoversEveryByte)
+{
+    std::set<std::size_t> hashes;
+    for (std::size_t size = 1; size != (3 * 144) + 20; ++size)
+    {
+        const auto name = std::make_unique<char[]>(size); // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+        std::fill_n(name.get(), size, 'n');
+        const auto hash = detail::HashName(name.get(), size);
+        EXPECT_TRUE(hashes.insert(hash).second) << size;
+        for (std::size_t pos = 0; pos != size; ++pos)
+        {
+            name[pos] = 'm';
+            EXPECT_NE(hash, detail::HashName(name.get(), size)) << size << " at " << pos;
+            name[pos] = 'n';
+        }
+        // The same name, followed by other bytes
+        std::string longer(name.get(), size);
+        longer += "tail";
+        EXPECT_EQ(hash, detail::HashName(longer.data(), size)) << size;
+        longer.back() = 'x';
+        EXPECT_EQ(hash, detail::HashName(longer.data(), size)) << size;
+    }
+}
+
+// A name of 145 bytes hashes its last byte with the 16 before it, which the first piece of 144
+// hashed too; the name of 161 bytes that repeats those 17 after the first piece hashes the same
+// bytes, and only the length keeps the two apart (verifier of docs/tasks/0507)
+TEST(NameMapTest, LongNamesRepeatingTheirLastWindowHashApart)
+{
+    std::string name;
+    for (std::size_t idx = 0; idx != 145; ++idx)
+    {
+        name += static_cast<char>('a' + ((idx * 7) % 26));
+    }
+    const auto repeated = name.substr(0, 144) + name.substr(128);
+    ASSERT_EQ(161U, repeated.size());
+    EXPECT_NE(HashedName::Hash(name), HashedName::Hash(repeated));
 }

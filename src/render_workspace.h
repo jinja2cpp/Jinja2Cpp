@@ -169,10 +169,19 @@ public:
         {
             m_retired.push_back(std::move(replaced));
         }
-        else if (!m_retired.empty())
+        else if (!m_retired.empty() || !m_loadingKept.empty())
         {
             ReleaseRetired();
         }
+    }
+    // Keeps a template that a Load replaced while that template's own first Load still runs: host
+    // code the Load called (an autoescape selector) loaded the same template twice, so the second
+    // Load replaced the template the first one parses into (docs/tasks/0517). Kept while *loading
+    // holds, whether a render runs or not; let go by the first release after that Load returned.
+    // Only the rare Load that replaces a loading template pays for it
+    void KeepWhileLoading(std::shared_ptr<const void> replaced, const bool* loading)
+    {
+        m_loadingKept.push_back({ std::move(replaced), loading });
     }
 
     // The tables kept for the next render have at most 1024 buckets: about 800 names. A
@@ -241,6 +250,8 @@ private:
     SlotFrame TakeFromNextChunk(UnitLayout layout);
     RenderMaps& LendNewMaps();
     void ReleaseRetired() noexcept;
+    // Lets go of the templates KeepWhileLoading kept whose Load returned
+    void ReleaseLoadedKept() noexcept;
     static void EmptyMaps(RenderMaps& maps, bool keepTables) noexcept;
 
     // The smallest chunk: a template with a few nested loops and macros fits in it
@@ -263,6 +274,15 @@ private:
     static inline thread_local std::size_t s_renders = 0;
     // The templates a Load replaced during a render on this thread
     std::vector<std::shared_ptr<const void>> m_retired;
+    // The templates a Load replaced while their own first Load ran (KeepWhileLoading). The
+    // thread's, not a render's: SwapContents leaves them, so that a suspendable render that ends
+    // inside such a Load does not free the template it parses into
+    struct LoadingKept
+    {
+        std::shared_ptr<const void> impl;
+        const bool* loading = nullptr;
+    };
+    std::vector<LoadingKept> m_loadingKept;
 };
 } // namespace v2
 } // namespace jinja2

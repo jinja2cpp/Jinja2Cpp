@@ -609,7 +609,8 @@ using TemplateW = BasicTemplate<wchar_t>;
  * an escape buffer, and the globals of the last \ref TemplateEnv it rendered with, which keeps
  * them (and what their callables capture) alive after that environment is destroyed. A template
  * that a Load called from a render replaced is kept too, until the next Load on the thread
- * outside a render. This frees
+ * outside a render, as is a template that nested Loads replaced while its own first Load ran
+ * (host code that Load called), once that Load returned. This frees
  * them on the calling thread: before an idle pool thread parks, or before a plugin is unloaded.
  * The next render on the thread allocates them again.
  *

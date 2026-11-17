@@ -99,9 +99,9 @@ void CycleCollector::Finish() noexcept
     try
     {
         // The values this render kept trees for may outlive it in the outer render too
-        for (auto& tree : m_notes->trees)
+        for (auto& kept : m_notes->trees)
         {
-            m_outer->KeepTree(tree);
+            m_outer->KeepTree(kept.tree, kept.bytes);
         }
         for (const auto& candidate : m_notes->candidates)
         {
@@ -119,30 +119,38 @@ void CycleCollector::Finish() noexcept
     }
 }
 
-void CycleCollector::KeepTree(std::shared_ptr<const void> tree)
+void CycleCollector::KeepTree(std::shared_ptr<const void> tree, std::uint64_t bytes)
 {
-    if (!tree)
+    if (tree && Insert(std::move(tree), bytes))
     {
-        return;
+        // Kept first: a tree past the budget stays alive for the values that name it, and this render fails instead
+        // (a throw here would make Finish's hand-over drop the trees)
+        detail::ChargeRenderMemoryOf(this, bytes);
     }
+}
+
+bool CycleCollector::Insert(std::shared_ptr<const void> tree, std::uint64_t bytes)
+{
     if (!m_notes)
     {
         m_notes = std::make_unique<Notes>();
     }
     auto& notes = *m_notes;
-    if (!notes.treeSet.insert(tree.get()).second)
+    const void* key = tree.get();
+    if (!notes.treeSet.insert(key).second)
     {
-        return;
+        return false;
     }
     try
     {
-        notes.trees.push_back(std::move(tree));
+        notes.trees.push_back({ std::move(tree), bytes });
     }
     catch (...)
     {
-        notes.treeSet.erase(tree.get());
+        notes.treeSet.erase(key);
         throw;
     }
+    return true;
 }
 
 std::weak_ptr<const void> CycleCollector::ExportToken()

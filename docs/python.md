@@ -227,7 +227,7 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 | `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
 | `compile_expression`, `lex`, `preprocess`, `compile` | called on a Jinja2 environment of the same configuration |
 | `Template.blocks`, `new_context`, `root_render_func` | read from the template loaded by Jinja2 from the same source or name |
-| A template the engine cannot parse (for example an item of a subscript of a literal by a tuple of slices that Jinja2 folds away, `true or [1][:, :][0]`) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
+| A template the engine cannot parse (rare since task 0497: for example, with StrictUndefined, a tuple-of-slices subscript in a conditional's branch, docs/tasks/0527) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
 
 **Tier C: never.** Bytecode-level internals of the engine: `jinja2.compiler` and
 `jinja2.nodes` as engine objects (`env.parse` of a native environment is opaque, for
@@ -322,7 +322,7 @@ only the first wrapper published is kept and counted in `loads_fallback`, and on
 are chains over the live dicts of your environment: a change after a template was made is seen by it.
 
 **Untrusted template text and the sandbox.** Which engine renders a template can depend on the template text:
-syntax the engine lacks (a subscript by a tuple of slices, an extension tag) sends the template to Jinja2's
+syntax the engine lacks (an extension tag, or one of the tuple-of-slices folds of docs/tasks/0527) sends the template to Jinja2's
 sandbox, where the engine's caps (`MaxSequenceSize`, the `str.format` cap, `MAX_RANGE` as `Limits::maxRange`)
 do not apply, only Jinja2's own checks. A sandbox that renders text you do not trust, and relies on
 the engine's caps, should be constructed with `fallback="never"`: a template using such syntax then raises

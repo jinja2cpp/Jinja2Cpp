@@ -271,6 +271,15 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
     // A finalize callable edited in place keeps its identity, so it would compare equal: templates of an environment
     // with one get settings of their own
     const WriterLock<Mutex> l(m_loadSettingsGuard);
+    if (!m_settingsLent)
+    {
+        // Only ReplaceSettings changed `settings`, and it made m_loadSettings from them (docs/tasks/0516)
+        if (!m_loadSettings)
+        {
+            m_loadSettings = MakeLoadSettingsLocked(BigIntBackendLocked());
+        }
+        return m_loadSettings;
+    }
     if (settings.finalize.callable)
     {
         return MakeLoadSettingsLocked(BigIntBackendLocked());
@@ -280,6 +289,22 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
         m_loadSettings = MakeLoadSettingsLocked(BigIntBackendLocked());
     }
     return m_loadSettings;
+}
+
+void TemplateEnvImpl::ReplaceSettings(Settings newSettings)
+{
+    const WriterLock<Mutex> l(m_loadSettingsGuard);
+    // Made first: when it throws, nothing has changed
+    auto loadSettings = std::make_shared<const LoadSettings>(newSettings, BigIntBackendLocked(), DialectLocked(), PromptSafeParamsLocked());
+    settings = std::move(newSettings);
+    m_loadSettings = std::move(loadSettings);
+}
+
+Settings& TemplateEnvImpl::MutableSettings()
+{
+    const WriterLock<Mutex> l(m_loadSettingsGuard);
+    m_settingsLent = true;
+    return settings;
 }
 
 bool TemplateEnvImpl::SetBigIntBackend(const BigIntBackend* backend) noexcept
@@ -511,12 +536,20 @@ const Settings& TemplateEnv::GetSettings() const
 
 Settings& TemplateEnv::GetSettings()
 {
-    return m_impl->settings;
+    return m_impl->MutableSettings();
 }
 
 void TemplateEnv::SetSettings(const Settings& setts)
 {
-    m_impl->settings = setts;
+    m_impl->ReplaceSettings(setts);
+}
+
+void TemplateEnv::ModifySettings(const std::function<void(Settings&)>& fn)
+{
+    // `fn` runs on a copy outside the lock: it may read the environment, and when it throws nothing has changed
+    Settings changed = m_impl->settings;
+    fn(changed);
+    m_impl->ReplaceSettings(std::move(changed));
 }
 
 bool TemplateEnv::SetBigIntBackend(const BigIntBackend* backend) noexcept

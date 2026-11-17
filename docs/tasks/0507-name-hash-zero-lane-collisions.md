@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/922
 priority: low
 area: robustness
 depends: [0231]
-touches: [src/hash_map.h, src/hash_map.cpp]
+touches: [src/hash_map.h, src/hash_map.cpp, test/name_map_test.cpp, test/params_table_test.cpp]
 ---
 # Host keys of raw bytes can collide in the name hash whatever its per-process key
 
@@ -28,3 +29,18 @@ off it, rehashes and string-keyed lookups are not).
 **Done when.** A test builds 4,000 params keys of 16 bytes sharing the first eight `secret[1]` bytes
 and a render reading them runs within a small factor of the same render with ordinary keys, and the
 bench rows stay within the perf bar.
+
+**Resolution.** `HashName` (src/hash_map.cpp) now runs hash_bytes's shape over the vendored reads
+and `mix` with secrets drawn per process instead of the fixed ones: a seed, 18 lane words (one per
+word of the nine 16 byte blocks), a finalizer word and a chain word for pieces past 144 bytes, all
+splitmix64 words of the drawn key (`JINJA2CPP_NAME_HASH_KEY` still pins it). A lane now drops its
+bytes only for an input equal to a secret nobody outside the process knows, so the post-hash
+finalizer is gone. The secrets are filled once by a function-local static and published with a
+release store that `HashName` reads with acquire. `src/ankerl/` is unchanged.
+Tests: `NameMapTest.NamesThatZeroUnkeyedLanesHashApart` (4,000 names each of 12 and 16 bytes
+starting with secret[1], and of 32 bytes zeroing both blocks: 1 unkeyed hash, 4,000 keyed, the
+longest probe in a linearly probed index of 8,192 under 200), `NameMapTest.NameHashCoversEveryByte`,
+`NameMapTest.LongNamesRepeatingTheirLastWindowHashApart` and
+`ParamsTableTest.KeysThatZeroUnkeyedLanesStillRender`. Measured once by hand, not in a test (no
+clocks in tests): 4,000 crafted params keys rendered in 185 ms on master against 1 ms with ordinary
+keys, and as fast as ordinary keys with the fix.

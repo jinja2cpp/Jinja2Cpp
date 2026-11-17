@@ -358,6 +358,59 @@ TEST(TemplateApiTest, LoadFromTheSelectorOfTheFirstLoad)
     EXPECT_EQ("i6", tpl->RenderAsString({ { "x", 6 } }).value());
 }
 
+// Host code inside the first Load loads the same template twice or more: the second nested Load
+// replaces the template the first Load still parses into, which stays until that Load returns
+// (docs/tasks/0517). The last Load that replaced the template is the one it renders
+template<typename CharT>
+void LoadTwiceFromTheSelectorOfTheFirstLoad()
+{
+    using Tpl = std::conditional_t<std::is_same_v<CharT, char>, Template, TemplateW>;
+    using Str = std::basic_string<CharT>;
+    const auto widen = [](const std::string& text) { return Str(text.begin(), text.end()); };
+    for (const int nestedLoads : { 2, 3 })
+    {
+        for (const bool release : { false, true })
+        {
+            for (const bool outerFails : { false, true })
+            {
+                SCOPED_TRACE(std::to_string(nestedLoads) + (release ? " release" : "") + (outerFails ? " outer fails" : ""));
+                TemplateEnv env;
+                std::optional<Tpl> tpl;
+                bool ran = false;
+                env.GetSettings().autoescapeSelector = [&](const std::string&) {
+                    if (!ran)
+                    {
+                        ran = true;
+                        for (int n = 0; n < nestedLoads; ++n)
+                        {
+                            EXPECT_TRUE(!!tpl->Load(widen(std::string(1, static_cast<char>('a' + n)) + std::string(40, 'n') + "{{ x }}")));
+                            if (release)
+                            {
+                                ReleaseThreadCaches();
+                            }
+                        }
+                    }
+                    return false;
+                };
+                tpl.emplace(&env);
+                EXPECT_EQ(!outerFails, !!tpl->Load(widen(outerFails ? "{{ broken" : "OUT{{ x }}")));
+                const auto last = std::string(1, static_cast<char>('a' + nestedLoads - 1)) + std::string(40, 'n') + "5";
+                EXPECT_EQ(widen(last), tpl->RenderAsString({ { "x", 5 } }).value());
+                // Once the Load returned, the template it parsed into goes with the thread's caches
+                EXPECT_TRUE(ReleaseThreadCaches());
+                ASSERT_TRUE(!!tpl->Load(widen("again{{ x }}")));
+                EXPECT_EQ(widen("again7"), tpl->RenderAsString({ { "x", 7 } }).value());
+            }
+        }
+    }
+}
+
+TEST(TemplateApiTest, LoadTwiceFromTheSelectorOfTheFirstLoad)
+{
+    LoadTwiceFromTheSelectorOfTheFirstLoad<char>();
+    LoadTwiceFromTheSelectorOfTheFirstLoad<wchar_t>();
+}
+
 // Reloads of each source size, inside the small-string buffer and outside it, and failed reloads
 // keep rendering the loaded template
 TEST(TemplateApiTest, ReloadsKeepEachSourceSize)

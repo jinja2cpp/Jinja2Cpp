@@ -143,10 +143,12 @@ def test_patch_assistant_mask_uses_transformers(patched):
     assert rendered == ["hi hello"]
 
 
-def test_patch_hands_unloadable_templates_to_transformers(patched):
-    # A syntax jinja2cpp lacks (a tuple of slices a step of a filter chain folds, task 0497) compiles in
-    # transformers' environment
-    compiled = patched._compile_jinja_template('{{ 1 }}{% if [1][:, :]|default([])|map("string") %}{% endif %}{{ 2 }}')
+def test_patch_hands_unloadable_templates_to_transformers(patched, monkeypatch):
+    # Brackets nested deeper than the engine's bracket depth, lowered for the test (as test_fallback.py's
+    # NOPARSE), compile in transformers' environment
+    monkeypatch.setattr(jinja2cpp.fallback, "_test_max_expression_depth", 4)
+    monkeypatch.setattr(integration, "_environment", None)  # a new shared environment, built at that depth
+    compiled = patched._compile_jinja_template("{{ 1 }}{% if ((((((1)))))) %}{% endif %}{{ 2 }}")
     assert not isinstance(compiled, integration.ChatTemplate)
     assert compiled.render() == "12"
     # transformers reads the variables through Jinja2's AST: the proxy gives its environment

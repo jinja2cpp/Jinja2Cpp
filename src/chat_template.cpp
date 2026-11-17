@@ -221,16 +221,18 @@ std::string FormatArgument(const Value& format)
 
 void ConfigureForChatTemplates(TemplateEnv& env, ChatTemplateOptions options)
 {
-    auto& settings = env.GetSettings();
-    settings.trimBlocks = true;
-    settings.lstripBlocks = true;
-    settings.extensions.loopControls = true;
-    settings.autoescape = false;
-    settings.autoescapeSelector = AutoescapeSelector();
-    if (settings.limits.maxRange == 0 || settings.limits.maxRange > SandboxMaxRange)
-    {
-        settings.limits.maxRange = SandboxMaxRange;
-    }
+    // Not the mutable GetSettings: it would make every later Load compare the settings (docs/tasks/0516)
+    env.ModifySettings([](Settings& settings) {
+        settings.trimBlocks = true;
+        settings.lstripBlocks = true;
+        settings.extensions.loopControls = true;
+        settings.autoescape = false;
+        settings.autoescapeSelector = AutoescapeSelector();
+        if (settings.limits.maxRange == 0 || settings.limits.maxRange > SandboxMaxRange)
+        {
+            settings.limits.maxRange = SandboxMaxRange;
+        }
+    });
     const auto& impl = detail::TemplateEnvAccess::GetImpl(env);
     impl->SetDialect(detail::Dialect::Transformers);
     impl->SetPromptSafeParams(std::move(options.promptSafeParams));

@@ -956,10 +956,19 @@ public:
         }
         return *this;
     }
-    ~SealedArena() { DestroyNodes(); }
+    ~SealedArena()
+    {
+        // Most trees own nothing (TrivialNodes): freeing the buffer is all their destruction takes
+        if (m_buffer && Header().objects != 0)
+        {
+            DestroyNodes();
+        }
+    }
 
     // Read on every render, so kept rather than read from the buffer's header
     [[nodiscard]] const ArenaView& View() const { return m_view; }
+    // The bytes of the tree's nodes (docs/tasks/0492)
+    [[nodiscard]] std::size_t Bytes() const { return m_view.m_size; }
     template<typename T>
     T& operator[](NodeRef<T> ref) const
     {
@@ -1045,7 +1054,14 @@ public:
     NodeArena(NodeArena&&) = delete;
     NodeArena& operator=(const NodeArena&) = delete;
     NodeArena& operator=(NodeArena&&) = delete;
-    ~NodeArena() { DestroyNodes(); }
+    ~NodeArena()
+    {
+        // Seal took the nodes of every Load that succeeded
+        if (m_objects.size() != 0)
+        {
+            DestroyNodes();
+        }
+    }
 
     // Counts the nodes made so far that may read the render context: name references, and
     // every other kind but the ones detail::NeedsNoContext lists. Two marks taken around a

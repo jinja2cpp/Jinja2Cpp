@@ -180,29 +180,44 @@ void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, std::byte* 
     const detail::OffsetTable owners(cleanup, m_owners);
     std::size_t owner = 0;
     std::size_t moved = 0;
+    const auto moveOne = [&](ArenaNode& from, std::uint32_t offset) {
+        const auto& ops = detail::OpsOf(from.GetKind());
+        ops.relocate(from, base + offset, refs);
+        if (ops.destroy)
+        {
+            // Make counted the owners by the same classes: a table too short is a bug
+            if (owner == m_owners)
+            {
+                throw std::logic_error("an arena node that owns something Make did not count");
+            }
+            owners.Set(owner++, offset);
+        }
+    };
     try
     {
-        // The objects are in the order of their offsets, so the blocks are walked once
-        std::size_t blockIdx = 0;
-        for (; moved != m_objects.size(); ++moved)
+        if (m_blocks.size() == 1)
         {
-            const auto offset = m_objects[moved];
-            while (blockIdx + 1 != m_blocks.size() && offset >= m_blocks[blockIdx + 1].start)
+            // The tree fits the first block, as most do: no block to look up
+            const auto& block = m_blocks[0];
+            for (; moved != m_objects.size(); ++moved)
             {
-                ++blockIdx;
+                const auto offset = m_objects[moved];
+                moveOne(detail::HeaderAt(block.data, offset - block.start), offset);
             }
-            const auto& block = m_blocks[blockIdx];
-            auto& from = detail::HeaderAt(block.data, offset - block.start);
-            const auto& ops = detail::OpsOf(from.GetKind());
-            ops.relocate(from, base + offset, refs);
-            if (ops.destroy)
+        }
+        else
+        {
+            // The objects are in the order of their offsets, so the blocks are walked once
+            std::size_t blockIdx = 0;
+            for (; moved != m_objects.size(); ++moved)
             {
-                // Make counted the owners by the same classes: a table too short is a bug
-                if (owner == m_owners)
+                const auto offset = m_objects[moved];
+                while (blockIdx + 1 != m_blocks.size() && offset >= m_blocks[blockIdx + 1].start)
                 {
-                    throw std::logic_error("an arena node that owns something Make did not count");
+                    ++blockIdx;
                 }
-                owners.Set(owner++, offset);
+                const auto& block = m_blocks[blockIdx];
+                moveOne(detail::HeaderAt(block.data, offset - block.start), offset);
             }
         }
     }

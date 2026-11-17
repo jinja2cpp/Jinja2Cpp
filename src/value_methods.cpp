@@ -71,6 +71,13 @@ bool Equals(const InternalValue& lhs, const InternalValue& rhs)
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
 }
 
+// Python's PyObject_RichCompareBool, which list.index(), count(), remove() and a dict lookup use: an
+// item is equal to itself, and a StrictUndefined refuses == (docs/tasks/0495)
+bool ItemEquals(const InternalValue& lhs, const InternalValue& rhs)
+{
+    return CheckItemsCompare(lhs, rhs) || Equals(lhs, rhs);
+}
+
 // Python hashes a dict key before it looks at the dict: a list or a dict is a TypeError
 void CheckHashable(const InternalValue& key)
 {
@@ -2396,7 +2403,7 @@ InternalValue ListIndex(const InternalValue& self, const CallParams& params, Ren
     auto end = SliceIndex(Arg(params, 2), items.size(), items.size(), "index");
     for (auto n = start; n < end; ++n)
     {
-        if (Equals(items[n], params.posParams[0]))
+        if (ItemEquals(items[n], params.posParams[0]))
         {
             return static_cast<int64_t>(n);
         }
@@ -2410,7 +2417,7 @@ InternalValue ListCount(const InternalValue& self, const CallParams& params, Ren
     int64_t result = 0;
     for (const auto& item : ListOf(self))
     {
-        if (Equals(item, params.posParams[0]))
+        if (ItemEquals(item, params.posParams[0]))
         {
             ++result;
         }
@@ -2491,7 +2498,7 @@ InternalValue ListRemove(const InternalValue& self, const CallParams& params, Re
 {
     CheckArgs(params, "remove", 1, 1);
     auto& items = MutableItems(self);
-    auto p = std::find_if(items.begin(), items.end(), [&params](const InternalValue& item) { return Equals(item, params.posParams[0]); });
+    auto p = std::find_if(items.begin(), items.end(), [&params](const InternalValue& item) { return ItemEquals(item, params.posParams[0]); });
     if (p == items.end())
     {
         Raise("list.remove(x): x not in list");
@@ -2725,8 +2732,8 @@ TemplateDict& MutableDict(const InternalValue& self)
 InternalValue DictKeys(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "keys", 0, 0);
-    // The views are lists marked with their kind (docs/tasks/0489)
-    return ListAdapter::CreateIterator(MapOf(self).GetKeyValues(), IteratorKind::DictKeys);
+    // The views are lists marked with their kind (docs/tasks/0489) that keep their dict (0496)
+    return ListAdapter::CreateDictView(MapOf(self).GetKeyValues(), IteratorKind::DictKeys, self);
 }
 
 InternalValue DictValues(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -2738,7 +2745,7 @@ InternalValue DictValues(const InternalValue& self, const CallParams& params, Re
     {
         result.push_back(std::move(entry.value));
     }
-    InternalValue list = ListAdapter::CreateIterator(std::move(result), IteratorKind::DictValues);
+    InternalValue list = ListAdapter::CreateDictView(std::move(result), IteratorKind::DictValues, self);
     if (self.ShouldExtendLifetime())
     {
         list.SetParentData(self);
@@ -2755,7 +2762,7 @@ InternalValue DictItems(const InternalValue& self, const CallParams& params, Ren
     {
         result.push_back(MakeTuple({ std::move(entry.key), std::move(entry.value) }));
     }
-    InternalValue list = ListAdapter::CreateIterator(std::move(result), IteratorKind::DictItems);
+    InternalValue list = ListAdapter::CreateDictView(std::move(result), IteratorKind::DictItems, self);
     if (self.ShouldExtendLifetime())
     {
         list.SetParentData(self);
@@ -3014,7 +3021,7 @@ public:
             ThrowUnhashable(unhashable);
         }
         const auto found = m_entries.find(*token);
-        return found != m_entries.end() && (!m_isItems || Equals(value, found->second));
+        return found != m_entries.end() && (!m_isItems || ItemEquals(found->second, value));
     }
 
 private:
@@ -3242,7 +3249,8 @@ const MethodInfo FloatMethods[] = {
 
 // The data attributes of int, bool and float (docs/tasks/0374): x.real, x.imag, and for an int
 // x.numerator and x.denominator. A bool is an int here, as in Python (True.real is 1)
-constexpr std::string_view NumberDataAttributes[] = { "real", "imag", "numerator", "denominator" };
+// And a dict view's `mapping` (docs/tasks/0496)
+constexpr std::string_view NumberDataAttributes[] = { "real", "imag", "numerator", "denominator", "mapping" };
 
 template<size_t N>
 const MethodInfo* FindIn(const MethodInfo (&table)[N], std::string_view name)
@@ -3346,6 +3354,13 @@ std::optional<InternalValue> NumberDataAttr(const InternalValue& self, std::stri
             return InternalValue(0.0);
         }
         return std::nullopt;
+    }
+    if (kind == ValueKind::List)
+    {
+        // A dict view's `mapping` is Python's read-only mappingproxy of its dict; here the dict
+        const auto list = name == "mapping" ? AsList(self) : std::nullopt;
+        const auto* mapping = list ? list->GetViewMapping() : nullptr;
+        return mapping ? std::optional<InternalValue>(*mapping) : std::nullopt;
     }
     if (kind != ValueKind::Int && kind != ValueKind::BigInt && kind != ValueKind::Bool)
     {
