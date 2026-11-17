@@ -47,4 +47,4 @@ step's value is its last filter on the kept value of that step (ExpressionFilter
 so a strict chain of N filters runs N filters at Load (`LimitsEnvTest.StrictFilterChainFoldsInLinearSteps`,
 400 filters under maxRenderSteps 20000, fails on master). The two divergence lines are gone; new
 corpus cases `tuple_of_slices_strict_conditional_*` and `tuple_of_slices_strict_filter_chain`.
-Generator folds, operator chains, nested brackets and the per-render constant moved to 0531.
+Generator folds, operator chains, nested brackets and the per-render constant moved to 0532.
