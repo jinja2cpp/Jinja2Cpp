@@ -2130,8 +2130,8 @@ private:
         {
             return;
         }
-        // Only an enclosing macro or call block takes the marks
-        if (std::none_of(m_openStatements->begin(), m_openStatements->end(), [](const StatementInfo& info) { return IsMacroScope(info); }))
+        // Only an enclosing macro, call block or `generation` body takes the marks
+        if (std::none_of(m_openStatements->begin(), m_openStatements->end(), [](const StatementInfo& info) { return IsMacroScope(info) || info.type == StatementInfo::GenerationStatement; }))
         {
             return;
         }
@@ -2175,6 +2175,14 @@ private:
 
         for (auto& info : *m_openStatements)
         {
+            // transformers' `generation` body is a call block's, which has names of its own (docs/tasks/0448)
+            if (info.type == StatementInfo::GenerationStatement)
+            {
+                auto& generation = m_nodes.Get<GenerationStatement>(info.renderer);
+                generation.DiscardSpecialNames(stores);
+                generation.AddSpecialNames(loads);
+                continue;
+            }
             if (!IsMacroScope(info))
             {
                 continue;

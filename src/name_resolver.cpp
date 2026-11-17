@@ -146,6 +146,31 @@ std::pair<bool, bool> IsInside(const Frames& frames, std::uint32_t inner, std::u
 }
 } // namespace
 
+ArenaSpan<SlotName> NameResolver::NamesResetAtEnd(FrameId frameId, NodeArena& nodes) const
+{
+    const auto& frame = m_frames[frameId];
+    // Frames are numbered as they start: the ones after this one are inside it
+    if (!frame.hasStores || std::none_of(m_frames.begin() + std::size_t{ frameId } + 1, m_frames.end(), [](const Frame& inner) { return inner.isMacro; }))
+    {
+        return {};
+    }
+    SmallVector<SlotName, 8> names;
+    for (auto idx = static_cast<std::size_t>(frame.firstStore); idx < m_stores.size(); ++idx)
+    {
+        const auto& store = m_stores[idx];
+        if (store.frame != frameId || store.kind == StoreKind::Hidden)
+        {
+            continue;
+        }
+        const auto hash = HashedName::Hash(store.name);
+        if (std::none_of(names.begin(), names.end(), [&store, hash, &nodes](const SlotName& name) { return name.hash == hash && nodes.Text(name.name) == store.name; }))
+        {
+            names.push_back({ nodes.MakeText(store.name), hash });
+        }
+    }
+    return nodes.MakeSpan(names);
+}
+
 NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, NodeArena& nodes)
 {
     const auto& frame = m_frames[frameId];

@@ -308,15 +308,18 @@ struct FrameEnd
     // The scopes below the frame the closures see, live while those run, kept when they end
     // (ClosureCapture::outer); 0 for none: the copy has all
     size_t continuation = 0;
+    // The names a loop or a `with`, `filter` or `autoescape` body stores, which its closures read as
+    // undefined once it has ended, besides those its scopes hold then (NameResolver::NamesResetAtEnd)
+    Span<const SlotName> resets{};
 
     // A macro call's scope `count - 1`, which sees the scopes below `link`
     // (ScopeView::NoLink: below its own)
-    static FrameEnd Call(size_t count, size_t link) { return { count, true, count - 1, std::min(link, count - 1) }; }
+    static FrameEnd Call(size_t count, size_t link) { return { count, true, count - 1, std::min(link, count - 1), {} }; }
     // A loop's scopes from `count - 1` up, or a `with`, `filter` or `autoescape` body's
-    static FrameEnd Soft(size_t count) { return { count, false, 0, count - 1 }; }
+    static FrameEnd Soft(size_t count, Span<const SlotName> resets = {}) { return { count, false, 0, count - 1, resets }; }
     // A loop's or a `with`, `filter` or `autoescape` body's, when a stop leaves it (docs/tasks/0479): Jinja2 never
     // reaches the end of the body, which resets the names it bound, so its closures keep them (docs/tasks/0504)
-    static FrameEnd Stopped(size_t count) { return { count, true, count - 1, count - 1 }; }
+    static FrameEnd Stopped(size_t count) { return { count, true, count - 1, count - 1, {} }; }
 };
 // The names a module's top level imported and has not set again since: Jinja2 exports none of
 // them (docs/tasks/0299)
@@ -902,11 +905,11 @@ public:
     // until CaptureClosures at the include's end puts it in their copy. Throws std::bad_alloc
     void KeepEndedSelf(InternalValue self) { m_captures->endedSelf = std::make_unique<InternalValue>(std::move(self)); }
     // The end of the context's own scopes, of a `with` or `filter` body
-    void CaptureClosuresAtSoftEnd()
+    void CaptureClosuresAtSoftEnd(Span<const SlotName> resets = {})
     {
         if (m_captures)
         {
-            CaptureClosuresImpl(FrameEnd::Soft(m_parentDepth + 1));
+            CaptureClosuresImpl(FrameEnd::Soft(m_parentDepth + 1, resets));
         }
     }
     // The same when a stop leaves the body (FrameEnd::Stopped)
@@ -1372,6 +1375,10 @@ private:
     // ends. Defined in statements.cpp
     // Only the names `keeps` reads (ClosureCapture::Reads) when it is not null
     void CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures, const ClosureCapture* keeps) const;
+    // Adds to `hidden` the names the scopes from the innermost down to scope `lowest` hold, frame views
+    // included, each as an undefined value: what the closures of a loop or `with` body that ended read
+    // there (FrameEnd::Soft). Only the names `keeps` reads when it is not null. Defined in statements.cpp
+    void HideNamesDownTo(InternalValueMap& hidden, size_t lowest, const ClosureCapture* keeps) const;
     // The capture of scope `depth - 1`, which this context or one it was made from has: the one
     // its closures share, else a new one there (ClosureSite::CaptureOnEnd), or what a call of a
     // kept closure sees there (EnterCapturedScope). Null for depth 0. Defined in statements.cpp.

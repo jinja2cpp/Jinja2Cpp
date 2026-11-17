@@ -34,7 +34,7 @@ enum class ErrorCode
     FileNotFound = 3,              //!< Requested file was not found. ExtraParams[0] contains name of the file
     ExtensionDisabled = 4,         //!< Particular jinja2 extension disabled in the settings
     TemplateEnvAbsent = 5,         //!< Template uses `extend`, `import`, `from` or `include` features but it's loaded without the template environment set
-    TemplateNotFound = 6,          //!< Template with the specified name was not found. ExtraParams[0] contains name of the file; an include's error has the list of the names tried, and ExtraParams[1] `"list"` when the include selected from a list (an empty one and `none` included), Python's TemplatesNotFound (docs/tasks/0458)
+    TemplateNotFound = 6,          //!< Template with the specified name was not found. ExtraParams[0] contains name of the file; an include's error has the list of the names tried, and ExtraParams[1] `"list"` when the include selected from a list (an empty one and `none` included), Python's TemplatesNotFound (docs/tasks/0458), and then ExtraParams[2], when names in the list were undefined, a list as long as the names with the message of each undefined one, an empty value for the others (docs/tasks/0498)
     TemplateNotParsed = 7,         //!< Template was not parsed
     InvalidValueType = 8,          //!< Invalid type of the value in the particular context
     InvalidTemplateName = 9,       //!< Invalid name of the template. ExtraParams[0] contains the name
