@@ -24,6 +24,7 @@
 
 #include "binding/toy_json.h"
 #include "../src/hash_map.h"
+#include "../src/recursion_guard.h"
 
 #if defined(__linux__) && defined(__SANITIZE_ADDRESS__)
 #define JINJA2CPP_ALLOC_TESTS_LEAK_CHECK 1
@@ -1270,13 +1271,16 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                                "Hallo Ann!|3 apples|menu:Open|1 Ding" }));
 // A scope map's first insert allocates its index and its first segment, which holds the list of
 // segments as well (docs/tasks/0506): one allocation fewer than the same map with another
-// allocator, which keeps the list in a std::vector of its own. Counted against that map rather
-// than as a number, since a checked standard library (MSVC's debug iterators) adds allocations
-// of its own to both
+// allocator with state, which keeps the list in a std::vector of its own; InternalValueMap's
+// CountedAllocator has none and allocates as the default one (docs/tasks/0508). Counted against
+// that map rather than as a number, since a checked standard library (MSVC's debug iterators)
+// adds allocations of its own to both
 template<typename T>
 struct OtherAllocator
 {
     using value_type = T;
+    // State, which the map would have to propagate and compare
+    int tag = 0;
     OtherAllocator() = default;
     template<typename U>
     OtherAllocator(const OtherAllocator<U>& /*other*/) noexcept // NOLINT(google-explicit-constructor,hicpp-explicit-conversions): rebinding
@@ -1308,6 +1312,12 @@ TEST_F(AllocationFailureTest, FreshStableMapAllocatesOnceLessOnItsFirstInsert)
     VectorListMap vectorListMap;
     EXPECT_EQ(firstInsert(vectorListMap) - 1, firstInsert(map));
     EXPECT_EQ(1, map.find("x")->second);
+    // As InternalValueMap's, whose blocks the library allocates: a Windows DLL's do not reach the counter
+#if !(defined(_WIN32) && defined(JINJA2CPP_LINK_AS_SHARED))
+    jinja2::detail::StableMap<std::string, int, Hash, std::equal_to<>, jinja2::CountedAllocator<std::pair<std::string, int>>> scope;
+    VectorListMap otherMap;
+    EXPECT_EQ(firstInsert(otherMap) - 1, firstInsert(scope));
+#endif
 }
 
 // A map growing past the tail of its first segment, whose list of segments then moves to an array

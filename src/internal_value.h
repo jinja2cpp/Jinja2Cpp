@@ -1816,7 +1816,8 @@ private:
     }
 };
 
-using InternalValueMap = detail::StableMap<std::string, InternalValue, NameHash, NameEqual>;
+// Its storage counts against the memory budget of the render that allocates it (CountedAllocator, docs/tasks/0508)
+using InternalValueMap = detail::StableMap<std::string, InternalValue, NameHash, NameEqual, CountedAllocator<std::pair<std::string, InternalValue>>>;
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);

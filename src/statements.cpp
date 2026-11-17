@@ -2657,7 +2657,8 @@ std::shared_ptr<ClosureCapture> RenderContext::CaptureOfScope(size_t depth)
             }
         }
     }
-    auto capture = std::make_shared<ClosureCapture>();
+    // Counted against the render's memory budget, with the copies it keeps (docs/tasks/0508)
+    auto capture = std::allocate_shared<ClosureCapture>(CountedAllocator<ClosureCapture>());
     capture->home = owner->Anchor();
     capture->depth = static_cast<uint32_t>(depth);
     capture->serial = serial;
@@ -2737,7 +2738,7 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
     std::shared_ptr<InternalValueMap> names;
     if (end.copies)
     {
-        names = std::make_shared<InternalValueMap>();
+        names = std::allocate_shared<InternalValueMap>(CountedAllocator<InternalValueMap>());
         CollectNamesDownTo(*names, end.copyFrom, ending, keeps.readsAll ? nullptr : &keeps);
         // A render's own context that ends while its closures are stored in an outer render's globals
         // (SetEndsBeforeRender, docs/tasks/0491): they read its params too, below its names

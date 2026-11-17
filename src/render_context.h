@@ -770,7 +770,7 @@ public:
 
     // Moves the first scope, with its names, into `map` when it is the only one left and has a
     // table: at the end of a render, so that the next one reuses the table (docs/tasks/0160)
-    void TakeTopScope(InternalValueMap& map)
+    JINJA2CPP_ALWAYS_INLINE void TakeTopScope(InternalValueMap& map)
     {
         if (m_scopes.size() == 1 && m_views.empty() && detail::HasStorage(m_scopes.back()))
         {

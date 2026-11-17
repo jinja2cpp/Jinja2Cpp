@@ -1114,13 +1114,27 @@ struct StringGetter : public visitors::BaseVisitor<std::string>
     std::string operator()(const BigIntView& /*val*/) const { return {}; }
 };
 
+namespace
+{
+// The copy of a narrow string's text, with std::string's construction inlined: in this unit GCC's inlining budget
+// otherwise leaves it a call for each string (+0.8% on Render/chat_llama, docs/tasks/0508)
+#ifdef __GNUC__
+__attribute__((flatten))
+#endif
+std::string
+CopyText(std::string_view text)
+{
+    return std::string(text);
+}
+} // namespace
+
 std::string AsString(const InternalValue& val)
 {
     // A narrow string, the common case, copied straight from its text rather than through the
     // visitor, whose code for it GCC does not always inline
     if (const auto text = AsStringView<char>(val))
     {
-        return std::string(*text);
+        return CopyText(*text);
     }
     return Apply<StringGetter>(val);
 }

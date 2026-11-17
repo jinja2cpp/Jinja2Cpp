@@ -10,6 +10,8 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <new>
 #include <string>
 #include <utility>
 
@@ -341,6 +343,35 @@ void CountTemplateLoadSlow()
         ThrowLimit("maxTemplateLoads", "the render loaded more templates than its limit allows");
     }
     --limits.loadsLeft;
+}
+
+void* AllocateCountedBlock(std::size_t bytes)
+{
+    auto* block = static_cast<unsigned char*>(::operator new(bytes + CountedBlockHeader));
+    std::uint64_t charged = 0;
+    if (RenderMemoryCounted())
+    {
+        charged = bytes + CountedBlockHeader;
+        ChargeObjectMemory(charged);
+    }
+    std::memcpy(block, &charged, sizeof(charged));
+    return block + CountedBlockHeader;
+}
+
+void FreeCountedBlock(void* ptr) noexcept
+{
+    if (!ptr)
+    {
+        return;
+    }
+    auto* block = static_cast<unsigned char*>(ptr) - CountedBlockHeader;
+    std::uint64_t charged = 0;
+    std::memcpy(&charged, block, sizeof(charged));
+    if (charged != 0)
+    {
+        ReleaseRenderMemory(charged);
+    }
+    ::operator delete(block);
 }
 
 void ThrowRangeTooLong(std::uint64_t size)

@@ -281,7 +281,7 @@
         }
       ],
       "primaryPackagePurpose": "SOURCE",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: InternalValueMap and the scope tables (detail::StableMap), the borrowed-cell tables and the name hash, all through src/hash_map.h; why: Successor of the archived robin_hood by the same author: value-stable segmented map with a SIMD group index, faster than robin_hood on the render paths (docs/tasks/0231); lighten: Header-only and internal; an update is a copy of the two files plus the recorded namespace change; modified: Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); segmented_vector constructors free their blocks when an element copy throws (0231); segmented_vector keeps its first block pointers in its first block and table::try_emplace_placing_inline added (0506); documented at the top of src/ankerl/unordered_dense.h; file: src/ankerl/unordered_dense.h sha256:b3f6c4254efb8322138bae4db967f0765881dc70031070f1c45fea728eab65bb; file: src/ankerl/stl.h sha256:6ae137a72fd9f6c197e92103500090b3eea9057db046c9defcc41840b855f134"
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: InternalValueMap and the scope tables (detail::StableMap), the borrowed-cell tables and the name hash, all through src/hash_map.h; why: Successor of the archived robin_hood by the same author: value-stable segmented map with a SIMD group index, faster than robin_hood on the render paths (docs/tasks/0231); lighten: Header-only and internal; an update is a copy of the two files plus the recorded namespace change; modified: Moved into namespace jinja2::v2::detail and its std::erase_if overload removed (0259); segmented_vector constructors free their blocks when an element copy throws (0231); segmented_vector keeps its first block pointers in its first block and table::try_emplace_placing_inline added (0506); documented at the top of src/ankerl/unordered_dense.h; file: src/ankerl/unordered_dense.h sha256:b382bc3dfb1e5cd53e68008390185d1d1d61207298df4fe643a58e3f58c8afb7; file: src/ankerl/stl.h sha256:6ae137a72fd9f6c197e92103500090b3eea9057db046c9defcc41840b855f134"
     },
     {
       "SPDXID": "SPDXRef-Package-lexertk",
@@ -1263,5 +1263,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-7fc8db46834bbe45"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-673e1a673426b118"
 }
