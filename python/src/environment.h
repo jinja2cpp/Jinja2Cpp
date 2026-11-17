@@ -53,7 +53,7 @@ public:
     void SetChatTemplates(nb::handle clock);
     // Environment.cache cleared, an entry deleted or the cache replaced: the engine's cache goes too, so that the next
     // get_template reads the loader again, as Jinja2's does (templates loaded before keep what they have)
-    void DropEngineCache() noexcept { m_env.reset(); }
+    void DropEngineCache() noexcept { RetireEngine(); }
     [[nodiscard]] bool NewstyleGettext() const noexcept { return m_newstyleGettext; }
     // Templates loaded from now on read it, as Jinja2 reads it when it compiles a `{% trans %}` block
     void SetNewstyleGettext(bool newstyle);
@@ -117,11 +117,23 @@ private:
     // Adds `object` to BoundObjects: the engine environment borrows it
     void Keep(nb::handle object);
     void ApplyGettext();
+    // m_env goes, for the next load to start another. While templates loaded from it live (its list of BoundObjects
+    // does), it is kept for ApplyGettext: Jinja2's install changes env.globals, which every template reads, so a later
+    // install reaches the templates of every engine environment
+    void RetireEngine() noexcept;
+    struct Retired
+    {
+        std::shared_ptr<jinja2::TemplateEnv> env;
+        // A weak reference to its list: the templates own it
+        nb::object bound;
+    };
     void ApplyChatTemplates();
     nb::object MakeTemplate(Loaded tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass);
 
     // Shared with the load in progress (Prepared)
     std::shared_ptr<jinja2::TemplateEnv> m_env;
+    // The engine environments before m_env that templates still use (RetireEngine)
+    std::vector<Retired> m_retired;
     // A SandboxedEnvironment, and whether its is_safe_attribute judges the engine's public names (read at each load)
     bool m_sandboxed = false;
     bool m_sandboxPublicNames = false;

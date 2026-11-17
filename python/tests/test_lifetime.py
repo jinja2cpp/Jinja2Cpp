@@ -166,6 +166,25 @@ def test_a_macro_keeps_the_callables_of_its_template(how):
     assert all(ref() is None for ref in refs)
 
 
+@pytest.mark.parametrize("newstyle", [False, True])
+def test_an_install_reaches_templates_loaded_before_a_filter_was_replaced(newstyle):
+    # docs/tasks/0406, 0509: a replaced filter starts a new engine environment; a later install reaches the templates
+    # of the one before too, as Jinja2's install changes env.globals, which every template reads
+    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
+    env.install_gettext_callables(lambda s: "one:" + s, lambda s, p, n: "one", newstyle=newstyle)
+    env.filters["f"] = lambda v: "first"
+    first = env.from_string("{{ gettext('a') }}{{ 1|f }}")
+    env.filters["f"] = lambda v: "second"
+    second = env.from_string("{{ gettext('a') }}{{ 1|f }}")
+    assert (first.render(), second.render()) == ("one:afirst", "one:asecond")
+    env.install_gettext_callables(lambda s: "two:" + s, lambda s, p, n: "two", newstyle=newstyle)
+    assert (first.render(), second.render()) == ("two:afirst", "two:asecond")
+    env.uninstall_gettext_translations(None)
+    gc.collect()
+    # Untranslated, here as before an install (docs/python.md, 0417), in both
+    assert (first.render(), second.render()) == ("afirst", "asecond")
+
+
 def test_reinstalled_translations_go():
     import gettext as gettext_module
 

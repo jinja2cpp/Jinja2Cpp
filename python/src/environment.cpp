@@ -20,6 +20,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -379,7 +380,7 @@ void PyEnvironment::SetOption(const std::string& name, nb::handle value)
         RaiseTypeError("Environment.__init__() got an unexpected keyword argument '" + name + "'");
     }
     // Templates loaded from now on take the change; loaded ones keep what they had, as in Jinja2
-    m_env.reset();
+    RetireEngine();
 }
 
 nb::object PyEnvironment::GetOption(const std::string& name) const
@@ -564,12 +565,76 @@ void PyEnvironment::SetLoader(nb::handle loader)
     m_loaderHandler.reset();
 }
 
+namespace
+{
+// A list that a weak reference can name (BoundObjects): a list subclass, as a list is not weakly referenceable
+nb::object NewBoundList()
+{
+    static PyObject* const type = [] {
+        nb::dict namespace_;
+        namespace_["__slots__"] = nb::make_tuple("__weakref__");
+        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(&PyType_Type))("BoundObjects", nb::make_tuple(nb::borrow<nb::object>(reinterpret_cast<PyObject*>(&PyList_Type))), namespace_).release().ptr();
+    }();
+    return nb::borrow<nb::object>(type)();
+}
+
+// The list a Retired entry names, or None once its templates are gone
+nb::object RetiredList(const nb::object& ref)
+{
+    nb::object list = nb::steal(PyObject_CallNoArgs(ref.ptr()));
+    if (!list.is_valid())
+    {
+        throw nb::python_error();
+    }
+    return list;
+}
+} // namespace
+
+void PyEnvironment::RetireEngine() noexcept
+{
+    if (!m_env || !m_bound.is_valid() || m_bound.is_none() || m_cleared)
+    {
+        m_env.reset();
+        return;
+    }
+    // An entry whose list went (its templates did) goes; the error of a weak reference that cannot be made is
+    // cleared: its templates then keep the translations they have
+    const auto gone = [](const Retired& retired) {
+        const nb::object list = nb::steal(PyObject_CallNoArgs(retired.bound.ptr()));
+        if (!list.is_valid())
+        {
+            PyErr_Clear();
+            return true;
+        }
+        return list.is_none();
+    };
+    m_retired.erase(std::remove_if(m_retired.begin(), m_retired.end(), gone), m_retired.end());
+    try
+    {
+        nb::object ref = nb::steal(PyWeakref_NewRef(m_bound.ptr(), nullptr));
+        if (ref.is_valid())
+        {
+            m_retired.push_back(Retired{ std::move(m_env), std::move(ref) });
+        }
+        else
+        {
+            PyErr_Clear();
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+    }
+    m_env.reset();
+    m_bound = nb::object();
+}
+
 void PyEnvironment::Rebuild()
 {
+    RetireEngine();
     m_env = std::make_shared<jinja2::TemplateEnv>();
     // What it borrows: the translations first (ApplyGettext), then the callables of the settings and the loader, and the
     // filters and tests as Prepared binds them. The templates loaded from the engine environment before keep its list
-    m_bound = nb::list();
+    m_bound = NewBoundList();
     Keep(nb::none());
     for (const auto* object : { &m_loader, &m_finalize })
     {
@@ -653,7 +718,7 @@ void PyEnvironment::SetChatTemplates(nb::handle clock)
     m_chatClock = nb::borrow(clock);
     m_chatTemplates = true;
     // Templates loaded before keep their environment; the next load rebuilds it with the preset
-    m_env.reset();
+    RetireEngine();
 #else
     (void)clock;
     RaiseTypeError("this jinja2cpp was built without chat templates (JINJA2CPP_WITH_CHAT_TEMPLATES=OFF)");
@@ -662,18 +727,29 @@ void PyEnvironment::SetChatTemplates(nb::handle clock)
 
 void PyEnvironment::ApplyGettext()
 {
-    if (!m_env)
-    {
-        return;
-    }
     // A callable left out stays unset: the message is not translated
     const auto callable = [](const nb::object& object) { return object.is_none() ? jinja2::UserCallable() : BorrowedCallable(object); };
-    m_env->InstallGettextCallables(m_gettextStyle, callable(m_gettext[0]), callable(m_gettext[1]), callable(m_gettext[2]), callable(m_gettext[3]));
-    // Item 0 of the list: the engine environment no longer calls the ones it replaces. A call running now holds the
-    // callable it runs (BorrowedCallable)
-    if (PyList_SetItem(m_bound.ptr(), 0, nb::make_tuple(m_gettext[0], m_gettext[1], m_gettext[2], m_gettext[3]).release().ptr()) != 0)
+    const auto install = [&](jinja2::TemplateEnv& env, const nb::object& bound) {
+        env.InstallGettextCallables(m_gettextStyle, callable(m_gettext[0]), callable(m_gettext[1]), callable(m_gettext[2]), callable(m_gettext[3]));
+        // Item 0 of the list: the engine environment no longer calls the ones it replaces. A call running now holds
+        // the callable it runs (BorrowedCallable)
+        if (PyList_SetItem(bound.ptr(), 0, nb::make_tuple(m_gettext[0], m_gettext[1], m_gettext[2], m_gettext[3]).release().ptr()) != 0)
+        {
+            throw nb::python_error();
+        }
+    };
+    if (m_env)
     {
-        throw nb::python_error();
+        install(*m_env, m_bound);
+    }
+    // The templates of the engine environments before, as Jinja2's templates all read env.globals
+    const auto retired = m_retired;
+    for (const auto& [env, ref] : retired)
+    {
+        if (const auto bound = RetiredList(ref); !bound.is_none())
+        {
+            install(*env, bound);
+        }
     }
 }
 
@@ -963,6 +1039,7 @@ void PyEnvironment::Clear() noexcept
     // The engine borrows what goes now: it is dropped first, and the environment is unusable
     m_cleared = true;
     m_env.reset();
+    m_retired.clear();
     if (m_loaderHandler)
     {
         m_loaderHandler->Clear();
