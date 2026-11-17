@@ -1087,10 +1087,14 @@ private:
     LexerHelper* m_helper;
     const char* m_narrowSource;
 
+    // Made once: a write on each call raced between threads loading templates (verifier of 0521)
     static const Token& EofToken()
     {
-        static Token eof;
-        eof.type = Token::Eof;
+        static const Token eof = [] {
+            Token token;
+            token.type = Token::Eof;
+            return token;
+        }();
         return eof;
     }
 };

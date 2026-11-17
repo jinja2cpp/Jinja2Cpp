@@ -1635,6 +1635,7 @@ std::string RenderWithDestroyedNested(const std::string& outer, const std::strin
     // Nothing caches lib.j2: only the nested render holds it
     env.GetSettings().cacheSize = 0;
     env.AddGlobal("g", ValuesList{});
+    env.AddGlobal("g2", ValuesList{});
     ValuesMap params;
     params["inner"] = UserCallable(
         [&env, inner](const UserCallableParams&) {
@@ -1823,6 +1824,12 @@ TEST(BorrowedCellsSingle, NestedRenderValuesMadeOnTheOuterContextOutliveTheirTem
           "recrecrec" },
         { "{% block b %}{% macro d() %}blk{% endmacro %}{% set _ = g.append(d) %}{% endblock %}{% set _ = g.append(self) %}",
           "{% set _ = mk.b() %}",
+          callEach,
+          "blkblkblk" },
+        // The block defines its macro only when the outer render calls it through `self`, so that nothing of the
+        // nested render's own pass holds the tree (RenderBlockAt's owner, verifier of 0521)
+        { "{% block b %}{% if g2 %}{% macro d() %}blk{% endmacro %}{% set _ = g.append(d) %}{% endif %}{% endblock %}{% set _ = g.append(self) %}",
+          "{% set _ = g2.append(1) %}{% set _ = mk.b() %}{% set mk = none %}{% set _ = g2.pop() %}",
           callEach,
           "blkblkblk" },
     };

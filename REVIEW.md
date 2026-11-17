@@ -77,6 +77,10 @@ are what this codebase has actually got wrong.
   A template module frees the trees a source change replaced (0482): a new kind of value
   that views a tree (an `ArenaView`, a statement pointer, a `string_view` into it) and can
   outlive a module call must hold the tree's owner (`RenderContext::TreeOwner`).
+  A render nested in another one that shares its globals gives its trees back the same
+  way (0521), so the rule holds for a value that can outlive that render too, and code
+  that switches a context to a tree held by a callable (`ArenaSwitch`) uses
+  `OwnedArenaSwitch` with the callable's owner, so that what it makes there owns it.
 - **Loaders.** The loader trust boundary is still being settled (task 0224). Do not
   assume a root folder confines template names, and flag a change that makes name
   handling more permissive or adds file access outside the FileSystem handlers. Once

@@ -245,9 +245,18 @@ CycleCollector::KeptTree* CycleCollector::Insert(const void* address, std::weak_
         note.bytes = bytes;
         return &note;
     }
-    notes.trees.reserve(notes.trees.size() + 1);
-    notes.treeIndex.emplace(address, notes.trees.size());
+    // Pushed first, so that the vector grows geometrically (a reserve of one more per tree made the loop of 0521
+    // quadratic), and taken back if the index cannot take its entry
     notes.trees.push_back({ std::move(tree), address, bytes });
+    try
+    {
+        notes.treeIndex.emplace(address, notes.trees.size() - 1);
+    }
+    catch (...)
+    {
+        notes.trees.pop_back();
+        throw;
+    }
     return &notes.trees.back();
 }
 

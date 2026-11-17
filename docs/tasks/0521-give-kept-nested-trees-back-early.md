@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: robustness
 depends: [0492, 0481]
@@ -62,3 +62,10 @@ values that name a tree own it, and the outer render's collector notes the tree 
 Not done here: step 3 (single-pass `OwnedArgument`, `template_module.cpp`) and lazy params, filed as 0532. A stored
 `self` that is let go of stays until the keeper ends (0529). Every new value that views a tree must take
 `TreeOwner()`, and every node that switches trees `OwnedArenaSwitch` with its owner (REVIEW.md).
+
+Verifier round 1: the ledger's insert reserved one more note per tree, which made a loop that stores a
+macro per nested render quadratic (now pushed first, geometric); a row that pins `RenderBlockAt`'s owner
+(a block that defines its macro only when the outer render calls it through `self`). The holders that
+still outlive what names a tree (closures in `KeptObjects` until their prune, a dropped recursive
+`loop`) are 0539. Also fixed: `LexScanner::EofToken` wrote its static token on each call, a data race
+between threads loading templates (TSan).
