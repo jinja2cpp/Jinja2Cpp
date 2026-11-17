@@ -90,6 +90,8 @@ public:
     // `names`: the copy of a frame's names `object` is, or null. Throws std::bad_alloc
     void Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     void Clear() noexcept { m_kept.clear(); }
+    // Moves to `other` what is still of use. Throws std::bad_alloc, and then keeps what it did not move
+    void MoveInto(KeptObjects& other);
     // Notes to the collector running on this thread the values of the kept copies of names: a
     // template module that goes releases them, and a cycle among their containers that a call
     // made has no note left, as it went with that call's collector (docs/tasks/0407). Throws
@@ -287,6 +289,11 @@ public:
         }
         Insert(tree, bytes);
     }
+    // This render shares `keeper`'s snapshot of the globals (KeepTree): when it ends, what it kept until then
+    // (KeepUntilEnd) goes to `keeper`, as the closures that keep it may be stored in a global the outer render reads
+    // afterwards (docs/tasks/0491)
+    // Throws std::bad_alloc
+    void KeepForOuter(CycleCollector* keeper) { NotesForKeep().keeper = keeper; }
     // What a container the render running on this thread hands the host keeps, so that the host's
     // copy can tell when it goes whether that render has ended: then nothing walks the container
     // any more, and a cycle it closes is freed only by CollectExport (docs/tasks/0424). Expires when
@@ -415,7 +422,12 @@ private:
         BorrowedCells cells;
         // ExportToken: made on the first container the render hands the host
         std::shared_ptr<const void> exportToken;
+        // KeepForOuter's; null when this render shares no outer render's globals
+        CycleCollector* keeper = nullptr;
     };
+
+    // The notes, made now if there are none. Throws std::bad_alloc
+    Notes& NotesForKeep();
 
     CycleCollector* m_outer = s_current;
     std::unique_ptr<Notes> m_notes;

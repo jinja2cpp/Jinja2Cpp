@@ -154,6 +154,12 @@ struct IRendererCallback : IComparable
     // Whether a module imported with context now ends with the host's call that imports it,
     // not with the render: a call of a Template::MakeModule export (docs/tasks/0301)
     [[nodiscard]] virtual bool ModulesEndWithCall() const { return false; }
+    // Whether the render ends before an outer render that shares its globals, which may call the closures it
+    // stores there: its modules' closures keep what they see, as an include's do (docs/tasks/0491)
+    [[nodiscard]] virtual bool EndsBeforeOuterRender() const { return false; }
+    // The table Templates() gives, shared with the `self` and super() values that may outlive this render while an
+    // outer one calls them (EndsBeforeOuterRender); null when nothing outlives the render
+    [[nodiscard]] virtual std::shared_ptr<TemplateSlots> SharedTemplates() const { return nullptr; }
     // A module imported without context renders its top level, which is shared on: what it
     // imports with context lives as long as it does, not with the call (docs/tasks/0301).
     // Returns a token for LeaveSharedModule, told whether the module was shared
@@ -308,6 +314,9 @@ struct FrameEnd
     static FrameEnd Call(size_t count, size_t link) { return { count, true, count - 1, std::min(link, count - 1) }; }
     // A loop's scopes from `count - 1` up, or a `with`, `filter` or `autoescape` body's
     static FrameEnd Soft(size_t count) { return { count, false, 0, count - 1 }; }
+    // A loop's or a `with`, `filter` or `autoescape` body's, when a stop leaves it (docs/tasks/0479): Jinja2 never
+    // reaches the end of the body, which resets the names it bound, so its closures keep them (docs/tasks/0504)
+    static FrameEnd Stopped(size_t count) { return { count, true, count - 1, count - 1 }; }
 };
 // The names a module's top level imported and has not set again since: Jinja2 exports none of
 // them (docs/tasks/0299)
@@ -871,6 +880,21 @@ public:
             CaptureClosuresImpl(end);
         }
     }
+    // The first of the context's own scopes, below which it sees another context's
+    [[nodiscard]] size_t FirstOwnScope() const { return m_parentDepth + 1; }
+    // Whether this context, or one it was made from, ends before the render (SetEndsBeforeRender): a closure made
+    // here may be called once its frames have ended
+    [[nodiscard]] bool EndsBeforeRender() const
+    {
+        for (const auto* context = this; context; context = context->m_parent)
+        {
+            if (context->m_endsBeforeRender)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
     // An included template's context whose closures may be kept past it: those defined at its
     // top level, or in a frame that ended while something outside still holds them
     [[nodiscard]] bool KeepsClosures() const { return m_endsBeforeRender && m_captures; }
@@ -883,6 +907,14 @@ public:
         if (m_captures)
         {
             CaptureClosuresImpl(FrameEnd::Soft(m_parentDepth + 1));
+        }
+    }
+    // The same when a stop leaves the body (FrameEnd::Stopped)
+    void CaptureClosuresAtStop()
+    {
+        if (m_captures)
+        {
+            CaptureClosuresImpl(FrameEnd::Stopped(m_parentDepth + 1));
         }
     }
     // A block body sets `self` only in its own scopes, from `depth` up: in Jinja2 a block

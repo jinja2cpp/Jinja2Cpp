@@ -80,6 +80,18 @@ thread_local ExportWalk* ExportWalk::s_held = nullptr;
 
 void CycleCollector::Finish() noexcept
 {
+    // What the closures stored in the outer render's globals still need lives as long as that render (KeepForOuter)
+    if (auto* keeper = m_notes->keeper)
+    {
+        try
+        {
+            auto& target = keeper->m_module ? keeper->m_module->kept : keeper->NotesForKeep().kept;
+            m_notes->kept.MoveInto(target);
+        }
+        catch (...) // NOLINT(bugprone-empty-catch): out of memory; the closures read what was not moved as ended
+        {
+        }
+    }
     // First: what only these held is gone before the walk counts the references
     m_notes->kept.Clear();
     m_notes->cells.Release(this);
@@ -257,12 +269,17 @@ bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_
         collector->m_module->kept.Keep(std::move(object), std::move(owner), names);
         return true;
     }
-    if (!collector->m_notes)
-    {
-        collector->m_notes = std::make_unique<Notes>();
-    }
-    collector->m_notes->kept.Keep(std::move(object), std::move(owner), names);
+    collector->NotesForKeep().kept.Keep(std::move(object), std::move(owner), names);
     return true;
+}
+
+CycleCollector::Notes& CycleCollector::NotesForKeep()
+{
+    if (!m_notes)
+    {
+        m_notes = std::make_unique<Notes>();
+    }
+    return *m_notes;
 }
 
 void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names)
@@ -273,6 +290,17 @@ void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const v
         m_pruneAt = std::max(MinPruneAt, m_kept.size() * 2);
     }
     m_kept.push_back(Entry{ std::move(owner), std::move(object), names });
+}
+
+void KeptObjects::MoveInto(KeptObjects& other)
+{
+    for (auto& entry : m_kept)
+    {
+        if (entry.object && !entry.owner.expired())
+        {
+            other.Keep(std::move(entry.object), std::move(entry.owner), entry.names);
+        }
+    }
 }
 
 void KeptObjects::NoteNames() const
@@ -322,11 +350,16 @@ CycleCollector* CycleCollector::SnapshotOwner() noexcept
     {
         return nullptr;
     }
+    // The outermost render that shares the snapshot, past renders of other environments between them, as
+    // SharedSnapshotKeeper finds it: that render reads the write once the ones between have ended (docs/tasks/0491)
     const auto* snapshot = running->owner->get();
     const auto* owner = running;
-    for (const auto* outer = running->outer; outer && outer->owner && outer->owner->get() == snapshot; outer = outer->outer)
+    for (const auto* outer = running->outer; outer; outer = outer->outer)
     {
-        owner = outer;
+        if (outer->owner && outer->owner->get() == snapshot)
+        {
+            owner = outer;
+        }
     }
     return owner != running && owner->collector && !owner->collector->m_module ? owner->collector : nullptr;
 }

@@ -507,6 +507,9 @@ struct BlocksStack
     std::unordered_map<std::string_view, std::vector<Entry>> blocks;
     // What `self` made of these blocks renders, made with the first one (MakeTemplateSelf)
     mutable std::shared_ptr<SelfBlocks> self;
+    // The table the blocks of an ended stack resolve in, when it is not that of the render calling them: a render that
+    // ended before an outer one, which calls a `self` or super() it stored (docs/tasks/0491); null otherwise
+    std::shared_ptr<const TemplateSlots> endedSlots;
 };
 
 // The blocks a template's `self` renders (docs/tasks/0207): the stack while the template

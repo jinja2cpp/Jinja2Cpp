@@ -8,6 +8,7 @@
 #include "internal_value.h"
 #include "make_unexpected.h"
 #include "out_stream.h"
+#include "public_host_object.h"
 #include "recursion_guard.h"
 #include "render_workspace.h"
 #include "render_context.h"
@@ -224,11 +225,31 @@ bool CopyTooDeep(std::uintptr_t entry)
     return (entry - frame) * DestroyStackFactor > frame - stack.low;
 }
 
+// Whether a host's GenericList or GenericMap is copied as a list or dict of its items (OwnedCopy): not an invalid one,
+// nor a map of the library's own bridge (a host object, an undefined value), which keeps its object alive itself, nor
+// a template object of the engine, which keeps its class (LendGenericItem)
+bool IsCopiedGeneric(const Value& value)
+{
+    if (const auto* list = value.GetIf<GenericList>())
+    {
+        return list->IsValid();
+    }
+    const auto* map = value.GetIf<GenericMap>();
+    if (!map || !map->GetAccessor())
+    {
+        return false;
+    }
+    return !IsSelfOwningHostMap(*map->GetAccessor()) && map->GetObjectClass() == nullptr;
+}
+
 // A copy of the host's `value` the module owns, which stops with RecursionLimitError where its
 // nesting, copied or destroyed, would overflow the stack: Value's copy and destructor recurse
 // once per level of its lists and dicts (docs/tasks/0418, 0449). A view of the host's text
 // becomes a string of its own, since the module's values outlive the call
-Value OwnedCopy(const Value& value, std::uintptr_t entry)
+// With `generic`, a host's GenericList or GenericMap becomes a list or dict of its items too: a render nested in
+// another one, whose values outlive it, may get one that views a container the host frees once the render returns
+// (docs/tasks/0524). Its items are taken once, at most the render's maxSequenceSize of them
+Value OwnedCopy(const Value& value, std::uintptr_t entry, bool generic)
 {
     if (const auto* view = value.GetIf<std::string_view>())
     {
@@ -239,7 +260,8 @@ Value OwnedCopy(const Value& value, std::uintptr_t entry)
         return std::wstring(*view);
     }
     const auto& data = value.GetData();
-    if (!std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data))
+    const bool isGeneric = generic && IsCopiedGeneric(value);
+    if (!isGeneric && !std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data))
     {
         return value;
     }
@@ -247,20 +269,39 @@ Value OwnedCopy(const Value& value, std::uintptr_t entry)
     {
         throw RecursionLimitError();
     }
+    if (const auto* list = isGeneric ? value.GetIf<GenericList>() : nullptr)
+    {
+        ValuesList copy;
+        for (const auto& item : *list)
+        {
+            CheckSequenceSize(static_cast<uint64_t>(copy.size()) + 1, "a generic list param");
+            copy.push_back(OwnedCopy(item, entry, generic));
+        }
+        return Value(std::move(copy));
+    }
+    if (const auto* map = isGeneric ? value.GetIf<GenericMap>() : nullptr)
+    {
+        ValuesMap copy;
+        for (const auto& [key, item] : *map)
+        {
+            copy.emplace(key, OwnedCopy(item, entry, generic));
+        }
+        return Value(std::move(copy));
+    }
     if (const auto* list = value.GetIf<ValuesList>())
     {
         ValuesList copy;
         copy.reserve(list->size());
         for (const auto& item : *list)
         {
-            copy.push_back(OwnedCopy(item, entry));
+            copy.push_back(OwnedCopy(item, entry, generic));
         }
         return Value(std::move(copy));
     }
     ValuesMap copy;
     for (const auto& [key, item] : value.As<ValuesMap>())
     {
-        copy.emplace(key, OwnedCopy(item, entry));
+        copy.emplace(key, OwnedCopy(item, entry, generic));
     }
     return Value(std::move(copy));
 }
@@ -269,12 +310,12 @@ Value OwnedCopy(const Value& value, std::uintptr_t entry)
 
 // A host Value as a value the module owns: copied and converted by value, so that a module
 // value the macro stores it in (a namespace) never refers to the host's
-InternalValue OwnedArgument(const Value& value)
+InternalValue OwnedArgument(const Value& value, bool generic)
 {
     // A scalar or a host's list or map, converted by value as it is
     const auto& data = value.GetData();
     if (!std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data) && !std::holds_alternative<std::string_view>(data)
-        && !std::holds_alternative<std::wstring_view>(data))
+        && !std::holds_alternative<std::wstring_view>(data) && !(generic && IsCopiedGeneric(value)))
     {
         return visit(visitors::InputValueConvertor(true, false), data);
     }
@@ -283,7 +324,21 @@ InternalValue OwnedArgument(const Value& value)
 #else
     const auto entry = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
 #endif
-    Value copy = OwnedCopy(value, entry);
+    Value copy;
+    try
+    {
+        copy = OwnedCopy(value, entry, generic);
+    }
+    catch (const RecursionLimitError&)
+    {
+        if (!generic)
+        {
+            throw;
+        }
+        // Too deep a generic value, a cyclic one most likely (a reflected struct that points back at its parent):
+        // the host's view of it, as without a copy, which the host keeps alive (docs/tasks/0524)
+        copy = OwnedCopy(value, entry, false);
+    }
     return visit(visitors::InputValueConvertor(true, false), copy.GetData());
 }
 

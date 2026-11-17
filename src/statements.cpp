@@ -319,6 +319,10 @@ struct LoopState : ValueObject
     bool recursiveVolatile = false;
     // Keeps recursiveNodes alive when a module frees replaced trees (docs/tasks/0482)
     std::shared_ptr<const void> recursiveOwner;
+    // What the site keeps of the frames around the loop once they end (ClosureSite::CaptureOnEnd), held while the
+    // loop is: a recursive loop stored past its include or macro call still resolves its body's names there
+    // (docs/tasks/0502)
+    std::shared_ptr<ClosureCapture> recursiveCapture;
     // The arguments of the last loop.changed() call, made on first use: a list [called,
     // *args] its callables hold as their receiver, where the cycle collector sees them
     InternalValue lastChanged;
@@ -481,6 +485,7 @@ struct LoopState : ValueObject
         if (recursiveStatement)
         {
             recursiveSite = ClosureSite();
+            recursiveCapture.reset();
         }
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
@@ -1545,7 +1550,20 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         state->recursiveStatement = this;
         state->recursiveNodes = values.Nodes();
         // loop(...) runs every level where the outermost one runs (ClosureSite)
-        state->recursiveSite = site ? *site : ClosureSite(values);
+        if (site)
+        {
+            state->recursiveSite = *site;
+            state->recursiveCapture = site->Capture();
+        }
+        else
+        {
+            state->recursiveSite = ClosureSite(values);
+            // Its body reads any name: the loop's names are not recorded as a macro body's are
+            if (state->recursiveSite.OutlivesItsFrames(values))
+            {
+                state->recursiveCapture = state->recursiveSite.CaptureOnEnd(values, {}, true);
+            }
+        }
         state->recursiveAutoescape = values.IsStaticAutoescape();
         state->recursiveVolatile = values.IsVolatileAutoescape();
         state->recursiveOwner = values.TreeOwner();
@@ -1627,7 +1645,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         auto failure = detail::TakeKept();
         if (detail::IsStop(failure))
         {
-            values.CaptureClosures(FrameEnd::Soft(endScopes));
+            values.CaptureClosures(FrameEnd::Stopped(endScopes));
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
         }
         std::rethrow_exception(std::move(failure));
@@ -1814,9 +1832,9 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         if (detail::IsStop(failure))
         {
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
-            // The end unbinds the slots before it closes over the frame
+            // The closures keep the loop's targets too, still in their slots (FrameEnd::Stopped)
+            values.CaptureClosures(FrameEnd::Stopped(endScopes));
             guard.Unbind();
-            values.CaptureClosures(FrameEnd::Soft(endScopes));
         }
         std::rethrow_exception(std::move(failure));
     }
@@ -2134,7 +2152,8 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
     {
         return;
     }
-    const auto block = blockContext.GetRendererCallback()->Templates().Resolve(p->second[depth]);
+    // An ended stack of a render that ended before this one resolves in that render's table (SelfBlocksOf)
+    const auto block = (stack.endedSlots ? *stack.endedSlots : blockContext.GetRendererCallback()->Templates()).Resolve(p->second[depth]);
     blockContext.PassOverEntryBindings();
     const ArenaSwitch nodesSwitch(blockContext, block.nodes);
     // Jinja2 renders a block through a generator: a StopIteration out of it is a RuntimeError, not a stopped call
@@ -2231,7 +2250,22 @@ void CopyCaptured(RenderContext& context, const ClosureSite& site, const Closure
 // (SelfBlocks), seeing the names `site` still has. `keepsCapture` false: the `self` does not
 // keep what the site keeps, which keeps it (the copy of an ended include's names,
 // RenderContext::KeepEndedSelf)
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, bool keepsCapture = true);
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, IRendererCallback* callback, bool keepsCapture = true);
+
+// The SelfBlocks of `stack`, made on first use. Its blocks are this render's, of the table `callback` resolves them in:
+// one that ends before an outer render that may call them shares the table with them (SharedTemplates, 0491)
+const std::shared_ptr<SelfBlocks>& SelfBlocksOf(const BlocksStack& stack, IRendererCallback* callback)
+{
+    if (!stack.self)
+    {
+        stack.self = std::make_shared<SelfBlocks>(&stack);
+        if (callback)
+        {
+            stack.self->ended.endedSlots = callback->SharedTemplates();
+        }
+    }
+    return stack.self;
+}
 
 // A block of `self` (MakeTemplateSelf), named `name`: renders it in the template `self` came
 // from while that runs, else where the comment of MakeTemplateSelf says
@@ -2281,7 +2315,7 @@ struct SelfBlockCall
             endedFrame.outer = curFrame;
             // Its scopes have ended too: a `self` in the block renders the ended blocks,
             // seeing what this one sees
-            endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName);
+            endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName, context.GetRendererCallback());
             frame = &endedFrame;
         }
         if (!frame)
@@ -2299,14 +2333,56 @@ struct SelfBlockCall
     }
 };
 
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, bool keepsCapture)
+// super() of the block at `depth` of its chain: renders the block at `depth + 1` of the stack it came from, in the
+// frame of that stack, wherever it is called from and once that stack has ended (stored past an include or a module
+// call: SelfBlocks), as Jinja2's BlockReference does (docs/tasks/0501)
+struct SuperBlockCall
+{
+    // Owned: super() may outlive the tree the name is in
+    std::string name;
+    size_t depth;
+    std::shared_ptr<SelfBlocks> owner;
+    ClosureSite site;
+
+    void operator()(const CallParams& params, OutStream& stream, RenderContext& context) const
+    {
+        CheckBlockCallParams(params);
+        // The value of the call, one item of generate() as a macro's output is
+        const OutStream::PieceHold pieceHold(stream);
+        const auto home = site.Resolve(context);
+        // The parent block sees the scopes below this block's, wherever super() is called from (a macro the block
+        // passes it to): a context on them in the block's own
+        RenderContext superContext(*home.context, home.link);
+        // The frames it was taken in have ended: it sees what they held (ClosureCapture)
+        CopyCaptured(superContext, site, home);
+        const BlocksStack* stack = owner->live ? owner->live : &owner->ended;
+        // Its chain's frame: the one running it, else one of its own, so that a super() in the parent block finds
+        // the block above it in the same chain
+        bool inChain = false;
+        for (const auto* f = superContext.GetTemplateFrame(); f && !inChain; f = f->outer)
+        {
+            inChain = f->blocks == stack;
+        }
+        TemplateFrame ownFrame;
+        if (!inChain)
+        {
+            ownFrame.blocks = stack;
+            ownFrame.baseDepth = home.link;
+            ownFrame.outer = superContext.GetTemplateFrame();
+            superContext.SetTemplateFrame(&ownFrame);
+        }
+        RenderBlockAt(*stack, name, depth + 1, stream, superContext);
+    }
+};
+
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, IRendererCallback* callback, bool keepsCapture)
 {
     // What the site keeps (ClosureSite::CaptureOnEnd), while the `self` lives; the caller holds it
     const std::shared_ptr<const void> keepAlive = keepsCapture ? site.Capture() : nullptr;
     InternalValueMap self;
-    if (!stack.blocks.empty() && !stack.self)
+    if (!stack.blocks.empty())
     {
-        stack.self = std::make_shared<SelfBlocks>(&stack);
+        SelfBlocksOf(stack, callback);
     }
     for (const auto& block : stack.blocks)
     {
@@ -2358,7 +2434,7 @@ LookupResult RenderContext::FindSelf(const std::string& name)
             keepAlive = site.CaptureOnEnd(*home, {}, true);
         }
         // The blocks keep it (MakeTemplateSelf)
-        return MakeTemplateSelf(*frame->blocks, site, frame->name);
+        return MakeTemplateSelf(*frame->blocks, site, frame->name, GetRendererCallback());
     };
     // In a block that sees more than the template's top level (a scoped one in a loop, or one
     // such a block's `self` renders), `self` passes on what it sees: Jinja2's TemplateReference
@@ -2390,6 +2466,11 @@ BlocksStack::~BlocksStack()
     {
         self->live = nullptr;
         self->ended.blocks = std::move(blocks);
+        // The blocks of an ended stack resolve in the table it has
+        if (endedSlots)
+        {
+            self->ended.endedSlots = endedSlots;
+        }
     }
 }
 
@@ -2652,6 +2733,15 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
     {
         names = std::make_shared<InternalValueMap>();
         CollectNamesDownTo(*names, end.copyFrom, ending, keeps.readsAll ? nullptr : &keeps);
+        // A render's own context that ends while its closures are stored in an outer render's globals
+        // (SetEndsBeforeRender, docs/tasks/0491): they read its params too, below its names
+        if (end.count == 0 && m_params && !m_parent)
+        {
+            for (const auto& param : *m_params)
+            {
+                names->emplace(std::string(param.name), param.value);
+            }
+        }
         // Read as `self` in the scopes over the caller's top level (FindSelf), unless set there
         if (endedSelf)
         {
@@ -2898,19 +2988,17 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
         {
             // super() may outlive the stack (stored past an include): it renders what the
             // stack held then, as `self` does
-            if (!stack->self)
+            SelfBlocksOf(*stack, values.GetRendererCallback());
+            ClosureSite site(values);
+            // Stored past an include, it sees what the block saw there, as a macro defined in the block does
+            // (0373); elsewhere the frames it sees end with the render, and nothing is kept
+            std::shared_ptr<const void> capture;
+            if (values.EndsBeforeRender() && site.OutlivesItsFrames(values))
             {
-                stack->self = std::make_shared<SelfBlocks>(stack);
+                capture = site.CaptureOnEnd(values, {}, true);
             }
-            // The parent block sees the scopes below this block's, wherever super() is called
-            // from (a macro the block passes it to): a context on them in the block's own
-            parentBlock.emplace(Callable::Macro, [owner = stack->self, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
-                // The value of the call, one item of generate() as a macro's output is
-                const OutStream::PieceHold pieceHold(stream);
-                const auto home = site.Resolve(context);
-                RenderContext superContext(*home.context, home.link);
-                RenderBlockAt(owner->live ? *owner->live : owner->ended, name, depth + 1, stream, superContext);
-            });
+            parentBlock.emplace(Callable::Macro, SuperBlockCall{ std::string(name), depth, stack->self, std::move(site) });
+            parentBlock->SetKeepAlive(std::move(capture));
         }
         else
         {
@@ -2932,11 +3020,14 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     OutputAutoescapeGuard autoescapeGuard(values, m_autoescape);
     values.Nodes()[m_mainBody].Render(os, values);
     // A closure defined in the block and kept past it sees what the block saw above its
-    // template's top level, as Jinja2's block function sees its derived context (0373)
+    // template's top level, as Jinja2's block function sees its derived context (0373). The
+    // frame is all of the block context's own scopes (RenderBlockAt makes it), so that it ends
+    // the capture of super() too, whose site is below the block's scope (0501)
     {
         const size_t count = values.GetScopesCount();
-        const size_t root = frame ? std::min(frame->baseDepth, count - 1) : count - 1;
-        values.CaptureClosures(FrameEnd{ count, true, root, root });
+        const size_t first = std::min(values.FirstOwnScope(), count);
+        const size_t root = frame ? std::min(frame->baseDepth, first - 1) : first - 1;
+        values.CaptureClosures(FrameEnd{ first, true, root, root });
     }
     values.ExitScope();
     values.SetSelfFromContext(prevSelfFromContext);
@@ -3071,7 +3162,7 @@ void TemplateRenderer::KeepEndedSelf(RenderContext& values, const TemplateFrame&
     // The capture of the top level, shared with its closures and held by the frames above it
     // that something outside holds; dropped here when none holds it
     [[maybe_unused]] const auto capture = site.CaptureOnEnd(values, {}, true);
-    values.KeepEndedSelf(MakeTemplateSelf(*frame.blocks, site, frame.name, false));
+    values.KeepEndedSelf(MakeTemplateSelf(*frame.blocks, site, frame.name, values.GetRendererCallback(), false));
 }
 
 template<typename Result, typename Fn>
@@ -3386,6 +3477,11 @@ ImportedModule::ImportedModule(const RenderContext& importer, bool withContext)
     , m_context(importer.CloneWith(m_importerNames))
 {
     m_context.SetModuleImports(&m_imports);
+    // Its context ends with a render an outer one outlives: RenderCore closes over it (CaptureModuleClosures)
+    if (const auto* callback = m_context.GetRendererCallback(); callback && callback->EndsBeforeOuterRender())
+    {
+        m_context.SetEndsBeforeRender();
+    }
 }
 
 ImportedModule::ImportedModule(InternalValueMap names, const InternalValueMap& globals, IRendererCallback* callback, const InternalValueMap* builtins)
@@ -3722,12 +3818,27 @@ const Body* MacroBodyOf(const InternalValue& value)
     }
     return callable->GetStatementCallable().target<Body>();
 }
+
+// The site of `value` when it is a closure that may keep a capture: a macro (MacroBody), or super() (SuperBlockCall), which the
+// copy of its block's names holds as `super` (docs/tasks/0501)
+template<typename MacroBody>
+const ClosureSite* ClosureSiteOf(const InternalValue& value)
+{
+    if (const auto* body = MacroBodyOf<MacroBody>(value))
+    {
+        return &body->site;
+    }
+    if (const auto* super = MacroBodyOf<SuperBlockCall>(value))
+    {
+        return &super->site;
+    }
+    return nullptr;
+}
 } // namespace
 
 std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
 {
-    const auto* body = MacroBodyOf<CallableBody>(value);
-    if (!body)
+    if (!ClosureSiteOf<CallableBody>(value))
     {
         return std::nullopt;
     }
@@ -3745,8 +3856,8 @@ std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& 
 
 InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
 {
-    const auto* body = MacroBodyOf<CallableBody>(value);
-    if (!body)
+    const auto* site = ClosureSiteOf<CallableBody>(value);
+    if (!site)
     {
         return value;
     }
@@ -3755,7 +3866,7 @@ InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
     {
         return value;
     }
-    auto capture = body->site.Capture();
+    auto capture = site->Capture();
     if (!capture)
     {
         return value;
@@ -4210,6 +4321,36 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     ThrowStoppedCallBlock(values, snapshot, true);
 }
 
+namespace
+{
+// A `with`, `filter` or generation body rendered by `body` in `inner`, its context: a stop out of it closes over the
+// body's names first (FrameEnd::Stopped). The rethrow is outside the handler, as in RenderMacroBody
+[[noreturn]] JINJA2CPP_NOINLINE void EndStoppedSoftBody(RenderContext& inner)
+{
+    auto failure = detail::TakeKept();
+    if (detail::IsStop(failure))
+    {
+        inner.CaptureClosuresAtStop();
+    }
+    std::rethrow_exception(std::move(failure));
+}
+
+template<typename Body>
+void RenderSoftBody(RenderContext& inner, const Body& body)
+{
+    try
+    {
+        body();
+        return;
+    }
+    catch (...)
+    {
+        detail::KeepFailure();
+    }
+    EndStoppedSoftBody(inner);
+}
+} // namespace
+
 void DoStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     values.Nodes()[m_expr].Evaluate(values);
@@ -4226,7 +4367,7 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
         scope.ForName({ nodes.Text(var.name), var.hash }) = nodes[var.value].Evaluate(values);
     }
 
-    values.Nodes()[m_mainBody].Render(os, innerValues);
+    RenderSoftBody(innerValues, [&] { values.Nodes()[m_mainBody].Render(os, innerValues); });
 
     innerValues.CaptureClosuresAtSoftEnd();
     innerValues.ExitScope();
@@ -4282,7 +4423,7 @@ void TransStatement::Render(OutStream& os, RenderContext& values)
 void FilterStatement::Render(OutStream& os, RenderContext& values)
 {
     auto innerValues = values.Clone(true);
-    TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { values.Nodes()[m_body].Render(stream, innerValues); });
+    TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { RenderSoftBody(innerValues, [&] { values.Nodes()[m_body].Render(stream, innerValues); }); });
     innerValues.CaptureClosuresAtSoftEnd();
     // A `break` or `continue` in the body drops its output, as in Jinja2
     values.SetLoopControl(innerValues.GetLoopControl());
