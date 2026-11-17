@@ -189,7 +189,7 @@ bool OutStream::HoldBack(const void* ptr, size_t bytes)
     {
         // Held output is bounded as a value is (MaxSequenceSize characters): past that it goes to the sink, what was
         // held first, and the calls that live can no longer take theirs back (they fail as before docs/tasks/0499)
-        if (SpillSize() / m_charSize + bytes / m_charSize > MaxSequenceSize)
+        if ((SpillSize() / m_charSize) + (bytes / m_charSize) > MaxSequenceSize)
         {
             ++m_spillOverflows;
             if (m_spill && !m_spill->Empty())
