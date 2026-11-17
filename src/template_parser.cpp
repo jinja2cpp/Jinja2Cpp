@@ -14,6 +14,7 @@
 #include "render_context.h"
 #include "renderer.h"
 #include "small_vector.h"
+#include "slot_frame.h"
 #include "statements.h"
 
 #include <jinja2cpp/error_info.h>

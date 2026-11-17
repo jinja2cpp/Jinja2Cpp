@@ -1094,6 +1094,8 @@ INSTANTIATE_TEST_SUITE_P(Jinja2Oracle, MacroKeptPastSoftBodyTest, ::testing::Val
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for a in [1] recursive %}{% if false %}{% set v = 'B' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "[V]" },
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [1] recursive %}{% macro inner() %}[{{ i }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "[1]" },
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [1] recursive %}{% macro inner() %}[{{ i }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "[1]" },
+    // a kept macro calls the ended recursive loop
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for x in [1,2,3] recursive %}{% macro m(l) %}<{{ loop(l) }}>{% endmacro %}{% set ns.f = m %}{% endfor %}{{ ns.f([4]) }}", UndefinedPolicy::Default, "<>" },
     // block set
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set x %}{% set v = 'S' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endset %}{{ x }}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
     SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set x | upper %}{% if false %}{% set v = 'S' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endset %}{{ x }}{{ ns.f() }}", UndefinedPolicy::Default, "X[]" }
