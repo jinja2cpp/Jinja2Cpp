@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: robustness
 depends: [0459, 0478]
-touches: [src/render_context.h, src/template_module.cpp, src/internal_value.cpp]
+touches: [src/recursion_guard.h, src/recursion_guard.cpp, src/hash_map.h, src/internal_value.h, src/statements.h, src/statements.cpp, test/limits_test.cpp]
 shares: [docs/security.md]
 ---
 # The render memory budget does not count scope maps, imported modules or closure copies
@@ -23,3 +23,21 @@ release under 0483's rule (release only what was charged). Measure the per-node 
 
 **Done when.** Both loops above fail with the memory-limit error under `UntrustedSettings`, a test covers each,
 and the bench rows stay within the perf bar.
+
+**Outcome (in progress).** `InternalValueMap` (every scope, the names a with-context import or module sees, the
+copy a kept closure holds) allocates through `CountedAllocator` (src/recursion_guard.h): each block is charged as
+an object is (`ChargeObjectMemory`: past the budget the render fails at its next step, nothing throws from an
+allocator) and records its charge in a 16-byte header, so freeing it gives back exactly what it took and a map made
+before the render, without a budget or under `UncountedMemoryScope` gives nothing (0483). `ImportedModule` (about
+1.6 KB with its context) allocates through the same block, and so do a closure's `ClosureCapture` and its copied
+names (`allocate_shared`). No per-map fixed charge, so the per-node path pays one compare per map allocation.
+
+Measured in Debug, `UntrustedSettings`: 100,000 `{% import "x" as m with context %}` now fail with
+`maxRenderMemory` at a 324 MB peak (rendered at 525 MB before); 10,000 of them took 2-5 MB of the budget before and
+30-60 MB now. 50,000 kept closures took 5-10 MB of the budget before and 60-80 MB now; their 125 MB peak is below the
+256 MiB default, so the test bounds them with 16 MiB. Tests (`test/limits_test.cpp`):
+`KeptModulesCountAgainstTheBudget` and `KeptClosureCopiesCountAgainstTheBudget` (both fail on master, narrow and
+wide), with dropped scopes and the shared without-context module rendering in 1 MiB.
+
+Still uncounted: what a macro's `std::function` holds apart from its `Callable` (about 124 bytes a macro) and the
+vectors inside a module's `RenderContext`; the budget remains an estimate, as docs/security.md says.

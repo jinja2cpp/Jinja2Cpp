@@ -626,6 +626,11 @@ public:
     ImportedModule& operator=(ImportedModule&&) = delete;
     ~ImportedModule() = default;
 
+    // A module counts against the memory budget of the render that imports it, which keeps it until it ends: a
+    // with-context import in a loop makes one per iteration (docs/tasks/0508)
+    static void* operator new(std::size_t size) { return detail::AllocateCountedBlock(size); }
+    static void operator delete(void* ptr) noexcept { detail::FreeCountedBlock(ptr); }
+
     // Renders the template `tpl` (a TemplateImpl) into the module's context, dropping its output
     template<typename Tpl>
     void Render(const Tpl& tpl);

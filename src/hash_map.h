@@ -54,12 +54,12 @@ inline unsigned CountTrailingZeros(std::uint32_t bits) noexcept
 // A map whose values stay where they are while others are added: they live in segments
 // of JINJA2CPP_STABLE_MAP_SEGMENT_BYTES that never move. An erase moves the last value
 // into the gap, so a caller that keeps pointers into the map forgets that one too
-template<typename Key, typename T, typename Hash, typename KeyEqual>
+template<typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator = std::allocator<std::pair<Key, T>>>
 using StableMap = ankerl::unordered_dense::segmented_map<Key,
                                                          T,
                                                          Hash,
                                                          KeyEqual,
-                                                         std::allocator<std::pair<Key, T>>,
+                                                         Allocator,
                                                          ankerl::unordered_dense::bucket_type::group,
                                                          JINJA2CPP_STABLE_MAP_SEGMENT_BYTES>;
 

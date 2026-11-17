@@ -170,7 +170,9 @@ back when it is freed, if it was counted ([0459](tasks/0459-render-memory-budget
 before the render, without a budget or by a cache gives nothing back, and what a render adds to
 such a container stays counted, [0483](tasks/0483-render-memory-uncharged-release.md)), and the other objects the
 render makes (loop state, macros, generators, undefined values, big integers) by its own size
-([0478](tasks/0478-render-memory-uncounted-objects.md)). It is an estimate of the engine's own
+([0478](tasks/0478-render-memory-uncounted-objects.md)), as well as the scopes' name maps, the modules an
+`import` makes and the names a closure kept past its frame copies
+([0508](tasks/0508-render-memory-scopes-modules.md)). It is an estimate of the engine's own
 storage; what such an object allocates apart, the host's data and allocator overhead are not
 counted, so give the host process room beyond it. A step is an approximate unit that can change between releases too; set
 `maxRenderSteps` with a wide margin over what the host's real templates take.

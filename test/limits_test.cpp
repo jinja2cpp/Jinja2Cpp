@@ -1006,3 +1006,55 @@ TEST_F(LimitsEnvTest, Presets)
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, Load("{{ range(100001)|list }}").RenderAsString({}).error().GetCode());
     EXPECT_EQ("&lt;b&gt;", Load("{{ x }}").RenderAsString({ { "x", "<b>" } }).value());
 }
+
+namespace
+{
+template<typename CharT>
+nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderWithModuleX(const std::string& source, std::uint64_t budget)
+{
+    TemplateEnv env;
+    auto settings = UntrustedSettings();
+    settings.limits.maxRenderMemory = budget;
+    env.SetSettings(settings);
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("x", "{% macro f() %}{% endmacro %}{% set a = 1 %}");
+    env.AddFilesystemHandler("", fs);
+    BasicTemplate<CharT> tpl(&env);
+    EXPECT_TRUE(tpl.Load(std::basic_string<CharT>(source.begin(), source.end())).has_value());
+    return tpl.RenderAsString({});
+}
+} // namespace
+
+// 0508: the render keeps every module a with-context import makes, with its context and the names it sees; 100,000
+// of them took 524 MB under UntrustedSettings. They now count against the budget: 10,000 took 2-5 MB of it before
+// and 30-60 MB now, the loop below fails in 16 MiB, in either character type
+TEST_F(LimitsEnvTest, KeptModulesCountAgainstTheBudget)
+{
+    const std::string loop = "{% for i in range(10000) %}{% import 'x' as m with context %}{% endfor %}done";
+    auto narrow = RenderWithModuleX<char>(loop, std::uint64_t{ 16 } << 20);
+    ASSERT_FALSE(narrow.has_value());
+    EXPECT_EQ("maxRenderMemory", ToString(narrow.error().GetExtraParams()[1]));
+    auto wide = RenderWithModuleX<wchar_t>(loop, std::uint64_t{ 16 } << 20);
+    ASSERT_FALSE(wide.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wide.error().GetCode());
+    // A module imported without context is shared, and so are its names: the loop keeps one
+    EXPECT_EQ("done", RenderWithModuleX<char>("{% for i in range(10000) %}{% import 'x' as m %}{% endfor %}done", std::uint64_t{ 1 } << 20).value());
+}
+
+// 0508: a closure kept past the call that defined it keeps a copy of the names it sees; 50,000 took 136 MB under
+// UntrustedSettings, of which the budget counted about 150 bytes each. The copy now counts, about 1.4 KB each
+TEST_F(LimitsEnvTest, KeptClosureCopiesCountAgainstTheBudget)
+{
+    const std::string loop = "{% macro mk(x) %}{% macro inner() %}{{ x }}{% endmacro %}{% set _ = l.append(inner) %}{% endmacro %}"
+                             "{% set l = [] %}{% for i in range(20000) %}{{ mk(i) }}{% endfor %}done";
+    auto narrow = RenderWithModuleX<char>(loop, std::uint64_t{ 16 } << 20);
+    ASSERT_FALSE(narrow.has_value());
+    EXPECT_EQ("maxRenderMemory", ToString(narrow.error().GetExtraParams()[1]));
+    auto wide = RenderWithModuleX<wchar_t>(loop, std::uint64_t{ 16 } << 20);
+    ASSERT_FALSE(wide.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wide.error().GetCode());
+    // Scopes that end give their storage back: the calls' scopes and the closures they drop take nothing for long
+    const std::string dropped = "{% macro mk(x) %}{% set y = x %}{% macro inner() %}{{ y }}{% endmacro %}{% set z = inner %}{% endmacro %}"
+                                "{% for i in range(20000) %}{{ mk(i) }}{% endfor %}done";
+    EXPECT_EQ("done", RenderWithModuleX<char>(dropped, std::uint64_t{ 1 } << 20).value());
+}

@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
+#include <new>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -396,6 +397,59 @@ inline void ReleaseRenderMemory(std::uint64_t bytes) noexcept
         limits.memoryLeft = bytes < limits.memoryBudget - limits.memoryLeft ? limits.memoryLeft + bytes : limits.memoryBudget;
     }
 }
+
+namespace detail
+{
+// The header of a block CountedAllocator allocates: the bytes it charged, 0 for none. As large as the strictest
+// fundamental alignment, so that the block after it keeps that alignment
+inline constexpr std::size_t CountedBlockHeader = alignof(std::max_align_t);
+static_assert(CountedBlockHeader >= sizeof(std::uint64_t));
+
+// A block of `bytes` charged as ChargeObjectMemory charges an object's (past the budget the render fails at its next
+// step), with the charge in a header, so that freeing it gives back what it took and nothing more: a block made
+// before the render, without a budget or under UncountedMemoryScope gives nothing back (docs/tasks/0483, 0508)
+// Exported: the maps of code outside a shared library allocate through them
+JINJA2CPP_EXPORT void* AllocateCountedBlock(std::size_t bytes);
+JINJA2CPP_EXPORT void FreeCountedBlock(void* ptr) noexcept;
+} // namespace detail
+
+// The allocator of the storage a template's scopes, the names a module or a with-context import sees and the copies
+// a closure keeps live in (InternalValueMap, docs/tasks/0508): it counts against the memory budget of the render
+// that allocates, which the maps' values alone did not. Stateless; any two compare equal
+template<typename T>
+struct CountedAllocator
+{
+    using value_type = T;
+    static_assert(alignof(T) <= detail::CountedBlockHeader);
+
+    CountedAllocator() noexcept = default;
+    template<typename U>
+    // NOLINTNEXTLINE(google-explicit-constructor, hicpp-explicit-conversions): an allocator's rebinding converts
+    CountedAllocator(const CountedAllocator<U>& /*other*/) noexcept
+    {
+    }
+
+    [[nodiscard]] T* allocate(std::size_t count)
+    {
+        if (count > (SIZE_MAX - detail::CountedBlockHeader) / sizeof(T))
+        {
+            throw std::bad_alloc();
+        }
+        return static_cast<T*>(detail::AllocateCountedBlock(count * sizeof(T)));
+    }
+    void deallocate(T* ptr, std::size_t /*count*/) noexcept { detail::FreeCountedBlock(ptr); }
+
+    template<typename U>
+    bool operator==(const CountedAllocator<U>& /*other*/) const noexcept
+    {
+        return true;
+    }
+    template<typename U>
+    bool operator!=(const CountedAllocator<U>& /*other*/) const noexcept
+    {
+        return false;
+    }
+};
 
 // Objects made while it lives are not counted against the running render's memory budget: those of a cache that
 // outlives the render (a loaded template, the thread's snapshot of the globals, the built-in globals), which the
