@@ -738,7 +738,7 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
         m_fs->AddFile("base", "<{% block b %}base{% endblock %}>");
         const auto& m = module.exports["m"];
         int serial = 0;
-        const auto callMany = [&, fails = fails](int count) {
+        const auto callMany = [&, failing = fails](int count) {
             for (int i = 0; i != count; ++i)
             {
                 // The same text length, so that every tree is the same size
@@ -746,7 +746,7 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
                 m_fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}" + mark);
                 m_fs->AddFile("child", "{% extends 'base' %}{% block b %}child{% endblock %}" + mark);
                 m_fs->AddFile("blocks", "{% block b %}B{% endblock %}{% block c %}C{% endblock %}" + mark);
-                if (fails)
+                if (failing)
                 {
                     EXPECT_THROW(Call(m), jinja2::BadResultAccess<>);
                 }
