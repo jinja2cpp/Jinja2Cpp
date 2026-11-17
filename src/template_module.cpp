@@ -47,6 +47,47 @@ namespace jinja2
 inline namespace v2
 {
 
+namespace detail
+{
+namespace
+{
+// Few at once: one per Load that host code replaced during the Load, until that Load returns
+struct LoadingKeepList
+{
+    Mutex mutex;
+    std::vector<std::shared_ptr<const ITemplateImpl>> kept JINJA2CPP_GUARDED_BY(mutex);
+};
+
+LoadingKeepList& LoadingKept()
+{
+    static LoadingKeepList list;
+    return list;
+}
+} // namespace
+
+void KeepTemplateWhileLoading(std::shared_ptr<const ITemplateImpl> impl)
+{
+    auto& list = LoadingKept();
+    const WriterLock lock(list.mutex);
+    list.kept.push_back(std::move(impl));
+}
+
+std::shared_ptr<const ITemplateImpl> TakeTemplateKeptWhileLoading(const ITemplateImpl* impl) noexcept
+{
+    std::shared_ptr<const ITemplateImpl> taken;
+    auto& list = LoadingKept();
+    const WriterLock lock(list.mutex);
+    const auto found = std::find_if(list.kept.begin(), list.kept.end(), [impl](const auto& kept) { return kept.get() == impl; });
+    if (found != list.kept.end())
+    {
+        taken = std::move(*found);
+        list.kept.erase(found);
+    }
+    // Dropped by the caller, outside the lock: its destructor may run host code that loads
+    return taken;
+}
+} // namespace detail
+
 namespace
 {
 // Copies a value of the module into one the host owns, so that nothing the host keeps refers
@@ -879,17 +920,13 @@ std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::sha
     auto error = loaded->Load(std::move(source), std::move(name));
     if (!error)
     {
-        auto& workspace = RenderWorkspace::ForThisThread();
         // The template this replaces may be parsing still: host code its first Load called (an
-        // autoescape selector) loads it a second time. That Load runs on the template until it
-        // returns, render or not (docs/tasks/0517)
-        if (const auto* replaced = static_cast<const TemplateImpl*>(impl.get()); replaced->m_loading)
-        {
-            workspace.KeepWhileLoading(impl, &replaced->m_loading);
-        }
+        // autoescape selector) loads it a second time, maybe on another thread. That Load runs on
+        // the template until it returns, render or not (docs/tasks/0517, 0522)
+        KeepWhileLoading(impl);
         // A render on this thread (one that called the host code loading now) may be rendering
         // the template this replaces: the workspace keeps it (RenderWorkspace::Retire)
-        workspace.Retire(impl);
+        RenderWorkspace::ForThisThread().Retire(impl);
         impl = std::move(loaded);
     }
     return error;

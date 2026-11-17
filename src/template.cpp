@@ -97,6 +97,44 @@ JINJA2CPP_COLD_INLINE Result<void, CharT> LoadReplacing(std::shared_ptr<ITemplat
     return ToResult(TemplateImpl<CharT>::LoadReplacing(impl, std::forward<Source>(source), std::move(name)));
 }
 
+// Lets go of the reference the process-wide list holds to a template replaced during its own
+// first Load (TemplateImpl::KeepWhileLoading), once that Load returned: the template may go with it
+template<typename CharT>
+JINJA2CPP_COLD_INLINE void ReleaseKeptWhileLoading(TemplateImpl<CharT>* impl) noexcept
+{
+    const auto kept = impl->TakeKeptWhileLoading();
+}
+
+// Releases the template KeepWhileLoading kept when the first Load returns or throws (bad_alloc).
+// A Load nested in it, from host code it calls, leaves it to that first Load, which still parses.
+// Host code the first Load calls may replace the template it parses into (a Load of it, maybe on
+// another thread, or an assignment): that template is kept until here (docs/tasks/0517, 0522)
+template<typename CharT>
+class ReleaseAfterFirstLoad
+{
+public:
+    explicit ReleaseAfterFirstLoad(TemplateImpl<CharT>* impl) noexcept
+        : m_impl(impl)
+        , m_first(!impl->Loading())
+    {
+    }
+    ReleaseAfterFirstLoad(const ReleaseAfterFirstLoad&) = delete;
+    ReleaseAfterFirstLoad& operator=(const ReleaseAfterFirstLoad&) = delete;
+    ReleaseAfterFirstLoad(ReleaseAfterFirstLoad&&) = delete;
+    ReleaseAfterFirstLoad& operator=(ReleaseAfterFirstLoad&&) = delete;
+    ~ReleaseAfterFirstLoad()
+    {
+        if (m_first && m_impl->KeptWhileLoading())
+        {
+            ReleaseKeptWhileLoading(m_impl);
+        }
+    }
+
+private:
+    TemplateImpl<CharT>* m_impl;
+    bool m_first;
+};
+
 template<typename CharT>
 struct FileStream;
 
@@ -123,6 +161,19 @@ template<typename CharT>
 BasicTemplate<CharT>::~BasicTemplate() = default;
 
 template<typename CharT>
+BasicTemplate<CharT>& BasicTemplate<CharT>::operator=(const BasicTemplate& other)
+{
+    // Host code the first Load of this template calls may assign it: that Load still parses into
+    // the template this lets go of (docs/tasks/0522)
+    if (this != &other)
+    {
+        TemplateImpl<CharT>::KeepWhileLoading(m_impl);
+        m_impl = other.m_impl;
+    }
+    return *this;
+}
+
+template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::string name)
 {
     auto* impl = GetImpl<CharT>(m_impl);
@@ -132,6 +183,7 @@ Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::strin
     }
     if (LoadsInPlace<CharT>(m_impl))
     {
+        const ReleaseAfterFirstLoad<CharT> release(impl);
         return ToResult(impl->Load(StringType(source), std::move(name)));
     }
     return LoadReplacing<CharT>(m_impl, source, std::move(name));
@@ -162,7 +214,9 @@ Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream
 
     if (LoadsInPlace<CharT>(m_impl))
     {
-        return ToResult(GetImpl<CharT>(m_impl)->Load(std::move(t), std::move(name)));
+        auto* impl = GetImpl<CharT>(m_impl);
+        const ReleaseAfterFirstLoad<CharT> release(impl);
+        return ToResult(impl->Load(std::move(t), std::move(name)));
     }
     return LoadReplacing<CharT>(m_impl, std::move(t), std::move(name));
 }

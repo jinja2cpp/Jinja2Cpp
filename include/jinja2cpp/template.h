@@ -360,9 +360,22 @@ public:
      */
     explicit BasicTemplate(TemplateEnv* env);
     /*!
+     * \brief Copy constructor: the copy shares the loaded template, which neither changes
+     */
+    BasicTemplate(const BasicTemplate& other) = default;
+    /*!
      * Destructor
      */
     ~BasicTemplate();
+    /*!
+     * \brief Copy assignment: this object then renders the template `other` holds
+     *
+     * Host code that a `Load` of this object calls (an autoescape selector) may assign it or load
+     * it again, on this thread or on one it joins: that `Load` finishes on the template it was
+     * parsing, and the object keeps what was assigned or loaded last. Destroying the object from
+     * such host code is not supported. There are no move operations: a move copies.
+     */
+    BasicTemplate& operator=(const BasicTemplate& other);
 
     /*!
      * \brief Load template from a string
