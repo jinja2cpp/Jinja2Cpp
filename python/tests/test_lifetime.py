@@ -267,3 +267,43 @@ def test_loader_uptodate_closure_over_environment_is_collected():
         del env
     gc.collect()
     assert [ref() for ref in refs] == [None] * 5
+
+
+@pytest.mark.parametrize("how", ["loader", "selector"])
+def test_a_filter_replaced_while_a_template_loads_stays_with_it(how):
+    # docs/tasks/0406: Python the load runs replaces the filter and loads again, so that a new engine environment
+    # binds the new one; the template that was loading keeps the filter it was compiled with
+    env = None
+    replaced = []
+
+    def replace():
+        if replaced:
+            return
+        replaced.append(True)
+        env.filters["f"] = lambda v: "second"
+        assert env.from_string("{{ 1|f }}").render() == "second"
+
+    class Loader(jinja2cpp.BaseLoader):
+        def get_source(self, environment, name):
+            if how == "loader":
+                replace()
+            return "{{ 1|f }}", None, lambda: True
+
+    def select(name):
+        if how == "selector":
+            replace()
+        return False
+
+    env = jinja2cpp.Environment(loader=Loader(), autoescape=select)
+    first = lambda v: "first"
+    env.filters["f"] = first
+    ref = weakref.ref(first)
+    del first
+    tpl = env.get_template("a")
+    gc.collect()
+    assert ref() is not None
+    assert tpl.render() == "first"
+    del tpl
+    env.cache.clear() if env.cache is not None else None
+    gc.collect()
+    assert env.from_string("{{ 1|f }}").render() == "second"

@@ -66,12 +66,26 @@ public:
     nb::object LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass, nb::handle cached);
     // A source a loader gave, with its name and filename (BaseLoader.load)
     nb::object Compile(nb::handle source, nb::handle name, nb::handle filename, nb::handle globals, nb::handle templateClass);
+    // An engine template and the list of what the engine environment it was loaded from borrows (BoundObjects), read
+    // before the load: Python the load runs (a loader, an autoescape selector) may replace a filter and so start a
+    // new engine environment with a list of its own
+    struct Loaded
+    {
+        jinja2::Template engine;
+        nb::object bound;
+    };
     // The engine's template of a source named `name` in its errors
-    jinja2::Template Load(nb::handle source, const std::string& name = std::string());
+    Loaded Load(nb::handle source, const std::string& name = std::string());
 
     // The engine's environment with the filters and tests of the dicts, as a template binds
-    // them when it loads
-    jinja2::TemplateEnv& Prepared();
+    // them when it loads, and its BoundObjects. The pointer keeps it while a load that runs Python
+    // starts another
+    struct Engine
+    {
+        std::shared_ptr<jinja2::TemplateEnv> env;
+        nb::object bound;
+    };
+    Engine Prepared();
     [[nodiscard]] PyObject* UndefinedClass() const noexcept { return m_undefined.ptr(); }
     // A list of what the engine environment templates load from now borrows: a template keeps it, so the callables
     // it was compiled with live while it does, and the environment lets go of one replaced since (docs/tasks/0406)
@@ -104,9 +118,10 @@ private:
     void Keep(nb::handle object);
     void ApplyGettext();
     void ApplyChatTemplates();
-    nb::object MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass);
+    nb::object MakeTemplate(Loaded tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass);
 
-    std::unique_ptr<jinja2::TemplateEnv> m_env;
+    // Shared with the load in progress (Prepared)
+    std::shared_ptr<jinja2::TemplateEnv> m_env;
     // A SandboxedEnvironment, and whether its is_safe_attribute judges the engine's public names (read at each load)
     bool m_sandboxed = false;
     bool m_sandboxPublicNames = false;
@@ -159,7 +174,8 @@ struct PieceOptions
 class PyTemplate
 {
 public:
-    PyTemplate(jinja2::Template tpl, nb::object environment, nb::object globals, nb::object name, nb::object filename);
+    // `bound`: what the engine environment `tpl` was loaded from borrows (PyEnvironment::Loaded)
+    PyTemplate(jinja2::Template tpl, nb::object bound, nb::object environment, nb::object globals, nb::object name, nb::object filename);
     // Template(source, **options): the template of a new environment, or of `environment` when
     // the Python layer made one (jinja2cpp.Template.__init__)
     PyTemplate(nb::handle source, nb::handle environment, nb::kwargs kwargs);

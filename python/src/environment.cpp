@@ -114,7 +114,11 @@ void AssignHeld(jinja2::Value& slot, nb::handle value, std::vector<PyObject*>* h
     }
     if (auto* before = HeldObject(slot))
     {
-        held->erase(std::find(held->begin(), held->end(), before));
+        // Each held one was pushed when its slot was assigned; a value the slot got otherwise is not in the list
+        if (const auto pos = std::find(held->begin(), held->end(), before); pos != held->end())
+        {
+            held->erase(pos);
+        }
     }
     slot = ToEngine(value);
     if (auto* object = HeldObject(slot))
@@ -562,7 +566,7 @@ void PyEnvironment::SetLoader(nb::handle loader)
 
 void PyEnvironment::Rebuild()
 {
-    m_env = std::make_unique<jinja2::TemplateEnv>();
+    m_env = std::make_shared<jinja2::TemplateEnv>();
     // What it borrows: the translations first (ApplyGettext), then the callables of the settings and the loader, and the
     // filters and tests as Prepared binds them. The templates loaded from the engine environment before keep its list
     m_bound = nb::list();
@@ -734,7 +738,7 @@ void PyEnvironment::CheckSandboxHooks() const
     CheckNativeSandboxHooks(nb::find(this).ptr());
 }
 
-jinja2::TemplateEnv& PyEnvironment::Prepared()
+PyEnvironment::Engine PyEnvironment::Prepared()
 {
     CheckAlive();
     if (!m_env)
@@ -764,7 +768,7 @@ jinja2::TemplateEnv& PyEnvironment::Prepared()
     };
     if (filters == m_boundFilters && tests == m_boundTests)
     {
-        return *m_env;
+        return Engine{ m_env, m_bound };
     }
     if (dropsOne(m_boundFilters, filters) || dropsOne(m_boundTests, tests))
     {
@@ -792,7 +796,7 @@ jinja2::TemplateEnv& PyEnvironment::Prepared()
     };
     sync(filters, m_boundFilters, true);
     sync(tests, m_boundTests, false);
-    return *m_env;
+    return Engine{ m_env, m_bound };
 }
 
 void PyEnvironment::CheckAlive() const
@@ -835,7 +839,7 @@ nb::object LoaderNotFoundOf(nb::handle environment, const std::string& name)
     return nb::cast<const PyEnvironment&>(environment).LoaderNotFound(name);
 }
 
-nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass)
+nb::object PyEnvironment::MakeTemplate(Loaded tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass)
 {
     auto self = nb::find(this);
     // A copy, as Jinja2's make_globals takes a ChainMap of it
@@ -846,15 +850,16 @@ nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals,
         RaiseTypeError("template_class must be jinja2cpp.Template or a subclass of it");
     }
     // Like Jinja2's Template.from_code: an instance of the class, without calling its __init__
-    auto made = std::make_unique<PyTemplate>(std::move(tpl), nb::borrow(self), std::move(templateGlobals), std::move(name), std::move(filename));
+    auto made = std::make_unique<PyTemplate>(std::move(tpl.engine), std::move(tpl.bound), nb::borrow(self), std::move(templateGlobals), std::move(name), std::move(filename));
     nb::object instance = nb::inst_take_ownership(templateClass, made.get());
     made.release(); // NOLINT(bugprone-unused-return-value): the instance owns it now
     return instance;
 }
 
-jinja2::Template PyEnvironment::Load(nb::handle source, const std::string& name)
+PyEnvironment::Loaded PyEnvironment::Load(nb::handle source, const std::string& name)
 {
-    auto& env = Prepared();
+    auto engine = Prepared();
+    auto& env = *engine.env;
     if (!PyUnicode_Check(source.ptr()))
     {
         // Jinja2 compiles a str; bytes and numbers are a TypeError, not their repr
@@ -873,7 +878,7 @@ jinja2::Template PyEnvironment::Load(nb::handle source, const std::string& name)
         }
         RaiseError(result.error(), where);
     }
-    return std::move(result).value();
+    return Loaded{ std::move(result).value(), std::move(engine.bound) };
 }
 
 nb::object PyEnvironment::FromString(nb::handle source, nb::handle globals, nb::handle templateClass)
@@ -896,7 +901,8 @@ nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::
     {
         return nb::borrow(name);
     }
-    auto& env = Prepared();
+    auto engine = Prepared();
+    auto& env = *engine.env;
     if (m_loader.is_none())
     {
         RaiseTypeError("no loader for this environment specified");
@@ -929,7 +935,7 @@ nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::
     }
     // Only the filename: the source is read for an error alone
     auto where = SourceOf(text, false);
-    return MakeTemplate(std::move(result).value(), globals, nb::borrow(name), where.filename, templateClass);
+    return MakeTemplate(Loaded{ std::move(result).value(), std::move(engine.bound) }, globals, nb::borrow(name), where.filename, templateClass);
 }
 
 int PyEnvironment::Traverse(visitproc visit, void* arg) const
@@ -990,19 +996,20 @@ PyTemplate::PyTemplate(nb::handle source, nb::handle environment, nb::kwargs kwa
 {
     // Jinja2 makes an environment of the arguments
     auto& env = nb::cast<PyEnvironment&>(m_environment);
-    m_template = env.Load(source);
+    auto loaded = env.Load(source);
+    m_template = std::move(loaded.engine);
     m_envGlobals = env.Globals();
-    m_bound = env.BoundObjects();
+    m_bound = std::move(loaded.bound);
 }
 
-PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object globals, nb::object name, nb::object filename)
+PyTemplate::PyTemplate(jinja2::Template tpl, nb::object bound, nb::object environment, nb::object globals, nb::object name, nb::object filename)
     : m_template(std::move(tpl))
     , m_environment(std::move(environment))
     , m_globals(std::move(globals))
     , m_envGlobals(nb::cast<PyEnvironment&>(m_environment).Globals())
     , m_name(std::move(name))
     , m_filename(std::move(filename))
-    , m_bound(nb::cast<PyEnvironment&>(m_environment).BoundObjects())
+    , m_bound(std::move(bound))
 {
 }
 
