@@ -1505,11 +1505,11 @@ private:
             // The released trees that went since
             loaded.released.erase(std::remove_if(loaded.released.begin(), loaded.released.end(), [](const auto& entry) { return entry.second.expired(); }),
                                   loaded.released.end());
-            // No handle of the slots can be used again when no `self` or `super` lives and neither the module
+            // No handle of the slots can be used again when no `self` or `super` of them lives and neither the module
             // that calls (`callerHoldsHandles`) nor one its calls keep holds one: then the slots go, and a
             // tree with one goes as the others (docs/tasks/0503)
             // A table shared with the stacks a render under a keeper ends is never cleared here (SharedTemplates)
-            const bool slotsFree = !callerHoldsHandles && !loaded.sharedTemplates && !SelfBlocks::AnyLive()
+            const bool slotsFree = !callerHoldsHandles && !loaded.sharedTemplates && !loaded.templates.HeldOutside()
                                    && std::none_of(loaded.modules.begin(), loaded.modules.end(), [](const auto& module) { return module && module->HoldsTemplateHandles(); });
             if (slotsFree)
             {

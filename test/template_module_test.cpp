@@ -760,6 +760,30 @@ TEST_F(TemplateModuleChangingSourceTest, ChildOfAChangingParent)
     EXPECT_EQ((std::vector<std::string>{ "<CL1>", "<CL2>", "[CL3]" }), results);
 }
 
+// A `super` of a block with no parent block, stored and called then and by later calls, fails naming the block,
+// as Jinja2's undefined does, while the module frees the tree it was taken in (docs/tasks/0503)
+TEST_F(TemplateModuleChangingSourceTest, StoredSuperWithNoParentNamesItsBlock)
+{
+    // Stored by the second call: the tree of the first stays for the module's life
+    AddFile("lib", "{% block b %}OLD{% endblock %}");
+    auto module = Make("{% set ns = namespace(s=none) %}{% macro m() %}{% include 'lib' %}[{% if ns.s is not none %}{{ ns.s() }}{% endif %}]{% endmacro %}");
+    EXPECT_EQ("OLD[]", Call(module.exports["m"]).AsString());
+    for (const char* lib : { "{% block b %}{% set ns.s = super %}S{% endblock %}", "{% block b %}NEW{% endblock %}", "{% block b %}NEW2{% endblock %}",
+                             "{% block b %}NEW3{% endblock %}" })
+    {
+        AddFile("lib", lib);
+        try
+        {
+            Call(module.exports["m"]);
+            FAIL() << "expected the stored super() to fail";
+        }
+        catch (const jinja2::BadResultAccess<>& failure)
+        {
+            EXPECT_NE(std::string::npos, failure.error().ToString().find("there is no parent block called 'b'.")) << failure.error().ToString();
+        }
+    }
+}
+
 TEST_F(TemplateModuleChangingSourceTest, StoredSelfLetGoOfFreesItsSlots)
 {
     const auto results = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",

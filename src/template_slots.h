@@ -7,9 +7,11 @@
 #include "small_vector.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
@@ -128,6 +130,20 @@ public:
         m_generation = 0;
     }
 
+    // The count of what holds handles of the table past a render (a `self` or super(), SelfBlocks), made on first
+    // use and shared with them: one may go on another thread. Throws std::bad_alloc
+    const std::shared_ptr<std::atomic<std::size_t>>& Holders()
+    {
+        if (!m_holders)
+        {
+            m_holders = std::make_shared<std::atomic<std::size_t>>(0);
+        }
+        return m_holders;
+    }
+    // Whether something counted by Holders still lives. Acquire: what a holder that went on another thread did
+    // with the table comes before
+    [[nodiscard]] bool HeldOutside() const noexcept { return m_holders && m_holders->load(std::memory_order_acquire) != 0; }
+
     // Throws for a handle another render made (but with NodeRefChecks OFF, only for one past
     // the table's end): its template may be gone. No handle has generation 0, the one of a
     // table that has made none
@@ -186,6 +202,7 @@ private:
     // The slots by tree, once there are more than a scan should look through
     std::unordered_map<const void*, std::uint32_t> m_bySlot;
     std::uint8_t m_generation = 0;
+    std::shared_ptr<std::atomic<std::size_t>> m_holders;
 };
 
 } // namespace v2

@@ -521,29 +521,34 @@ struct SelfBlocks
     explicit SelfBlocks(const BlocksStack* stack)
         : live(stack)
     {
-        s_count.fetch_add(1, std::memory_order_relaxed);
     }
     SelfBlocks(const SelfBlocks&) = delete;
     SelfBlocks(SelfBlocks&&) = delete;
     SelfBlocks& operator=(const SelfBlocks&) = delete;
     SelfBlocks& operator=(SelfBlocks&&) = delete;
-    ~SelfBlocks() { s_count.fetch_sub(1, std::memory_order_relaxed); }
+    ~SelfBlocks()
+    {
+        if (holders)
+        {
+            holders->fetch_sub(1, std::memory_order_release);
+        }
+    }
 
-    // Whether any `self` or `super` of any render still lives: the handles of an ended one link
-    // to slots of the table its render used, so that a module frees no tree with a slot while
-    // one does (TemplateSlots::Clear, docs/tasks/0503). Read by a module's call under its lock,
-    // after the call: one made or let go of on another thread meanwhile is of another render,
-    // or of a value that thread holds of this one, which the module's lock orders
-    [[nodiscard]] static bool AnyLive() noexcept { return s_count.load(std::memory_order_acquire) != 0; }
+    // Counts this one among the holders of handles of `slots`, the table its blocks resolve in, so that a module
+    // does not clear that table while it lives (TemplateSlots::Clear, docs/tasks/0503). Throws std::bad_alloc
+    void HoldHandlesOf(TemplateSlots& slots)
+    {
+        holders = slots.Holders();
+        holders->fetch_add(1, std::memory_order_relaxed);
+    }
 
     // The stack, until it ends; only compared then, to find the frames of its template
     const BlocksStack* live;
     // Its blocks once it has ended. Made with the `self`: the stack's destructor, which fills
     // it, must not allocate, and MSVC's unordered_map allocates when default constructed
     BlocksStack ended;
-
-private:
-    static inline std::atomic<std::size_t> s_count{ 0 };
+    // The count of the table's holders this one is among (HoldHandlesOf)
+    std::shared_ptr<std::atomic<std::size_t>> holders;
 };
 
 // The root of a parsed template
