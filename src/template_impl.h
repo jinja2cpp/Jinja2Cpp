@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "borrowed_cells.h"
+#include "call_stop.h"
 #include "contracts.h"
 #include "cycle_collector.h"
 #include "dialect.h"
@@ -651,6 +652,38 @@ public:
         }
         return keeper;
     }
+    // Renders the template under a keeper: whether it ends or fails, the closures it stored in a global the outer
+    // render may call keep the names they see before its frames go, as Jinja2's do (docs/tasks/0491, 0525). Out of
+    // line: a render nests in another rarely. The rethrow is outside the handler (call_stop.h); a capture that fails
+    // to allocate throws std::bad_alloc instead of the render's failure
+    template<typename Callback>
+    JINJA2CPP_NOINLINE void RenderForOuter(OutStream& outStream, RenderContext& context, Callback& callback) const
+    {
+        const size_t topScopes = context.GetScopesCount();
+        bool failed = false;
+        try
+        {
+            m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
+        }
+        catch (...)
+        {
+            failed = true;
+            detail::KeepFailure();
+        }
+        auto failure = failed ? detail::TakeKept() : std::exception_ptr();
+        // A failure leaves the scopes of the frames it went out of: they end first, innermost first, keeping the
+        // names they held, as Jinja2 never reaches their ends (FrameEnd::Stopped)
+        while (context.GetScopesCount() > topScopes)
+        {
+            context.CaptureClosures(FrameEnd::Stopped(context.GetScopesCount()));
+            context.ExitScope();
+        }
+        callback.CaptureClosuresForOuter(context);
+        if (failure)
+        {
+            std::rethrow_exception(std::move(failure));
+        }
+    }
 
     // Marks prompt-safe the strings of the params the environment names (ChatTemplateOptions::promptSafeParams,
     // docs/tasks/0394), as if the host passed them as Markup. Out of line: few environments name any
@@ -822,10 +855,13 @@ public:
             {
                 LimitOutput(os, output, outStream);
             }
-            m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             if (JINJA2CPP_CELL_UNLIKELY(keeper != nullptr))
             {
-                callback.CaptureClosuresForOuter(context);
+                RenderForOuter(outStream, context, callback);
+            }
+            else
+            {
+                m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             }
             outStream.Flush();
             if constexpr (hasHooks)

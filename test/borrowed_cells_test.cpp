@@ -1693,6 +1693,46 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
     }
 }
 
+TEST(BorrowedCellsSingle, NestedRenderThatFailsKeepsItsClosures)
+{
+    // 0525: a nested render that fails after it stored a closure in a shared global, the host swallowing the
+    // error: the closure sees the names its frames had, as Python Jinja2's does. The expectations are Python's
+    struct Case
+    {
+        const char* inner;
+        const char* expected;
+    };
+    const Case cases[] = {
+        { "{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{{ 1 // 0 }}", "cl" },
+        { "{% set x = 'a' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{% set x = 'b' %}"
+          "{% for i in [1] %}{% set x = 'c' %}{{ 1 // 0 }}{% endfor %}",
+          "b" },
+        { "{% import 'lib.j2' as lib %}{% set _ = g.append(lib.m) %}{{ 1 // 0 }}", "Y" },
+        { "{% set x = 't' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{% with x = 'w' %}{{ 1 // 0 }}{% endwith %}", "t" },
+    };
+    // A closure defined in a frame the failure went out of (a macro call, a loop, a `with`) reads that frame's names
+    // as ended, where Python prints them: docs/tasks/0531
+    for (const auto& c : cases)
+    {
+        TemplateEnv env;
+        auto fs = std::make_shared<MemoryFileSystem>();
+        fs->AddFile("lib.j2", "{% set y = 'Y' %}{% macro m() %}{{ y }}{% endmacro %}");
+        env.AddFilesystemHandler(std::string(), fs);
+        env.GetSettings().cacheSize = 0;
+        env.AddGlobal("g", ValuesList{});
+        ValuesMap params;
+        params["inner"] = UserCallable(
+            [&env, &c](const UserCallableParams&) {
+                auto tpl = std::make_unique<Template>(&env);
+                EXPECT_TRUE(!!tpl->Load(c.inner));
+                EXPECT_FALSE(!!tpl->RenderAsString({}));
+                return Value(std::string());
+            },
+            {});
+        EXPECT_EQ(c.expected, Render("{{ inner() }}{{ g[-1]() }}", params, &env)) << c.inner;
+    }
+}
+
 namespace
 {
 // A host map whose getter hands out the next number on each call, as a stateful accessor may
