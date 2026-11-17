@@ -17,12 +17,12 @@ import pytest
 from jinja2 import nodes
 from jinja2cpp.nativetypes import NativeEnvironment
 
-# A syntax of Jinja2 the engine does not parse: a subscript of a literal by a tuple of slices whose
-# fold Jinja2 finds in a step of a filter chain, where the engine checks only the whole chain (task
-# 0497); `default` folds also with StrictUndefined, and the `if` renders "" whatever the environment
-# (unfolded, it compiles to invalid Python). A
+# A template Jinja2 compiles and the engine does not parse: brackets nested deeper than the engine's
+# bracket depth, which default_mode lowers to NOPARSE_DEPTH (fallback._test_max_expression_depth; the
+# engine's syntax gaps are closed, task 0497). The `if` renders "" whatever the environment. A
 # template with NOPARSE in it goes to Jinja2; test_candidate_is_unparsable checks it
-NOPARSE = '{% if [1][:, :]|default([])|map("string") %}{% endif %}'
+NOPARSE_DEPTH = 12
+NOPARSE = "{% if " + "(" * (NOPARSE_DEPTH + 4) + "1" + ")" * (NOPARSE_DEPTH + 4) + " %}{% endif %}"
 UNPARSABLE = "a" + NOPARSE + "{{ 1 }}b"
 UNPARSABLE_RESULT = "a1b"
 
@@ -30,8 +30,11 @@ UNPARSABLE_RESULT = "a1b"
 @pytest.fixture(autouse=True)
 def default_mode():
     previous = jinja2cpp.set_fallback("auto")
+    depth = jinja2cpp.fallback._test_max_expression_depth
+    jinja2cpp.fallback._test_max_expression_depth = NOPARSE_DEPTH
     jinja2cpp.stats(reset=True)
     yield
+    jinja2cpp.fallback._test_max_expression_depth = depth
     jinja2cpp.set_fallback(previous)
 
 
@@ -58,7 +61,7 @@ class OurHelloExtension(jinja2cpp.ext.Extension):
 
 
 def test_candidate_is_unparsable():
-    # If the engine learns this statement, pick another one for UNPARSABLE
+    # Fails the engine's parse only at the lowered bracket depth
     with pytest.raises(jinja2cpp.TemplateSyntaxError):
         jinja2cpp.Environment(fallback="never").from_string(UNPARSABLE)
     assert jinja2.Environment().from_string(UNPARSABLE).render() == UNPARSABLE_RESULT
@@ -549,10 +552,11 @@ def run_without_jinja2(body):
         import jinja2cpp
         import jinja2cpp.ext
 
+        jinja2cpp.fallback._test_max_expression_depth = %r
         UNPARSABLE = %r
         """
         )
-        % UNPARSABLE
+        % (NOPARSE_DEPTH, UNPARSABLE)
         + textwrap.dedent(body)
     )
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False, env=process_env())

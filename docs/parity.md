@@ -22,24 +22,24 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Nov 2026):
 | calls | 83 | 82 | 1 | 0 | 0 | 0 | 0 | 0 | 0214 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | errors | 129 | 129 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| filters | 462 | 461 | 1 | 0 | 0 | 0 | 0 | 0 | 0101 |
+| filters | 463 | 462 | 1 | 0 | 0 | 0 | 0 | 0 | 0101 |
 | fuzz | 34 | 34 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | globals | 105 | 104 | 0 | 1 | 0 | 0 | 0 | 0 | 0178 |
 | i18n | 73 | 73 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | literals | 108 | 108 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | loader | 248 | 246 | 2 | 0 | 0 | 0 | 0 | 0 | 0165 |
 | methods | 226 | 222 | 0 | 4 | 0 | 0 | 0 | 0 | 0178, 0403 |
-| operators | 213 | 207 | 2 | 3 | 1 | 0 | 0 | 0 | 0178, 0496 |
+| operators | 220 | 216 | 1 | 3 | 0 | 0 | 0 | 0 | 0178, 0523 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 38 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | statements | 603 | 593 | 10 | 0 | 0 | 0 | 0 | 0 | 0165, 0214, 0366, 0390, 0399, 0446 |
 | string_filters | 544 | 544 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| subscripts | 123 | 121 | 0 | 2 | 0 | 0 | 0 | 0 | 0497 |
+| subscripts | 131 | 129 | 0 | 1 | 1 | 0 | 0 | 0 | 0527 |
 | tests | 74 | 73 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
-| undefined | 132 | 132 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| undefined | 160 | 160 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 59 | 59 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **3532** | **3504** | **16** | **11** | **1** | **0** | **0** | **0** | |
+| **total** | **3576** | **3550** | **15** | **10** | **1** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment

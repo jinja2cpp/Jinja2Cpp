@@ -812,7 +812,7 @@ InternalValue InLiteralExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
     return WithLeft(context, [this](const InternalValue& leftVal) {
-        CheckUndefinedUse(leftVal, UndefinedUse::Operator);
+        // Each item compares with ==, which a StrictUndefined refuses but for itself (docs/tasks/0495)
         return InternalValue(testers::IsValueInList(leftVal, m_items));
     });
 }
@@ -1010,8 +1010,12 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
         return visitors::ApplyToNumbers(leftVal, rightVal, m_oper);
     }
     InternalValue result;
-    // StrictUndefined fails on any operator; the others fail in the arithmetic below
-    CheckUndefinedUse(leftVal, UndefinedUse::Operator);
+    // StrictUndefined fails on any operator; the others fail in the arithmetic below. `in` asks
+    // the container, which compares or hashes its left operand only when it has to (docs/tasks/0495)
+    if (m_oper != In)
+    {
+        CheckUndefinedUse(leftVal, UndefinedUse::Operator);
+    }
     // A string formats an undefined right operand by its directives, so StrictUndefined fails
     // only where one converts it: `'xy' % missing` is 'xy' (docs/tasks/0297)
     if (m_oper == DivRemainder)
@@ -1183,10 +1187,15 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
     InternalValue left = context.Nodes()[m_first].Evaluate(context);
-    CheckUndefinedUse(left, UndefinedUse::Operator);
     for (const auto& operand : context.Nodes()[m_operands])
     {
+        // Python evaluates both operands before it compares them, and `in` asks the container,
+        // which compares or hashes the left one only when it has to (docs/tasks/0495)
         InternalValue right = context.Nodes()[operand.expr].Evaluate(context);
+        if (operand.operation != BinaryExpression::In)
+        {
+            CheckUndefinedUse(left, UndefinedUse::Operator);
+        }
         CheckUndefinedUse(right, UndefinedUse::Operator);
         bool result = false;
         if (operand.operation == BinaryExpression::In)

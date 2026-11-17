@@ -1,6 +1,7 @@
 ---
-status: open
+status: done
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/926
 area: parity
 depends: [0484]
 touches: [src/expression_parser.cpp#ParseFiltersAndTests]
@@ -42,6 +43,18 @@ the Python module's tests use as the syntax the engine lacks (`NOPARSE` in
 **Proposal.** Record each step of a filter chain as a candidate (a FilteredExpression per step, or
 a candidate that evaluates a prefix of the chain), within the Load perf gate. For the cost, evaluate
 a candidate's inner candidates only where the outer one fails and stop at the first fatal failure.
+
+**Result (#926).** Each step of a filter chain is a candidate: ParseFilterExpression makes a
+FilteredExpression of the operand and the chain so far before each later filter, and
+ParseFiltersAndTests notes the chain before each later `|`, test or call. The whole chain is the
+last candidate, so a step is evaluated only where the chain does not fold. A step's node is only
+held by its candidate; every candidate's node is a root of Seal (UnknownCallables::AddFoldNode,
+TemplateParser::MakeFoldNodeRoots), which also fixes "invalid node reference" at Load for a
+candidate in an argument a filter drops (`{{ x|first([1][:, :]) }}`). The strict case showed that
+an empty generator (`[]|map(...)`, `[]|select`) was false: an iterator is now true whatever it
+holds, a dict view still has a length (BooleanEvaluator, `filters.lazy_result_empty_is_true`). The
+remaining items above (strict generator folds, a host filter's calls, the conditional's
+`failsLoad`, the costs and the per-render cache) moved to 0527.
 
 **Done when.** `subscripts.tuple_of_slices_chain_step` matches in narrow and wide runs and its
 and `tuple_of_slices_chain_step_strict` divergence and module `match` lines are gone; `NOPARSE` needs another syntax or its tests are

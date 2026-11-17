@@ -131,10 +131,14 @@ enum class IteratorKind : uint8_t
     ItemsGenerator,
     // Not iterators: the views dict.keys(), values() and items() return (docs/tasks/0489). They
     // have len(), `in` and reversed() but, as an iterator, no items, slices, list methods or
-    // `+` and `*`; they print as dict_keys([...]) and compare as their own kind does
+    // `+` and `*`; they print as dict_keys([...]) and compare as their own kind does. Last:
+    // the kinds before them are iterators, true whatever they hold (BooleanEvaluator)
     DictKeys,
     DictValues,
-    DictItems
+    DictItems,
+    // reversed() of dict_values and dict_items (docs/tasks/0496); of dict_keys, DictReverseKey
+    DictReverseValue,
+    DictReverseItem
 };
 
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
@@ -150,24 +154,24 @@ public:
     // A copy is a new object: its count starts at zero, and it is not charged, whatever the original was
     ValueObject(const ValueObject& other) noexcept
         : m_flags(other.m_flags)
-        , m_bits(static_cast<uint8_t>(other.m_bits & BorrowedBit))
+        , m_bits(static_cast<uint8_t>(other.m_bits & CopiedBits))
     {
     }
     ValueObject(ValueObject&& other) noexcept
         : m_flags(other.m_flags)
-        , m_bits(static_cast<uint8_t>(other.m_bits & BorrowedBit))
+        , m_bits(static_cast<uint8_t>(other.m_bits & CopiedBits))
     {
     }
     ValueObject& operator=(const ValueObject& other) noexcept
     {
         m_flags = other.m_flags;
-        SetBorrowedBit(static_cast<uint8_t>(other.m_bits & BorrowedBit));
+        SetCopiedBits(static_cast<uint8_t>(other.m_bits & CopiedBits));
         return *this;
     }
     ValueObject& operator=(ValueObject&& other) noexcept
     {
         m_flags = other.m_flags;
-        SetBorrowedBit(static_cast<uint8_t>(other.m_bits & BorrowedBit));
+        SetCopiedBits(static_cast<uint8_t>(other.m_bits & CopiedBits));
         return *this;
     }
     virtual ~ValueObject() = default;
@@ -196,9 +200,9 @@ public:
     [[nodiscard]] bool IsTraversable() const noexcept { return (m_flags & TraverseFlag) != 0; }
     // An adapter of an environment's global, which the thread's snapshot of the globals keeps
     // across renders: a render's write to it never outlives the render (docs/tasks/0211, 0331)
-    [[nodiscard]] bool IsGlobalData() const noexcept { return (m_flags & GlobalFlag) != 0; }
+    [[nodiscard]] bool IsGlobalData() const noexcept { return (m_bits & GlobalBit) != 0; }
     // Marks the object as IsGlobalData says, before anything else shares it
-    void MarkGlobalData() noexcept { m_flags |= GlobalFlag; }
+    void MarkGlobalData() noexcept { m_bits |= GlobalBit; }
     // The kind of a list accessor that is a Python iterator (ListAdapter::CreateIterator), None for others;
     // kept in the flags so that indexing a list reads it without a virtual call
     [[nodiscard]] IteratorKind GetIteratorKind() const noexcept { return static_cast<IteratorKind>((m_flags & IteratorMask) >> IteratorShift); }
@@ -262,18 +266,22 @@ private:
     static constexpr uint8_t CloneFlag = 1;
     static constexpr uint8_t AnchorFlag = 2;
     static constexpr uint8_t TraverseFlag = 4;
-    static constexpr uint8_t GlobalFlag = 8;
-    static constexpr uint8_t IteratorShift = 4;
-    static constexpr uint8_t IteratorMask = 0xF0;
+    // Five bits: the dict views and their reverse iterators took the sixteenth kind (docs/tasks/0496)
+    static constexpr uint8_t IteratorShift = 3;
+    static constexpr uint8_t IteratorMask = 0xF8;
     static constexpr uint8_t RangeBit = 1;
     static constexpr uint8_t BorrowedBit = 2;
     static constexpr uint8_t ChargedBit = 4;
-    void SetBorrowedBit(uint8_t bit) noexcept { m_bits = static_cast<uint8_t>((m_bits & ~BorrowedBit) | bit); }
+    // In m_bits, which has room, so that the iterator kind takes five bits of m_flags
+    static constexpr uint8_t GlobalBit = 8;
+    // What a copy of the object keeps: m_flags whole and these bits
+    static constexpr uint8_t CopiedBits = BorrowedBit | GlobalBit;
+    void SetCopiedBits(uint8_t bits) noexcept { m_bits = static_cast<uint8_t>((m_bits & ~CopiedBits) | bits); }
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
     // In the padding after m_flags, so that the object keeps its size
     mutable bool m_inSnapshot = false;
-    // RangeBit, BorrowedBit and ChargedBit
+    // RangeBit, BorrowedBit, ChargedBit and GlobalBit
     uint8_t m_bits = 0;
 };
 // The flags and bits share the padding after the count: every value's object stays this size
@@ -650,7 +658,7 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
-static_assert(static_cast<uint8_t>(IteratorKind::DictItems) < 16, "IteratorKind fits four bits of ValueObject's flags");
+static_assert(static_cast<uint8_t>(IteratorKind::DictReverseItem) < 32, "IteratorKind fits five bits of ValueObject's flags");
 
 // The Python type of an iterator (generator, list_reverseiterator, ...), null for None and a dict view
 const char* IteratorTypeName(IteratorKind kind) noexcept;
@@ -751,6 +759,9 @@ struct IListAccessor : ValueObject
     [[nodiscard]] virtual IntrusivePtr<const IListAccessor> Clone() const { return nullptr; }
     // The field names of a namedtuple, read by x.name; null for other lists
     [[nodiscard]] virtual const std::vector<std::string>* GetFieldNames() const { return nullptr; }
+    // The dict a view of dict.keys(), values() or items() was taken from, which its `mapping` gives; null for other
+    // lists (docs/tasks/0496)
+    [[nodiscard]] virtual const InternalValue* GetViewMapping() const { return nullptr; }
 };
 
 // How x.name looks a name up on a map (docs/tasks/0020)
@@ -883,6 +894,7 @@ public:
     // Tuples are lists that print as (a, b) instead of [a, b]
     [[nodiscard]] bool IsTuple() const { return m_isTuple; }
     [[nodiscard]] const std::vector<std::string>* GetFieldNames() const { return m_accessor ? m_accessor->GetFieldNames() : nullptr; }
+    [[nodiscard]] const InternalValue* GetViewMapping() const { return m_accessor ? m_accessor->GetViewMapping() : nullptr; }
 
     // An owning copy, which shares the items (or clones a generator) as copying the value does
     [[nodiscard]] ListAdapter ToAdapter() const;
@@ -940,6 +952,9 @@ public:
     // A list of these items that is a Python iterator of this kind, not a sequence: a lazy
     // filter's generator, reversed() of a sequence (docs/tasks/0383)
     static ListAdapter CreateIterator(InternalValueList&& values, IteratorKind kind);
+    // A view of `mapping` (dict.keys(), values(), items()): its items, of `kind`, and the dict it keeps for its
+    // `mapping` (docs/tasks/0496)
+    static ListAdapter CreateDictView(InternalValueList&& values, IteratorKind kind, InternalValue mapping);
     static ListAdapter CreateAdapter(const GenericList& values);
     static ListAdapter CreateAdapter(const ValuesList& values);
     static ListAdapter CreateAdapter(GenericList&& values);
