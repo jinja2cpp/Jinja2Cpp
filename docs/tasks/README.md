@@ -561,7 +561,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | done |
 | [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | done |
 | [0499](0499-stopped-macro-rollback-into-a-sink.md) | A macro that stops after its output reached the sink keeps the RuntimeError | parity | low | done |
-| [0500](0500-stopiteration-in-gettext-and-format.md) | A StopIteration out of gettext or str.format is undefined in Jinja2 | parity | low | open |
+| [0500](0500-stopiteration-in-gettext-and-format.md) | A StopIteration out of gettext or str.format is undefined in Jinja2 | parity | low | done |
 | [0501](0501-stored-super-deep-chain.md) | A stored `super` called past its block renders without the block's frame | parity | low | done |
 | [0502](0502-stored-loop-namespace-assign.md) | A stored recursive loop that sets a namespace attribute fails after its include ended | parity | low | done |
 | [0503](0503-replaced-trees-slots-and-failed-calls.md) | Replaced trees that hold a slot, or that a failed call loaded, still stay | robustness | low | done |
@@ -572,7 +572,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | done |
 | [0509](0509-gettext-call-style-follows-install.md) | The style of a gettext call follows the last install, not the template's load | parity | low | done |
 | [0510](0510-percent-format-errors-python-classes.md) | `%` formatting errors carry no Python class | parity | low | done |
-| [0511](0511-keyerror-class-of-format-keys.md) | A missing format key raises no KeyError | parity | low | open |
+| [0511](0511-keyerror-class-of-format-keys.md) | A missing format key raises no KeyError | parity | low | done |
 | [0512](0512-per-render-fixed-costs.md) | Per-render fixed costs: the memory budget's per-object charge and the render's setup | perf | medium | done |
 | [0513](0513-params-table-render-setup.md) | The params of a render as a flat table, and a slimmer per-render setup | perf | medium | done |
 | [0514](0514-shared-library-tls-model.md) | The thread-locals of a shared library: initial-exec TLS model | perf | medium | done |
@@ -601,3 +601,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | open |
 | [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | open |
 | [0539](0539-nested-trees-held-by-kept-closures-and-loops.md) | Kept closures and a dropped recursive loop still hold nested trees after 0521 | robustness | low | open |
+| [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | open |
