@@ -41,6 +41,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <iterator>
 #include <memory>
@@ -2225,11 +2226,12 @@ Callable WithKeepAlive(Callable&& callable, std::shared_ptr<const void> keepAliv
 void CopyCaptured(ScopeRef& scope, const ClosureKept& kept)
 {
     // An inner frame's names hide those of the frames below it
+    MacroStatement::SelfCopies copies;
     for (auto frame = kept.frames.rbegin(); frame != kept.frames.rend(); ++frame)
     {
         for (const auto& [name, value] : **frame)
         {
-            scope[name] = MacroStatement::StrengthenCapture(value);
+            scope[name] = MacroStatement::StrengthenCapture(value, &copies);
         }
     }
 }
@@ -2289,6 +2291,9 @@ struct SelfBlockCall
     // Owned: the name is the template's, whose tree has no slot when only its parent defines the blocks, so a module
     // may free it while `self` is stored (docs/tasks/0482)
     std::string templateName;
+    // Who the `self` this block is of is (CreateObjectAdapter), shared by its blocks: a copy of it a frame's copy
+    // rebuilds stays `sameas` it (docs/tasks/0529)
+    std::shared_ptr<const void> identity;
 
     void operator()(const CallParams& params, OutStream& stream, RenderContext& context) const
     {
@@ -2391,16 +2396,18 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
     // What the site keeps (ClosureSite::CaptureOnEnd), while the `self` lives; the caller holds it
     const std::shared_ptr<const void> keepAlive = keepsCapture ? site.Capture() : nullptr;
     InternalValueMap self;
+    std::shared_ptr<const void> identity;
     if (!stack.blocks.empty())
     {
         SelfBlocksOf(stack, callback);
+        identity = std::make_shared<char>();
     }
     for (const auto& block : stack.blocks)
     {
         std::string blockName(block.first);
-        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, stack.self, site, std::string(templateName) }), keepAlive));
+        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, stack.self, site, std::string(templateName), identity }), keepAlive));
     }
-    return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)));
+    return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)), identity.get());
 }
 } // namespace
 
@@ -2881,9 +2888,13 @@ namespace
 {
 // Adds `name` to a copy of frames (RenderContext::CollectNamesDownTo), weakened when it is a
 // closure keeping one of `captures`
-void AddCollected(InternalValueMap& collected, std::string name, const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
+void AddCollected(InternalValueMap& collected,
+                  std::string name,
+                  const InternalValue& value,
+                  Span<const std::shared_ptr<ClosureCapture>> captures,
+                  MacroStatement::SelfCopies& copies)
 {
-    if (auto weakened = MacroStatement::WeakenCapture(value, captures))
+    if (auto weakened = MacroStatement::WeakenCapture(value, captures, &copies))
     {
         collected.emplace(std::move(name), std::move(*weakened));
         return;
@@ -2895,9 +2906,10 @@ void AddCollected(InternalValueMap& collected, std::string name, const InternalV
 void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures, const ClosureCapture* keeps) const
 {
     const size_t entryPassDepth = m_entryPassDepth;
+    MacroStatement::SelfCopies copies;
     VisitScopes(
         *this,
-        [&collected, lowest, entryPassDepth, captures, keeps](const InternalValueMap* scope, size_t depth) {
+        [&collected, &copies, lowest, entryPassDepth, captures, keeps](const InternalValueMap* scope, size_t depth) {
             if (depth < lowest)
             {
                 return true;
@@ -2914,11 +2926,11 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
                 {
                     continue;
                 }
-                AddCollected(collected, name, value, captures);
+                AddCollected(collected, name, value, captures, copies);
             }
             return false;
         },
-        [&collected, captures, keeps](const FrameView& view, size_t /*depth*/) {
+        [&collected, &copies, captures, keeps](const FrameView& view, size_t /*depth*/) {
             for (size_t idx = 0; idx != view.names.size(); ++idx)
             {
                 if (!view.slots[idx].IsBound())
@@ -2929,7 +2941,7 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
                 {
                     continue;
                 }
-                AddCollected(collected, std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]), captures);
+                AddCollected(collected, std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]), captures, copies);
             }
             return false;
         });
@@ -3716,6 +3728,12 @@ bool IsImported(const InternalValue& value)
 }
 } // namespace
 
+bool ImportedModule::ExportsToObject(std::string_view name, const InternalValue& value) const noexcept
+{
+    // Jinja2 exports no name that starts with an underline
+    return !name.empty() && name[0] != '_' && IsImported(value) && Exports(name);
+}
+
 namespace
 {
 // Python's repr() of a value
@@ -3776,8 +3794,7 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
     InternalValueMap importedNs;
     for (const auto& [name, value] : moduleNames)
     {
-        // Jinja2 exports no name that starts with an underline
-        if (name.empty() || name[0] == '_' || !IsImported(value) || !module.Exports(name))
+        if (!module.ExportsToObject(name, value))
         {
             continue;
         }
@@ -3894,7 +3911,9 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
         capture = site.CaptureOnEnd(values, values.Nodes()[m_bodyReads], false);
     }
     Callable result(Callable::Macro,
-                    CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly, values.TreeOwner() });
+                    CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly, values.TreeOwner() },
+                    // std::function keeps a body this large on the heap, past the holder's own block (docs/tasks/0530)
+                    sizeof(CallableBody));
     result.SetAttributes(m_attributes);
     result.SetKeepAlive(std::move(capture));
     return result;
@@ -3931,11 +3950,208 @@ const ClosureSite* ClosureSiteOf(const InternalValue& value)
 }
 } // namespace
 
-std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
+const void* MacroStatement::TreeOwnerOf(const InternalValue& value, const void*& body) noexcept
+{
+    const auto* callable = GetIf<Callable>(&value);
+    const auto* function = callable && callable->GetKind() == Callable::Macro ? std::get_if<Callable::StatementCallable>(&callable->GetCallable()) : nullptr;
+    const auto* macro = function ? function->target<CallableBody>() : nullptr;
+    body = macro;
+    return macro ? macro->treeOwner.get() : nullptr;
+}
+
+bool ImportedModule::HeldOnlyByItself() const noexcept
+{
+    if (!m_treeOwner)
+    {
+        return false;
+    }
+    // The objects of the module's values, each with the holders it has here: its names and, once made, the object of
+    // its exports. A module has few names; past the array's room it stays, which is only memory kept
+    struct Held
+    {
+        const ValueObject* object;
+        unsigned count;
+        // The macro body that holds the module's tree, if the value is one of its macros
+        const void* body;
+    };
+    std::array<Held, 64> held{};
+    std::size_t objects = 0;
+    bool overflow = false;
+    const auto bodyOf = [this](const InternalValue& value) -> const void* {
+        const void* body = nullptr;
+        return MacroStatement::TreeOwnerOf(value, body) == m_treeOwner.get() ? body : nullptr;
+    };
+    const auto note = [&held, &objects, &overflow, &bodyOf](const InternalValue& value) {
+        const auto* object = detail::InternalValueAccess::Object(value);
+        if (!object)
+        {
+            return;
+        }
+        // data(): std::array's iterator is a class in MSVC's library
+        Held* const end = held.data() + objects;
+        if (Held* const found = std::find_if(held.data(), end, [object](const Held& h) { return h.object == object; }); found != end)
+        {
+            ++found->count;
+        }
+        else if (objects != held.size())
+        {
+            held[objects++] = Held{ object, 1, bodyOf(value) };
+        }
+        else
+        {
+            overflow = true;
+        }
+    };
+    const auto* moduleObject = detail::InternalValueAccess::Object(m_object);
+    // use_count: read on the thread that runs the module's calls, which holds its lock
+    if (moduleObject && moduleObject->use_count() != 1)
+    {
+        return false;
+    }
+    const auto& names = Names();
+    for (const auto& [name, value] : names)
+    {
+        note(value);
+        if (moduleObject && ExportsToObject(name, value))
+        {
+            note(value);
+        }
+    }
+    if (overflow)
+    {
+        return false;
+    }
+    // The macros the module defined hold its tree, the load and the module itself hold it once each
+    long treeHolders = 2;
+    for (const Held* h = held.data(); h != held.data() + objects; ++h)
+    {
+        // use_count: as above; a count never below the holders noted, so a higher one is a holder outside
+        if (h->object->use_count() != h->count)
+        {
+            return false;
+        }
+    }
+    // Each body of a macro holds the tree once, however many boxes share it: count a body at its first box
+    for (const Held* h = held.data(); h != held.data() + objects; ++h)
+    {
+        if (h->body && std::none_of(static_cast<const Held*>(held.data()), h, [h](const Held& other) { return other.body == h->body; }))
+        {
+            ++treeHolders;
+        }
+    }
+    // A closure a call made in the tree and stored (a nested macro, a caller, a recursive loop) holds it too
+    return m_treeOwner.use_count() == treeHolders; // use_count: as above
+}
+
+namespace
+{
+// The blocks of `value` when it is a `self` (MakeTemplateSelf) with blocks, else null: one with none keeps nothing,
+// and every macro call of a template copies its `self`
+const InternalValueMap* SelfBlocksOfValue(const InternalValue& value)
+{
+    const auto map = AsMap(value);
+    if (!map)
+    {
+        return nullptr;
+    }
+    const auto* items = ObjectItemsOf(*map);
+    if (!items || items->empty())
+    {
+        return nullptr;
+    }
+    const char* objectClass = map->GetObjectClass();
+    if (!objectClass || std::strcmp(objectClass, "TemplateReference") != 0)
+    {
+        return nullptr;
+    }
+    return std::all_of(items->begin(), items->end(), [](const auto& item) { return MacroBodyOf<SelfBlockCall>(item.second) != nullptr; }) ? items : nullptr;
+}
+
+// `value`, a `self`, with each block keeping what `keepAliveOf` gives for it; nothing when no block changes. Throws
+// std::bad_alloc
+template<typename KeepAliveOf>
+std::optional<InternalValue> RekeptSelf(const InternalValue& value, const KeepAliveOf& keepAliveOf, MacroStatement::SelfCopies* copies)
+{
+    const auto* items = SelfBlocksOfValue(value);
+    if (!items)
+    {
+        return std::nullopt;
+    }
+    const void* original = detail::InternalValueAccess::Object(value);
+    if (copies)
+    {
+        const auto copy = std::find_if(copies->begin(), copies->end(), [original](const auto& entry) { return entry.first == original; });
+        if (copy != copies->end())
+        {
+            return copy->second;
+        }
+    }
+    // Find the first block that changes before allocating anything: a self whose blocks already keep what they should
+    // (a stored macro's capture strengthened on every call) costs no copy
+    auto first = items->end();
+    std::shared_ptr<const void> firstKeepAlive;
+    for (auto item = items->begin(); item != items->end(); ++item)
+    {
+        if (auto keepAlive = keepAliveOf(*GetIf<Callable>(&item->second)))
+        {
+            first = item;
+            firstKeepAlive = std::move(*keepAlive);
+            break;
+        }
+    }
+    if (first == items->end())
+    {
+        return std::nullopt;
+    }
+    InternalValueMap blocks;
+    for (auto item = items->begin(); item != first; ++item)
+    {
+        blocks.emplace(item->first, item->second);
+    }
+    blocks.emplace(first->first, MakeWrapped(WithKeepAlive(Callable(*GetIf<Callable>(&first->second)), std::move(firstKeepAlive))));
+    for (auto item = std::next(first); item != items->end(); ++item)
+    {
+        const auto& callable = *GetIf<Callable>(&item->second);
+        auto keepAlive = keepAliveOf(callable);
+        if (!keepAlive)
+        {
+            blocks.emplace(item->first, item->second);
+            continue;
+        }
+        blocks.emplace(item->first, MakeWrapped(WithKeepAlive(Callable(callable), std::move(*keepAlive))));
+    }
+    const auto map = AsMap(value);
+    if (!map)
+    {
+        return std::nullopt;
+    }
+    const auto* repr = map->GetReprArgument();
+    // The same object as `value` for `is` and ==: its blocks, which the copy shares, keep the identity
+    const void* identity = items->empty() ? nullptr : GetIf<Callable>(&items->begin()->second)->GetStatementCallable().target<SelfBlockCall>()->identity.get();
+    InternalValue rebuilt(CreateObjectAdapter(std::move(blocks), map->GetObjectClass(), repr ? *repr : InternalValue(NoneValue()), identity));
+    if (copies)
+    {
+        copies->emplace_back(original, rebuilt);
+    }
+    return rebuilt;
+}
+} // namespace
+
+std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures, SelfCopies* copies)
 {
     if (!ClosureSiteOf<CallableBody>(value))
     {
-        return std::nullopt;
+        // A `self` the frame's names hold, whose blocks keep the capture of its template's top level: the copy holds it
+        // with blocks that keep nothing, or the capture would keep the copy that holds it (docs/tasks/0529)
+        const auto weakened = [captures](const Callable& callable) -> std::optional<std::shared_ptr<const void>> {
+            const void* keepAlive = callable.GetKeepAlive();
+            if (keepAlive && std::any_of(captures.begin(), captures.end(), [keepAlive](const auto& capture) { return capture.get() == keepAlive; }))
+            {
+                return std::shared_ptr<const void>();
+            }
+            return std::nullopt;
+        };
+        return RekeptSelf(value, weakened, copies);
     }
     const auto& callable = *GetIf<Callable>(&value);
     const void* keepAlive = callable.GetKeepAlive();
@@ -3949,11 +4165,29 @@ std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& 
     return InternalValue(std::move(weakened));
 }
 
-InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
+InternalValue MacroStatement::StrengthenCapture(const InternalValue& value, SelfCopies* copies)
 {
     const auto* site = ClosureSiteOf<CallableBody>(value);
     if (!site)
     {
+        // A `self` WeakenCapture weakened keeps what its site keeps again (docs/tasks/0529)
+        const auto strengthened = [](const Callable& callable) -> std::optional<std::shared_ptr<const void>> {
+            if (callable.GetKeepAlive())
+            {
+                return std::nullopt;
+            }
+            auto capture = callable.GetStatementCallable().target<SelfBlockCall>()->site.Capture();
+            if (!capture)
+            {
+                return std::nullopt;
+            }
+            return std::shared_ptr<const void>(std::move(capture));
+        };
+        auto strong = RekeptSelf(value, strengthened, copies);
+        if (strong)
+        {
+            return std::move(*strong);
+        }
         return value;
     }
     const auto& callable = *GetIf<Callable>(&value);

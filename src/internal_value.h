@@ -839,6 +839,9 @@ struct IMapAccessor : ValueObject
     // The value an object prints with as <Class value> (`self`, <TemplateReference 'name'>);
     // null for one that prints as <module.Class object at 0x...>
     [[nodiscard]] virtual const InternalValue* GetReprArgument() const { return nullptr; }
+    // The attributes of such an object made of a map it owns (CreateObjectAdapter), read in place: an InternalValueMap,
+    // which is declared below (ObjectItemsOf); null for the others
+    [[nodiscard]] virtual const void* GetObjectItems() const { return nullptr; }
     // The text str() of an object prints when it is not its repr (a template module's output,
     // which is also its __html__); null for the others
     [[nodiscard]] virtual const InternalValue* GetStrValue() const { return nullptr; }
@@ -1067,6 +1070,7 @@ public:
     [[nodiscard]] bool IsNamespace() const { return m_accessor != nullptr && m_accessor->IsNamespace(); }
     [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
     [[nodiscard]] const InternalValue* GetReprArgument() const { return m_accessor ? m_accessor->GetReprArgument() : nullptr; }
+    [[nodiscard]] const void* GetObjectItems() const { return m_accessor ? m_accessor->GetObjectItems() : nullptr; }
     [[nodiscard]] const InternalValue* GetStrValue() const { return m_accessor ? m_accessor->GetStrValue() : nullptr; }
     [[nodiscard]] const InternalValue* GetProxiedMapping() const { return m_accessor ? m_accessor->GetProxiedMapping() : nullptr; }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
@@ -1830,6 +1834,12 @@ private:
 // Its storage counts against the memory budget of the render that allocates it (CountedAllocator, docs/tasks/0508)
 using InternalValueMap = detail::StableMap<std::string, InternalValue, NameHash, NameEqual, CountedAllocator<std::pair<std::string, InternalValue>>>;
 
+// The attributes of `map` when it is an object made of a map it owns (CreateObjectAdapter), read in place; else null
+inline const InternalValueMap* ObjectItemsOf(const MapRef& map)
+{
+    return static_cast<const InternalValueMap*>(map.GetObjectItems());
+}
+
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);
 MapAdapter CreateMapAdapter(TemplateDict&& values);
@@ -1841,6 +1851,9 @@ MapAdapter CreateNamespaceAdapter(TemplateDict&& values);
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className);
 // An object of `className` that prints as <className repr(reprArgument)>
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument);
+// As above, the object being `identity` for `is` and ==, which must live as long as it does: the copies of one object
+// that a frame's copy rebuilds with other values stay the same object (docs/tasks/0529)
+MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument, const void* identity);
 // Python's read-only mappingproxy of `dict`, a dict view's `mapping` (docs/tasks/0523): it reads the dict live and
 // has only the dict's reading methods
 MapAdapter CreateMappingProxy(InternalValue dict);
@@ -2162,13 +2175,16 @@ public:
     // up for a call, and copying a std::function copies everything it captured
     Callable(Kind kind, ExpressionCallable&& callable)
         : m_kind(kind)
-        , m_callable(std::make_shared<const CallableHolder>(std::move(callable)))
+        , m_callable(MakeHolder(std::move(callable), 0))
     {
     }
 
-    Callable(Kind kind, StatementCallable&& callable)
+    // `functorBytes`: the size of the functor `callable` holds when std::function keeps it on the heap (a macro's
+    // body), which counts against the memory budget with the holder, and is given back when the last copy goes
+    // (docs/tasks/0530)
+    Callable(Kind kind, StatementCallable&& callable, std::size_t functorBytes = 0)
         : m_kind(kind)
-        , m_callable(std::make_shared<const CallableHolder>(std::move(callable)))
+        , m_callable(MakeHolder(std::move(callable), functorBytes))
     {
     }
 
@@ -2264,6 +2280,39 @@ public:
 private:
     // Visits the receiver of a bound method and the attributes, when this callable alone holds them
     friend void TraverseBoxed(const Callable& callable, const TraverseFn& fn);
+
+    // The shared function and what it charged to the render's memory budget beyond its own block
+    struct CountedHolder : CallableHolder
+    {
+        template<typename F>
+        CountedHolder(F&& function, std::uint64_t functorBytes)
+            : CallableHolder(std::forward<F>(function))
+        {
+            // Charged as a counted block's header-less part; released only when it was charged (docs/tasks/0483)
+            if (functorBytes != 0 && RenderMemoryCounted())
+            {
+                m_charged = functorBytes;
+                ChargeObjectMemory(m_charged);
+            }
+        }
+        CountedHolder(const CountedHolder&) = delete;
+        CountedHolder& operator=(const CountedHolder&) = delete;
+        ~CountedHolder()
+        {
+            if (m_charged != 0)
+            {
+                ReleaseRenderMemory(m_charged);
+            }
+        }
+        std::uint64_t m_charged = 0;
+    };
+
+    // The holder and its control block come from CountedAllocator, so they count against the render's memory budget
+    template<typename F>
+    static std::shared_ptr<const CallableHolder> MakeHolder(F&& function, std::size_t functorBytes)
+    {
+        return std::allocate_shared<const CountedHolder>(CountedAllocator<CountedHolder>(), std::forward<F>(function), functorBytes);
+    }
 
     Kind m_kind;
     std::shared_ptr<const CallableHolder> m_callable;

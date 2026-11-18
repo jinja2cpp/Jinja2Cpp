@@ -782,6 +782,33 @@ TEST_F(TemplateModuleChangingSourceTest, ChildOfAChangingParent)
     EXPECT_EQ((std::vector<std::string>{ "<CL1>", "<CL2>", "[CL3]" }), results);
 }
 
+// A module imported without context goes with its replaced tree once nothing else holds it (docs/tasks/0528): what a
+// call stored of it, a macro, the module object or a macro its macro made, still runs with the module's names
+TEST_F(TemplateModuleChangingSourceTest, StoredMacroOfASharedModuleSeesItsNames)
+{
+    const std::vector<std::string> libs = { "{% set v = 'V1' %}{% macro x() %}OLD{{ v }}{% endmacro %}", "{% set v = 'V2' %}{% macro x() %}NEW{{ v }}{% endmacro %}",
+                                            "{% set v = 'V3' %}{% macro x() %}NEW2{{ v }}{% endmacro %}" };
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLDV1]", "[NEWV2]" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% import 'lib' as l %}{% set ns.f = l.x %}{% endmacro %}", libs));
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLDV1]", "[NEWV2]" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% from 'lib' import x %}{% set ns.f = x %}{% endmacro %}", libs));
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLDV1V1]", "[NEWV2V2]" }),
+              CallWithLibs("{% set ns = namespace(l=none) %}{% macro m() %}[{% if ns.l %}{{ ns.l.x() }}{{ ns.l.v }}{% endif %}]{% import 'lib' as l %}{% set ns.l = l %}{% endmacro %}", libs));
+    // Stored by the first call only: its module stays while the macro does
+    auto four = libs;
+    four.emplace_back("{% set v = 'V4' %}{% macro x() %}NEW3{{ v }}{% endmacro %}");
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLDV1]", "[OLDV1]", "[OLDV1]" }),
+              CallWithLibs("{% set ns = namespace(f=none, n=0) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% import 'lib' as l %}"
+                           "{% if ns.n == 0 %}{% set ns.f = l.x %}{% endif %}{% set ns.n = ns.n + 1 %}{% endmacro %}",
+                           four));
+    // A macro the module's macro made and stored
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[Y1V1]", "[Y2V2]" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% import 'lib' as l %}{% set _ = l.mk(ns) %}{% endmacro %}",
+                           { "{% set v = 'V1' %}{% macro mk(ns) %}{% macro y() %}Y1{{ v }}{% endmacro %}{% set ns.f = y %}{% endmacro %}",
+                             "{% set v = 'V2' %}{% macro mk(ns) %}{% macro y() %}Y2{{ v }}{% endmacro %}{% set ns.f = y %}{% endmacro %}",
+                             "{% set v = 'V3' %}{% macro mk(ns) %}{% macro y() %}Y3{{ v }}{% endmacro %}{% set ns.f = y %}{% endmacro %}" }));
+}
+
 // A `super` of a block with no parent block, stored and called then and by later calls, fails naming the block,
 // as Jinja2's undefined does, while the module frees the tree it was taken in (docs/tasks/0503)
 TEST_F(TemplateModuleChangingSourceTest, StoredSuperWithNoParentNamesItsBlock)
@@ -812,6 +839,41 @@ TEST_F(TemplateModuleChangingSourceTest, StoredSelfLetGoOfStopsRendering)
                                       { "{% block b %}OLD{% endblock %}{% set ns.s = self %}", "{% block b %}NEW{% endblock %}{% set ns.s = none %}",
                                         "{% block b %}NEW2{% endblock %}", "{% block b %}NEW3{% endblock %}" });
     EXPECT_EQ((std::vector<std::string>{ "[]OLD", "[OLD]NEW", "[]NEW2", "[]NEW3" }), results);
+}
+
+// A `self` the included template's top level set, which a stored macro reads or the call stores, renders the old
+// blocks: the copy of the include's names holds it without its capture, which it keeps again when read (0529)
+TEST_F(TemplateModuleChangingSourceTest, SelfSetAtTheTopLevelOutlivesTheInclude)
+{
+    EXPECT_EQ((std::vector<std::string>{ "[]B1", "[B1T1True]B2", "[B2T2]B3" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                           { "{% block b %}B1{% endblock %}{% set q = self %}{% set t = 'T1' %}{% macro f() %}{{ q.b() }}{{ t }}{{ q is defined }}{% endmacro %}{% set ns.f = f %}",
+                             "{% block b %}B2{% endblock %}{% set q = self %}{% set t = 'T2' %}{% macro f() %}{{ q.b() }}{{ t }}{% endmacro %}{% set ns.f = f %}",
+                             "{% block b %}B3{% endblock %}" }));
+    EXPECT_EQ((std::vector<std::string>{ "[]B1T1", "[B1T1]B2", "[B1T1]B3" }),
+              CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                           { "{% set t='T1' %}{% block b %}B1{{ t }}{% endblock %}{% set q = self %}{% set ns.s = q %}", "{% block b %}B2{% endblock %}",
+                             "{% block b %}B3{% endblock %}" }));
+}
+
+// Two names holding one `self` hold one object once the include has ended, in a render and in a module's call
+TEST_F(TemplateModuleChangingSourceTest, SelfSetTwiceStaysOneObject)
+{
+    AddFile("lib", "{% block b %}B0{% endblock %}{% set q = self %}{% set r = self %}{% macro f() %}{{ q is sameas r }}|{{ q == r }}{% endmacro %}{% set ns.f = f %}");
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load("{% set ns = namespace(f=none) %}{% include 'lib' %}|{{ ns.f() }}"));
+    EXPECT_EQ("B0|True|True", tpl.RenderAsString({}).value());
+    jinja2::TemplateW wide(&m_env);
+    ASSERT_TRUE(!!wide.Load(L"{% set ns = namespace(f=none) %}{% include 'lib' %}|{{ ns.f() }}"));
+    EXPECT_EQ(L"B0|True|True", wide.RenderAsString({}).value());
+    auto module = Make("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}");
+    EXPECT_EQ("[]B0", Call(module.exports["m"]).AsString());
+    EXPECT_EQ("[True|True]B0", Call(module.exports["m"]).AsString());
+    // And the same object as a copy stored outside the include (Codex review of #946)
+    AddFile("lib", "{% block b %}B{% endblock %}{% set q = self %}{% set ns.s = q %}{% macro f() %}{{ q is sameas ns.s }}|{{ q == ns.s }}{% endmacro %}{% set ns.f = f %}");
+    jinja2::Template stored(&m_env);
+    ASSERT_TRUE(!!stored.Load("{% set ns = namespace(s=none, f=none) %}{% include 'lib' %}|{{ ns.f() }}"));
+    EXPECT_EQ("B|True|True", stored.RenderAsString({}).value());
 }
 
 TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopRunsItsOldBody)
