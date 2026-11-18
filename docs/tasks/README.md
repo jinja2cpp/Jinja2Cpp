@@ -589,9 +589,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0525](0525-nested-render-error-after-storing-closure.md) | A closure stored by a nested render that then fails reads its names as ended | parity | low | done |
 | [0526](0526-soft-frame-closure-reads-outer-name.md) | A closure kept past a `filter`, `with` or loop body reads the wrong value of a name the body rebound | parity | low | done |
 | [0527](0527-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds: StrictUndefined leftovers and the cost of the Load's checks | parity | low | done |
-| [0528](0528-plain-import-shared-module-per-change.md) | A module that plain-imports a changing template keeps a shared module per source change | robustness | low | open |
-| [0529](0529-stored-self-let-go-stays-counted.md) | A `self` or `super()` stored in a module and let go of keeps the module's slot trees | robustness | low | open |
-| [0530](0530-render-memory-callable-and-context-storage.md) | The render memory budget leaves out a macro's function storage and a module context's vectors | robustness | low | open |
+| [0528](0528-plain-import-shared-module-per-change.md) | A module that plain-imports a changing template keeps a shared module per source change | robustness | low | done |
+| [0529](0529-stored-self-let-go-stays-counted.md) | A `self` or `super()` stored in a module and let go of keeps the module's slot trees | robustness | low | done |
+| [0530](0530-render-memory-callable-and-context-storage.md) | The render memory budget leaves out a macro's function storage and a module context's vectors | robustness | low | done |
 | [0531](0531-failed-nested-render-inner-frame-closures.md) | A closure defined in a frame that a failing nested render went out of reads its names as ended | parity | low | open |
 | [0532](0532-copy-nested-render-params-lazily.md) | Copy the params of a nested render when a value of them is stored, not on every render | perf | low | open |
 | [0533](0533-nested-with-context-module-closure-importer-names.md) | A macro of a module imported with context by a nested render loses the importer's names once that render ends | parity | low | open |
@@ -602,3 +602,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | open |
 | [0539](0539-nested-trees-held-by-kept-closures-and-loops.md) | Kept closures and a dropped recursive loop still hold nested trees after 0521 | robustness | low | open |
 | [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | open |
+| [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
+| [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
