@@ -551,7 +551,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | open |
 | [0488](0488-upstream-reports-and-recipes.md) | Report our fixes upstream and update the package recipes | release | low | open |
 | [0489](0489-dict-views-type.md) | `d.items()`, `d.keys()` and `d.values()` are lists, not dict views | parity | low | done |
-| [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | open |
+| [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | done |
 | [0491](0491-nested-render-closure-and-self-after-its-end.md) | A nested render's closures and `self` stored in a shared global lose their frames | parity | low | done |
 | [0492](0492-nested-render-kept-trees-outside-the-memory-budget.md) | The trees an outer render keeps for its nested renders are outside the memory budget | robustness | high | done |
 | [0493](0493-generate-items-markup.md) | generate() items are str where Jinja2 yields Markup | parity | low | done |
@@ -584,7 +584,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0520](0520-drift-report-slow-creep.md) | The drift report cannot see creep slower than 3% per 10 merges | perf | low | done |
 | [0521](0521-give-kept-nested-trees-back-early.md) | Give the trees kept for nested renders back before the keeper ends, and copy their params lazily | robustness | medium | open |
 | [0522](0522-nested-load-other-thread-or-assign.md) | Host code inside a first Load that reloads on another thread, or assigns the template, still frees it | robustness | low | in-progress |
-| [0523](0523-dict-view-live-and-set-ops.md) | What dict views still lack after 0496 | parity | low | open |
+| [0523](0523-dict-view-live-and-set-ops.md) | What dict views still lack after 0496 | parity | low | done |
 | [0524](0524-nested-render-generic-params-outlive-host.md) | A nested render's GenericList param stored in a shared global is read after the host freed it | robustness | high | done |
 | [0525](0525-nested-render-error-after-storing-closure.md) | A closure stored by a nested render that then fails reads its names as ended | parity | low | open |
 | [0526](0526-soft-frame-closure-reads-outer-name.md) | A closure kept past a `filter`, `with` or loop body reads the wrong value of a name the body rebound | parity | low | done |
@@ -596,3 +596,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | open |
 | [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | open |
 | [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | open |
+| [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | open |

@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/940
 priority: low
 area: parity
 depends: [0476]
