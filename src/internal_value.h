@@ -839,6 +839,9 @@ struct IMapAccessor : ValueObject
     // The value an object prints with as <Class value> (`self`, <TemplateReference 'name'>);
     // null for one that prints as <module.Class object at 0x...>
     [[nodiscard]] virtual const InternalValue* GetReprArgument() const { return nullptr; }
+    // The attributes of such an object made of a map it owns (CreateObjectAdapter), read in place: an InternalValueMap,
+    // which is declared below (ObjectItemsOf); null for the others
+    [[nodiscard]] virtual const void* GetObjectItems() const { return nullptr; }
     // The text str() of an object prints when it is not its repr (a template module's output,
     // which is also its __html__); null for the others
     [[nodiscard]] virtual const InternalValue* GetStrValue() const { return nullptr; }
@@ -1067,6 +1070,7 @@ public:
     [[nodiscard]] bool IsNamespace() const { return m_accessor != nullptr && m_accessor->IsNamespace(); }
     [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
     [[nodiscard]] const InternalValue* GetReprArgument() const { return m_accessor ? m_accessor->GetReprArgument() : nullptr; }
+    [[nodiscard]] const void* GetObjectItems() const { return m_accessor ? m_accessor->GetObjectItems() : nullptr; }
     [[nodiscard]] const InternalValue* GetStrValue() const { return m_accessor ? m_accessor->GetStrValue() : nullptr; }
     [[nodiscard]] const InternalValue* GetProxiedMapping() const { return m_accessor ? m_accessor->GetProxiedMapping() : nullptr; }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
@@ -1829,6 +1833,12 @@ private:
 
 // Its storage counts against the memory budget of the render that allocates it (CountedAllocator, docs/tasks/0508)
 using InternalValueMap = detail::StableMap<std::string, InternalValue, NameHash, NameEqual, CountedAllocator<std::pair<std::string, InternalValue>>>;
+
+// The attributes of `map` when it is an object made of a map it owns (CreateObjectAdapter), read in place; else null
+inline const InternalValueMap* ObjectItemsOf(const MapRef& map)
+{
+    return static_cast<const InternalValueMap*>(map.GetObjectItems());
+}
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);

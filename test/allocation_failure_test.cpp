@@ -765,6 +765,52 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
     }
 }
 
+// A `self` or `super` one call stores and a later one lets go of ends then, with the slots of the trees it held: the
+// replaced trees after it go as without it (docs/tasks/0529)
+TEST_F(ModuleCallTest, EveryUseStoredSelfLetGoOfStaysFlat)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
+    m_env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+    m_env.GetSettings().cacheSize = 0;
+    m_tpl = Template(&m_env);
+    MakeModule("");
+    m_fs->AddFile("base", "<{% block b %}base{% endblock %}>");
+    // The included template stores on the first call, the second lets go
+    for (const char* store : { "{% block b %}OLD{% endblock %}{% if ns.n == 0 %}{% set ns.s = self %}{% endif %}",
+                               "{% extends 'base' %}{% block b %}{% if ns.n == 0 %}{% set ns.s = super %}{% endif %}C{% endblock %}",
+                               "{% if ns.n == 0 %}{% set ns.s = self %}{% endif %}{% block b %}B{% endblock %}",
+                               // A macro that reads a `self` the include's top level set
+                               "{% block b %}B{% endblock %}{% set q = self %}{% macro f() %}{{ q.b() }}{% endmacro %}{% if ns.n == 0 %}{% set ns.s = f %}{% endif %}",
+                               "{% block b %}B{% endblock %}{% set q = self %}{% macro f() %}{{ q.b() }}{% endmacro %}",
+                               "{% block b %}B{% endblock %}{% set q = self %}",
+                               "{% block b %}B{% endblock %}{% macro f() %}{{ 1 }}{% endmacro %}",
+                               "{% block b %}B{% endblock %}{% macro f() %}{{ self.b() }}{% endmacro %}",
+                               "{% set q = 2 %}{% macro f() %}{{ q }}{% endmacro %}" })
+    {
+        ASSERT_TRUE(!!m_tpl.Load("{% set ns = namespace(s=none, n=0) %}{% macro m() %}{% include 'lib' %}{% if ns.n == 1 %}{% set ns.s = none %}{% endif %}"
+                                 "{% set ns.n = ns.n + 1 %}{% endmacro %}"));
+        auto module = m_tpl.MakeModule();
+        ASSERT_TRUE(!!module);
+        const auto& m = module->exports["m"];
+        int serial = 0;
+        const auto callMany = [&](int count) {
+            for (int i = 0; i != count; ++i)
+            {
+                const auto mark = "{# " + std::to_string(1000000 + ++serial) + " #}";
+                m_fs->AddFile("lib", store + mark);
+                Call(m);
+            }
+        };
+        callMany(100);
+        const long before = g_live.load(std::memory_order_relaxed);
+        callMany(1000);
+        EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << store;
+    }
+}
+
 // A call that fails at any allocation ends what it imported, and the module goes on working
 TEST_F(ModuleCallTest, CallSucceedsOrThrowsBadAlloc)
 {

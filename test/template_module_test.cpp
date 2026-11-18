@@ -841,6 +841,21 @@ TEST_F(TemplateModuleChangingSourceTest, StoredSelfLetGoOfStopsRendering)
     EXPECT_EQ((std::vector<std::string>{ "[]OLD", "[OLD]NEW", "[]NEW2", "[]NEW3" }), results);
 }
 
+// A `self` the included template's top level set, which a stored macro reads or the call stores, renders the old
+// blocks: the copy of the include's names holds it without its capture, which it keeps again when read (0529)
+TEST_F(TemplateModuleChangingSourceTest, SelfSetAtTheTopLevelOutlivesTheInclude)
+{
+    EXPECT_EQ((std::vector<std::string>{ "[]B1", "[B1T1True]B2", "[B2T2]B3" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                           { "{% block b %}B1{% endblock %}{% set q = self %}{% set t = 'T1' %}{% macro f() %}{{ q.b() }}{{ t }}{{ q is defined }}{% endmacro %}{% set ns.f = f %}",
+                             "{% block b %}B2{% endblock %}{% set q = self %}{% set t = 'T2' %}{% macro f() %}{{ q.b() }}{{ t }}{% endmacro %}{% set ns.f = f %}",
+                             "{% block b %}B3{% endblock %}" }));
+    EXPECT_EQ((std::vector<std::string>{ "[]B1T1", "[B1T1]B2", "[B1T1]B3" }),
+              CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                           { "{% set t='T1' %}{% block b %}B1{{ t }}{% endblock %}{% set q = self %}{% set ns.s = q %}", "{% block b %}B2{% endblock %}",
+                             "{% block b %}B3{% endblock %}" }));
+}
+
 TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopRunsItsOldBody)
 {
     const std::string body = "{{ i }}{{ loop(i) if i is iterable and i is not string }}";

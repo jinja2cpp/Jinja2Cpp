@@ -4360,6 +4360,7 @@ public:
 
     [[nodiscard]] const char* GetObjectClass() const override { return m_className; }
     [[nodiscard]] const InternalValue* GetReprArgument() const override { return m_reprArgument ? &*m_reprArgument : nullptr; }
+    [[nodiscard]] const void* GetObjectItems() const override { return &m_values.Get(); }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));

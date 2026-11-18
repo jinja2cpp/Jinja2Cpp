@@ -41,6 +41,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <iterator>
 #include <memory>
@@ -4028,11 +4029,73 @@ bool ImportedModule::HeldOnlyByItself() const noexcept
     return m_treeOwner.use_count() == treeHolders;
 }
 
+namespace
+{
+// The blocks of `value` when it is a `self` (MakeTemplateSelf), else null
+const InternalValueMap* SelfBlocksOfValue(const InternalValue& value)
+{
+    const auto map = AsMap(value);
+    if (!map)
+    {
+        return nullptr;
+    }
+    const char* objectClass = map->GetObjectClass();
+    const auto* items = ObjectItemsOf(*map);
+    if (!items || !objectClass || std::strcmp(objectClass, "TemplateReference") != 0)
+    {
+        return nullptr;
+    }
+    return std::all_of(items->begin(), items->end(), [](const auto& item) { return MacroBodyOf<SelfBlockCall>(item.second) != nullptr; }) ? items : nullptr;
+}
+
+// `value`, a `self`, with each block keeping what `keepAliveOf` gives for it; nothing when no block changes. Throws
+// std::bad_alloc
+template<typename KeepAliveOf>
+std::optional<InternalValue> RekeptSelf(const InternalValue& value, const KeepAliveOf& keepAliveOf)
+{
+    const auto* items = SelfBlocksOfValue(value);
+    if (!items)
+    {
+        return std::nullopt;
+    }
+    bool changed = false;
+    InternalValueMap blocks;
+    for (const auto& [name, item] : *items)
+    {
+        const auto& callable = *GetIf<Callable>(&item);
+        auto keepAlive = keepAliveOf(callable);
+        if (!keepAlive)
+        {
+            blocks.emplace(name, item);
+            continue;
+        }
+        changed = true;
+        blocks.emplace(name, MakeWrapped(WithKeepAlive(Callable(callable), std::move(*keepAlive))));
+    }
+    if (!changed)
+    {
+        return std::nullopt;
+    }
+    const auto map = AsMap(value);
+    const auto* repr = map->GetReprArgument();
+    return InternalValue(CreateObjectAdapter(std::move(blocks), map->GetObjectClass(), repr ? *repr : InternalValue(NoneValue())));
+}
+} // namespace
+
 std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
 {
     if (!ClosureSiteOf<CallableBody>(value))
     {
-        return std::nullopt;
+        // A `self` the frame's names hold, whose blocks keep the capture of its template's top level: the copy holds it
+        // with blocks that keep nothing, or the capture would keep the copy that holds it (docs/tasks/0529)
+        return RekeptSelf(value, [captures](const Callable& callable) -> std::optional<std::shared_ptr<const void>> {
+            const void* keepAlive = callable.GetKeepAlive();
+            if (keepAlive && std::any_of(captures.begin(), captures.end(), [keepAlive](const auto& capture) { return capture.get() == keepAlive; }))
+            {
+                return std::shared_ptr<const void>();
+            }
+            return std::nullopt;
+        });
     }
     const auto& callable = *GetIf<Callable>(&value);
     const void* keepAlive = callable.GetKeepAlive();
@@ -4051,7 +4114,20 @@ InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
     const auto* site = ClosureSiteOf<CallableBody>(value);
     if (!site)
     {
-        return value;
+        // A `self` WeakenCapture weakened keeps what its site keeps again (docs/tasks/0529)
+        auto strong = RekeptSelf(value, [](const Callable& callable) -> std::optional<std::shared_ptr<const void>> {
+            if (callable.GetKeepAlive())
+            {
+                return std::nullopt;
+            }
+            auto capture = callable.GetStatementCallable().target<SelfBlockCall>()->site.Capture();
+            if (!capture)
+            {
+                return std::nullopt;
+            }
+            return std::shared_ptr<const void>(std::move(capture));
+        });
+        return strong ? std::move(*strong) : value;
     }
     const auto& callable = *GetIf<Callable>(&value);
     if (callable.GetKeepAlive())

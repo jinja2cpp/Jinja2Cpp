@@ -488,9 +488,10 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     {
     public:
         // `holdsHandles`: the module holds handles of the callback's table of templates (its blocks)
-        CallScope(Callback& callback, bool holdsHandles)
+        CallScope(Callback& callback, bool holdsHandles, KeptObjects& kept)
             : m_callback(callback)
             , m_holdsHandles(holdsHandles)
+            , m_kept(kept)
             , m_mark(callback.MarkCall())
             , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
         {
@@ -508,6 +509,11 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
             // A call that failed leaves what its error views as it is until the error is made,
             // then prunes (PruneAfterFailedCall, docs/tasks/0503)
+            // What closures the host's calls let go of kept goes now, before the slots are asked who holds them
+            if (m_callback.calls == 0)
+            {
+                m_kept.ReleaseExpired();
+            }
             if (m_succeeded && m_callback.calls == 0 && m_callback.HasReplaced())
             {
                 // The shared modules of replaced templates first, so that their trees go in the same pass (0528)
@@ -522,6 +528,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     private:
         Callback& m_callback;
         bool m_holdsHandles;
+        KeptObjects& m_kept;
         typename Callback::CallMark m_mark;
         // A call made from a shared module's top level (a host callable there) imports for
         // itself: its modules end with it
@@ -692,7 +699,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // among them (docs/tasks/0480)
             NoteDropped();
             // Then what the call loads, which its collector sees go
-            CallScope callScope(*callback, module->HoldsTemplateHandles());
+            CallScope callScope(*callback, module->HoldsTemplateHandles(), kept);
             // Then the module's context as the call found it, which a failed call would leave
             // with its scopes pushed
             const HomeCall::Restore restore(module->Context());

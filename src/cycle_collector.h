@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "recursion_guard.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -91,6 +92,16 @@ public:
     // `names`: the copy of a frame's names `object` is, or null. Throws std::bad_alloc
     void Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     void Clear() noexcept { m_kept.clear(); }
+    // Releases what an owner that has expired kept: a template module's call that returns, so that a closure a call
+    // stored and a later one let go of does not keep its copy, and what that holds, until enough others are kept
+    // to prune (docs/tasks/0529)
+    void ReleaseExpired() noexcept
+    {
+        if (!m_kept.empty())
+        {
+            m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const Entry& entry) { return entry.owner.expired(); }), m_kept.end());
+        }
+    }
     // Moves to `other` what is still of use. Throws std::bad_alloc, and then keeps what it did not move
     void MoveInto(KeptObjects& other);
     // Notes to the collector running on this thread the values of the kept copies of names: a
