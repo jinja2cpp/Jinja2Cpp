@@ -2226,11 +2226,12 @@ Callable WithKeepAlive(Callable&& callable, std::shared_ptr<const void> keepAliv
 void CopyCaptured(ScopeRef& scope, const ClosureKept& kept)
 {
     // An inner frame's names hide those of the frames below it
+    MacroStatement::SelfCopies copies;
     for (auto frame = kept.frames.rbegin(); frame != kept.frames.rend(); ++frame)
     {
         for (const auto& [name, value] : **frame)
         {
-            scope[name] = MacroStatement::StrengthenCapture(value);
+            scope[name] = MacroStatement::StrengthenCapture(value, &copies);
         }
     }
 }
@@ -2882,9 +2883,13 @@ namespace
 {
 // Adds `name` to a copy of frames (RenderContext::CollectNamesDownTo), weakened when it is a
 // closure keeping one of `captures`
-void AddCollected(InternalValueMap& collected, std::string name, const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
+void AddCollected(InternalValueMap& collected,
+                  std::string name,
+                  const InternalValue& value,
+                  Span<const std::shared_ptr<ClosureCapture>> captures,
+                  MacroStatement::SelfCopies& copies)
 {
-    if (auto weakened = MacroStatement::WeakenCapture(value, captures))
+    if (auto weakened = MacroStatement::WeakenCapture(value, captures, &copies))
     {
         collected.emplace(std::move(name), std::move(*weakened));
         return;
@@ -2896,9 +2901,10 @@ void AddCollected(InternalValueMap& collected, std::string name, const InternalV
 void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures, const ClosureCapture* keeps) const
 {
     const size_t entryPassDepth = m_entryPassDepth;
+    MacroStatement::SelfCopies copies;
     VisitScopes(
         *this,
-        [&collected, lowest, entryPassDepth, captures, keeps](const InternalValueMap* scope, size_t depth) {
+        [&collected, &copies, lowest, entryPassDepth, captures, keeps](const InternalValueMap* scope, size_t depth) {
             if (depth < lowest)
             {
                 return true;
@@ -2915,11 +2921,11 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
                 {
                     continue;
                 }
-                AddCollected(collected, name, value, captures);
+                AddCollected(collected, name, value, captures, copies);
             }
             return false;
         },
-        [&collected, captures, keeps](const FrameView& view, size_t /*depth*/) {
+        [&collected, &copies, captures, keeps](const FrameView& view, size_t /*depth*/) {
             for (size_t idx = 0; idx != view.names.size(); ++idx)
             {
                 if (!view.slots[idx].IsBound())
@@ -2930,7 +2936,7 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
                 {
                     continue;
                 }
-                AddCollected(collected, std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]), captures);
+                AddCollected(collected, std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]), captures, copies);
             }
             return false;
         });
@@ -3717,7 +3723,7 @@ bool IsImported(const InternalValue& value)
 }
 } // namespace
 
-bool ImportedModule::ExportsToObject(std::string_view name, const InternalValue& value) const
+bool ImportedModule::ExportsToObject(std::string_view name, const InternalValue& value) const noexcept
 {
     // Jinja2 exports no name that starts with an underline
     return !name.empty() && name[0] != '_' && IsImported(value) && Exports(name);
@@ -3937,9 +3943,11 @@ const ClosureSite* ClosureSiteOf(const InternalValue& value)
 }
 } // namespace
 
-const void* MacroStatement::TreeOwnerOf(const InternalValue& value, const void*& body)
+const void* MacroStatement::TreeOwnerOf(const InternalValue& value, const void*& body) noexcept
 {
-    const auto* macro = MacroBodyOf<CallableBody>(value);
+    const auto* callable = GetIf<Callable>(&value);
+    const auto* function = callable && callable->GetKind() == Callable::Macro ? std::get_if<Callable::StatementCallable>(&callable->GetCallable()) : nullptr;
+    const auto* macro = function ? function->target<CallableBody>() : nullptr;
     body = macro;
     return macro ? macro->treeOwner.get() : nullptr;
 }
@@ -4024,9 +4032,8 @@ bool ImportedModule::HeldOnlyByItself() const noexcept
             ++treeHolders;
         }
     }
-    // use_count: as above. A closure a call made in the tree and stored (a nested macro, a caller, a recursive loop)
-    // holds it too
-    return m_treeOwner.use_count() == treeHolders;
+    // A closure a call made in the tree and stored (a nested macro, a caller, a recursive loop) holds it too
+    return m_treeOwner.use_count() == treeHolders; // use_count: as above
 }
 
 namespace
@@ -4051,12 +4058,21 @@ const InternalValueMap* SelfBlocksOfValue(const InternalValue& value)
 // `value`, a `self`, with each block keeping what `keepAliveOf` gives for it; nothing when no block changes. Throws
 // std::bad_alloc
 template<typename KeepAliveOf>
-std::optional<InternalValue> RekeptSelf(const InternalValue& value, const KeepAliveOf& keepAliveOf)
+std::optional<InternalValue> RekeptSelf(const InternalValue& value, const KeepAliveOf& keepAliveOf, MacroStatement::SelfCopies* copies)
 {
     const auto* items = SelfBlocksOfValue(value);
     if (!items)
     {
         return std::nullopt;
+    }
+    const void* original = detail::InternalValueAccess::Object(value);
+    if (copies)
+    {
+        const auto copy = std::find_if(copies->begin(), copies->end(), [original](const auto& entry) { return entry.first == original; });
+        if (copy != copies->end())
+        {
+            return copy->second;
+        }
     }
     bool changed = false;
     InternalValueMap blocks;
@@ -4077,25 +4093,35 @@ std::optional<InternalValue> RekeptSelf(const InternalValue& value, const KeepAl
         return std::nullopt;
     }
     const auto map = AsMap(value);
+    if (!map)
+    {
+        return std::nullopt;
+    }
     const auto* repr = map->GetReprArgument();
-    return InternalValue(CreateObjectAdapter(std::move(blocks), map->GetObjectClass(), repr ? *repr : InternalValue(NoneValue())));
+    InternalValue rebuilt(CreateObjectAdapter(std::move(blocks), map->GetObjectClass(), repr ? *repr : InternalValue(NoneValue())));
+    if (copies)
+    {
+        copies->emplace_back(original, rebuilt);
+    }
+    return rebuilt;
 }
 } // namespace
 
-std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
+std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures, SelfCopies* copies)
 {
     if (!ClosureSiteOf<CallableBody>(value))
     {
         // A `self` the frame's names hold, whose blocks keep the capture of its template's top level: the copy holds it
         // with blocks that keep nothing, or the capture would keep the copy that holds it (docs/tasks/0529)
-        return RekeptSelf(value, [captures](const Callable& callable) -> std::optional<std::shared_ptr<const void>> {
+        const auto weakened = [captures](const Callable& callable) -> std::optional<std::shared_ptr<const void>> {
             const void* keepAlive = callable.GetKeepAlive();
             if (keepAlive && std::any_of(captures.begin(), captures.end(), [keepAlive](const auto& capture) { return capture.get() == keepAlive; }))
             {
                 return std::shared_ptr<const void>();
             }
             return std::nullopt;
-        });
+        };
+        return RekeptSelf(value, weakened, copies);
     }
     const auto& callable = *GetIf<Callable>(&value);
     const void* keepAlive = callable.GetKeepAlive();
@@ -4109,13 +4135,13 @@ std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& 
     return InternalValue(std::move(weakened));
 }
 
-InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
+InternalValue MacroStatement::StrengthenCapture(const InternalValue& value, SelfCopies* copies)
 {
     const auto* site = ClosureSiteOf<CallableBody>(value);
     if (!site)
     {
         // A `self` WeakenCapture weakened keeps what its site keeps again (docs/tasks/0529)
-        auto strong = RekeptSelf(value, [](const Callable& callable) -> std::optional<std::shared_ptr<const void>> {
+        const auto strengthened = [](const Callable& callable) -> std::optional<std::shared_ptr<const void>> {
             if (callable.GetKeepAlive())
             {
                 return std::nullopt;
@@ -4126,8 +4152,13 @@ InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
                 return std::nullopt;
             }
             return std::shared_ptr<const void>(std::move(capture));
-        });
-        return strong ? std::move(*strong) : value;
+        };
+        auto strong = RekeptSelf(value, strengthened, copies);
+        if (strong)
+        {
+            return std::move(*strong);
+        }
+        return value;
     }
     const auto& callable = *GetIf<Callable>(&value);
     if (callable.GetKeepAlive())

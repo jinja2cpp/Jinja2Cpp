@@ -5,7 +5,6 @@
 #include "internal_value.h"
 #include "recursion_guard.h"
 
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -92,14 +91,30 @@ public:
     // `names`: the copy of a frame's names `object` is, or null. Throws std::bad_alloc
     void Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     void Clear() noexcept { m_kept.clear(); }
-    // Releases what an owner that has expired kept: a template module's call that returns, so that a closure a call
-    // stored and a later one let go of does not keep its copy, and what that holds, until enough others are kept
-    // to prune (docs/tasks/0529)
+    // Releases what owners that have expired kept, looking at a few entries in turn: a template module's call that
+    // returns, so that a closure a call stored and a later one let go of does not keep its copy, and what that holds,
+    // until enough others are kept to prune (docs/tasks/0529). A few, so that a module keeping many live closures
+    // does not pay for all of them on every call: an expired one goes within a pass over the entries
     void ReleaseExpired() noexcept
     {
-        if (!m_kept.empty())
+        for (std::size_t looked = 0; looked != ReleaseLooksPerCall && !m_kept.empty(); ++looked)
         {
-            m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const Entry& entry) { return entry.owner.expired(); }), m_kept.end());
+            if (m_cursor >= m_kept.size())
+            {
+                m_cursor = 0;
+            }
+            auto& entry = m_kept[m_cursor];
+            if (!entry.owner.expired())
+            {
+                ++m_cursor;
+                continue;
+            }
+            // The order of the entries does not matter: the last one takes its place
+            if (&entry != &m_kept.back())
+            {
+                entry = std::move(m_kept.back());
+            }
+            m_kept.pop_back();
         }
     }
     // Moves to `other` what is still of use. Throws std::bad_alloc, and then keeps what it did not move
@@ -119,8 +134,11 @@ private:
     };
 
     static constexpr size_t MinPruneAt = 64;
+    static constexpr size_t ReleaseLooksPerCall = 4;
     std::vector<Entry> m_kept;
     size_t m_pruneAt = MinPruneAt;
+    // The next entry ReleaseExpired looks at
+    size_t m_cursor = 0;
 };
 
 // The lists, dicts and namespaces a template module's calls made and handed the host, which the

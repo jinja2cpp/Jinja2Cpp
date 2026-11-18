@@ -856,6 +856,21 @@ TEST_F(TemplateModuleChangingSourceTest, SelfSetAtTheTopLevelOutlivesTheInclude)
                              "{% block b %}B3{% endblock %}" }));
 }
 
+// Two names holding one `self` hold one object once the include has ended, in a render and in a module's call
+TEST_F(TemplateModuleChangingSourceTest, SelfSetTwiceStaysOneObject)
+{
+    AddFile("lib", "{% block b %}B0{% endblock %}{% set q = self %}{% set r = self %}{% macro f() %}{{ q is sameas r }}|{{ q == r }}{% endmacro %}{% set ns.f = f %}");
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load("{% set ns = namespace(f=none) %}{% include 'lib' %}|{{ ns.f() }}"));
+    EXPECT_EQ("B0|True|True", tpl.RenderAsString({}).value());
+    jinja2::TemplateW wide(&m_env);
+    ASSERT_TRUE(!!wide.Load(L"{% set ns = namespace(f=none) %}{% include 'lib' %}|{{ ns.f() }}"));
+    EXPECT_EQ(L"B0|True|True", wide.RenderAsString({}).value());
+    auto module = Make("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}");
+    EXPECT_EQ("[]B0", Call(module.exports["m"]).AsString());
+    EXPECT_EQ("[True|True]B0", Call(module.exports["m"]).AsString());
+}
+
 TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopRunsItsOldBody)
 {
     const std::string body = "{{ i }}{{ loop(i) if i is iterable and i is not string }}";
