@@ -4081,23 +4081,39 @@ std::optional<InternalValue> RekeptSelf(const InternalValue& value, const KeepAl
             return copy->second;
         }
     }
-    bool changed = false;
-    InternalValueMap blocks;
-    for (const auto& [name, item] : *items)
+    // Find the first block that changes before allocating anything: a self whose blocks already keep what they should
+    // (a stored macro's capture strengthened on every call) costs no copy
+    auto first = items->end();
+    std::shared_ptr<const void> firstKeepAlive;
+    for (auto item = items->begin(); item != items->end(); ++item)
     {
-        const auto& callable = *GetIf<Callable>(&item);
+        if (auto keepAlive = keepAliveOf(*GetIf<Callable>(&item->second)))
+        {
+            first = item;
+            firstKeepAlive = std::move(*keepAlive);
+            break;
+        }
+    }
+    if (first == items->end())
+    {
+        return std::nullopt;
+    }
+    InternalValueMap blocks;
+    for (auto item = items->begin(); item != first; ++item)
+    {
+        blocks.emplace(item->first, item->second);
+    }
+    blocks.emplace(first->first, MakeWrapped(WithKeepAlive(Callable(*GetIf<Callable>(&first->second)), std::move(firstKeepAlive))));
+    for (auto item = std::next(first); item != items->end(); ++item)
+    {
+        const auto& callable = *GetIf<Callable>(&item->second);
         auto keepAlive = keepAliveOf(callable);
         if (!keepAlive)
         {
-            blocks.emplace(name, item);
+            blocks.emplace(item->first, item->second);
             continue;
         }
-        changed = true;
-        blocks.emplace(name, MakeWrapped(WithKeepAlive(Callable(callable), std::move(*keepAlive))));
-    }
-    if (!changed)
-    {
-        return std::nullopt;
+        blocks.emplace(item->first, MakeWrapped(WithKeepAlive(Callable(callable), std::move(*keepAlive))));
     }
     const auto map = AsMap(value);
     if (!map)
