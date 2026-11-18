@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0496]
@@ -32,3 +32,19 @@ Jinja2's sets once sets exist (they print as `{...}`).
 
 **Done when** cases for 1-3 match in narrow and wide runs: `operators.dict_view_mapping_proxy` (its
 divergence line goes) and new cases for live views and the set operators.
+
+**Resolution (batch 9 A).** Items 1-3 are fixed:
+- 1: a view is `DictView` (internal_value.cpp), which keeps its dict and reads it at each use: its
+  size, its items, `in`, comparisons and `isdisjoint` (`DictViewLookup` asks the dict, no lookup is
+  built per call). A walk (`DictViewEnumerator`) takes the items when it starts and raises
+  `dictionary changed size during iteration` once the size changes, as Python's does.
+- 2: `mapping` is `CreateMappingProxy` (`MappingProxyAdapter`): read-only, live, class and repr
+  `mappingproxy`, only the dict's reading methods (`keys`, `values`, `items`, `get`, `copy`), not JSON
+  serializable; a view of it is a view of its dict.
+- 3: `-` of a `dict_keys` or `dict_items` view and any iterable (either side) is a `set`
+  (`IteratorKind::Set`, `SetDifference`), which prints as `{...}`/`set()`, is unhashable, not
+  subscriptable or reversible, compares as a set with views and sets, and has `isdisjoint` and `-`
+  with another set or view. Jinja2 has no `|` (a filter), `&` or `^` operator, so `-` is the only one.
+
+Items 4-6, and what the walk still reads from its start, are task 0538 (pinned by corpus cases).
+

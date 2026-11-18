@@ -40,6 +40,7 @@
 #include <cstdlib>
 #include <exception>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <new>
@@ -2907,6 +2908,7 @@ const char* IteratorTypeName(IteratorKind kind) noexcept
     case IteratorKind::DictKeys:
     case IteratorKind::DictValues:
     case IteratorKind::DictItems:
+    case IteratorKind::Set:
         break;
     }
     return nullptr;
@@ -2922,6 +2924,8 @@ const char* DictViewTypeName(IteratorKind kind) noexcept
         return "dict_values";
     case IteratorKind::DictItems:
         return "dict_items";
+    case IteratorKind::Set:
+        return "set";
     default:
         return nullptr;
     }
@@ -3231,17 +3235,14 @@ std::shared_ptr<const Accessor> MakeHostCopy(const Adapter& adapter)
     return std::shared_ptr<const Accessor>(holder, &holder->Get());
 }
 
-// A list of `values`; a dict view (docs/tasks/0496) when `mapping` is set, the dict it keeps
-ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind, InternalValue* mapping = nullptr)
+// A list of `values`
+ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind)
 {
     // The items are shared by every copy of the list, as a Python list is shared by its
     // names: an append() through one is seen through all, and `a is sameas b` holds
     class Adapter : public IndexedListAccessorImpl<Adapter>
     {
     public:
-        // A dict view (DictView below, the one list that has a mapping) reads its items as this
-        // class does, so that a loop's enumerator rebinds to the next view without a new one
-        static bool ReadsAsSelf(const IListAccessor& list) { return list.GetViewMapping() != nullptr; }
         Adapter(InternalValueList&& values, IteratorKind iteratorKind)
             : m_values(std::move(values))
         {
@@ -3307,32 +3308,188 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         BySharedMutable<InternalValueList> m_values;
     };
 
-    // The dict a view was taken from, for its `mapping`: one more reference, which the cycle
-    // collector follows as the view's own
-    class DictView final : public Adapter
-    {
-    public:
-        DictView(InternalValueList&& values, IteratorKind iteratorKind, InternalValue mapping)
-            : Adapter(std::move(values), iteratorKind)
-            , m_mapping(std::move(mapping))
-        {
-        }
-        [[nodiscard]] const InternalValue* GetViewMapping() const override { return &m_mapping; }
-        void Traverse(const TraverseFn& fn) const override
-        {
-            Adapter::Traverse(fn);
-            TraverseValue(m_mapping, fn);
-        }
-
-    private:
-        InternalValue m_mapping;
-    };
-
-    if (mapping)
-    {
-        return ListAdapter(MakeRef<DictView>(std::move(values), iteratorKind, std::move(*mapping)));
-    }
     return ListAdapter(MakeRef<Adapter>(std::move(values), iteratorKind));
+}
+
+// The view dict.keys(), values() or items() returns: it keeps its dict (docs/tasks/0496) and reads
+// it live, as Python's does (0523), so that a view taken before a change sees the change. A walk
+// takes the items when it starts and, as Python's, fails at the next step once the dict's size
+// changed; a dict can lose and gain entries while it is walked, so the walk never holds a
+// position in it
+class DictView final : public IListAccessor
+{
+public:
+    DictView(InternalValue mapping, IteratorKind kind)
+        : m_mapping(std::move(mapping))
+    {
+        SetTraversable();
+        SetIteratorKind(kind);
+    }
+
+    // The items now, in the dict's order
+    [[nodiscard]] InternalValueList Items() const
+    {
+        const auto map = AsMap(m_mapping);
+        if (!map)
+        {
+            return InternalValueList();
+        }
+        const auto kind = GetIteratorKind();
+        if (kind == IteratorKind::DictKeys)
+        {
+            return map->GetKeyValues();
+        }
+        InternalValueList result;
+        auto entries = map->GetEntries();
+        result.reserve(entries.size());
+        for (auto& entry : entries)
+        {
+            if (kind == IteratorKind::DictValues)
+            {
+                result.push_back(std::move(entry.value));
+            }
+            else
+            {
+                result.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ std::move(entry.key), std::move(entry.value) }).MarkAsTuple());
+            }
+        }
+        return result;
+    }
+    // The item of the entry key: value, as the view's kind makes it
+    [[nodiscard]] InternalValue Item(InternalValue key, InternalValue value) const
+    {
+        switch (GetIteratorKind())
+        {
+        case IteratorKind::DictKeys:
+            return key;
+        case IteratorKind::DictValues:
+            return value;
+        default:
+            return ListAdapter::CreateAdapter(InternalValueList{ std::move(key), std::move(value) }).MarkAsTuple();
+        }
+    }
+    [[nodiscard]] size_t LiveSize() const
+    {
+        const auto map = AsMap(m_mapping);
+        return map ? map->GetSize() : 0;
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return LiveSize(); }
+    [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
+    {
+        // Not a sequence in Python: only the engine's own reads (first, last) index it. A dict the template owns is
+        // walked to the entry from its nearer end, without the items being made
+        if (const auto map = AsMap(m_mapping); map && idx >= 0)
+        {
+            if (const auto* dict = map->GetMutableItems())
+            {
+                const auto& entries = dict->Items();
+                const auto pos = static_cast<size_t>(idx);
+                if (pos >= entries.size())
+                {
+                    return std::optional<InternalValue>();
+                }
+                const auto at = pos < entries.size() / 2 ? std::next(entries.begin(), idx) : std::prev(entries.end(), static_cast<std::ptrdiff_t>(entries.size() - pos));
+                return Item(dict->KeyOf(at->first), at->second);
+            }
+        }
+        auto items = Items();
+        if (idx < 0 || static_cast<size_t>(idx) >= items.size())
+        {
+            return std::optional<InternalValue>();
+        }
+        return std::move(items[static_cast<size_t>(idx)]);
+    }
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override;
+    [[nodiscard]] GenericList CreateGenericList() const override
+    {
+        // The host gets the items as they are now, a list of the view's kind
+        return CreateValuesAdapter(Items(), GetIteratorKind()).Ref().CreateGenericList();
+    }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+    [[nodiscard]] bool HasLiveSize() const override { return true; }
+    [[nodiscard]] const InternalValue* GetViewMapping() const override { return &m_mapping; }
+    void Traverse(const TraverseFn& fn) const override { TraverseValue(m_mapping, fn); }
+
+private:
+    InternalValue m_mapping;
+};
+
+// A walk of a DictView: the items it had when the walk started
+class DictViewEnumerator final : public IListAccessorEnumerator
+{
+public:
+    explicit DictViewEnumerator(const DictView* view)
+        : m_view(view)
+    {
+    }
+
+    void Reset() override { m_pos = InvalidPos; }
+    bool MoveNext() override
+    {
+        if (!m_view)
+        {
+            return false;
+        }
+        if (m_pos == InvalidPos)
+        {
+            m_items = m_view->Items();
+            m_startSize = m_view->LiveSize();
+            m_pos = 0;
+        }
+        else
+        {
+            if (m_view->LiveSize() != m_startSize)
+            {
+                throw TemplateRuntimeError("dictionary changed size during iteration");
+            }
+            ++m_pos;
+        }
+        return m_pos < m_items.size();
+    }
+    [[nodiscard]] InternalValue GetCurrent() const override { return m_pos < m_items.size() ? m_items[m_pos] : InternalValue(); }
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
+    {
+        return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<DictViewEnumerator>{}, *this);
+    }
+    std::optional<ListAccessorEnumeratorPtr> Transfer() override
+    {
+        auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<DictViewEnumerator>{}, std::move(*this));
+        m_view = nullptr;
+        m_pos = InvalidPos;
+        return result;
+    }
+    bool Rebind(const IListAccessor* list) override
+    {
+        // Another view, or none: the items of the last walk go, their buffer stays
+        const auto* view = dynamic_cast<const DictView*>(list);
+        if (list && !view)
+        {
+            return false;
+        }
+        m_view = view;
+        m_pos = InvalidPos;
+        m_items.clear();
+        return true;
+    }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* val = dynamic_cast<const DictViewEnumerator*>(&other);
+        return val != nullptr && val->m_view == m_view && val->m_pos == m_pos;
+    }
+
+private:
+    static constexpr size_t InvalidPos = std::numeric_limits<size_t>::max();
+
+    const DictView* m_view;
+    InternalValueList m_items;
+    size_t m_startSize = 0;
+    size_t m_pos = InvalidPos;
+};
+
+std::optional<ListAccessorEnumeratorPtr> DictView::CreateListAccessorEnumerator() const
+{
+    return ListAccessorEnumeratorPtr(types::in_place_type_t<DictViewEnumerator>{}, DictViewEnumerator(this));
 }
 } // namespace
 
@@ -3346,9 +3503,9 @@ ListAdapter ListAdapter::CreateIterator(InternalValueList&& values, IteratorKind
     return CreateValuesAdapter(std::move(values), kind);
 }
 
-ListAdapter ListAdapter::CreateDictView(InternalValueList&& values, IteratorKind kind, InternalValue mapping)
+ListAdapter ListAdapter::CreateDictView(InternalValue mapping, IteratorKind kind)
 {
-    return CreateValuesAdapter(std::move(values), kind, &mapping);
+    return ListAdapter(MakeRef<DictView>(std::move(mapping), kind));
 }
 
 InternalValue IListAccessor::LifetimeAnchor(const InternalValue& self) const
@@ -4213,6 +4370,48 @@ private:
     std::optional<InternalValue> m_reprArgument;
 };
 
+// Python's mappingproxy (docs/tasks/0523): reads its dict live, as the view it came from does
+class MappingProxyAdapter final : public IMapAccessor
+{
+public:
+    explicit MappingProxyAdapter(InternalValue dict)
+        : m_dict(std::move(dict))
+    {
+        SetTraversable();
+    }
+
+    [[nodiscard]] size_t GetSize() const override { return Dict().GetSize(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return Dict().HasValue(name); }
+    [[nodiscard]] InternalValue GetItem(const std::string& name) const override { return Dict().GetValueByName(name); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        const auto* accessor = Dict().GetAccessor();
+        return accessor ? accessor->GetKeys() : std::vector<std::string>();
+    }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override { return Dict().GetEntries(); }
+    [[nodiscard]] InternalValueList GetKeyValues() const override { return Dict().GetKeyValues(); }
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override { return Dict().FindItem(key); }
+    [[nodiscard]] GenericMap CreateGenericMap() const override { return Dict().CreateGenericMap(); }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
+    [[nodiscard]] const InternalValue* GetProxiedMapping() const override { return &m_dict; }
+    void Traverse(const TraverseFn& fn) const override { TraverseValue(m_dict, fn); }
+
+private:
+    [[nodiscard]] MapRef Dict() const
+    {
+        const auto map = AsMap(m_dict);
+        return map ? *map : MapRef(nullptr, nullptr);
+    }
+
+    InternalValue m_dict;
+};
+
+MapAdapter CreateMappingProxy(InternalValue dict)
+{
+    return MapAdapter(MakeRef<MappingProxyAdapter>(std::move(dict)));
+}
+
 // Jinja2's TemplateModule: <TemplateModule 'name'> as repr, its template's output as str()
 class ModuleMapAdapter final : public ObjectMapAdapter
 {
@@ -4916,12 +5115,15 @@ constexpr PythonClass PythonClasses[] = {
     { builtinsModule, "function" },
     { builtinsModule, "generator" },
     { builtinsModule, "int" },
+    { builtinsModule, "object" },
     { builtinsModule, "list" },
     { builtinsModule, "list_reverseiterator" },
+    { builtinsModule, "mappingproxy" },
     { builtinsModule, "method" },
     { builtinsModule, "range" },
     { builtinsModule, "range_iterator" },
     { builtinsModule, "reversed" },
+    { builtinsModule, "set" },
     { builtinsModule, "str" },
     { builtinsModule, "tuple" },
     { builtinsModule, "type" },
@@ -4937,6 +5139,8 @@ constexpr PythonClass PythonClasses[] = {
     { utilsModule, "Joiner" },
     { utilsModule, "Namespace" },
     { "jinja2.environment", "TemplateModule" },
+    { runtimeModule, "BlockReference" },
+    { "jinja2.filters", "_GroupTuple" },
 };
 
 const PythonClass* FindPythonClass(std::string_view name)
@@ -4971,6 +5175,8 @@ private:
         result.emplace("__name__", InternalValue(std::string(cls.name)));
         result.emplace("__qualname__", InternalValue(std::string(cls.name)));
         result.emplace("__module__", InternalValue(std::string(cls.module)));
+        // Every class is callable (docs/tasks/0490): its constructor, or Python's refusal
+        result.emplace("operator()", InternalValue(Callable(Callable::GlobalFunc, [name = cls.name](const CallParams& params, RenderContext& context) { return CallPythonClass(name, params, context); })));
         return result;
     }
     static std::string QualifiedName(const PythonClass& cls)
@@ -5002,6 +5208,16 @@ std::string_view PythonClassName(const InternalValue& value)
             return {};
         }
     }
+    // A named tuple is groupby's group
+    if (const auto list = AsList(value); list && list->GetFieldNames())
+    {
+        return "_GroupTuple";
+    }
+    // A macro that has no arguments attribute is a block's reference: self.blk and super (docs/tasks/0490)
+    if (const auto* callable = GetIf<Callable>(&value); callable && callable->GetKind() == Callable::Macro && (!callable->GetAttributes() || callable->GetAttributes()->count("arguments") == 0))
+    {
+        return "BlockReference";
+    }
     return Apply<visitors::PythonTypeNameGetter>(value);
 }
 } // namespace
@@ -5032,6 +5248,97 @@ std::optional<InternalValue> MakeNamedClassObject(std::string_view className)
         return result;
     }();
     return objects[static_cast<size_t>(cls - std::begin(PythonClasses))];
+}
+
+namespace
+{
+// The name of the class a class object stands for, or empty for any other value
+std::string_view ClassObjectName(const InternalValue& value)
+{
+    if (const auto map = AsMap(value))
+    {
+        const auto* identity = map->GetIdentity();
+        const auto* found = std::find_if(std::begin(PythonClasses), std::end(PythonClasses), [identity](const PythonClass& cls) { return &cls == identity; });
+        return found == std::end(PythonClasses) ? std::string_view() : found->name;
+    }
+    // The classes that are globals (range, dict, cycler, ...) are callables that hold their names
+    if (const auto* callable = GetIf<Callable>(&value); callable && callable->GetAttributes())
+    {
+        const auto& attributes = *callable->GetAttributes();
+        const auto name = attributes.find("__name__");
+        const auto module = attributes.find("__module__");
+        if (name != attributes.end() && module != attributes.end() && IsStringValue(name->second) && IsStringValue(module->second))
+        {
+            if (ClassGlobalOf(AsString(module->second), AsString(name->second)))
+            {
+                const auto* cls = FindPythonClass(AsString(name->second));
+                return cls ? cls->name : std::string_view();
+            }
+        }
+    }
+    return {};
+}
+
+// The base of a class in Python's hierarchy; empty for object
+std::string_view ClassBaseName(std::string_view name)
+{
+    if (name == "object")
+    {
+        return {};
+    }
+    if (name == "bool")
+    {
+        return "int";
+    }
+    if (name == "Markup")
+    {
+        return "str";
+    }
+    if (name == "_GroupTuple")
+    {
+        return "tuple";
+    }
+    if (name == "StrictUndefined" || name == "ChainableUndefined" || name == "DebugUndefined")
+    {
+        return "Undefined";
+    }
+    return "object";
+}
+} // namespace
+
+std::optional<InternalValue> ClassObjectAttribute(const InternalValue& value, std::string_view attr)
+{
+    if (attr != "__mro__" && attr != "__bases__" && attr != "mro")
+    {
+        return std::nullopt;
+    }
+    const auto name = ClassObjectName(value);
+    if (name.empty())
+    {
+        return std::nullopt;
+    }
+    InternalValueList items;
+    if (attr == "__bases__")
+    {
+        if (auto base = MakeNamedClassObject(ClassBaseName(name)))
+        {
+            items.push_back(std::move(*base));
+        }
+        return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
+    }
+    for (auto cls = name; !cls.empty(); cls = ClassBaseName(cls))
+    {
+        if (auto object = MakeNamedClassObject(cls))
+        {
+            items.push_back(std::move(*object));
+        }
+    }
+    if (attr == "__mro__")
+    {
+        return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
+    }
+    // mro(): a new list of the same classes
+    return InternalValue(Callable(Callable::GlobalFunc, [items = std::move(items)](const CallParams&, RenderContext&) { return ListAdapter::CreateAdapter(InternalValueList(items)); }));
 }
 
 std::optional<InternalValue> MakeClassObject(const InternalValue& value)

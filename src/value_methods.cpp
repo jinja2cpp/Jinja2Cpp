@@ -1704,6 +1704,11 @@ struct StrOps
     {
         if (value.IsUndefined())
         {
+            // __class__ is an attribute the undefined object has, whatever its policy (docs/tasks/0490)
+            if (auto cls = ClassAttribute(value, attr, &context))
+            {
+                return std::move(*cls);
+            }
             CheckUndefinedUse(value, UndefinedUse::Attribute);
             return value;
         }
@@ -2729,45 +2734,38 @@ TemplateDict& MutableDict(const InternalValue& self)
     return *items;
 }
 
+// The views are lists marked with their kind (docs/tasks/0489) that keep their dict (0496) and read it live (0523).
+// A view of a mappingproxy is one of its dict, as Python's
+InternalValue DictView(const InternalValue& self, IteratorKind kind)
+{
+    const auto map = MapOf(self);
+    const auto* proxied = map.GetProxiedMapping();
+    const InternalValue& dict = proxied ? *proxied : self;
+    InternalValue view = ListAdapter::CreateDictView(dict, kind);
+    // The items of a dict that borrows the host's data point into it
+    if (kind != IteratorKind::DictKeys && dict.ShouldExtendLifetime())
+    {
+        view.SetParentData(dict);
+    }
+    return view;
+}
+
 InternalValue DictKeys(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "keys", 0, 0);
-    // The views are lists marked with their kind (docs/tasks/0489) that keep their dict (0496)
-    return ListAdapter::CreateDictView(MapOf(self).GetKeyValues(), IteratorKind::DictKeys, self);
+    return DictView(self, IteratorKind::DictKeys);
 }
 
 InternalValue DictValues(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "values", 0, 0);
-    const auto& map = MapOf(self);
-    InternalValueList result;
-    for (auto& entry : map.GetEntries())
-    {
-        result.push_back(std::move(entry.value));
-    }
-    InternalValue list = ListAdapter::CreateDictView(std::move(result), IteratorKind::DictValues, self);
-    if (self.ShouldExtendLifetime())
-    {
-        list.SetParentData(self);
-    }
-    return list;
+    return DictView(self, IteratorKind::DictValues);
 }
 
 InternalValue DictItems(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "items", 0, 0);
-    const auto& map = MapOf(self);
-    InternalValueList result;
-    for (auto& entry : map.GetEntries())
-    {
-        result.push_back(MakeTuple({ std::move(entry.key), std::move(entry.value) }));
-    }
-    InternalValue list = ListAdapter::CreateDictView(std::move(result), IteratorKind::DictItems, self);
-    if (self.ShouldExtendLifetime())
-    {
-        list.SetParentData(self);
-    }
-    return list;
+    return DictView(self, IteratorKind::DictItems);
 }
 
 InternalValue DictGet(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -2981,14 +2979,19 @@ bool ViewItemParts(const InternalValue& item, InternalValue& key, InternalValue&
     return true;
 }
 
-// `in` of a dict_keys or dict_items view as Python's is: one lookup of the item's key, not a
-// walk of the view (docs/tasks/0489). The view's keys are held by their tokens
+// `in` of a dict_keys or dict_items view or a set as Python's is: one lookup of the item's key, not a
+// walk of the view (docs/tasks/0489). A view asks its dict (0523); a set's items are held by their tokens
 class DictViewLookup
 {
 public:
     explicit DictViewLookup(const ListRef& view)
-        : m_isItems(view.GetIteratorKind() == IteratorKind::DictItems)
+        : m_mapping(view.GetViewMapping())
+        , m_isItems(view.GetIteratorKind() == IteratorKind::DictItems)
     {
+        if (m_mapping)
+        {
+            return;
+        }
         for (const auto& entry : view)
         {
             InternalValue key = entry;
@@ -3020,11 +3023,18 @@ public:
         {
             ThrowUnhashable(unhashable);
         }
+        if (m_mapping)
+        {
+            const auto map = AsMap(*m_mapping);
+            const auto found = map ? map->FindItem(key) : std::nullopt;
+            return found && (!m_isItems || ItemEquals(*found, value));
+        }
         const auto found = m_entries.find(*token);
         return found != m_entries.end() && (!m_isItems || ItemEquals(found->second, value));
     }
 
 private:
+    const InternalValue* m_mapping;
     InternalDict m_entries;
     bool m_isItems;
 };
@@ -3041,7 +3051,7 @@ InternalValue DictViewIsDisjoint(const InternalValue& self, const CallParams& pa
     }
     const auto view = *AsList(self);
     // Python walks the smaller of two set-like views and looks its items up in the larger one
-    if (const auto kind = other.GetIteratorKind(); (kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems) && other.GetSize().value_or(0) > view.GetSize().value_or(0))
+    if (IsSetKind(other.GetIteratorKind()) && other.GetSize().value_or(0) > view.GetSize().value_or(0))
     {
         const DictViewLookup lookup(other.Ref());
         return std::none_of(view.begin(), view.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
@@ -3277,7 +3287,7 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
             // An iterator (a lazy filter's generator) has none of a list's methods (docs/tasks/0383)
             if (const auto kind = list->GetIteratorKind(); kind != IteratorKind::None)
             {
-                return kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems ? FindIn(DictViewMethods, name) : nullptr;
+                return IsSetKind(kind) ? FindIn(DictViewMethods, name) : nullptr;
             }
             return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
         }
@@ -3287,7 +3297,13 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
         {
             // An object (KeysOnly) has no dict methods, and one of the host language only its own
             const auto policy = map->GetAttrPolicy();
-            return policy == MapAttrPolicy::KeysOnly || policy == MapAttrPolicy::Host ? nullptr : FindIn(DictMethods, name);
+            if (policy == MapAttrPolicy::KeysOnly || policy == MapAttrPolicy::Host)
+            {
+                return nullptr;
+            }
+            const auto* method = FindIn(DictMethods, name);
+            // A mappingproxy has the dict's reading methods alone (docs/tasks/0523)
+            return method && method->isMutating && map->GetProxiedMapping() ? nullptr : method;
         }
         return nullptr;
     case ValueKind::Int:
@@ -3328,6 +3344,11 @@ bool IsMethodName(std::string_view name)
         }
         constexpr std::string_view classAttribute = "__class__";
         result[classAttribute.size()].push_back(classAttribute);
+        // The hierarchy of a class object (docs/tasks/0490)
+        for (const std::string_view attr : { "__mro__", "__bases__", "mro" })
+        {
+            result[attr.size()].push_back(attr);
+        }
         for (auto& sameLength : result)
         {
             std::sort(sameLength.begin(), sameLength.end());
@@ -3357,10 +3378,10 @@ std::optional<InternalValue> NumberDataAttr(const InternalValue& self, std::stri
     }
     if (kind == ValueKind::List)
     {
-        // A dict view's `mapping` is Python's read-only mappingproxy of its dict; here the dict
+        // A dict view's `mapping` is Python's read-only mappingproxy of its dict (docs/tasks/0523)
         const auto list = name == "mapping" ? AsList(self) : std::nullopt;
         const auto* mapping = list ? list->GetViewMapping() : nullptr;
-        return mapping ? std::optional<InternalValue>(*mapping) : std::nullopt;
+        return mapping ? std::optional<InternalValue>(CreateMappingProxy(*mapping)) : std::nullopt;
     }
     if (kind != ValueKind::Int && kind != ValueKind::BigInt && kind != ValueKind::Bool)
     {
@@ -3403,6 +3424,21 @@ std::optional<InternalValue> ClassAttribute(const InternalValue& obj, std::strin
 {
     if (name != "__class__")
     {
+        // The hierarchy of a class object
+        if (name == "__mro__" || name == "__bases__" || name == "mro")
+        {
+            if (auto hierarchy = ClassObjectAttribute(obj, name))
+            {
+                if (context && context->GetSandboxPolicy())
+                {
+                    if (auto replacement = SandboxedNativeAttribute(context, obj, std::string(name)))
+                    {
+                        return replacement;
+                    }
+                }
+                return hierarchy;
+            }
+        }
         return std::nullopt;
     }
     // A host object answers for itself; a map's own `__class__` key is the attribute of a map whose keys come first
@@ -3628,8 +3664,9 @@ InternalValue MakeMutable(const InternalValue& value)
     bool extendLifetime = value.ShouldExtendLifetime();
     if (auto list = AsList(value))
     {
-        // Tuples and ranges are never changed in place: only their read-only methods exist
-        if (list->IsTuple() || list->GetRangeInfo())
+        // Tuples and ranges are never changed in place: only their read-only methods exist. Nor are a dict's views,
+        // which have no list methods: a copy would take a mutating call the view refuses (docs/tasks/0523)
+        if (list->IsTuple() || list->GetRangeInfo() || list->GetViewMapping())
         {
             return value;
         }
@@ -3647,6 +3684,11 @@ InternalValue MakeMutable(const InternalValue& value)
         // The host's list becomes the copy for every name of it in the render (docs/tasks/0049)
         const auto* accessor = list->GetAccessor();
         return accessor && accessor->AdoptCopy(value, copy) ? value : copy;
+    }
+    // Nor is a mappingproxy, which has only the dict's reading methods (docs/tasks/0523)
+    if (auto map = AsMap(value); map && map->GetProxiedMapping())
+    {
+        return value;
     }
     if (auto map = AsMap(value))
     {
@@ -3679,6 +3721,42 @@ bool AllInDictView(const ListRef& items, const ListRef& view)
 {
     const methods::DictViewLookup lookup(view);
     return std::all_of(items.begin(), items.end(), [&lookup](const InternalValue& item) { return lookup.Contains(item); });
+}
+
+InternalValue SetDifference(const ListRef& left, const ListRef& right)
+{
+    // set(left), then the discard of each of right's items, as Python's dict views do
+    InternalDict kept;
+    for (const auto& item : left)
+    {
+        const char* unhashable = nullptr;
+        auto token = MakeDictKey(item, &unhashable);
+        if (!token)
+        {
+            ThrowUnhashable(unhashable);
+        }
+        if (kept.try_emplace(std::move(*token), item).second)
+        {
+            CheckSequenceSize(uint64_t{ kept.size() }, "a set");
+        }
+    }
+    for (const auto& item : right)
+    {
+        const char* unhashable = nullptr;
+        const auto token = MakeDictKey(item, &unhashable);
+        if (!token)
+        {
+            ThrowUnhashable(unhashable);
+        }
+        kept.erase(*token);
+    }
+    InternalValueList result;
+    ReserveHint(result, kept.size());
+    for (auto& entry : kept)
+    {
+        result.push_back(std::move(entry.second));
+    }
+    return ListAdapter::CreateIterator(std::move(result), IteratorKind::Set);
 }
 } // namespace v2
 } // namespace jinja2

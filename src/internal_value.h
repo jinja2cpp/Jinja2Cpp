@@ -138,7 +138,10 @@ enum class IteratorKind : uint8_t
     DictItems,
     // reversed() of dict_values and dict_items (docs/tasks/0496); of dict_keys, DictReverseKey
     DictReverseValue,
-    DictReverseItem
+    DictReverseItem,
+    // A Python set: what `-` of a dict_keys or dict_items view gives (docs/tasks/0523). A list of
+    // distinct items, unordered to Python, that prints as {a, b} and behaves as the views do
+    Set
 };
 
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
@@ -658,12 +661,17 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
-static_assert(static_cast<uint8_t>(IteratorKind::DictReverseItem) < 32, "IteratorKind fits five bits of ValueObject's flags");
+static_assert(static_cast<uint8_t>(IteratorKind::Set) < 32, "IteratorKind fits five bits of ValueObject's flags");
 
 // The Python type of an iterator (generator, list_reverseiterator, ...), null for None and a dict view
 const char* IteratorTypeName(IteratorKind kind) noexcept;
-// The Python type of a dict view (dict_keys, dict_values, dict_items), null for the other kinds
+// The Python type of a dict view (dict_keys, dict_values, dict_items) or a set, null for the other kinds
 const char* DictViewTypeName(IteratorKind kind) noexcept;
+// Whether lists of `kind` are Python sets: dict_keys, dict_items and set compare as sets and have `-` (docs/tasks/0523)
+constexpr bool IsSetKind(IteratorKind kind) noexcept
+{
+    return kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems || kind == IteratorKind::Set;
+}
 // The function a generator's repr names (select_or_reject); null for the other kinds
 const char* GeneratorFunctionName(IteratorKind kind) noexcept;
 
@@ -844,6 +852,8 @@ struct IMapAccessor : ValueObject
     [[nodiscard]] virtual bool Iterates() const { return false; }
     // The object of a host language this map stands for (host_object.h); null for the others
     [[nodiscard]] virtual const IEngineHostObject* GetHostObject() const { return nullptr; }
+    // The dict a read-only mappingproxy (a dict view's `mapping`, docs/tasks/0523) reads; null for the others
+    [[nodiscard]] virtual const InternalValue* GetProxiedMapping() const { return nullptr; }
 };
 
 // A non-owning view of a list: code outside internal_value.* reads list values through it,
@@ -952,9 +962,9 @@ public:
     // A list of these items that is a Python iterator of this kind, not a sequence: a lazy
     // filter's generator, reversed() of a sequence (docs/tasks/0383)
     static ListAdapter CreateIterator(InternalValueList&& values, IteratorKind kind);
-    // A view of `mapping` (dict.keys(), values(), items()): its items, of `kind`, and the dict it keeps for its
-    // `mapping` (docs/tasks/0496)
-    static ListAdapter CreateDictView(InternalValueList&& values, IteratorKind kind, InternalValue mapping);
+    // A view of `mapping` (dict.keys(), values(), items()) of `kind`, which reads the dict live
+    // (docs/tasks/0523) and keeps it for its `mapping` (0496)
+    static ListAdapter CreateDictView(InternalValue mapping, IteratorKind kind);
     static ListAdapter CreateAdapter(const GenericList& values);
     static ListAdapter CreateAdapter(const ValuesList& values);
     static ListAdapter CreateAdapter(GenericList&& values);
@@ -1058,6 +1068,7 @@ public:
     [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
     [[nodiscard]] const InternalValue* GetReprArgument() const { return m_accessor ? m_accessor->GetReprArgument() : nullptr; }
     [[nodiscard]] const InternalValue* GetStrValue() const { return m_accessor ? m_accessor->GetStrValue() : nullptr; }
+    [[nodiscard]] const InternalValue* GetProxiedMapping() const { return m_accessor ? m_accessor->GetProxiedMapping() : nullptr; }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
     bool SetValue(std::string name, const InternalValue& val) const { return m_accessor != nullptr && m_accessor->SetValue(std::move(name), val); }
     [[nodiscard]] bool ShouldExtendLifetime() const { return m_accessor != nullptr && m_accessor->ShouldExtendLifetime(); }
@@ -1830,6 +1841,9 @@ MapAdapter CreateNamespaceAdapter(TemplateDict&& values);
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className);
 // An object of `className` that prints as <className repr(reprArgument)>
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument);
+// Python's read-only mappingproxy of `dict`, a dict view's `mapping` (docs/tasks/0523): it reads the dict live and
+// has only the dict's reading methods
+MapAdapter CreateMappingProxy(InternalValue dict);
 // x.__class__ of a value the engine made (docs/tasks/0476): the Python class it stands for, as a read-only object
 // that prints as <class 'str'> and equals only itself; nullopt for a host object or a value whose class the engine
 // does not know
@@ -1837,9 +1851,14 @@ std::optional<InternalValue> MakeClassObject(const InternalValue& value);
 // The class named `className` (str, Markup, StrictUndefined, ...), as MakeClassObject gives it; nullopt for a name
 // it does not know
 std::optional<InternalValue> MakeNamedClassObject(std::string_view className);
+// `__mro__`, `__bases__` and `mro` of a class object (docs/tasks/0490); nullopt for any other name or value
+std::optional<InternalValue> ClassObjectAttribute(const InternalValue& value, std::string_view attr);
 // The global that is the class `name` of `module` in Jinja2 (range, dict, cycler, joiner, namespace), the same object
 // for every render (global_functions.cpp); nullopt for another class
 std::optional<InternalValue> ClassGlobalOf(std::string_view module, std::string_view name);
+// What calling the class `className` does (`(1).__class__('5')`, docs/tasks/0490): Python's constructor for the classes the
+// engine has one for, the error Python gives for the rest (global_functions.cpp)
+InternalValue CallPythonClass(std::string_view className, const CallParams& params, RenderContext& context);
 // The callable of an oldstyle `{% trans %}` block: Markup of its argument under autoescape (Jinja2 MarkSafeIfAutoescape)
 const InternalValue& MarkSafeIfAutoescapeFunction();
 // Jinja2's TemplateModule of an imported template named `name`: `values` are its exports,
@@ -2425,10 +2444,15 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
 // reads with Subscript(fn, "operator()"); x['operator()'] does not see it, as Python's objects
 // have no such item. A namespace's attributes are its own (docs/tasks/0420)
 bool IsEngineCallSlot(const MapRef& map, std::string_view name);
-// The size precheck keeps the call off every other subscript
+// The size precheck keeps the call off every other subscript. A namespace's `__class__` is hidden as well: Python reads
+// the class of the object, whatever `{% set ns.__class__ = 5 %}` stored (docs/tasks/0490)
 inline bool IsHiddenCallSlot(const MapRef& map, std::string_view name)
 {
-    return name.size() == std::string_view("operator()").size() && IsEngineCallSlot(map, name);
+    if (name.size() == std::string_view("operator()").size())
+    {
+        return IsEngineCallSlot(map, name);
+    }
+    return name.size() == std::string_view("__class__").size() && name == "__class__" && map.IsNamespace();
 }
 // Python's val[start:stop:step] on lists and strings; an empty start, stop or step is omitted
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);

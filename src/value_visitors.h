@@ -213,6 +213,9 @@ bool ConvertToBool(const InternalValue& val);
 // Whether every item of `items` is in the dict view `view`, a dict_keys or dict_items, as
 // Python's comparisons of those views (all_contained_in) ask (docs/tasks/0489)
 bool AllInDictView(const ListRef& items, const ListRef& view);
+// `left - right` of two iterables one of which is a set (dict_keys, dict_items, set): the set of left's items not in
+// right, as Python's (docs/tasks/0523); an unhashable item is a TypeError
+InternalValue SetDifference(const ListRef& left, const ListRef& right);
 
 namespace visitors
 {
@@ -787,14 +790,27 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
     }
 
     const size_t start = m_os->size();
+    // A set prints as {a, b}, an empty one as set() (docs/tasks/0523)
+    const bool isSet = list.GetIteratorKind() == IteratorKind::Set;
+    if (isSet && list.GetSize() == std::optional<size_t>(0))
+    {
+        AppendAscii("set()");
+        containers.pop_back();
+        return;
+    }
     // A dict view prints its items as a list inside its type's name: dict_keys(['a']) (docs/tasks/0489)
-    const char* view = DictViewTypeName(list.GetIteratorKind());
+    const char* view = isSet ? nullptr : DictViewTypeName(list.GetIteratorKind());
     if (view)
     {
         AppendAscii(view);
         AppendAscii("(");
     }
-    AppendAscii(isTuple ? "(" : "[");
+    std::string_view brackets = isTuple ? "()" : "[]";
+    if (isSet)
+    {
+        brackets = "{}";
+    }
+    AppendAscii(brackets.substr(0, 1));
     size_t count = 0;
     for (const auto& item : list)
     {
@@ -809,7 +825,7 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
     {
         AppendAscii(",");
     }
-    AppendAscii(isTuple ? ")" : "]");
+    AppendAscii(brackets.substr(1));
     if (view)
     {
         AppendAscii(")");
@@ -873,6 +889,20 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
     if (objectClass)
     {
         AppendAscii("<Namespace ");
+    }
+    // A mappingproxy's str() is its dict's, its repr mappingproxy({...}) (docs/tasks/0523)
+    if (const auto* proxied = map.GetProxiedMapping())
+    {
+        if (m_asRepr)
+        {
+            AppendAscii("mappingproxy(");
+        }
+        RenderRepr(*proxied, m_containers);
+        if (m_asRepr)
+        {
+            AppendAscii(")");
+        }
+        return;
     }
 
     ContainerStack ownContainers;
@@ -979,7 +1009,11 @@ inline const char* PythonTypeName(const ListRef& list)
 inline const char* PythonTypeName(const MapRef& map)
 {
     const char* objectClass = map.GetObjectClass();
-    return objectClass ? objectClass : "dict";
+    if (objectClass)
+    {
+        return objectClass;
+    }
+    return map.GetProxiedMapping() ? "mappingproxy" : "dict";
 }
 inline const char* PythonTypeName(const KeyValuePair&)
 {
@@ -1341,6 +1375,55 @@ struct BinaryMathOperation : BaseVisitor<>
         throw TemplateRuntimeError("unsupported operand type(s) for "s + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
     }
 
+    // An operand of a set's `-` that is no list but iterates: a str's characters, a dict's keys
+    template<typename T>
+    [[nodiscard]] static std::optional<ListAdapter> SetOperandItems(const T& val)
+    {
+        if constexpr (std::is_same_v<T, MapRef>)
+        {
+            if (!val.GetObjectClass() && !val.GetHostObject())
+            {
+                return ListAdapter::CreateAdapter(val.GetKeyValues());
+            }
+        }
+        else if constexpr (IsStringType_v<T>)
+        {
+            bool isConverted = false;
+            auto chars = ConvertToList(InternalValue(std::basic_string<typename T::value_type>(val)), isConverted, false);
+            if (isConverted)
+            {
+                return chars;
+            }
+        }
+        return std::nullopt;
+    }
+    // `set - str`, `dict - dict_keys`: the set of the set operand's difference (docs/tasks/0523)
+    template<typename L, typename R>
+    [[nodiscard]] JINJA2CPP_COLD_INLINE std::optional<ResultType> SetMinusIterable(const L& left, const R& right) const
+    {
+        if constexpr (std::is_same_v<L, ListRef>)
+        {
+            if (IsKeysOrItemsView(left))
+            {
+                if (auto items = SetOperandItems(right))
+                {
+                    return SetDifference(left, items->Ref());
+                }
+            }
+        }
+        else if constexpr (std::is_same_v<R, ListRef>)
+        {
+            if (IsKeysOrItemsView(right))
+            {
+                if (auto items = SetOperandItems(left))
+                {
+                    return SetDifference(items->Ref(), right);
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
     // Operands that have no operation in common: unequal, anything else is a TypeError
     template<typename L, typename R>
     [[nodiscard]] ResultType Mismatch(const L& left, const R& right) const
@@ -1348,6 +1431,16 @@ struct BinaryMathOperation : BaseVisitor<>
         if (m_oper == BinaryExpression::DivRemainder && IsStringType_v<L>)
         {
             return PercentFormat(left, right);
+        }
+        if constexpr (std::is_same_v<L, ListRef> || std::is_same_v<R, ListRef>)
+        {
+            if (m_oper == BinaryExpression::Minus)
+            {
+                if (auto result = SetMinusIterable(left, right))
+                {
+                    return std::move(*result);
+                }
+            }
         }
         if constexpr (std::is_same_v<L, MapRef> || std::is_same_v<R, MapRef>)
         {
@@ -2206,6 +2299,11 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return SetViewOperands(left, right);
         }
+        // `-` of a dict_keys or dict_items view and any iterable is a set (docs/tasks/0523)
+        if (m_oper == jinja2::BinaryExpression::Minus && (IsKeysOrItemsView(left) || IsKeysOrItemsView(right)))
+        {
+            return SetDifference(left, right);
+        }
         // A dict_values view, too, equals only itself (docs/tasks/0489)
         if (m_oper == jinja2::BinaryExpression::LogicalEq || m_oper == jinja2::BinaryExpression::LogicalNe)
         {
@@ -2221,11 +2319,9 @@ struct BinaryMathOperation : BaseVisitor<>
 
     // dict_keys and dict_items are sets in Python: two of them compare as sets do, whatever
     // their kinds, by length and then by the lookup of one's items in the other (docs/tasks/0489)
-    [[nodiscard]] static bool IsSetView(const ListRef& list)
-    {
-        const auto kind = list.GetIteratorKind();
-        return kind == IteratorKind::DictKeys || kind == IteratorKind::DictItems;
-    }
+    [[nodiscard]] static bool IsSetView(const ListRef& list) { return IsSetKind(list.GetIteratorKind()); }
+    // A dict_keys or dict_items view, whose `-` takes any iterable; a set's takes only a set (docs/tasks/0523)
+    [[nodiscard]] static bool IsKeysOrItemsView(const ListRef& list) { return IsSetView(list) && list.GetIteratorKind() != IteratorKind::Set; }
     [[nodiscard]] JINJA2CPP_COLD_INLINE ResultType SetViewOperands(const ListRef& left, const ListRef& right) const
     {
         // Views of views nest as deep as a template makes them: the item lookup compares values
@@ -2246,6 +2342,8 @@ struct BinaryMathOperation : BaseVisitor<>
             return leftSize > rightSize && AllInDictView(right, left);
         case jinja2::BinaryExpression::LogicalGe:
             return leftSize >= rightSize && AllInDictView(right, left);
+        case jinja2::BinaryExpression::Minus:
+            return SetDifference(left, right);
         default:
             ThrowUnsupported(left, right);
         }

@@ -231,7 +231,7 @@ void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> v
     idx.isAttr = !attrName.empty();
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
     // A map's __class__ is its class, not an item (docs/tasks/0476)
-    idx.maybeDictMethod = idx.maybeMethod && (methods::IsDictMethodName(attrName) || attrName == "__class__");
+    idx.maybeDictMethod = idx.maybeMethod && (methods::IsDictMethodName(attrName) || attrName == "__class__" || attrName == "__mro__" || attrName == "__bases__" || attrName == "mro");
     // x.name of a map is then no plain item lookup either: the policy is asked first
     idx.sandboxed = detail::t_parseLimits.sandboxed;
     idx.maybeDictMethod = idx.maybeDictMethod || (idx.sandboxed && idx.isAttr);
@@ -1782,6 +1782,15 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
     const bool mayMutate = methods::IsMutatingName(*name);
     auto receiver = subscript->EvaluateReceiver(values, mayMutate);
+    // x.__class__(...) of an undefined x is the class of the undefined, whatever its policy (docs/tasks/0490)
+    if (receiver.IsUndefined() && *name == "__class__")
+    {
+        if (auto cls = methods::ClassAttribute(receiver, *name, &values))
+        {
+            callee = std::move(*cls);
+            return false;
+        }
+    }
     CheckUndefinedUse(receiver, UndefinedUse::Attribute);
     const auto* method = methods::FindMethod(receiver, *name);
     if (method)
@@ -1796,8 +1805,8 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
     if (!method)
     {
-        // x.__class__(...) is the class, before a dict's own `__class__` item (docs/tasks/0476)
-        if (*name == "__class__")
+        // x.__class__(...) is the class, before a dict's own `__class__` item (docs/tasks/0476); C.mro() is its hierarchy
+        if (*name == "__class__" || *name == "mro")
         {
             if (auto cls = methods::ClassAttribute(receiver, *name, &values))
             {
