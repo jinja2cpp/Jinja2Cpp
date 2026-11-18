@@ -4,6 +4,7 @@
 #include "test_tools.h"
 // The internals are in the static library only (FreeingUncountedObjectsGivesNoBudget)
 #ifndef JINJA2CPP_LINK_AS_SHARED
+#include "../src/cycle_collector.h"
 #include "../src/internal_value.h"
 #include "../src/recursion_guard.h"
 #include "../src/template_dict.h"
@@ -18,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -821,42 +823,62 @@ TEST_F(LimitsEnvTest, UntrustedLimitsBoundMemory)
 namespace
 {
 // A render of `outer` whose `inner()` loads a new template of about 2 KB on each call and renders it with the
-// environment's globals, which it shares with the outer render: the outer render keeps each such template until it
-// ends (docs/tasks/0481), and counts it against its memory budget (docs/tasks/0492). With `byName`, `inner()`
-// renders the environment's cached template instead, one tree however often it is called
+// environment's globals, which it shares with the outer render: the outer render counts each such template against
+// its memory budget (docs/tasks/0492) for as long as something owns it (docs/tasks/0521). The template stores nothing,
+// or with `store` a macro of it in the global `g`, which owns the template. With `byName`, `inner()` renders the
+// environment's cached template instead, one tree however often it is called. `after` runs once the template has
+// gone, `extra` adds params
 template<typename CharT>
-nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderNestedLoads(TemplateEnv& env, const std::string& outer, std::uint64_t budget, bool byName = false)
+nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderNestedLoads(TemplateEnv& env,
+                                                                                    const std::string& outer,
+                                                                                    std::uint64_t budget,
+                                                                                    bool byName = false,
+                                                                                    bool store = false,
+                                                                                    const std::function<void()>& after = {},
+                                                                                    ValuesMap extra = {})
 {
     auto settings = UntrustedSettings();
     settings.limits.maxRenderMemory = budget;
     env.SetSettings(settings);
     env.AddGlobal("g", ValuesList{});
-    const std::string body = "{% set x = 1 %}" + std::string(2000, 'x');
+    const std::string body = std::string(store ? "{% macro m() %}x{% endmacro %}{% set _ = g.append(m) %}" : "{% set x = 1 %}") + std::string(2000, 'x');
     std::basic_string<CharT> source(body.begin(), body.end());
     auto fs = std::make_shared<MemoryFileSystem>();
     fs->AddFile("inner.j2", body);
     env.AddFilesystemHandler(std::string(), fs);
-    ValuesMap params;
+    ValuesMap params = std::move(extra);
     params["inner"] = UserCallable(
-        [&env, source, byName](const UserCallableParams&) {
-            BasicTemplate<CharT> tpl(&env);
-            if (byName)
+        [&env, source, byName, after, budget](const UserCallableParams&) {
+            std::int64_t size = 0;
             {
-                if constexpr (std::is_same_v<CharT, char>)
+                BasicTemplate<CharT> tpl(&env);
+                if (byName)
                 {
-                    tpl = env.LoadTemplate("inner.j2").value();
+                    if constexpr (std::is_same_v<CharT, char>)
+                    {
+                        tpl = env.LoadTemplate("inner.j2").value();
+                    }
+                    else
+                    {
+                        tpl = env.LoadTemplateW("inner.j2").value();
+                    }
                 }
-                else
+                else if (!tpl.Load(source).has_value())
                 {
-                    tpl = env.LoadTemplateW("inner.j2").value();
+                    // A Load inside the render charges its values to the outer budget: once the kept trees fill it,
+                    // the Load may fail before the outer render's next step does, depending on the platform's
+                    // allocation sizes (macOS)
+                    EXPECT_NE(0U, budget);
+                    return Value(std::int64_t{ 0 });
                 }
+                const auto result = tpl.RenderAsString({});
+                size = static_cast<std::int64_t>(result ? result->size() : 0);
             }
-            else
+            if (after)
             {
-                EXPECT_TRUE(tpl.Load(source).has_value());
+                after();
             }
-            const auto result = tpl.RenderAsString({});
-            return Value(static_cast<std::int64_t>(result ? result->size() : 0));
+            return Value(size);
         },
         {});
     BasicTemplate<CharT> tpl(&env);
@@ -866,12 +888,101 @@ nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderNestedLo
 }
 } // namespace
 
+#ifndef JINJA2CPP_LINK_AS_SHARED
+// 0521: the outer render owns no nested tree: 20000 renders of a new template that stores nothing, with no budget,
+// leave no more than the template running and the one before it (0492 took the process from 45 to 122 MB), and the
+// notes of the trees that went are given up as the loop runs
+TEST_F(LimitsEnvTest, NestedTemplatesGivenBackStayConstant)
+{
+    std::size_t maxLive = 0;
+    std::size_t maxLedger = 0;
+    auto probe = [&] {
+        auto* collector = CycleCollector::Current();
+        ASSERT_NE(nullptr, collector);
+        maxLive = std::max(maxLive, collector->KeptTreeCount());
+        maxLedger = std::max(maxLedger, collector->KeptLedgerSize());
+    };
+    auto result = RenderNestedLoads<char>(m_env, "{% for i in range(20000) %}{{ inner() }}{% endfor %}", 0, false, false, probe);
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ(20000 * 4U, result->size());
+    EXPECT_LE(maxLive, 2U);
+    EXPECT_LT(maxLedger, 200U);
+}
+
+TEST_F(LimitsEnvTest, WideNestedTemplatesGivenBackStayConstant)
+{
+    std::size_t maxLive = 0;
+    auto probe = [&] {
+        auto* collector = CycleCollector::Current();
+        ASSERT_NE(nullptr, collector);
+        maxLive = std::max(maxLive, collector->KeptTreeCount());
+    };
+    auto result = RenderNestedLoads<wchar_t>(m_env, "{% for i in range(2000) %}{{ inner() }}{% endfor %}", 0, false, false, probe);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_LE(maxLive, 2U);
+}
+
+// A nested template a stored macro names stays while the macro does, counted, and goes when the host drops it
+TEST_F(LimitsEnvTest, StoringNestedTemplatesKeepTheirTreesUntilTheValuesGo)
+{
+    ValuesMap extra;
+    extra["count"] = UserCallable([](const UserCallableParams&) { return Value(static_cast<std::int64_t>(CycleCollector::Current()->KeptTreeCount())); }, {});
+    auto result = RenderNestedLoads<char>(m_env,
+                                          "{% for i in range(300) %}{{ inner() }}{% endfor %}{{ count() }}|{% set _ = g.clear() %}{{ count() }}",
+                                          0,
+                                          false,
+                                          true,
+                                          {},
+                                          std::move(extra));
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("300|0", result->substr(result->size() - 5));
+}
+
+// The trees that go are credited what they were charged and no more: the budget never has more left than the render
+// started with, and a loop of them fits a budget that holds a few hundred
+TEST_F(LimitsEnvTest, GivenBackTreesCreditOnlyTheirCharge)
+{
+    std::uint64_t start = 0;
+    std::uint64_t maxLeft = 0;
+    ValuesMap extra;
+    extra["mem"] = UserCallable(
+        [&](const UserCallableParams&) {
+            start = detail::t_renderLimits.memoryLeft;
+            return Value(std::string());
+        },
+        {});
+    auto probe = [&] { maxLeft = std::max(maxLeft, detail::t_renderLimits.memoryLeft); };
+    auto result = RenderNestedLoads<char>(m_env,
+                                          "{{ mem() }}{% for i in range(5000) %}{{ inner() }}{% endfor %}",
+                                          std::uint64_t{ 1 } << 20,
+                                          false,
+                                          false,
+                                          probe,
+                                          std::move(extra));
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_GT(start, 0U);
+    EXPECT_LE(maxLeft, start);
+}
+#endif
+
+// 0521: 20000 nested renders of a new 2 KB template that stores nothing fit 1 MiB: each tree is given back once
+// nothing owns it (0492 failed this loop)
+TEST_F(LimitsEnvTest, NestedTemplatesGivenBackFitTheOuterBudget)
+{
+    auto result = RenderNestedLoads<char>(m_env, "{% for i in range(20000) %}{{ inner() }}{% endfor %}", std::uint64_t{ 1 } << 20);
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ(20000 * 4U, result->size());
+    auto wide = RenderNestedLoads<wchar_t>(m_env, "{% for i in range(20000) %}{{ inner() }}{% endfor %}", std::uint64_t{ 1 } << 20);
+    ASSERT_TRUE(wide.has_value());
+}
+
 // 0492: 20000 nested renders of a new 2 KB template each took the process from 45 to 122 MB under UntrustedLimits:
-// the trees the outer render keeps for them now count against its budget, and fail it rather than the nested render
+// the trees that values of the outer render own count against its budget, and fail it rather than the nested render.
+// Each template stores a macro of itself in a global (0521: one that stores nothing is given back)
 TEST_F(LimitsEnvTest, KeptNestedTemplatesCountAgainstTheOuterBudget)
 {
     const std::string loop = "{% for i in range(20000) %}{{ inner() }}{% endfor %}";
-    auto result = RenderNestedLoads<char>(m_env, loop, std::uint64_t{ 1 } << 20);
+    auto result = RenderNestedLoads<char>(m_env, loop, std::uint64_t{ 1 } << 20, false, true);
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
     EXPECT_EQ("maxRenderMemory", ToString(result.error().GetExtraParams()[1]));
@@ -887,7 +998,8 @@ TEST_F(LimitsEnvTest, KeptTemplatesOfADeeperRenderCountAgainstTheOuterBudget)
     settings.limits.maxRenderMemory = std::uint64_t{ 1 } << 20;
     m_env.SetSettings(settings);
     m_env.AddGlobal("g", ValuesList{});
-    const std::string body = "{% set x = 1 %}" + std::string(2000, 'x');
+    // A macro of each template in a global owns it, so that the trees add up (0521)
+    const std::string body = "{% macro m() %}x{% endmacro %}{% set _ = g.append(m) %}" + std::string(2000, 'x');
     int rendered = 0;
     int failed = 0;
     std::string innerError;
@@ -974,7 +1086,7 @@ TEST_F(LimitsEnvTest, KeptCachedTemplateCountsOnce)
 
 TEST_F(LimitsEnvTest, WideKeptNestedTemplatesCountAgainstTheOuterBudget)
 {
-    auto result = RenderNestedLoads<wchar_t>(m_env, "{% for i in range(20000) %}{{ inner() }}{% endfor %}", std::uint64_t{ 1 } << 20);
+    auto result = RenderNestedLoads<wchar_t>(m_env, "{% for i in range(20000) %}{{ inner() }}{% endfor %}", std::uint64_t{ 1 } << 20, false, true);
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
 }

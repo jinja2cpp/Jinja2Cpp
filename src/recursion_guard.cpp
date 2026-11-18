@@ -400,26 +400,59 @@ void OverdrawRenderMemory(std::uint64_t bytes) noexcept
     Overdraw(t_renderLimits, bytes);
 }
 
-bool ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept
+namespace
+{
+// The limits of the running render, or one it interrupted, that `collector` installed; null for none
+RenderLimits* LimitsOf(const void* collector) noexcept
 {
     for (auto* limits = &t_renderLimits; limits; limits = limits->interrupted)
     {
-        if (limits->collector != collector)
+        if (limits->collector == collector)
         {
-            continue;
+            return limits;
         }
-        if (limits->memoryLeft != UINT64_MAX)
-        {
-            if (bytes > limits->memoryLeft)
-            {
-                Overdraw(*limits, bytes);
-                return false;
-            }
-            limits->memoryLeft -= bytes;
-        }
+    }
+    return nullptr;
+}
+} // namespace
+
+bool ChargeRenderMemoryOf(const void* collector, std::uint64_t bytes, std::uint64_t* taken) noexcept
+{
+    if (taken)
+    {
+        *taken = 0;
+    }
+    auto* limits = LimitsOf(collector);
+    if (!limits || limits->memoryLeft == UINT64_MAX)
+    {
         return true;
     }
+    if (taken)
+    {
+        *taken = bytes;
+    }
+    if (bytes > limits->memoryLeft)
+    {
+        Overdraw(*limits, bytes);
+        return false;
+    }
+    limits->memoryLeft -= bytes;
     return true;
+}
+
+void ReleaseRenderMemoryOf(const void* collector, std::uint64_t bytes) noexcept
+{
+    auto* limits = LimitsOf(collector);
+    if (limits && limits->memoryLeft != UINT64_MAX)
+    {
+        limits->memoryLeft = bytes < limits->memoryBudget - limits->memoryLeft ? limits->memoryLeft + bytes : limits->memoryBudget;
+    }
+}
+
+std::uint64_t RenderMemoryLeftOf(const void* collector) noexcept
+{
+    const auto* limits = LimitsOf(collector);
+    return limits ? limits->memoryLeft : UINT64_MAX;
 }
 
 void ThrowKeptTreeMemory(std::uint64_t bytes)
