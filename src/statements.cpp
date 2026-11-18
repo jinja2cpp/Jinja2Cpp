@@ -3906,7 +3906,9 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
         capture = site.CaptureOnEnd(values, values.Nodes()[m_bodyReads], false);
     }
     Callable result(Callable::Macro,
-                    CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly, values.TreeOwner() });
+                    CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly, values.TreeOwner() },
+                    // std::function keeps a body this large on the heap, past the holder's own block (docs/tasks/0530)
+                    sizeof(CallableBody));
     result.SetAttributes(m_attributes);
     result.SetKeepAlive(std::move(capture));
     return result;

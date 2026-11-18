@@ -2172,13 +2172,16 @@ public:
     // up for a call, and copying a std::function copies everything it captured
     Callable(Kind kind, ExpressionCallable&& callable)
         : m_kind(kind)
-        , m_callable(std::make_shared<const CallableHolder>(std::move(callable)))
+        , m_callable(MakeHolder(std::move(callable), 0))
     {
     }
 
-    Callable(Kind kind, StatementCallable&& callable)
+    // `functorBytes`: the size of the functor `callable` holds when std::function keeps it on the heap (a macro's
+    // body), which counts against the memory budget with the holder, and is given back when the last copy goes
+    // (docs/tasks/0530)
+    Callable(Kind kind, StatementCallable&& callable, std::size_t functorBytes = 0)
         : m_kind(kind)
-        , m_callable(std::make_shared<const CallableHolder>(std::move(callable)))
+        , m_callable(MakeHolder(std::move(callable), functorBytes))
     {
     }
 
@@ -2274,6 +2277,39 @@ public:
 private:
     // Visits the receiver of a bound method and the attributes, when this callable alone holds them
     friend void TraverseBoxed(const Callable& callable, const TraverseFn& fn);
+
+    // The shared function and what it charged to the render's memory budget beyond its own block
+    struct CountedHolder : CallableHolder
+    {
+        template<typename F>
+        CountedHolder(F&& function, std::uint64_t functorBytes)
+            : CallableHolder(std::forward<F>(function))
+        {
+            // Charged as a counted block's header-less part; released only when it was charged (docs/tasks/0483)
+            if (functorBytes != 0 && RenderMemoryCounted())
+            {
+                m_charged = functorBytes;
+                ChargeObjectMemory(m_charged);
+            }
+        }
+        CountedHolder(const CountedHolder&) = delete;
+        CountedHolder& operator=(const CountedHolder&) = delete;
+        ~CountedHolder()
+        {
+            if (m_charged != 0)
+            {
+                ReleaseRenderMemory(m_charged);
+            }
+        }
+        std::uint64_t m_charged = 0;
+    };
+
+    // The holder and its control block come from CountedAllocator, so they count against the render's memory budget
+    template<typename F>
+    static std::shared_ptr<const CallableHolder> MakeHolder(F&& function, std::size_t functorBytes)
+    {
+        return std::allocate_shared<const CountedHolder>(CountedAllocator<CountedHolder>(), std::forward<F>(function), functorBytes);
+    }
 
     Kind m_kind;
     std::shared_ptr<const CallableHolder> m_callable;

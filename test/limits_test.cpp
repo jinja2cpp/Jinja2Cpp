@@ -1181,6 +1181,38 @@ TEST_F(LimitsEnvTest, KeptModulesCountAgainstTheBudget)
     EXPECT_EQ("done", RenderWithModuleX<char>("{% for i in range(10000) %}{% import 'x' as m %}{% endfor %}done", std::uint64_t{ 1 } << 20).value());
 }
 
+// 0530: a macro's callable counts its holder, control block and the heap block std::function keeps its body in, not
+// only the ValueBox. Measured on 2026-11-18 (Debug, glibc, counting operator new, usable sizes): 50,000 kept macros
+// grew the heap by 19.3 MB at their peak; the least budget that renders them is 18.1 MB (94%; before, 7.7 MB of
+// 17.7 MB). The loop fails at 17.5 MB, 9% under the peak, and passes at 24 MB
+TEST_F(LimitsEnvTest, KeptMacrosCountAgainstTheBudgetClosely)
+{
+    const std::string loop = "{% set l = [] %}{% for i in range(50000) %}{% macro m() %}{% endmacro %}{% set _ = l.append(m) %}{% endfor %}done";
+    auto narrow = RenderWithModuleX<char>(loop, std::uint64_t{ 17500000 });
+    ASSERT_FALSE(narrow.has_value());
+    EXPECT_EQ("maxRenderMemory", ToString(narrow.error().GetExtraParams()[1]));
+    auto wide = RenderWithModuleX<wchar_t>(loop, std::uint64_t{ 17500000 });
+    ASSERT_FALSE(wide.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wide.error().GetCode());
+    EXPECT_EQ("done", RenderWithModuleX<char>(loop, std::uint64_t{ 24000000 }).value());
+    EXPECT_EQ(L"done", RenderWithModuleX<wchar_t>(loop, std::uint64_t{ 24000000 }).value());
+    // Macros that are dropped give back what they took
+    const std::string dropped = "{% for i in range(50000) %}{% macro m() %}{% endmacro %}{% set x = m %}{% endfor %}done";
+    EXPECT_EQ("done", RenderWithModuleX<char>(dropped, std::uint64_t{ 1 } << 20).value());
+}
+
+// 0530: 10,000 with-context imports kept in a list peak at 51.4 MB of heap, and the least budget that renders them is
+// 50.3 MB (98%); the vectors a module's context keeps are under 1% of that, so they stay uncounted. The loop fails at
+// 46 MB and passes at 60 MB
+TEST_F(LimitsEnvTest, KeptModuleListCountsAgainstTheBudgetClosely)
+{
+    const std::string loop = "{% set l = [] %}{% for i in range(10000) %}{% import 'x' as m with context %}{% set _ = l.append(m) %}{% endfor %}done";
+    auto narrow = RenderWithModuleX<char>(loop, std::uint64_t{ 46000000 });
+    ASSERT_FALSE(narrow.has_value());
+    EXPECT_EQ("maxRenderMemory", ToString(narrow.error().GetExtraParams()[1]));
+    EXPECT_EQ("done", RenderWithModuleX<char>(loop, std::uint64_t{ 60000000 }).value());
+}
+
 // 0508: a closure kept past the call that defined it keeps a copy of the names it sees; 50,000 took 136 MB under
 // UntrustedSettings, of which the budget counted about 150 bytes each. The copy now counts, about 1.3 KB each: 20,000
 // of them pass 8 MiB with a 3x margin
