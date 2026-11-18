@@ -1307,6 +1307,10 @@ TEST(ErrorsJinjaMessagesTest, RuntimeErrorsNameTheirPythonClass)
         { "{{ '%x'|safe % 1.5 }}", "TypeError", "%x format: an integer is required, not _MarkupEscapeHelper" },
         { "{{ '%c'|safe % 1 }}", "TypeError", "%c requires int or char" },
         { "{{ '%*d'|safe % (1, 1) }}", "TypeError", "* wants int" },
+        // KeyError: the message keeps its prefix, the key is ExtraParams[2] (docs/tasks/0511)
+        { "{{ '%(b)s' % {'a': 1} }}", "KeyError", "KeyError: 'b'" },
+        { "{{ '{0[b]}'.format({'a': 1}) }}", "KeyError", "KeyError: 'b'" },
+        { "{{ {'a': 1}.pop('b') }}", "KeyError", "KeyError: 'b'" },
         // Not reclassified
         { "{{ 1 + 'a' }}", nullptr, nullptr },
     };
@@ -1323,10 +1327,66 @@ TEST(ErrorsJinjaMessagesTest, RuntimeErrorsNameTheirPythonClass)
             EXPECT_EQ(1U, params.size()) << row.source;
             continue;
         }
-        ASSERT_EQ(2U, params.size()) << row.source;
+        ASSERT_EQ(std::string(row.pythonClass) == "KeyError" ? 3U : 2U, params.size()) << row.source;
         EXPECT_EQ(row.message, params[0].AsString()) << row.source;
         EXPECT_EQ(row.pythonClass, params[1].AsString()) << row.source;
     }
+}
+
+// The missing key a KeyError keeps, as the Python module raises KeyError(key): an owned scalar or string only,
+// never a tuple or a callable whose items the render may have lent (docs/tasks/0511)
+TEST(ErrorsJinjaMessagesTest, KeyErrorKeepsItsPlainKey)
+{
+    const auto keyOf = [](const char* source) -> std::optional<Value> {
+        Template tpl;
+        EXPECT_TRUE(tpl.Load(source).has_value()) << source;
+        const auto result = tpl.RenderAsString({});
+        EXPECT_FALSE(result.has_value()) << source;
+        if (result.has_value())
+        {
+            return std::nullopt;
+        }
+        const auto& params = result.error().GetExtraParams();
+        EXPECT_EQ(ErrorCode::TemplateRuntimeError, result.error().GetCode()) << source;
+        EXPECT_GE(params.size(), 2U) << source;
+        if (params.size() < 2)
+        {
+            return std::nullopt;
+        }
+        EXPECT_EQ("KeyError", params[1].AsString()) << source;
+        return params.size() > 2 ? std::optional<Value>(params[2]) : std::nullopt;
+    };
+    const auto text = keyOf("{{ {'a': 1}.pop('b') }}");
+    if (text && text->IsString())
+    {
+        EXPECT_EQ("b", text->AsString());
+    }
+    else
+    {
+        ADD_FAILURE() << "no string key";
+    }
+    for (const char* source : { "{{ {'a': 1}.pop(1) }}", "{{ '{0[1]}'.format({'a': 1}) }}" })
+    {
+        const auto number = keyOf(source);
+        if (number && number->IsInt())
+        {
+            EXPECT_EQ(1, number->AsInt()) << source;
+        }
+        else
+        {
+            ADD_FAILURE() << "no int key: " << source;
+        }
+    }
+    const auto wide = [] {
+        TemplateW tpl;
+        EXPECT_TRUE(tpl.Load(L"{{ {'a': 1}.pop('b') }}").has_value());
+        return tpl.RenderAsString({});
+    }();
+    ASSERT_FALSE(wide.has_value());
+    ASSERT_EQ(3U, wide.error().GetExtraParams().size());
+    EXPECT_TRUE(wide.error().GetExtraParams()[2].IsString() || wide.error().GetExtraParams()[2].IsWString());
+    EXPECT_FALSE(keyOf("{% macro m() %}{% endmacro %}{{ {'a': 1}.pop(m) }}"));
+    EXPECT_FALSE(keyOf("{{ {'a': 1}.pop((1, 'x')) }}"));
 }
 
 // Python's messages for str.format's [key] of a sequence and for Markup * x (docs/tasks/0475)

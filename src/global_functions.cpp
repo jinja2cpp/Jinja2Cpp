@@ -1,3 +1,4 @@
+#include "call_stop.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "filters.h"
@@ -6,6 +7,7 @@
 #include "markup.h"
 #include "python_format.h"
 #include "recursion_guard.h"
+#include "render_context.h"
 #include "template_dict.h"
 #include "template_env_impl.h"
 #include "undefined.h"
@@ -582,6 +584,37 @@ bool IsOne(const InternalValue& n)
     return false;
 }
 
+// The installed callable of a newstyle gettext function, called through Context.call: one that raises StopIteration
+// gives undefined (docs/tasks/0500), which `rv % variables` then refuses as Jinja2's Undefined does; under autoescape
+// the function first makes it Markup, as str() of the undefined value
+InternalValue CallTranslation(const UserCallable& userFn, const CallParams& params, RenderContext& context)
+{
+    auto callable = visitors::InputValueConvertor::ConvertUserCallable(userFn);
+    CallParams rawParams;
+    rawParams.posParams = params.posParams;
+    HomeCall::Snapshot snapshot(context);
+    try
+    {
+        return GetIf<Callable>(&callable)->GetExpressionCallable()(rawParams, context);
+    }
+    catch (...)
+    {
+        detail::KeepFailure();
+    }
+    if (!detail::KeptIsStop())
+    {
+        detail::RethrowKept();
+    }
+    detail::DropKept();
+    snapshot.Undo();
+    const auto undefined = detail::MakeStopUndefined(context);
+    if (!context.IsAutoescape())
+    {
+        CheckUndefinedUse(undefined, UndefinedUse::Arithmetic);
+    }
+    return MakeMarkup(undefined, context.GetRendererCallback());
+}
+
 // _make_new_gettext and friends: translates the message, then formats it with the keyword
 // arguments (`num` defaults to the count); under autoescape the result is Markup and the
 // variables are escaped
@@ -598,10 +631,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     InternalValue translated;
     if (userFn)
     {
-        auto callable = visitors::InputValueConvertor::ConvertUserCallable(*userFn);
-        CallParams rawParams;
-        rawParams.posParams = params.posParams;
-        translated = GetIf<Callable>(&callable)->GetExpressionCallable()(rawParams, context);
+        translated = CallTranslation(*userFn, params, context);
     }
     else
     {

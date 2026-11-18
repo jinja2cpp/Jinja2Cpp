@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_ENGINE_ERRORS_H
 
 #include <exception>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -10,6 +11,8 @@ namespace jinja2
 {
 inline namespace v2
 {
+class Value;
+
 // Errors the engine raises, which Load and Render report by their code with no exception
 // attached (docs/api-2.0.md, 2.1); a standard exception of the same kind from host code keeps its own.
 
@@ -55,13 +58,22 @@ public:
         Unknown,
         TypeError,
         ValueError,
-        AttributeError
+        AttributeError,
+        KeyError
     };
 
     using std::runtime_error::runtime_error;
     TemplateRuntimeError(PythonClass pythonClass, const std::string& message)
         : std::runtime_error(message)
         , m_pythonClass(pythonClass)
+    {
+    }
+    // Python's KeyError of the missing `key` (ExtraParams[2] of the error, docs/tasks/0511); null when the key is not
+    // a value an error may keep past the render (methods::ThrowKeyError)
+    TemplateRuntimeError(PythonClass pythonClass, const std::string& message, std::shared_ptr<const Value> key)
+        : std::runtime_error(message)
+        , m_pythonClass(pythonClass)
+        , m_key(std::move(key))
     {
     }
     //! The name of the class (ExtraParams[1] of the error), or null when unknown
@@ -75,14 +87,20 @@ public:
             return "ValueError";
         case PythonClass::AttributeError:
             return "AttributeError";
+        case PythonClass::KeyError:
+            return "KeyError";
         case PythonClass::Unknown:
             break;
         }
         return nullptr;
     }
 
+    //! The missing key of a KeyError, or null
+    [[nodiscard]] const std::shared_ptr<const Value>& Key() const noexcept { return m_key; }
+
 private:
     PythonClass m_pythonClass = PythonClass::Unknown;
+    std::shared_ptr<const Value> m_key;
 };
 
 // Python's UndefinedError: ErrorCode::UndefinedError

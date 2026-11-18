@@ -8,6 +8,7 @@
 #include "markup.h"
 #include "prompt_escape.h"
 #include "undefined.h"
+#include "value_methods.h"
 #include "value_visitors.h"
 
 #include <fmt/format.h>
@@ -697,7 +698,7 @@ private:
         std::string key(name);
         if (!m_map->HasValue(key))
         {
-            throw TemplateRuntimeError("KeyError: '" + key + "'");
+            methods::ThrowKeyError(InternalValue(key));
         }
         m_keyedValue = m_map->GetValueByName(key);
         m_keyed = true;

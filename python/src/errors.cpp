@@ -9,6 +9,7 @@
 #include <exception>
 #include <new>
 #include <string>
+#include <string_view>
 
 namespace jinja2cpp_py
 {
@@ -264,6 +265,20 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         PyErr_SetString(PyExc_RecursionError, "maximum recursion depth exceeded");
         throw nb::python_error();
     case ErrorCode::TemplateRuntimeError:
+        // Python's KeyError(key), whose str() is the key's repr: the engine's message has a `KeyError: ` prefix, and
+        // the key is ExtraParams[2] when the error could keep it (docs/tasks/0511)
+        if (ParamText(error, 1) == "KeyError")
+        {
+            const auto& params = error.GetExtraParams();
+            constexpr std::string_view prefix = "KeyError: ";
+            std::string text = ParamText(error, 0);
+            if (text.compare(0, prefix.size(), prefix) == 0)
+            {
+                text.erase(0, prefix.size());
+            }
+            const nb::object key = params.size() > 2 ? ToPython(params[2]) : nb::object(MakeStr(text));
+            Raise(PyExc_KeyError, nb::handle(PyExc_KeyError)(key));
+        }
         // Python's class of the error, when the engine names it (ExtraParams[1])
         if (auto* type = PythonClassOf(ParamText(error, 1)))
         {
