@@ -443,10 +443,10 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // what a module it imported that was shared imported
             kept.erase(std::remove_if(from, kept.end(), [](const KeptModule& entry) { return !entry.owned; }), kept.end());
         }
-        void ShareModule(const IRendererCallback::LoadTemplateResult& tpl, ImportedModule& module) override
+        void ShareModule(const IRendererCallback::LoadTemplateResult& tpl, ImportedModule& sharedModule) override
         {
-            Impl::RendererCallback::ShareModule(tpl, module);
-            lastShared = &module;
+            Impl::RendererCallback::ShareModule(tpl, sharedModule);
+            lastShared = &sharedModule;
         }
         ImportedModule& AddModule(std::unique_ptr<ImportedModule> newModule) override
         {
