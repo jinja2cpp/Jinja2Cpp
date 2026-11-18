@@ -3716,6 +3716,12 @@ bool IsImported(const InternalValue& value)
 }
 } // namespace
 
+bool ImportedModule::ExportsToObject(std::string_view name, const InternalValue& value) const
+{
+    // Jinja2 exports no name that starts with an underline
+    return !name.empty() && name[0] != '_' && IsImported(value) && Exports(name);
+}
+
 namespace
 {
 // Python's repr() of a value
@@ -3776,8 +3782,7 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
     InternalValueMap importedNs;
     for (const auto& [name, value] : moduleNames)
     {
-        // Jinja2 exports no name that starts with an underline
-        if (name.empty() || name[0] == '_' || !IsImported(value) || !module.Exports(name))
+        if (!module.ExportsToObject(name, value))
         {
             continue;
         }
@@ -3930,6 +3935,98 @@ const ClosureSite* ClosureSiteOf(const InternalValue& value)
     return nullptr;
 }
 } // namespace
+
+const void* MacroStatement::TreeOwnerOf(const InternalValue& value, const void*& body)
+{
+    const auto* macro = MacroBodyOf<CallableBody>(value);
+    body = macro;
+    return macro ? macro->treeOwner.get() : nullptr;
+}
+
+bool ImportedModule::HeldOnlyByItself() const noexcept
+{
+    if (!m_treeOwner)
+    {
+        return false;
+    }
+    // The objects of the module's values, each with the holders it has here: its names and, once made, the object of
+    // its exports. A module has few names; past the array's room it stays, which is only memory kept
+    struct Held
+    {
+        const ValueObject* object;
+        unsigned count;
+        // The macro body that holds the module's tree, if the value is one of its macros
+        const void* body;
+    };
+    std::array<Held, 64> held{};
+    std::size_t objects = 0;
+    bool overflow = false;
+    const auto bodyOf = [this](const InternalValue& value) -> const void* {
+        const void* body = nullptr;
+        return MacroStatement::TreeOwnerOf(value, body) == m_treeOwner.get() ? body : nullptr;
+    };
+    const auto note = [&held, &objects, &overflow, &bodyOf](const InternalValue& value) {
+        const auto* object = detail::InternalValueAccess::Object(value);
+        if (!object)
+        {
+            return;
+        }
+        // data(): std::array's iterator is a class in MSVC's library
+        Held* const end = held.data() + objects;
+        if (Held* const found = std::find_if(held.data(), end, [object](const Held& h) { return h.object == object; }); found != end)
+        {
+            ++found->count;
+        }
+        else if (objects != held.size())
+        {
+            held[objects++] = Held{ object, 1, bodyOf(value) };
+        }
+        else
+        {
+            overflow = true;
+        }
+    };
+    const auto* moduleObject = detail::InternalValueAccess::Object(m_object);
+    // use_count: read on the thread that runs the module's calls, which holds its lock
+    if (moduleObject && moduleObject->use_count() != 1)
+    {
+        return false;
+    }
+    const auto& names = Names();
+    for (const auto& [name, value] : names)
+    {
+        note(value);
+        if (moduleObject && ExportsToObject(name, value))
+        {
+            note(value);
+        }
+    }
+    if (overflow)
+    {
+        return false;
+    }
+    // The macros the module defined hold its tree, the load and the module itself hold it once each
+    long treeHolders = 2;
+    for (const Held* h = held.data(); h != held.data() + objects; ++h)
+    {
+        // use_count: as above; a count never below the holders noted, so a higher one is a holder outside
+        if (h->object->use_count() != h->count)
+        {
+            return false;
+        }
+    }
+    // Each body of a macro holds the tree once, however many boxes share it: count a body at its first box
+    for (const Held* h = held.data(); h != held.data() + objects; ++h)
+    {
+        if (h->body && std::none_of(static_cast<const Held*>(held.data()), h, [h](const Held& other) { return other.body == h->body; }))
+        {
+            ++treeHolders;
+        }
+    }
+    // use_count: as above. A closure a call made in the tree and stored (a nested macro, a caller, a recursive loop)
+    // holds it too
+    return m_treeOwner.use_count() == treeHolders;
+}
 
 std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
 {

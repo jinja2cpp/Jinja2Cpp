@@ -683,6 +683,9 @@ public:
     // did not set it again, as Jinja2 does not (docs/tasks/0299). Names that start with an
     // underscore are the caller's to leave out
     [[nodiscard]] bool Exports(std::string_view name) const { return std::find(m_imports.begin(), m_imports.end(), name) == m_imports.end(); }
+    // Whether the `import ... as m` object has `name`, one of Names() holding `value`: an export that does not start
+    // with an underscore and is not a callable other than a macro, as Jinja2 exports. Defined in statements.cpp
+    [[nodiscard]] bool ExportsToObject(std::string_view name, const InternalValue& value) const;
     // The `import ... as m` object: the exported names as attributes, which prints as
     // Jinja2's TemplateModule, its output as str() and <TemplateModule 'name'> as repr()
     // (docs/tasks/0309). Made once: a module two imports share is one object, equal to itself
@@ -694,6 +697,11 @@ public:
     // Whether the module holds handles of a render's table of templates: its blocks, or the parent
     // its template extends, which a module's slots must keep (docs/tasks/0503)
     [[nodiscard]] bool HoldsTemplateHandles() const noexcept { return !m_blocks.blocks.empty() || static_cast<bool>(m_frame.parent); }
+    // Whether only the module and the result of the load it was made from hold what it made: each value of its names
+    // is held by them and the object `import ... as` made of them alone, and its tree (SetTreeOwner) by the load, the
+    // module and its own macros alone. Then nothing else can reach the module or view its tree, and it may end
+    // with them (docs/tasks/0528). False for a module whose tree is not kept by value
+    [[nodiscard]] bool HeldOnlyByItself() const noexcept;
 
 private:
     // Declared first, so that it goes last: the module's names and macros view the tree it keeps
@@ -900,6 +908,9 @@ public:
     // its capture again, so that what the call stores elsewhere keeps it; else `value`. Throws
     // std::bad_alloc
     [[nodiscard]] static InternalValue StrengthenCapture(const InternalValue& value);
+    // The owner of the tree `value` runs in when it is a macro of a module that frees replaced trees
+    // (RenderContext::TreeOwner), else null; `body` gets the callable's body, which holds it (docs/tasks/0528)
+    [[nodiscard]] static const void* TreeOwnerOf(const InternalValue& value, const void*& body);
 
 protected:
     // What MakeCallable's callable holds; defined in statements.cpp

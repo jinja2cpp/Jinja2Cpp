@@ -782,6 +782,33 @@ TEST_F(TemplateModuleChangingSourceTest, ChildOfAChangingParent)
     EXPECT_EQ((std::vector<std::string>{ "<CL1>", "<CL2>", "[CL3]" }), results);
 }
 
+// A module imported without context goes with its replaced tree once nothing else holds it (docs/tasks/0528): what a
+// call stored of it, a macro, the module object or a macro its macro made, still runs with the module's names
+TEST_F(TemplateModuleChangingSourceTest, StoredMacroOfASharedModuleSeesItsNames)
+{
+    const std::vector<std::string> libs = { "{% set v = 'V1' %}{% macro x() %}OLD{{ v }}{% endmacro %}", "{% set v = 'V2' %}{% macro x() %}NEW{{ v }}{% endmacro %}",
+                                            "{% set v = 'V3' %}{% macro x() %}NEW2{{ v }}{% endmacro %}" };
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLDV1]", "[NEWV2]" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% import 'lib' as l %}{% set ns.f = l.x %}{% endmacro %}", libs));
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLDV1]", "[NEWV2]" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% from 'lib' import x %}{% set ns.f = x %}{% endmacro %}", libs));
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLDV1V1]", "[NEWV2V2]" }),
+              CallWithLibs("{% set ns = namespace(l=none) %}{% macro m() %}[{% if ns.l %}{{ ns.l.x() }}{{ ns.l.v }}{% endif %}]{% import 'lib' as l %}{% set ns.l = l %}{% endmacro %}", libs));
+    // Stored by the first call only: its module stays while the macro does
+    auto four = libs;
+    four.emplace_back("{% set v = 'V4' %}{% macro x() %}NEW3{{ v }}{% endmacro %}");
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[OLDV1]", "[OLDV1]", "[OLDV1]" }),
+              CallWithLibs("{% set ns = namespace(f=none, n=0) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% import 'lib' as l %}"
+                           "{% if ns.n == 0 %}{% set ns.f = l.x %}{% endif %}{% set ns.n = ns.n + 1 %}{% endmacro %}",
+                           four));
+    // A macro the module's macro made and stored
+    EXPECT_EQ((std::vector<std::string>{ "[]", "[Y1V1]", "[Y2V2]" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% import 'lib' as l %}{% set _ = l.mk(ns) %}{% endmacro %}",
+                           { "{% set v = 'V1' %}{% macro mk(ns) %}{% macro y() %}Y1{{ v }}{% endmacro %}{% set ns.f = y %}{% endmacro %}",
+                             "{% set v = 'V2' %}{% macro mk(ns) %}{% macro y() %}Y2{{ v }}{% endmacro %}{% set ns.f = y %}{% endmacro %}",
+                             "{% set v = 'V3' %}{% macro mk(ns) %}{% macro y() %}Y3{{ v }}{% endmacro %}{% set ns.f = y %}{% endmacro %}" }));
+}
+
 // A `super` of a block with no parent block, stored and called then and by later calls, fails naming the block,
 // as Jinja2's undefined does, while the module frees the tree it was taken in (docs/tasks/0503)
 TEST_F(TemplateModuleChangingSourceTest, StoredSuperWithNoParentNamesItsBlock)

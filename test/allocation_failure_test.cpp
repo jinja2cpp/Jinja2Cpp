@@ -723,10 +723,11 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
         const char* body;
         bool fails;
     };
-    // Not a plain import (without context): the module shares the imported template's module, one per source change
-    // (docs/tasks/0528)
     for (const auto& [body, fails] : { Row{ "{% include 'lib' %}{{ 1 }}", false }, Row{ "{% import 'lib' as l with context %}{{ l.x() }}", false },
                                        Row{ "{% from 'lib' import x with context %}{{ x() }}", false },
+                                       // A plain import (without context) shares the imported template's module, which goes with
+                                       // its tree once nothing else holds it (docs/tasks/0528)
+                                       Row{ "{% import 'lib' as l %}{{ l.x() }}", false }, Row{ "{% from 'lib' import x %}{{ x() }}", false },
                                        Row{ "{% for i in range(3) %}{% include 'lib' %}{% endfor %}", false },
                                        // A tree that takes a slot: an `extends` child, an included or imported template with blocks
                                        Row{ "{% include 'child' %}", false }, Row{ "{% include 'blocks' %}", false },

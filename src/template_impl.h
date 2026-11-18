@@ -1572,6 +1572,59 @@ private:
             return nullptr;
         }
 
+        // Ends the modules imported without context whose template a source change replaced and that only they and
+        // their load hold (ImportedModule::HeldOnlyByItself), so that PruneReplaced frees their trees: Jinja2's old
+        // Template goes with its module once nothing refers to them, while a module shared for the module's life
+        // kept one per source change (docs/tasks/0528). Not one that `isKeptOrKeeps` names: another such module's
+        // top level imported it, or it imported modules at its own, which it alone reaches. Called when the
+        // outermost call of a module returned, before PruneReplaced and while the call's collector notes the
+        // values that may hold themselves
+        template<typename IsKeptOrKeeps>
+        void EndReplacedSharedModules(const IsKeptOrKeeps& isKeptOrKeeps) noexcept
+        {
+            if (!HasReplaced() || m_loaded->sharedModules.empty())
+            {
+                return;
+            }
+            auto& loaded = *m_loaded;
+            // The results a name, a statement or nothing but `replaced` holds
+            const auto isLive = [&loaded](const LoadTemplateResult* result) {
+                return std::any_of(loaded.byName.begin(), loaded.byName.end(), [result](const auto& entry) { return entry.second.latest == result || &entry.second.first == result; })
+                       || std::any_of(loaded.bySite.begin(), loaded.bySite.end(), [result](const auto& entry) { return entry.second == result; });
+            };
+            auto& shared = loaded.sharedModules;
+            for (auto p = shared.size(); p-- != 0;)
+            {
+                auto* module = shared[p].second;
+                if (isLive(shared[p].first) || isKeptOrKeeps(module) || module->HoldsTemplateHandles() || !module->HeldOnlyByItself())
+                {
+                    continue;
+                }
+                auto owned = std::find_if(loaded.modules.begin(), loaded.modules.end(), [module](const auto& entry) { return entry.get() == module; });
+                if (owned == loaded.modules.end())
+                {
+                    continue;
+                }
+                // Its values may hold themselves: the call's collector frees those cycles. Noting them allocates; when
+                // that fails, the module stays until a later call
+                try
+                {
+                    for (const auto& [name, value] : module->Names())
+                    {
+                        CycleCollector::NoteStore(value);
+                    }
+                }
+                catch (const std::bad_alloc&)
+                {
+                    continue;
+                }
+                shared.erase(shared.begin() + static_cast<std::ptrdiff_t>(p));
+                // Freed uncounted, as PruneReplaced frees the tree: the module was made by an earlier call
+                const UncountedMemoryScope uncounted;
+                loaded.modules.erase(owned);
+            }
+        }
+
         // Whether a source change replaced a tree this render loaded (PruneReplaced)
         [[nodiscard]] bool HasReplaced() const noexcept { return m_loaded && !m_loaded->replaced.empty(); }
         // Ends the trees a source change replaced that nothing of the render's own reaches: not the latest of their
