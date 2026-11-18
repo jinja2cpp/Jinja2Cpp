@@ -7,6 +7,7 @@
 #include "markup.h"
 #include "python_format.h"
 #include "recursion_guard.h"
+#include "render_context.h"
 #include "template_dict.h"
 #include "template_env_impl.h"
 #include "undefined.h"

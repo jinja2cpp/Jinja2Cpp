@@ -698,7 +698,7 @@ private:
         std::string key(name);
         if (!m_map->HasValue(key))
         {
-            methods::ThrowKeyError(InternalValue(std::move(key)));
+            methods::ThrowKeyError(InternalValue(key));
         }
         m_keyedValue = m_map->GetValueByName(key);
         m_keyed = true;

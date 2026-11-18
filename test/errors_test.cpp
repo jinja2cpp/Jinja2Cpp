@@ -1357,13 +1357,25 @@ TEST(ErrorsJinjaMessagesTest, KeyErrorKeepsItsPlainKey)
         return params.size() > 2 ? std::optional<Value>(params[2]) : std::nullopt;
     };
     const auto text = keyOf("{{ {'a': 1}.pop('b') }}");
-    ASSERT_TRUE(text && text->IsString());
-    EXPECT_EQ("b", text->AsString());
+    if (text && text->IsString())
+    {
+        EXPECT_EQ("b", text->AsString());
+    }
+    else
+    {
+        ADD_FAILURE() << "no string key";
+    }
     for (const char* source : { "{{ {'a': 1}.pop(1) }}", "{{ '{0[1]}'.format({'a': 1}) }}" })
     {
         const auto number = keyOf(source);
-        ASSERT_TRUE(number && number->IsInt()) << source;
-        EXPECT_EQ(1, number->AsInt()) << source;
+        if (number && number->IsInt())
+        {
+            EXPECT_EQ(1, number->AsInt()) << source;
+        }
+        else
+        {
+            ADD_FAILURE() << "no int key: " << source;
+        }
     }
     const auto wide = [] {
         TemplateW tpl;

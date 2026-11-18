@@ -22,6 +22,7 @@
 #include "value_visitors.h"
 
 #include <fmt/format.h>
+#include <jinja2cpp/markup.h>
 
 #include <algorithm>
 #include <array>
