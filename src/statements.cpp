@@ -4045,7 +4045,8 @@ bool ImportedModule::HeldOnlyByItself() const noexcept
 
 namespace
 {
-// The blocks of `value` when it is a `self` (MakeTemplateSelf), else null
+// The blocks of `value` when it is a `self` (MakeTemplateSelf) with blocks, else null: one with none keeps nothing,
+// and every macro call of a template copies its `self`
 const InternalValueMap* SelfBlocksOfValue(const InternalValue& value)
 {
     const auto map = AsMap(value);
@@ -4053,9 +4054,13 @@ const InternalValueMap* SelfBlocksOfValue(const InternalValue& value)
     {
         return nullptr;
     }
-    const char* objectClass = map->GetObjectClass();
     const auto* items = ObjectItemsOf(*map);
-    if (!items || !objectClass || std::strcmp(objectClass, "TemplateReference") != 0)
+    if (!items || items->empty())
+    {
+        return nullptr;
+    }
+    const char* objectClass = map->GetObjectClass();
+    if (!objectClass || std::strcmp(objectClass, "TemplateReference") != 0)
     {
         return nullptr;
     }
