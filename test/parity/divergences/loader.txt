@@ -3,3 +3,4 @@
 
 loader.self_of_ended_scoped_block_loses_loop output 0165 deliberate: a `self` kept past its scoped block loses the loop variable, as a macro kept past its loop does
 loader.include_with_macro_kept output 0165 deliberate: a closure called after its `with` reads the `with`'s names as undefined; Jinja2 prints its missing sentinel
+loader.include_dict_of_names_missing accepts 0494 deliberate: none of a mapping's keys found; Jinja2's TemplatesNotFound fails building itself (names[-1], a KeyError, or a TypeError for a set or dict view), which `ignore missing` does not catch; the engine reports TemplatesNotFound

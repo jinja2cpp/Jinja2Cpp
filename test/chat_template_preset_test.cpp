@@ -136,6 +136,15 @@ INSTANTIATE_TEST_SUITE_P(Preset, ChatTemplatePresetTest, ::testing::Values(
     ChatCase{ "{% generation x %}{% endgeneration %}", "error: " },
     ChatCase{ "{% endgeneration %}", "error: " },
     ChatCase{ "{% generation %}", "error: " },
+    // The body is a call block's in transformers: no caller, varargs or kwargs of its own, the macro's other names
+    // (docs/tasks/0448)
+    ChatCase{ "{% macro a() %}{% generation %}{{ caller() }}{% endgeneration %}{% endmacro %}p{% call a() %}x{% endcall %}", "error: No caller defined" },
+    ChatCase{ "{% generation %}{{ caller() }}{% endgeneration %}", "error: No caller defined" },
+    ChatCase{ "{% generation %}[{{ caller }}]{% endgeneration %}", "[]" },
+    ChatCase{ "{% macro a() %}{% generation %}{{ caller is defined }}{% endgeneration %}{{ caller() }}{% endmacro %}{% call a() %}x{% endcall %}", "Falsex" },
+    ChatCase{ "{% macro a(q) %}{% generation %}{{ q }}{{ varargs }}{{ kwargs }}{% endgeneration %}{% endmacro %}{{ a(1) }}", "1(){}" },
+    ChatCase{ "{% macro a() %}{% generation %}{{ varargs }}{{ kwargs }}{% endgeneration %}{{ varargs }}{% endmacro %}{{ a(1, k=2) }}", "(){}(1,)" },
+    ChatCase{ "{% macro a() %}{% generation %}{% set caller = 'c' %}{{ caller }}{% endgeneration %}{% endmacro %}{{ a() }}", "c" },
     // ImmutableSandboxedEnvironment: the methods that change a list or dict are unsafe
     ChatCase{ "{% set l = [1] %}{{ l.append }}|{{ l.append is defined }}|{{ l['append'] }}|{{ (l|attr('append')) is defined }}|{{ l.index(1) }}", "|False||False|0" },
     ChatCase{ "{% set l = [1] %}{{ l.append(2) }}", "error: access to attribute 'append' of 'list' object is unsafe." },
@@ -164,6 +173,24 @@ TEST(ChatTemplatePreset, RaiseExceptionIsTemplateRuntimeError)
     auto result = tpl.RenderAsString({});
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::TemplateRuntimeError);
+}
+
+// caller() in a `generation` body of a macro is the undefined caller of transformers' call block (docs/tasks/0448)
+TEST(ChatTemplatePreset, CallerInGenerationIsUndefinedError)
+{
+    jinja2::TemplateEnv env;
+    jinja2::ConfigureForChatTemplates(env);
+    const std::string source = "{% macro a() %}{% generation %}{{ caller() }}{% endgeneration %}{% endmacro %}p{% call a() %}x{% endcall %}";
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(source));
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::UndefinedError);
+    jinja2::TemplateW wide(&env);
+    ASSERT_TRUE(wide.Load(jinja2::ConvertString<std::wstring>(source)));
+    auto wideResult = wide.RenderAsString({});
+    ASSERT_FALSE(wideResult);
+    EXPECT_EQ(wideResult.error().GetCode(), jinja2::ErrorCode::UndefinedError);
 }
 
 // strftime_now's result counts against maxSequenceSize as it grows, written or not

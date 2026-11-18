@@ -74,6 +74,12 @@ CASES = [
     ("include_ignore_missing", "a{% include 'missing.j2' ignore missing %}b", L),
     ("include_missing", "{% include 'missing.j2' %}", L),
     ("include_list", "{% include ['missing.j2', 'hello.j2'] %}", L),
+    # docs/tasks/0494 and 0498
+    ("include_unhashable_name", "{% include ['missing.j2', []] ignore missing %}", L),
+    ("include_unhashable_name_after_found", "{% include ['hello.j2', []] %}", L),
+    ("include_undefined_name", "{% include [nope, 'missing.j2'] %}", L),
+    ("include_dict_of_names", "{% include {'hello.j2': 1} %}", L),
+    ("include_dict_of_names_missing", "{% include {'missing.j2': 1} ignore missing %}", L),
     ("include_variable", "{% set t = 'hello.j2' %}{% include t %}", L),
     ("include_nested", "{% include 'outer_include.j2' %}", L),
     ("import_as", "{% import 'macros.j2' as m %}{{ m.greet('a') }}", L),

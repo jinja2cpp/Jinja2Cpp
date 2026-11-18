@@ -237,7 +237,10 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         if (!error.GetExtraParams().empty())
         {
             // A list of names is select_template's (ExtraParams[1] "list"), even of one name
-            RaiseTemplateNotFound(source.environment, ToPython(error.GetExtraParams()[0]), ParamText(error, 1) == "list");
+            const auto& params = error.GetExtraParams();
+            // The messages of the names that were undefined (docs/tasks/0498)
+            const nb::object undefined = params.size() > 2 ? ToPython(params[2]) : nb::none();
+            RaiseTemplateNotFound(source.environment, ToPython(params[0]), ParamText(error, 1) == "list", undefined);
         }
         Raise(names.templateNotFound, names.templateNotFound(message));
     case ErrorCode::UndefinedError:
@@ -332,7 +335,7 @@ void RaiseTemplateNotFound(nb::handle name)
     Raise(type, type(name));
 }
 
-void RaiseTemplateNotFound(nb::handle environment, nb::handle names, bool selected)
+void RaiseTemplateNotFound(nb::handle environment, nb::handle names, bool selected, nb::handle undefined)
 {
     // One name a Python loader did not find: Jinja2 raises the loader's own exception
     if (!selected)
@@ -350,7 +353,7 @@ void RaiseTemplateNotFound(nb::handle environment, nb::handle names, bool select
             }
         }
     }
-    auto instance = nb::module_::import_("jinja2cpp.loaders").attr("_not_found")(environment, names, selected);
+    auto instance = nb::module_::import_("jinja2cpp.loaders").attr("_not_found")(environment, names, selected, undefined);
     Raise(reinterpret_cast<PyObject*>(Py_TYPE(instance.ptr())), instance);
 }
 } // namespace jinja2cpp_py

@@ -473,7 +473,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0403](0403-python-methods-on-native-values.md) | Python methods of int, float and str the engine does not implement | parity | low | done |
 | [0404](0404-urlencode-non-dict-mapping.md) | urlencode of a Python Mapping that is not a dict | parity | low | open |
 | [0405](0405-python-globals-replaced-under-cache.md) | Templates cached before env.globals is replaced see the new dict | parity | low | open |
-| [0406](0406-python-environment-keep-bounded.md) | Bound the callables an Environment keeps alive | robustness | low | open |
+| [0406](0406-python-environment-keep-bounded.md) | Bound the callables an Environment keeps alive | robustness | low | done |
 | [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | done |
 | [0408](0408-bench-gate-driver-capabilities.md) | Detect the base bench driver's features by a capability marker | ci | low | open |
 | [0409](0409-truncate-tokens-shrink-bound.md) | Bound the host calls of truncate_tokens' shrink loop | robustness | low | done |
@@ -515,7 +515,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0445](0445-subscript-tuple-of-slices.md) | A subscript of a literal by a tuple of slices is a parse error in the engine | parity | low | done |
 | [0446](0446-nfkc-template-names.md) | Names a template sets are not NFKC-normalised | parity | low | done |
 | [0447](0447-chained-if-unicode-space.md) | Chained else-less conditionals and Unicode spaces inside tags | parity | low | done |
-| [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | open |
+| [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | done |
 | [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | done |
 | [0450](0450-module-call-collector-quadratic.md) | A module whose calls grow a module-level container walks all of it on every call | robustness | medium | done |
 | [0451](0451-python-module-trans-percent-and-range.md) | Python module: `{% trans %}100%{% endtrans %}` prints `100%%`; `range()` prints nothing | api | low | open |
@@ -529,7 +529,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | done |
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | done |
 | [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
-| [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | open |
+| [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | done |
 | [0463](0463-outer-render-sees-nested-global-write.md) | The outer render does not see a global a nested render changed first | robustness | low | done |
 | [0464](0464-lower-upper-tests-cased-letters.md) | `lower` and `upper` tests: a string with no cased letter is neither | parity | medium | done |
 | [0465](0465-dotted-filter-test-names.md) | Dotted filter and test names (`x|ns.f`, `x is ns.t`) | parity | low | done |
@@ -554,12 +554,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | open |
 | [0491](0491-nested-render-closure-and-self-after-its-end.md) | A nested render's closures and `self` stored in a shared global lose their frames | parity | low | done |
 | [0492](0492-nested-render-kept-trees-outside-the-memory-budget.md) | The trees an outer render keeps for its nested renders are outside the memory budget | robustness | high | done |
-| [0493](0493-generate-items-markup.md) | generate() items are str where Jinja2 yields Markup | parity | low | open |
-| [0494](0494-include-odd-names.md) | Include names Jinja2 rejects with other classes | parity | low | open |
+| [0493](0493-generate-items-markup.md) | generate() items are str where Jinja2 yields Markup | parity | low | done |
+| [0494](0494-include-odd-names.md) | Include names Jinja2 rejects with other classes | parity | low | done |
 | [0495](0495-strict-undefined-compare-leftovers.md) | StrictUndefined in the tests and methods that compare | parity | low | done |
 | [0496](0496-dict-view-leftovers.md) | What dict views still lack after 0489 | parity | low | done |
 | [0497](0497-tuple-of-slices-chain-step-folds.md) | A tuple-of-slices fold of one step of a filter chain, and the costs of those folds | parity | low | done |
-| [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | open |
+| [0498](0498-undefined-name-in-include-list.md) | An undefined name in an include's list loses its message in TemplatesNotFound | parity | low | done |
 | [0499](0499-stopped-macro-rollback-into-a-sink.md) | A macro that stops after its output reached the sink keeps the RuntimeError | parity | low | done |
 | [0500](0500-stopiteration-in-gettext-and-format.md) | A StopIteration out of gettext or str.format is undefined in Jinja2 | parity | low | open |
 | [0501](0501-stored-super-deep-chain.md) | A stored `super` called past its block renders without the block's frame | parity | low | done |
@@ -570,7 +570,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | done |
 | [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | done |
 | [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | done |
-| [0509](0509-gettext-call-style-follows-install.md) | The style of a gettext call follows the last install, not the template's load | parity | low | open |
+| [0509](0509-gettext-call-style-follows-install.md) | The style of a gettext call follows the last install, not the template's load | parity | low | done |
 | [0510](0510-percent-format-errors-python-classes.md) | `%` formatting errors carry no Python class | parity | low | done |
 | [0511](0511-keyerror-class-of-format-keys.md) | A missing format key raises no KeyError | parity | low | open |
 | [0512](0512-per-render-fixed-costs.md) | Per-render fixed costs: the memory budget's per-object charge and the render's setup | perf | medium | done |
@@ -583,13 +583,16 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0519](0519-module-call-fixed-cost-creep.md) | A module call's fixed cost grew 4.3% in three weeks, one named exception at a time | perf | low | done |
 | [0520](0520-drift-report-slow-creep.md) | The drift report cannot see creep slower than 3% per 10 merges | perf | low | done |
 | [0521](0521-give-kept-nested-trees-back-early.md) | Give the trees kept for nested renders back before the keeper ends, and copy their params lazily | robustness | medium | open |
-| [0522](0522-nested-load-other-thread-or-assign.md) | Host code inside a first Load that reloads on another thread, or assigns the template, still frees it | robustness | low | open |
+| [0522](0522-nested-load-other-thread-or-assign.md) | Host code inside a first Load that reloads on another thread, or assigns the template, still frees it | robustness | low | in-progress |
 | [0523](0523-dict-view-live-and-set-ops.md) | What dict views still lack after 0496 | parity | low | open |
 | [0524](0524-nested-render-generic-params-outlive-host.md) | A nested render's GenericList param stored in a shared global is read after the host freed it | robustness | high | done |
 | [0525](0525-nested-render-error-after-storing-closure.md) | A closure stored by a nested render that then fails reads its names as ended | parity | low | open |
-| [0526](0526-soft-frame-closure-reads-outer-name.md) | A closure kept past a `filter`, `with` or loop body reads the wrong value of a name the body rebound | parity | low | open |
+| [0526](0526-soft-frame-closure-reads-outer-name.md) | A closure kept past a `filter`, `with` or loop body reads the wrong value of a name the body rebound | parity | low | done |
 | [0527](0527-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds: StrictUndefined leftovers and the cost of the Load's checks | parity | low | done |
 | [0528](0528-plain-import-shared-module-per-change.md) | A module that plain-imports a changing template keeps a shared module per source change | robustness | low | open |
 | [0529](0529-stored-self-let-go-stays-counted.md) | A `self` or `super()` stored in a module and let go of keeps the module's slot trees | robustness | low | open |
 | [0530](0530-render-memory-callable-and-context-storage.md) | The render memory budget leaves out a macro's function storage and a module context's vectors | robustness | low | open |
+| [0534](0534-fuzz-oldstyle-i18n.md) | Fuzz the oldstyle gettext parser path | robustness | low | open |
+| [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | open |
 | [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | open |
+| [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | open |

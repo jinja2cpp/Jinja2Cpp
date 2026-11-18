@@ -220,6 +220,50 @@ TEST_F(IncludeTest, NamesAsSelectTemplateTakesThem)
     }
 }
 
+// A list or a dict among the names fails as Jinja2's template cache hashes it, `ignore missing` or not, once the
+// names before it are tried (docs/tasks/0494)
+TEST_F(IncludeTest, UnhashableNameIsTypeError)
+{
+    for (const std::string source : { "{% include [[]] %}", "{% include [[]] ignore missing %}", "{% include [{}] %}", "{% include ['missing', []] %}", "{% include [1, []] %}", "{% include [([],)] %}", "{% include [{}.keys()] %}" })
+    {
+        jinja2::Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(jinja2::ErrorCode::TemplateRuntimeError, result.error().GetCode()) << source;
+        ASSERT_EQ(2ULL, result.error().GetExtraParams().size()) << source;
+        EXPECT_EQ("TypeError", result.error().GetExtraParams()[1].AsString()) << source;
+    }
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{% include [{}] %}").has_value());
+    EXPECT_EQ("unhashable type: 'dict'", tpl.RenderAsString({}).error().GetExtraParams()[0].AsString());
+    // A name found before it renders; a tuple of strings is hashable
+    ASSERT_TRUE(tpl.Load("{% include ['header', []] %}|{% include [('a',), 'header'] %}").has_value());
+    EXPECT_EQ("[|23]|[|23]", tpl.RenderAsString({}).value());
+}
+
+// An undefined name among the names keeps its message for TemplatesNotFound (ExtraParams[2], docs/tasks/0498)
+TEST_F(IncludeTest, UndefinedNamesKeepTheirMessage)
+{
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{% include ['missing', nope, d.x] %}").has_value());
+    auto result = tpl.RenderAsString({ { "d", jinja2::ValuesMap{} } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, result.error().GetCode());
+    const auto& extraParams = result.error().GetExtraParams();
+    ASSERT_EQ(3ULL, extraParams.size());
+    EXPECT_EQ("list", extraParams[1].AsString());
+    const jinja2::ValuesList* messages = nullptr;
+    ASSERT_TRUE(extraParams[2].AsList(messages));
+    ASSERT_EQ(3ULL, messages->size());
+    EXPECT_TRUE((*messages)[0].IsNone());
+    EXPECT_EQ("'nope' is undefined", (*messages)[1].AsString());
+    EXPECT_EQ("'dict object' has no attribute 'x'", (*messages)[2].AsString());
+    // No undefined name, no third entry
+    ASSERT_TRUE(tpl.Load("{% include ['missing', none] %}").has_value());
+    EXPECT_EQ(2ULL, tpl.RenderAsString({}).error().GetExtraParams().size());
+}
+
 // RealFileSystem names follow Python's FileSystemLoader: a ".." piece is not found
 TEST_F(IncludeTest, RealFileSystemNameRules)
 {

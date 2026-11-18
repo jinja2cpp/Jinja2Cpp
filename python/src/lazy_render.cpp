@@ -189,7 +189,7 @@ public:
         {
             throw RenderCancelled();
         }
-        m_owner.m_items.emplace_back(text);
+        m_owner.m_items.emplace_back(std::string(text), m_owner.m_markup);
         // Where a switch would hand live state to the consumer, the item waits, and the render goes on: correct,
         // not lazy (the engine writes only after a statement, so this does not happen today)
         if (!m_owner.CanSwitch())
@@ -239,9 +239,13 @@ void PyLazyRender::Run()
     ProtectStack();
     const jinja2::RenderSuspension suspension{ m_fiber->StackLow(), m_fiber->StackSize() };
     Sink sink(*this);
+    PieceOptions pieces;
+    pieces.suspension = &suspension;
+    pieces.pieceIsMarkup = &m_markup;
+    pieces.held = &m_held;
     try
     {
-        nb::cast<const PyTemplate&>(m_template).RenderSuspended(sink, m_args, m_kwargs, suspension);
+        nb::cast<const PyTemplate&>(m_template).RenderSuspended(sink, m_args, m_kwargs, pieces);
     }
     catch (...)
     {
@@ -287,7 +291,8 @@ void PyLazyRender::Resume()
 
 nb::object PyLazyRender::Pop()
 {
-    auto item = MakeStr(m_items.front());
+    auto& [text, markup] = m_items.front();
+    auto item = markup ? Names().markupType(MakeStr(text)) : MakeStr(text);
     m_items.pop_front();
     return item;
 }
@@ -354,15 +359,73 @@ void PyLazyRender::Close()
 
 void PyLazyRender::Abandon() noexcept
 {
-    // A suspended fiber runs nothing: its stack goes, and what its frames own stays
+    // A suspended fiber runs nothing: its stack goes, and what its frames own stays, no longer reported
+    m_held.clear();
     m_done = true;
     m_items.clear();
     m_fiber.reset();
 }
 
+int PyLazyRender::Traverse(visitproc visit, void* arg) const
+{
+    Py_VISIT(m_template.ptr());
+    Py_VISIT(m_args.ptr());
+    Py_VISIT(m_kwargs.ptr());
+    // Each reference the suspended render holds, once: the list is cleared before they go
+    for (PyObject* object : m_held)
+    {
+        Py_VISIT(object);
+    }
+    return 0;
+}
+
+void PyLazyRender::Clear() noexcept
+{
+    // A cycle through the render: it ends where it is suspended, on its fiber, which lets go of what the render holds
+    try
+    {
+        Close();
+    }
+    catch (nb::python_error& error)
+    {
+        error.discard_as_unraisable("closing a jinja2cpp generator");
+    }
+    catch (...)
+    {
+        Abandon();
+    }
+    m_template = nb::none();
+    m_args = nb::borrow<nb::args>(nb::tuple());
+    m_kwargs = nb::borrow<nb::kwargs>(nb::dict());
+}
+
+namespace
+{
+int LazyRenderTraverse(PyObject* self, visitproc visit, void* arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    if (!nb::inst_ready(self))
+    {
+        return 0;
+    }
+    return nb::inst_ptr<PyLazyRender>(self)->Traverse(visit, arg);
+}
+
+int LazyRenderClear(PyObject* self)
+{
+    if (nb::inst_ready(self))
+    {
+        nb::inst_ptr<PyLazyRender>(self)->Clear();
+    }
+    return 0;
+}
+
+PyType_Slot g_lazyRenderSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&LazyRenderTraverse) }, { Py_tp_clear, reinterpret_cast<void*>(&LazyRenderClear) }, { 0, nullptr } };
+} // namespace
+
 void BindLazyRender(nb::module_& module)
 {
-    nb::class_<PyLazyRender>(module, "_LazyRender").def("_next", &PyLazyRender::Next).def("close", &PyLazyRender::Close);
+    nb::class_<PyLazyRender>(module, "_LazyRender", nb::type_slots(g_lazyRenderSlots)).def("_next", &PyLazyRender::Next).def("close", &PyLazyRender::Close);
     module.def("_lazy_generate_available", &LazyGenerateAvailable);
     module.def("_set_lazy_generate", [](bool enabled) { g_lazyEnabled = enabled; }, nb::arg("enabled"));
     // A generator closed or collected after this renders nothing more: its fiber is freed as it stands

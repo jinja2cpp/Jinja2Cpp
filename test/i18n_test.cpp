@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 
 using namespace jinja2;
 
@@ -156,6 +157,46 @@ TEST_F(I18nOldstyleTest, WideTemplate)
     auto result = tpl.RenderAsString({ { "L", "Welt" } });
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(L"Hallo Welt!|100%|a %(b)s", result.value());
+}
+
+// An install that fixes the style (GettextStyle, docs/tasks/0509) gives every template's gettext globals that style,
+// as Jinja2's globals are what the last install put; `{% trans %}` blocks keep the style they were loaded with
+TEST_F(I18nOldstyleTest, InstallFixesTheStyleOfTheGlobals)
+{
+    // A call with a keyword argument and a block without one, loaded under each style
+    const char* call = "{{ gettext('Hello %(name)s!', name='x') }}";
+    const char* block = "{% trans %}100%{% endtrans %}";
+    std::vector<Template> oldstyle(2, Template(&m_env));
+    ASSERT_TRUE(oldstyle[0].Load(call).has_value());
+    ASSERT_TRUE(oldstyle[1].Load(block).has_value());
+    m_env.GetSettings().extensions.i18nNewstyle = true;
+    std::vector<Template> newstyle(2, Template(&m_env));
+    ASSERT_TRUE(newstyle[0].Load(call).has_value());
+    ASSERT_TRUE(newstyle[1].Load(block).has_value());
+    const auto render = [](const Template& tpl) {
+        auto result = tpl.RenderAsString({});
+        return result ? result.value() : result.error().ToString();
+    };
+    const auto expect = [&](const char* what, const std::vector<std::string>& expected) {
+        EXPECT_EQ(render(oldstyle[0]), expected[0]) << what;
+        EXPECT_NE(render(oldstyle[1]).find(expected[1]), std::string::npos) << what << ": " << render(oldstyle[1]);
+        EXPECT_EQ(render(newstyle[0]), expected[2]) << what;
+        EXPECT_EQ(render(newstyle[1]), expected[3]) << what;
+    };
+    // Following the load: each template its own style
+    expect("load", { "Hallo %(name)s!", "100%", "Hallo x!", "100 %" });
+
+    auto gettext = MakeCallable([](const std::string& message) { return message.rfind("Hello", 0) == 0 ? "Hallo" + message.substr(5) : message; }, ArgInfo{ "message" });
+    auto ngettext = MakeCallable([](const std::string& s, const std::string& p, int n) { return n == 1 ? s : p; }, ArgInfo{ "s" }, ArgInfo{ "p" }, ArgInfo{ "n" });
+    // Newstyle globals format every call; an oldstyle block passes its `%` unescaped, which Jinja2's newstyle
+    // gettext then fails to format (ValueError: incomplete format)
+    m_env.InstallGettextCallables(GettextStyle::Newstyle, gettext, ngettext);
+    expect("newstyle install", { "Hallo x!", "incomplete format", "Hallo x!", "100%" });
+    // Oldstyle globals return the translation as it is: a newstyle block's doubled `%` stays
+    m_env.InstallGettextCallables(GettextStyle::Oldstyle, gettext, ngettext);
+    expect("oldstyle install", { "Hallo %(name)s!", "100%", "Hallo %(name)s!", "100%%" });
+    m_env.InstallGettextCallables(gettext, ngettext);
+    expect("install following the load", { "Hallo %(name)s!", "100%", "Hallo x!", "100%" });
 }
 
 // A template loaded again after the style changed is parsed again: the setting takes part in Settings ==

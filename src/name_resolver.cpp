@@ -6,6 +6,7 @@
 #include "node_arena.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "small_vector.h"
 #include "span.h"
 #include "statements.h"
 
@@ -145,6 +146,35 @@ std::pair<bool, bool> IsInside(const Frames& frames, std::uint32_t inner, std::u
     return { false, false };
 }
 } // namespace
+
+ArenaSpan<SlotName> NameResolver::NamesResetAtEnd(FrameId frameId, NodeArena& nodes) const
+{
+    const auto& frame = m_frames[frameId];
+    // Frames are numbered as they start: the ones after this one are inside it
+    if (!frame.hasStores || std::none_of(m_frames.begin() + std::size_t{ frameId } + 1, m_frames.end(), [](const Frame& inner) { return inner.isMacro; }))
+    {
+        return {};
+    }
+    // Sorted and unique, so that a body of many stores loads in linear time
+    SmallVector<std::pair<std::size_t, std::string_view>, 8> stored;
+    for (auto idx = static_cast<std::size_t>(frame.firstStore); idx < m_stores.size(); ++idx)
+    {
+        const auto& store = m_stores[idx];
+        if (store.frame == frameId && store.kind != StoreKind::Hidden)
+        {
+            stored.emplace_back(HashedName::Hash(store.name), store.name);
+        }
+    }
+    std::sort(stored.begin(), stored.end());
+    stored.erase(std::unique(stored.begin(), stored.end()), stored.end());
+    SmallVector<SlotName, 8> names;
+    names.reserve(stored.size());
+    for (const auto& [hash, name] : stored)
+    {
+        names.push_back({ nodes.MakeText(name), hash });
+    }
+    return nodes.MakeSpan(names);
+}
 
 NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, NodeArena& nodes)
 {

@@ -135,6 +135,8 @@ public:
         refs(m_elseBody);
         detail::VisitTargetRefs(refs, m_target);
         detail::VisitSlotNameRefs(refs, m_slotNames);
+        detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
+        detail::VisitSlotNameRefs(refs, m_elseResetsAtEnd);
     }
 
     ForStatement(AssignTarget target, NodeRef<Expression> expr, NodeRef<Expression> ifExpr, bool isRecursive)
@@ -181,6 +183,10 @@ public:
     // Makes the list of the names the loop binds: `loop`, then its target names in order,
     // each once. Called once, before BindSlots
     ArenaSpan<SlotName> MakeBinderNames(NodeArena& nodes);
+    // The names the body stores, which its closures kept past it read as undefined (NameResolver::NamesResetAtEnd)
+    void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
+    // The same for the `else` body
+    void SetElseResetsAtEnd(ArenaSpan<SlotName> names) { m_elseResetsAtEnd = names; }
     [[nodiscard]] ArenaSpan<SlotName> GetBinderNames() const { return m_slotNames; }
     // Gives the names the loop binds slots of its unit's frame from `first`: `loop`, the
     // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
@@ -221,6 +227,8 @@ private:
     SlotIndex m_firstSlot;
     UnitId m_unit;
     ArenaSpan<SlotName> m_slotNames;
+    ArenaSpan<SlotName> m_resetsAtEnd;
+    ArenaSpan<SlotName> m_elseResetsAtEnd;
 
     static uint64_t NewLoopId();
 };
@@ -353,6 +361,7 @@ public:
     {
         SetStatement::VisitRefs(refs);
         refs(m_body);
+        detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
     }
 
     using SetStatement::SetStatement;
@@ -366,12 +375,15 @@ public:
     {
         m_body = renderer;
     }
+    // The names the body stores, which its closures kept past it read as undefined (NameResolver::NamesResetAtEnd)
+    void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
 protected:
     ~SetBlockStatement() = default;
     InternalValue RenderBody(RenderContext&);
 
 private:
     NodeRef<IRendererBase> m_body;
+    ArenaSpan<SlotName> m_resetsAtEnd;
 };
 
 class SetRawBlockStatement final : public SetBlockStatement
@@ -1036,6 +1048,7 @@ public:
             checker(var.value);
         });
         refs(m_mainBody);
+        detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
     }
 
     // Assigned in this order, so that the last of two equal names wins
@@ -1045,10 +1058,14 @@ public:
         m_mainBody = renderer;
     }
 
+    // The names the body stores, which its closures kept past it read as undefined (NameResolver::NamesResetAtEnd)
+    void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
+
     void Render(OutStream& os, RenderContext& values) override;
 private:
     ArenaSpan<NamedExpr> m_scopeVars;
     NodeRef<IRendererBase> m_mainBody;
+    ArenaSpan<SlotName> m_resetsAtEnd;
 };
 
 // transformers' `{% generation %}` (docs/tasks/0377): renders its body in a scope of its own as `{% with %}` does and,
@@ -1057,14 +1074,30 @@ class GenerationStatement final : public Statement
 {
 public:
     static constexpr NodeKind Kind = NodeKind::GenerationStmt;
-    void VisitRefs(detail::RefChecker& refs) const { refs(m_mainBody); }
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_mainBody);
+        detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
+    }
 
     void SetMainBody(NodeRef<IRendererBase> renderer) { m_mainBody = renderer; }
+    // The names the body stores, which its closures kept past it read as undefined (NameResolver::NamesResetAtEnd)
+    void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
+    // As MacroStatement's: the body is a call block's in transformers, whose own `caller`, `varargs` and
+    // `kwargs` hide the enclosing macro's when the body reads them before assigning them (docs/tasks/0448)
+    void AddSpecialNames(unsigned names) { m_specialNames |= names & ~m_assignedNames; }
+    void DiscardSpecialNames(unsigned names) { m_assignedNames |= names & ~m_specialNames; }
 
     void Render(OutStream& os, RenderContext& values) override;
 
 private:
+    void BindOwnSpecialNames(ScopeRef& scope, const RenderContext& values) const;
+
     NodeRef<IRendererBase> m_mainBody;
+    ArenaSpan<SlotName> m_resetsAtEnd;
+    // MacroStatement::SpecialName flags
+    unsigned m_specialNames = 0;
+    unsigned m_assignedNames = 0;
 };
 
 class FilterStatement final : public Statement
@@ -1075,6 +1108,7 @@ public:
     {
         refs(m_expr);
         refs(m_body);
+        detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
     }
 
     explicit FilterStatement(NodeRef<ExpressionFilter> expr)
@@ -1084,11 +1118,14 @@ public:
     {
         m_body = renderer;
     }
+    // The names the body stores, which its closures kept past it read as undefined (NameResolver::NamesResetAtEnd)
+    void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
 
     void Render(OutStream&, RenderContext&) override;
 private:
     NodeRef<ExpressionFilter> m_expr;
     NodeRef<IRendererBase> m_body;
+    ArenaSpan<SlotName> m_resetsAtEnd;
 };
 
 // {% autoescape expr %}: turns output escaping on or off for its body, in a new scope
@@ -1100,6 +1137,7 @@ public:
     {
         refs(m_expr);
         refs(m_body);
+        detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
     }
 
     // isVolatile: the value is not constant, as Jinja2 decides it at compile time; the
@@ -1112,12 +1150,15 @@ public:
     [[nodiscard]] bool IsVolatile() const { return m_isVolatile; }
 
     void SetBody(NodeRef<IRendererBase> renderer) { m_body = renderer; }
+    // The names the body stores, which its closures kept past it read as undefined (NameResolver::NamesResetAtEnd)
+    void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
 
     void Render(OutStream&, RenderContext&) override;
 
 private:
     NodeRef<Expression> m_expr;
     NodeRef<IRendererBase> m_body;
+    ArenaSpan<SlotName> m_resetsAtEnd;
     bool m_isVolatile;
 };
 

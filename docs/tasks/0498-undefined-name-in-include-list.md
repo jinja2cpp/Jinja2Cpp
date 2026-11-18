@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/939
 priority: low
 area: parity
 depends: [0458]
@@ -22,3 +23,10 @@ deliberate (the class matches; only the text differs).
 
 **Done when.** `{% include [nope] %}` raises Jinja2's message through the module, with a case in
 python/tests/test_errors.py (`test_include_and_constructor_errors_have_jinja2s_class`).
+
+**Resolution (batch 9 C).** An include that selects from a list adds ExtraParams[2] when names in it were
+undefined: a list as long as the names, with the UndefinedError message of each undefined one and an empty value
+for the others (documented on ErrorCode::TemplateNotFound). The module's `loaders._not_found` turns each into the
+environment's undefined class with that hint, so TemplatesNotFound prints `none of the templates given were found:
+'nope' is undefined` and `.templates` holds the Undefined (`IncludeTest.UndefinedNamesKeepTheirMessage`,
+`test_include_and_constructor_errors_have_jinja2s_class`).

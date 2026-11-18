@@ -686,6 +686,11 @@ std::optional<UserCallable> TemplateEnv::FindTest(const std::string& name) const
 
 void TemplateEnv::InstallGettextCallables(UserCallable gettext, UserCallable ngettext, UserCallable pgettext, UserCallable npgettext)
 {
+    InstallGettextCallables(GettextStyle::FollowLoad, std::move(gettext), std::move(ngettext), std::move(pgettext), std::move(npgettext));
+}
+
+void TemplateEnv::InstallGettextCallables(GettextStyle style, UserCallable gettext, UserCallable ngettext, UserCallable pgettext, UserCallable npgettext)
+{
     const detail::WriterLock<detail::SharedMutex> l(m_impl->guard);
     m_impl->translations.clear();
     // A loop rather than a lambda: the analysis checks a lambda as a function of its own, which holds no lock
@@ -697,6 +702,7 @@ void TemplateEnv::InstallGettextCallables(UserCallable gettext, UserCallable nge
             m_impl->translations[name] = std::move(*fn);
         }
     }
+    m_impl->gettextStyle = style;
 }
 
 std::optional<UserCallable> TemplateEnv::FindGettextCallable(const std::string& name) const
@@ -704,6 +710,19 @@ std::optional<UserCallable> TemplateEnv::FindGettextCallable(const std::string& 
     const detail::ReaderLock l(m_impl->guard);
     return detail::FindCallable(m_impl->translations, name);
 }
+
+namespace detail
+{
+std::optional<UserCallable> TemplateEnvImpl::FindTranslation(const std::string& name, bool& newstyle) const
+{
+    const ReaderLock l(guard);
+    if (gettextStyle != GettextStyle::FollowLoad)
+    {
+        newstyle = gettextStyle == GettextStyle::Newstyle;
+    }
+    return FindCallable(translations, name);
+}
+} // namespace detail
 
 void TemplateEnv::ApplyGlobals(const std::function<void(const ValuesMap&)>& fn) const
 {

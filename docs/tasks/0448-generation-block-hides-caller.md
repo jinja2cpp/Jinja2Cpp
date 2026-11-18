@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/939
 priority: low
 area: parity
 depends: [0377]
@@ -27,3 +28,9 @@ sees them).
 **Done when.** A row in test/chat_template_preset_test.cpp renders the template above narrow and
 wide and fails with ErrorCode::UndefinedError, and a generation body that does not use `caller`
 still sees the macro's arguments.
+
+**Resolution (batch 9 C).** The parser marks the `caller`, `varargs` and `kwargs` a `generation` body reads before
+assigning them (as it marks a macro's) and stores them in the body's frame, so the reads are by name; the body
+binds them to the undefined `No caller defined`, an empty tuple and an empty dict, as transformers' call-block
+body does. The enclosing macro still catches them for its own body. Rows in test/chat_template_preset_test.cpp
+and `ChatTemplatePreset.CallerInGenerationIsUndefinedError`.

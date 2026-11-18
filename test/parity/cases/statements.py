@@ -468,6 +468,10 @@ CASES = [
     # closures kept past the frame that defined them: deliberate divergences (docs/tasks/0165)
     ('caller_escapes_its_loop', '{% set ns = namespace(c=none) %}{% macro m() %}{% set ns.c = caller %}{% endmacro %}{% for i in [1] %}{% call m() %}[{{ i }}]{% endcall %}{% endfor %}{{ ns.c() }}'),
     ('macro_escapes_its_loop', '{% set ns = namespace(m=none) %}{% for i in [1, 2] %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.m = m %}{% endfor %}{{ ns.m() }}{{ ns.m() }}'),
+    # a closure kept past a body that rebound a name reads it undefined, not the frame below's (docs/tasks/0526)
+    ('macro_kept_past_filter_body_rebinding', "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% filter upper %}{% set v = 'F' %}{% macro m() %}[{{ v }}]{% endmacro %}{% set ns.f = m %}x{% endfilter %}{{ ns.f() }}"),
+    ('macro_kept_past_loop_body_rebinding', "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1, 2] %}{% if i == 1 %}{% set v = 'L' %}{% endif %}{% macro m() %}[{{ v }}]{% endmacro %}{% set ns.f = m %}{% endfor %}{{ ns.f() }}{{ v }}"),
+    ('macro_kept_past_with_body_not_rebinding', "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% with %}{% macro m() %}[{{ v }}]{% endmacro %}{% set ns.f = m %}{% endwith %}{{ ns.f() }}"),
     ('nested_macro_escapes_its_call', '{% set ns = namespace(l=[]) %}{% macro o(a) %}{% macro i() %}{{ a }}{% endmacro %}{% set _ = ns.l.append(i) %}{% endmacro %}{{ o(1) }}{{ o(2) }}{% for f in ns.l %}{{ f() }}{% endfor %}'),
     # idtracking (docs/tasks/0168): a name the root or loop sets after the call
     ('macro_root_name_set_after_call', '{% macro m() %}[{{ x }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}'),

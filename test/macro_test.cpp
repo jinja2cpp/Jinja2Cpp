@@ -985,3 +985,128 @@ TEST(MacroStopOutputTest, ContextIsRestored)
                          "{% set v = 'o' %}{% for q in 'ab' %}[{{ m(q) }}{{ v }}{{ q }}{{ w }}]{% endfor %}{{ v }}"));
     EXPECT_EQ("[oa][ob]o", tpl.RenderAsString(ValuesMap{}).value());
 }
+
+// A closure defined in a loop or a `with`, `filter` or `autoescape` body and kept past it reads the names the body
+// stored, in a branch too, as undefined: Jinja2 resets them as the body ends, rather than letting the frame below
+// show through (docs/tasks/0526). Each expectation is Jinja2 3.1.6's, at the top level and in an included template
+namespace
+{
+struct SoftBodyCase
+{
+    const char* source;
+    UndefinedPolicy policy;
+    const char* expected; // the output, or "error: UndefinedError"
+};
+
+template<typename Tpl, typename CharT>
+void CheckSoftBodyCase(const SoftBodyCase& param, bool included)
+{
+    using String = std::basic_string<CharT>;
+    TemplateEnv env;
+    env.GetSettings().undefinedPolicy = param.policy;
+    auto files = std::make_shared<MemoryFileSystem>();
+    files->AddFile("i", param.source);
+    env.AddFilesystemHandler({}, files);
+    Tpl tpl(&env);
+    ASSERT_TRUE(tpl.Load(ConvertString<String>(included ? std::string("{% include 'i' %}") : std::string(param.source)))) << param.source;
+    auto result = tpl.RenderAsString(ValuesMap{});
+    const std::string expected = param.expected;
+    if (expected.rfind("error: ", 0) == 0)
+    {
+        ASSERT_FALSE(result.has_value()) << param.source;
+        EXPECT_EQ(ErrorCode::UndefinedError, result.error().GetCode()) << param.source;
+        return;
+    }
+    ASSERT_TRUE(result.has_value()) << param.source << ": " << ToString(result.error().ToString());
+    EXPECT_EQ(ConvertString<String>(expected), result.value()) << param.source;
+}
+
+class MacroKeptPastSoftBodyTest : public ::testing::TestWithParam<SoftBodyCase>
+{
+};
+} // namespace
+
+TEST_P(MacroKeptPastSoftBodyTest, Narrow)
+{
+    CheckSoftBodyCase<Template, char>(GetParam(), false);
+}
+
+TEST_P(MacroKeptPastSoftBodyTest, Wide)
+{
+    CheckSoftBodyCase<TemplateW, wchar_t>(GetParam(), false);
+}
+
+TEST_P(MacroKeptPastSoftBodyTest, Included)
+{
+    CheckSoftBodyCase<Template, char>(GetParam(), true);
+}
+
+TEST_P(MacroKeptPastSoftBodyTest, IncludedWide)
+{
+    CheckSoftBodyCase<TemplateW, wchar_t>(GetParam(), true);
+}
+
+// clang-format off
+INSTANTIATE_TEST_SUITE_P(Jinja2Oracle, MacroKeptPastSoftBodyTest, ::testing::Values(
+    // filter
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% filter upper %}{% set v = 'F' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfilter %}{{ ns.f() }}", UndefinedPolicy::Default, "X[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% filter upper %}{% set v = 'F' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfilter %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // filter, no store
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% filter upper %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfilter %}{{ ns.f() }}", UndefinedPolicy::Default, "X[V]" },
+    // filter, store in a branch
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% filter upper %}{% if false %}{% set v = 'F' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfilter %}{{ ns.f() }}", UndefinedPolicy::Default, "X[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% filter upper %}{% if false %}{% set v = 'F' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfilter %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // with
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% with %}{% set v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% with %}{% set v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // with, no store
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% with %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{{ ns.f() }}", UndefinedPolicy::Default, "x[V]" },
+    // for
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1, 2] %}{% set v = 'L' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "xx[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1, 2] %}{% set v = 'L' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // for, store after
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}{% set v = 'L' %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}{% set v = 'L' %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // for, store in a branch
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% if false %}{% set v = 'L' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% if false %}{% set v = 'L' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // for, no store
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "x[V]" },
+    // autoescape
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% autoescape false %}{% set v = 'A' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endautoescape %}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% autoescape false %}{% set v = 'A' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endautoescape %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // for in a macro
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% macro o() %}{% set v = 'M' %}{% for i in [1] %}{% set v = 'L' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}{% endmacro %}{{ o() }}", UndefinedPolicy::Default, "x[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% macro o() %}{% set v = 'M' %}{% for i in [1] %}{% set v = 'L' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}{% endmacro %}{{ o() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // with in a macro
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% macro o() %}{% set v = 'M' %}{% with %}{% set v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{{ ns.f() }}{% endmacro %}{{ o() }}", UndefinedPolicy::Default, "x[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% macro o() %}{% set v = 'M' %}{% with %}{% set v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{{ ns.f() }}{% endmacro %}{{ o() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // filter in a macro
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% macro o() %}{% set v = 'M' %}{% filter upper %}{% set v = 'F' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfilter %}{{ ns.f() }}{% endmacro %}{{ o() }}", UndefinedPolicy::Default, "X[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% macro o() %}{% set v = 'M' %}{% filter upper %}{% set v = 'F' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endfilter %}{{ ns.f() }}{% endmacro %}{{ o() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // with in a for
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% with %}{% set v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% for i in [1] %}{% with %}{% set v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endwith %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // loop else, store in a branch
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [] %}{% else %}{% if false %}{% set v = 'B' %}{% endif %}{% macro inner() %}[{{ v }}{{ i }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "x[I]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [] %}{% else %}{% if false %}{% set v = 'B' %}{% endif %}{% macro inner() %}[{{ v }}{{ i }}]{% endmacro %}{% set ns.f = inner %}x{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "error: UndefinedError" },
+    // a recursive loop resets nothing: its body is a function in Jinja2
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for a in [1] recursive %}{% if false %}{% set v = 'B' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "[V]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [1] recursive %}{% macro inner() %}[{{ i }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Default, "[1]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for i in [1] recursive %}{% macro inner() %}[{{ i }}]{% endmacro %}{% set ns.f = inner %}{% endfor %}{{ ns.f() }}", UndefinedPolicy::Strict, "[1]" },
+    // a kept macro calls the ended recursive loop
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set i = 'I' %}{% for x in [1,2,3] recursive %}{% macro m(l) %}<{{ loop(l) }}>{% endmacro %}{% set ns.f = m %}{% endfor %}{{ ns.f([4]) }}", UndefinedPolicy::Default, "<>" },
+    // block set
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set x %}{% set v = 'S' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endset %}{{ x }}{{ ns.f() }}", UndefinedPolicy::Default, "x[]" },
+    SoftBodyCase{ "{% set ns = namespace(f=none) %}{% set v = 'V' %}{% set x | upper %}{% if false %}{% set v = 'S' %}{% endif %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}x{% endset %}{{ x }}{{ ns.f() }}", UndefinedPolicy::Default, "X[]" }
+));
+// clang-format on
+
+// A `with` target and a loop target read after the body ends: Jinja2 reads its `missing` sentinel there, the engine an
+// undefined value (the deliberate divergence of docs/tasks/0165), not the frame below's value of the name
+MULTISTR_TEST(MacroTest, KeptClosureReadsAnEndedTargetAsUndefined, R"({% set ns = namespace(f=none, g=none) %}{% set v = 'V' %}{% with v = 'W' %}{% macro inner() %}[{{ v }}]{% endmacro %}{% set ns.f = inner %}{% endwith %}{% for v in ['L'] %}{% macro inner() %}<{{ v }}>{% endmacro %}{% set ns.g = inner %}{% endfor %}{{ ns.f() }}{{ ns.g() }}{{ v }})",
+              //--------------
+              R"([]<>V)")
+{
+    params = PrepareTestData();
+}

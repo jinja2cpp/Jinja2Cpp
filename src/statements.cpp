@@ -74,9 +74,10 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
             const OutStream::PieceHold pieceHold(os);
             RenderLoop(loopVal, os, values, 0);
         }
-        // An item even when empty: Jinja2 yields the loop's buffer
+        // An item even when empty: Jinja2 yields the loop's buffer, Markup under the runtime autoescape
         if (os.WritesEachPiece())
         {
+            os.MarkPiece(values.IsAutoescape());
             os.FlushPiece();
         }
         return;
@@ -1515,7 +1516,7 @@ void ForStatement::RenderElse(OutStream& os, RenderContext& values)
 {
     values.EnterScope();
     values.Nodes()[m_elseBody].Render(os, values);
-    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount()));
+    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount(), values.Nodes()[m_elseResetsAtEnd]));
     values.ExitScope();
 }
 
@@ -1650,9 +1651,10 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         }
         std::rethrow_exception(std::move(failure));
     }
-    // A closure defined in the body and kept past the loop sees the frame below it (0373)
+    // A closure defined in the body and kept past the loop sees the frame below it (0373). A recursive loop's body
+    // is a function in Jinja2, which resets nothing as it ends: its closures keep its names (docs/tasks/0526)
     JINJA2CPP_ASSERT(values.GetScopesCount() - 1 == endScopes);
-    values.CaptureClosures(FrameEnd::Soft(endScopes));
+    values.CaptureClosures(m_isRecursive ? FrameEnd::Stopped(endScopes) : FrameEnd::Soft(endScopes, values.Nodes()[m_resetsAtEnd]));
     values.ExitScope(state->bodyScope);
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
@@ -1857,7 +1859,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
 
     guard.Unbind();
     JINJA2CPP_ASSERT(values.GetScopesCount() == endScopes);
-    values.CaptureClosures(FrameEnd::Soft(endScopes));
+    values.CaptureClosures(FrameEnd::Soft(endScopes, values.Nodes()[m_resetsAtEnd]));
     values.PopFrameView();
     values.ExitScope(state->bodyScope);
     if (!loopRendered && m_elseBody)
@@ -2093,7 +2095,7 @@ InternalValue SetBlockStatement::RenderBody(RenderContext& values)
 {
     auto innerValues = values.Clone(true);
     TargetString result = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { values.Nodes()[m_body].Render(stream, innerValues); });
-    innerValues.CaptureClosuresAtSoftEnd();
+    innerValues.CaptureClosuresAtSoftEnd(values.Nodes()[m_resetsAtEnd]);
     values.SetLoopControl(innerValues.GetLoopControl());
     return result;
 }
@@ -2755,6 +2757,26 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
             names->emplace("self", std::move(*endedSelf));
         }
     }
+    else
+    {
+        // Jinja2 resets the names a loop or `with`, `filter` or `autoescape` body bound as it ends, so its
+        // closures read them as undefined rather than the frame's below (docs/tasks/0526)
+        names = std::allocate_shared<InternalValueMap>(CountedAllocator<InternalValueMap>());
+        HideNamesDownTo(*names, count - 1, keeps.readsAll ? nullptr : &keeps);
+        // And those it stored before: a loop's body scope is emptied after each pass, a branch may not have run
+        for (const auto& name : end.resets)
+        {
+            if (keeps.readsAll || keeps.Reads(name.hash))
+            {
+                const auto text = Nodes().Text(name.name);
+                names->emplace(std::string(text), MakeUndefined(*this, std::string(text)));
+            }
+        }
+        if (names->empty())
+        {
+            names.reset();
+        }
+    }
     // Made before the frame's captures leave the list: the frame below is another scope
     const auto outer = CaptureOfScope(end.continuation);
     if (outer)
@@ -2905,6 +2927,43 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
                     continue;
                 }
                 AddCollected(collected, std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]), captures);
+            }
+            return false;
+        });
+}
+
+void RenderContext::HideNamesDownTo(InternalValueMap& hidden, size_t lowest, const ClosureCapture* keeps) const
+{
+    const size_t entryPassDepth = m_entryPassDepth;
+    const auto hide = [this, &hidden, keeps](std::string_view name, size_t hash) {
+        if (!keeps || keeps->Reads(hash))
+        {
+            hidden.emplace(std::string(name), MakeUndefined(*this, std::string(name)));
+        }
+    };
+    VisitScopes(
+        *this,
+        [&hide, lowest, entryPassDepth](const InternalValueMap* scope, size_t depth) {
+            if (depth < lowest)
+            {
+                return true;
+            }
+            for (const auto& [name, value] : *scope)
+            {
+                const auto hash = HashedName::Hash(name);
+                // The names an include's context passes over (PassOverEntryBindings)
+                if (depth >= entryPassDepth || !IsEntryBinding(value, hash))
+                {
+                    hide(name, hash);
+                }
+            }
+            return false;
+        },
+        // A loop's names in slots, unbound already as it ends
+        [&hide](const FrameView& view, size_t /*depth*/) {
+            for (const auto& slotName : view.names)
+            {
+                hide(view.nodes.Text(slotName.name), slotName.hash);
             }
             return false;
         });
@@ -3427,11 +3486,24 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
     // The names tried, for the error: a host iterable may iterate once, and stops at the first found
     // name as Python's select_template does
     InternalValueList tried;
+    // The messages of the undefined names among them, by their index; empty when there are none
+    ValuesList undefinedMessages;
     if (isConverted)
     {
         list.ForEach([&](InternalValue&& name) {
             CheckSequenceSize(tried.size() + 1, "a list");
             const auto& tryName = tried.emplace_back(std::move(name));
+            // Jinja2's template cache hashes the name first: a list or a dict fails, `ignore missing` or not (docs/tasks/0494)
+            if (const char* unhashable = UnhashableType(tryName))
+            {
+                throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, std::string("unhashable type: '") + unhashable + "'");
+            }
+            // TemplatesNotFound reports an undefined name by its message (docs/tasks/0498)
+            if (const auto* info = GetUndefinedInfo(tryName))
+            {
+                undefinedMessages.resize(tried.size());
+                undefinedMessages.back() = UndefinedMessage(*info);
+            }
             // Python's select_template finds no template by a name that is not a string and tries the next
             if (!GetAsSameString(std::string(), tryName))
             {
@@ -3458,8 +3530,14 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
         if (isConverted)
         {
             // A list of names is Python's select_template, which raises TemplatesNotFound
+            const auto count = tried.size();
             extraParams.push_back(IntValue2Value(ListAdapter::CreateAdapter(std::move(tried))));
             extraParams.emplace_back(std::string("list"));
+            if (!undefinedMessages.empty())
+            {
+                undefinedMessages.resize(count);
+                extraParams.emplace_back(std::move(undefinedMessages));
+            }
         }
         else
         {
@@ -4312,6 +4390,11 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
             throw TemplateRuntimeError("expected str instance, "s + Apply<visitors::PythonTypeNameGetter>(result) + " found");
         }
         WriteOutput(os, result, values);
+        if (os.WritesEachPiece())
+        {
+            // generate() yields the call's result as it is (docs/tasks/0493); a plain string escaped here is Markup
+            os.MarkPiece(result.IsMarkup() || values.IsOutputAutoescape());
+        }
         return;
     }
     // A call block's caller runs into a buffer in Jinja2
@@ -4321,6 +4404,11 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     try
     {
         callable->GetStatementCallable()(callParams, os, values);
+        if (os.WritesEachPiece())
+        {
+            // A macro's result: Markup under the runtime autoescape (docs/tasks/0493)
+            os.MarkPiece(values.IsAutoescape());
+        }
         return;
     }
     catch (...)
@@ -4382,7 +4470,7 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
 
     RenderSoftBody(innerValues, [&] { values.Nodes()[m_mainBody].Render(os, innerValues); });
 
-    innerValues.CaptureClosuresAtSoftEnd();
+    innerValues.CaptureClosuresAtSoftEnd(values.Nodes()[m_resetsAtEnd]);
     innerValues.ExitScope();
     values.SetLoopControl(innerValues.GetLoopControl());
 }
@@ -4390,7 +4478,13 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
 void GenerationStatement::Render(OutStream& os, RenderContext& values)
 {
     auto innerValues = values.Clone(true);
-    static_cast<void>(innerValues.EnterScope());
+    auto scope = innerValues.EnterScope();
+    // transformers' body is a call block's, with no caller and no extra arguments of its own: they hide the
+    // enclosing macro's (docs/tasks/0448)
+    if (m_specialNames != 0)
+    {
+        BindOwnSpecialNames(scope, innerValues);
+    }
 
     auto* tracker = values.GetRendererCallback()->GetGenerationTracker();
     if (!tracker)
@@ -4410,9 +4504,28 @@ void GenerationStatement::Render(OutStream& os, RenderContext& values)
         tracker->Push(start, start + (os.Written() - before));
     }
 
-    innerValues.CaptureClosuresAtSoftEnd();
+    innerValues.CaptureClosuresAtSoftEnd(values.Nodes()[m_resetsAtEnd]);
     innerValues.ExitScope();
     values.SetLoopControl(innerValues.GetLoopControl());
+}
+
+void GenerationStatement::BindOwnSpecialNames(ScopeRef& scope, const RenderContext& values) const
+{
+    static const HashedName callerName{ "caller", HashedName::Hash("caller") };
+    static const HashedName kwargsName{ "kwargs", HashedName::Hash("kwargs") };
+    static const HashedName varargsName{ "varargs", HashedName::Hash("varargs") };
+    if ((m_specialNames & MacroStatement::UsesCaller) != 0)
+    {
+        scope.ForName(callerName) = MakeUndefinedWithHint(values, "No caller defined");
+    }
+    if ((m_specialNames & MacroStatement::UsesKwargs) != 0)
+    {
+        scope.ForName(kwargsName) = CreateMapAdapter(InternalDict());
+    }
+    if ((m_specialNames & MacroStatement::UsesVarargs) != 0)
+    {
+        scope.ForName(varargsName) = ListAdapter::CreateAdapter(InternalValueList()).MarkAsTuple();
+    }
 }
 
 void TransStatement::Render(OutStream& os, RenderContext& values)
@@ -4437,7 +4550,7 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
 {
     auto innerValues = values.Clone(true);
     TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { RenderSoftBody(innerValues, [&] { values.Nodes()[m_body].Render(stream, innerValues); }); });
-    innerValues.CaptureClosuresAtSoftEnd();
+    innerValues.CaptureClosuresAtSoftEnd(values.Nodes()[m_resetsAtEnd]);
     // A `break` or `continue` in the body drops its output, as in Jinja2
     values.SetLoopControl(innerValues.GetLoopControl());
     if (values.HasLoopControl())
@@ -4450,6 +4563,11 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     body.SetMarkup(values.IsOutputAutoescape());
     const auto result = values.Nodes()[m_expr].Evaluate(body, values);
     os.WriteValue(result);
+    if (os.WritesEachPiece())
+    {
+        // generate() yields the filter's result: Markup when it is (docs/tasks/0493)
+        os.MarkPiece(result.IsMarkup());
+    }
 }
 
 void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
@@ -4457,7 +4575,7 @@ void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
     const auto autoescapeGuard = AutoescapeGuard::Statement(values, ConvertToBool(values.Nodes()[m_expr].Evaluate(values)), m_isVolatile);
     values.EnterScope();
     values.Nodes()[m_body].Render(os, values);
-    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount()));
+    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount(), values.Nodes()[m_resetsAtEnd]));
     values.ExitScope();
 }
 

@@ -462,9 +462,11 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   dict: after `env.globals = {...}` Jinja2's imports of a cached template still see the old one
   (0405). Likewise the `globals` a `get_template` call gave reach that template's imports and
   `without context` includes, which in Jinja2 see the environment's.
-- An environment keeps every filter, test, `finalize`, `autoescape` callable and loader it was
-  ever given alive for as long as it lives, because a template loaded earlier may still call
-  one: replacing `env.filters` entries in a loop grows the environment (0406).
+- A template binds the filters and tests when it loads and keeps them, with the `finalize`,
+  `autoescape` callable and loader it was loaded with, where Jinja2 looks a filter up in
+  `env.filters` at each render: a template loaded before `env.filters['f']` is replaced keeps
+  calling the old `f`. The environment lets go of a replaced one once the templates loaded with
+  it go (0406); a load after a filter or test is replaced or removed reads the loader again.
 - `{% include %}`, `{% import %}`, `{% from %}` and `{% extends %}` read the loader through the
   engine, not through `env.get_template(name, parent=...)`, so an overridden `join_path` is not
   called for them (Jinja2 calls it with the including template's name); `get_template` and
@@ -487,17 +489,19 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `next()` in a thread pool), `render()` the template or pass `list(t.generate())`; a lazy async iterator
   is task 0461. A generator closed or collected on another thread, or after the interpreter began to
   exit, is not resumed: its render stops where it was, and what it held is not released.
-- A reference cycle through a suspended generator (a param that refers back to the generator) is not
-  collected until the generator is closed; Jinja2's is (0462).
+- A reference cycle through a suspended generator is collected, as Jinja2's is, when it runs
+  through the generator's arguments or the globals of its render (a param that refers back to the
+  generator, 0462); one through a value the template made from them while it runs (`{% set y = x.y %}`
+  with the generator in `x.y`) is not, until the generator is closed.
 - `generate()` runs the whole template at the first item, as before 0457, where lazy rendering is not
   available: when `greenlet` is imported (gevent, eventlet: its stack switching and a fiber cannot share
   a thread), on CPython 3.14.0 and versions after 3.15 (not yet checked), on platforms other than
   Windows and x86-64 or AArch64 Linux, macOS and the BSDs, under a CET or GCS shadow stack, past 8
   generators nested in each other's callables on a thread, or when no stack can be reserved.
-- `generate()` yields `str` items where Jinja2 yields the `Markup` an autoescaped value becomes
-  (`{{ x }}` under autoescape); the text of each item is Jinja2's (0493). Jinja2 folds a constant
-  expression that is not a literal (`a{{ 1 + 2 }}b`) into the text around it, one item; here it is
-  an item of its own (0456).
+- `generate()` yields `Markup` items where Jinja2 does (0493), but a `{% filter %}` block whose filter
+  returns something else than a string (`length`) yields its `str()`, as the engine's output is text.
+  Jinja2 folds a constant expression that is not a literal (`a{{ 1 + 2 }}b`) into the text around it,
+  one `str` item; here it is an item of its own, `Markup` under autoescape (0535).
 - A Python loader's `get_source` runs again when a template it gave fails to compile, to show
   the line of the error (twice more with the default fallback, which loads it through Jinja2);
   Jinja2 calls it once.
@@ -509,10 +513,6 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   arguments, the globals and the template's top-level names; its `vars` and `parent` both hold
   all of them (0416). `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and
   `exported_vars` (empty) are not there.
-- The gettext calls of a template take the style it was loaded with (`newstyle_gettext` then), where
-  Jinja2's take the style of the last install: a template loaded while oldstyle was on and rendered
-  after a newstyle install does not format `gettext('%(a)s', a=1)` (0509). `{% trans %}` blocks
-  take the style they were loaded with in both.
 - Without installed translations (and after `uninstall_gettext_translations`) the engine's
   `_()` and `{% trans %}` render the message untranslated; Jinja2 raises `UndefinedError`
   because it has no `gettext` global yet (0417). A `gettext` set in `env.globals` replaces the
