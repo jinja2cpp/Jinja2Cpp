@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/937
 priority: medium
 area: robustness
 depends: [0492, 0481]
