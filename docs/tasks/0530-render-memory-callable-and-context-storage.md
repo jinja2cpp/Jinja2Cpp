@@ -3,7 +3,7 @@ status: in-progress
 priority: low
 area: robustness
 depends: [0508]
-touches: [src/statements.cpp, src/render_context.h]
+touches: [src/internal_value.h, src/statements.cpp, test/limits_test.cpp]
 shares: [docs/security.md]
 ---
 # The render memory budget leaves out a macro's function storage and a module context's vectors

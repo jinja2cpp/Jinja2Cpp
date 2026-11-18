@@ -4,7 +4,7 @@ pr:
 priority: low
 area: robustness
 depends: [0503]
-touches: [src/statements.cpp, src/cycle_collector.h, src/internal_value.h, src/internal_value.cpp, src/template_module.cpp, test/allocation_failure_test.cpp, test/template_module_test.cpp]
+touches: [src/statements.cpp, src/statements.h, src/cycle_collector.h, src/internal_value.h, src/internal_value.cpp, src/template_module.cpp, test/allocation_failure_test.cpp, test/template_module_test.cpp]
 ---
 # A `self` or `super()` stored in a module and let go of keeps the module's slot trees
 
