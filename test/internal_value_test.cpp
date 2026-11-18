@@ -535,7 +535,7 @@ TEST(WalkTablesTest, CollectFromWalksThroughDictView)
 {
     auto marker = ListAdapter::CreateAdapter(InternalValueList{});
     auto list = ListAdapter::CreateAdapter(InternalValueList{});
-    list.GetMutableItems()->emplace_back(ListAdapter::CreateDictView(InternalValueList{}, IteratorKind::DictKeys, InternalValue(list)));
+    list.GetMutableItems()->emplace_back(ListAdapter::CreateDictView(InternalValue(list), IteratorKind::DictKeys));
     list.GetMutableItems()->emplace_back(marker);
     const auto markerRefs = OwnObjectOf(InternalValue(marker))->use_count();
 

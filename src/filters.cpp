@@ -2031,10 +2031,10 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             return InternalValue();
         }
 
-        // list() is always a new list: of a tuple or a range it prints as [a, b], and of a
+        // list() is always a new list: of a tuple, a range or a dict view it prints as [a, b], and of a
         // list the template owns or the host's an append() to it must not change the original
         const auto* accessor = val.GetAccessor();
-        if (val.IsTuple() || val.GetRangeInfo() || val.GetMutableItems() || (accessor && accessor->IsBorrowed()))
+        if (val.IsTuple() || val.GetRangeInfo() || val.GetMutableItems() || val.GetViewMapping() || (accessor && accessor->IsBorrowed()))
         {
             return ListAdapter::CreateAdapter(val.ToValueList());
         }

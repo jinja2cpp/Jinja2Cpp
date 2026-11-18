@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "borrowed_cells.h"
+#include "call_stop.h"
 #include "contracts.h"
 #include "cycle_collector.h"
 #include "dialect.h"
@@ -21,6 +22,7 @@
 #include "render_suspension.h"
 #include "render_workspace.h"
 #include "renderer.h"
+#include "small_vector.h"
 #include "statements.h"
 #include "template_env_impl.h"
 #include "template_parser.h"
@@ -686,6 +688,38 @@ public:
         }
         return keeper;
     }
+    // Renders the template under a keeper: whether it ends or fails, the closures it stored in a global the outer
+    // render may call keep the names they see before its frames go, as Jinja2's do (docs/tasks/0491, 0525). Out of
+    // line: a render nests in another rarely. The rethrow is outside the handler (call_stop.h); a capture that fails
+    // to allocate throws std::bad_alloc instead of the render's failure
+    template<typename Callback>
+    JINJA2CPP_NOINLINE void RenderForOuter(OutStream& outStream, RenderContext& context, Callback& callback) const
+    {
+        const size_t topScopes = context.GetScopesCount();
+        bool failed = false;
+        try
+        {
+            m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
+        }
+        catch (...)
+        {
+            failed = true;
+            detail::KeepFailure();
+        }
+        auto failure = failed ? detail::TakeKept() : std::exception_ptr();
+        // A failure leaves the scopes of the frames it went out of, in the render's context and in a module's it
+        // was importing: they end first
+        if (failure)
+        {
+            context.EndScopesLeftByFailure(topScopes);
+            callback.EndModuleScopesLeftByFailure();
+        }
+        callback.CaptureClosuresForOuter(context);
+        if (failure)
+        {
+            std::rethrow_exception(std::move(failure));
+        }
+    }
 
     // Marks prompt-safe the strings of the params the environment names (ChatTemplateOptions::promptSafeParams,
     // docs/tasks/0394), as if the host passed them as Markup. Out of line: few environments name any
@@ -857,10 +891,13 @@ public:
             {
                 LimitOutput(os, output, outStream);
             }
-            m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             if (JINJA2CPP_CELL_UNLIKELY(keeper != nullptr))
             {
-                callback.CaptureClosuresForOuter(context);
+                RenderForOuter(outStream, context, callback);
+            }
+            else
+            {
+                m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             }
             outStream.Flush();
             if constexpr (hasHooks)
@@ -1280,15 +1317,36 @@ private:
         }
         // A module's callback outlives the call that made it, so it names its globals to no render
         void SetGlobals(const GlobalsSnapshot* globals) noexcept { m_globals = globals; }
-        // The outer render that keeps the templates this one loads (SharedSnapshotKeeper)
-        // Throws std::bad_alloc
+        // The outer render that counts the templates this one loads (SharedSnapshotKeeper). Its values name trees the
+        // host may free once the render returns, so each owns its tree, and the table `self` and super() resolve in
+        // owns the trees it names (docs/tasks/0521). Throws std::bad_alloc
         void SetKeeper(CycleCollector* keeper)
         {
-            Loaded().sharedTemplates = std::make_shared<TemplateSlots>();
+            Loaded().sharedTable = std::make_shared<SharedTemplateTable>();
             m_keeper = keeper;
+            SetKeepsTreesByValue();
         }
         [[nodiscard]] bool EndsBeforeOuterRender() const override { return m_keeper != nullptr; }
-        [[nodiscard]] std::shared_ptr<TemplateSlots> SharedTemplates() const override { return m_loaded ? m_loaded->sharedTemplates : nullptr; }
+        // The table is asked for when a `self` or super() is made, which is what may hold it past the render: it
+        // owns the rendered template from then on, as it owns what the render loads (KeepLoaded). Throws std::bad_alloc
+        [[nodiscard]] std::shared_ptr<TemplateSlots> SharedTemplates() const override
+        {
+            if (!m_loaded || !m_loaded->sharedTable)
+            {
+                return nullptr;
+            }
+            // Aliases the slots: whoever holds them holds the table, and so its trees
+            const auto& table = m_loaded->sharedTable;
+            if (!table->ownsHost)
+            {
+                if (auto host = m_host->weak_from_this().lock())
+                {
+                    table->trees.push_back(std::move(host));
+                }
+                table->ownsHost = true;
+            }
+            return std::shared_ptr<TemplateSlots>(table, &table->slots);
+        }
         // The render's context and the modules it imported end with it: the closures stored past it keep what they
         // see (EndsBeforeOuterRender). Out of line: a render nests in another rarely. Throws std::bad_alloc
         JINJA2CPP_NOINLINE void CaptureClosuresForOuter(RenderContext& context)
@@ -1303,6 +1361,22 @@ private:
                 if (module)
                 {
                     module->Context().CaptureClosures(FrameEnd{ 0, true, 0, 0 });
+                }
+            }
+        }
+        // The module contexts' own scopes above their top levels, which a failure left (RenderForOuter)
+        JINJA2CPP_NOINLINE void EndModuleScopesLeftByFailure()
+        {
+            if (!m_loaded)
+            {
+                return;
+            }
+            for (auto& module : m_loaded->modules)
+            {
+                if (module)
+                {
+                    auto& moduleContext = module->Context();
+                    moduleContext.EndScopesLeftByFailure(moduleContext.FirstOwnScope());
                 }
             }
         }
@@ -1544,7 +1618,7 @@ private:
             // that calls (`callerHoldsHandles`) nor one its calls keep holds one: then the slots go, and a
             // tree with one goes as the others (docs/tasks/0503)
             // A table shared with the stacks a render under a keeper ends is never cleared here (SharedTemplates)
-            const bool slotsFree = !callerHoldsHandles && !loaded.sharedTemplates && !loaded.templates.HeldOutside()
+            const bool slotsFree = !callerHoldsHandles && !loaded.sharedTable && !loaded.templates.HeldOutside()
                                    && std::none_of(loaded.modules.begin(), loaded.modules.end(), [](const auto& module) { return module && module->HoldsTemplateHandles(); });
             if (slotsFree)
             {
@@ -1554,7 +1628,7 @@ private:
             {
                 const LoadTemplateResult* result = &*p;
                 if (std::binary_search(named.begin(), named.end(), result, std::less<>())
-                    || (!slotsFree && HoldsSlot(*result, loaded.sharedTemplates ? *loaded.sharedTemplates : loaded.templates)))
+                    || (!slotsFree && HoldsSlot(*result, loaded.sharedTable ? loaded.sharedTable->slots : loaded.templates)))
                 {
                     ++p;
                     continue;
@@ -1581,7 +1655,7 @@ private:
         TemplateSlots& Templates() override
         {
             auto& loaded = Loaded();
-            return JINJA2CPP_CELL_UNLIKELY(loaded.sharedTemplates != nullptr) ? *loaded.sharedTemplates : loaded.templates;
+            return JINJA2CPP_CELL_UNLIKELY(loaded.sharedTable != nullptr) ? loaded.sharedTable->slots : loaded.templates;
         }
         ImportedModule& AddModule(std::unique_ptr<ImportedModule> module) override { return *Loaded().modules.emplace_back(std::move(module)); }
         void ShareModule(const LoadTemplateResult& tpl, ImportedModule& module) override { Loaded().sharedModules.emplace_back(&tpl, &module); }
@@ -1716,6 +1790,16 @@ private:
                 },
                 result);
         }
+        // The table Templates() gives under a keeper, with the trees its slots may name: the rendered template and
+        // what the render loads. Held by the `self` and super() values that outlive the render (SharedTemplates), so
+        // the trees stay while one does, and go with it (docs/tasks/0521)
+        struct SharedTemplateTable
+        {
+            TemplateSlots slots;
+            SmallVector<std::shared_ptr<const void>, 2> trees;
+            // `trees` has the rendered template (SharedTemplates)
+            bool ownsHost = false;
+        };
         struct LoadedTemplates
         {
             LoadedTemplates() = default;
@@ -1727,7 +1811,7 @@ private:
             JINJA2CPP_NOINLINE_INLINE ~LoadedTemplates() = default;
 
             // Templates() under a keeper, shared with the `self` and super() stacks the render ends (SharedTemplates)
-            std::shared_ptr<TemplateSlots> sharedTemplates;
+            std::shared_ptr<SharedTemplateTable> sharedTable;
             std::unordered_map<std::string, LoadedTemplate> byName;
             // Results that are not the first for their name: templates reloaded during the render
             std::list<LoadTemplateResult> replaced;
@@ -1772,6 +1856,9 @@ private:
                     {
                         if (loaded)
                         {
+                            // Owned before it is counted: a tree the budget refuses is still named by what the
+                            // render made of it, which goes with the failure
+                            Loaded().sharedTable->trees.push_back(std::shared_ptr<const void>(loaded.value()));
                             m_keeper->KeepNewTree(loaded.value());
                         }
                     }

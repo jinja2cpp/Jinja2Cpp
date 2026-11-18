@@ -61,6 +61,10 @@ std::optional<InternalValue> SandboxedNativeAttribute(const RenderContext* conte
 InternalValue MakeUndefined(const RenderContext& context, std::string name);
 // An undefined value whose message is hint, as Python's environment.undefined(hint)
 InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hint);
+// An undefined value made by calling the class `className` (Undefined, StrictUndefined, ChainableUndefined or
+// DebugUndefined), whose message is `hint` when it is not empty, missing `name` from `obj` when they are
+// given (Python's Undefined(hint, obj, name)); nullopt for another name
+std::optional<InternalValue> MakeUndefinedOfClass(std::string_view className, std::string hint = {}, const InternalValue* obj = nullptr, const InternalValue* name = nullptr);
 // Jinja2's cond_expr_undefined for an inline if-expression on `line` without else: an undefined
 // of the default policy whatever the policy of the render (jinja2.Undefined in every
 // environment); its message is formatted only when it is reported

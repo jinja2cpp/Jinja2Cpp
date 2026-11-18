@@ -461,6 +461,15 @@ bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
             return IsValueInDictView(baseVal, *mapping, kind == IteratorKind::DictItems);
         }
     }
+    else if (kind == IteratorKind::Set)
+    {
+        // A set hashes the item before it looks (docs/tasks/0523)
+        CheckUndefinedUse(baseVal, UndefinedUse::Operator);
+        if (const char* type = UnhashableType(baseVal))
+        {
+            ThrowUnhashable(type);
+        }
+    }
     if (const auto* items = list->GetMutableItems())
     {
         return IsValueInList(baseVal, *items);

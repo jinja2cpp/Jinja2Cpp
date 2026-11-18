@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -261,20 +262,19 @@ public:
     static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     // The collector of the render running on this thread, or null
     [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
-    // Holds `tree` (a template, what a render of it loaded) until this render ends, after its
-    // cells and its walk: a render started inside this one that shares its snapshot of the
-    // globals can store a value of its own in a global this render reads afterwards (docs/tasks/
-    // 0324, 0463), a macro or `caller` that runs in that tree, a `self` or loop that names it,
-    // a param it views. The host may destroy the nested template once its render has returned,
-    // so this render keeps it (docs/tasks/0481). A tree is kept once. Its `bytes` count against this render's
-    // memory budget from then on, although another render's limits may be running: past it this render fails at its
-    // next step (docs/tasks/0492). Throws std::bad_alloc
-    void KeepTree(std::shared_ptr<const void> tree, std::uint64_t bytes);
-    // The same for a tree a render nested in this one starts to need (its template, one it loads), before it runs
-    // or records it: when the tree does not fit in this render's budget it is not kept, this render fails at its
-    // next step, and the nested one fails now with ResourceLimitError, so that a nested render with a loop of its
-    // own cannot keep more (docs/tasks/0492). `Tree` has TreeBytes(), computed for a tree not kept yet only.
-    // Throws std::bad_alloc
+    // Counts a tree (a template, what a render of it loaded) against this render's memory budget for as long as
+    // something owns it: a render started inside this one that shares its snapshot of the globals can store a value
+    // of its own in a global this render reads afterwards (docs/tasks/0324, 0463), a macro or `caller` that runs in
+    // that tree, a `self` or loop that names it, a param it views. The host may destroy the nested template once its
+    // render has returned, so each such value owns it (RenderContext::TreeOwner) and this render holds no reference:
+    // it notes the tree weakly with the bytes it took, and gives them back once the tree has expired
+    // (docs/tasks/0521). A tree is noted once. Its bytes count against this render's memory budget from then on,
+    // although another render's limits may be running: past it this render fails at its next step (docs/tasks/0492)
+    // KeepNewTree is that for a tree a render nested in this one starts to need (its template, one it loads), before
+    // it runs or records it: when the tree does not fit in this render's budget, after giving back what the trees that have
+    // expired took, it is not noted, this render fails at its next step, and the nested one fails now with
+    // ResourceLimitError, so that a nested render with a loop of its own cannot keep more (docs/tasks/0492). `Tree`
+    // has TreeBytes(), computed for a tree not noted yet only. Throws std::bad_alloc
     template<typename Tree>
     void KeepNewTree(const std::shared_ptr<Tree>& tree)
     {
@@ -283,12 +283,31 @@ public:
             return;
         }
         const std::uint64_t bytes = tree->TreeBytes();
-        if (!detail::ChargeRenderMemoryOf(this, bytes))
+        if (bytes > detail::RenderMemoryLeftOf(this))
+        {
+            GiveBackExpired();
+        }
+        std::uint64_t taken = 0;
+        if (!detail::ChargeRenderMemoryOf(this, bytes, &taken))
         {
             detail::ThrowKeptTreeMemory(bytes);
         }
-        Insert(tree, bytes);
+        try
+        {
+            Insert(tree.get(), tree, taken);
+        }
+        catch (...)
+        {
+            detail::ReleaseRenderMemoryOf(this, taken);
+            throw;
+        }
     }
+    // Gives back to the budget what the noted trees took that nothing owns any more, and forgets them
+    void GiveBackExpired() noexcept;
+    // The noted trees something still owns, and all the notes, expired ones too: what a test reads to see that a
+    // loop of nested renders keeps neither (docs/tasks/0521)
+    [[nodiscard]] size_t KeptTreeCount() const noexcept;
+    [[nodiscard]] size_t KeptLedgerSize() const noexcept { return m_notes ? m_notes->trees.size() : 0; }
     // This render shares `keeper`'s snapshot of the globals (KeepTree): when it ends, what it kept until then
     // (KeepUntilEnd) goes to `keeper`, as the closures that keep it may be stored in a global the outer render reads
     // afterwards (docs/tasks/0491)
@@ -364,10 +383,24 @@ private:
     friend struct detail::RenderThreadState;
 
     void Finish() noexcept;
-    // Whether KeepTree holds `tree` already
-    [[nodiscard]] bool Keeps(const void* tree) const noexcept { return m_notes && m_notes->treeSet.count(tree) != 0; }
-    // Holds `tree` with what it counted; false when it was held already. Throws std::bad_alloc
-    bool Insert(std::shared_ptr<const void> tree, std::uint64_t bytes);
+    // Whether `tree` is noted and something owns it still. A note of an expired tree gives back what it took, once
+    // (an address may be reused by a new tree: Insert then takes the note)
+    [[nodiscard]] bool Keeps(const void* tree) noexcept;
+    // What KeepTree notes of a tree (docs/tasks/0521)
+    struct KeptTree
+    {
+        std::weak_ptr<const void> tree;
+        const void* address = nullptr;
+        // What it took of the budget of the render that notes it, given back with it (docs/tasks/0492)
+        std::uint64_t bytes = 0;
+    };
+    // Notes `tree`, at `address`, with the bytes it took; null when it was noted already. The note, whose bytes the
+    // caller may set. Throws std::bad_alloc, and then notes nothing
+    KeptTree* Insert(const void* address, std::weak_ptr<const void> tree, std::uint64_t bytes);
+    // Notes what a render that ends handed over (Finish), charged here. Throws std::bad_alloc, and then notes nothing
+    void KeepTree(const KeptTree& kept);
+    // Gives back `bytes` a note took
+    void GiveBack(std::uint64_t bytes) noexcept;
     // The collector of the render whose registry GlobalCells finds, or null for the running one's
     [[nodiscard]] static CycleCollector* SnapshotOwner() noexcept;
     void Add(ValueObjectPtr object);
@@ -385,20 +418,18 @@ private:
     // What a render noted, made on the first note: most renders store no container in another
     struct Notes
     {
-        // KeepTree's: first, so that it goes last, after every value of the render
-        struct KeptTree
-        {
-            std::shared_ptr<const void> tree;
-            // What it counts against the memory budget of the render that keeps it (docs/tasks/0492)
-            std::uint64_t bytes = 0;
-        };
+        // Notes of trees and candidates held by nothing else are dropped when there are this many (Insert, Add)
+        static constexpr size_t MinPruneAt = 64;
+        // KeepTree's: noted weakly, as what owns a tree is the values that name it (docs/tasks/0521)
         std::vector<KeptTree> trees;
-        std::unordered_set<const void*> treeSet;
+        // The index in `trees` of each address noted, expired or not
+        std::unordered_map<const void*, size_t> treeIndex;
+        // The expired notes are given back when there are this many (Insert)
+        size_t treePruneAt = MinPruneAt;
         // The receiving containers, held until the render ends
         std::vector<ValueObjectPtr> candidates;
         std::unordered_set<const void*> noted;
         // Candidates held by nothing else are dropped when there are this many (Add)
-        static constexpr size_t MinPruneAt = 64;
         size_t pruneAt = MinPruneAt;
         // WalkFromEveryNote: nothing is dropped before the walk
         bool walkFromEvery = false;

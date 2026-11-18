@@ -35,6 +35,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -213,6 +214,10 @@ private:
 // its own. So another tree at the same addresses is seen only under a later epoch, which
 // no entry of the freed one holds. A render must not make nodes, nor run a tree it does not
 // keep alive, under an epoch that outlives the tree.
+// A render nested in another one that shares its globals (docs/tasks/0521) may end before the
+// outer one runs its code, which then runs under the outer render's epoch or a fresh one, as a
+// closure it was handed is called: the nested render's own epochs went with its contexts, and the
+// callable that runs the tree holds it (TreeOwner), so the rule holds.
 class LookupCache
 {
 public:
@@ -585,6 +590,8 @@ public:
         , m_builtinScope(other.m_builtinScope)
         , m_templateFrame(other.m_templateFrame)
         , m_nodes(other.m_nodes)
+        , m_ownerNodes(other.m_ownerNodes)
+        , m_nodesOwner(other.m_nodesOwner)
         , m_parent(other.m_parent)
         , m_parentDepth(other.m_parentDepth)
         , m_selfDepth(other.m_selfDepth)
@@ -637,6 +644,8 @@ public:
         , m_builtinScope(other.m_builtinScope)
         , m_templateFrame(other.m_templateFrame)
         , m_nodes(other.m_nodes)
+        , m_ownerNodes(other.m_ownerNodes)
+        , m_nodesOwner(other.m_nodesOwner)
         , m_parent(&other)
         , m_parentDepth(std::min(depth, other.GetScopesCount()))
         , m_selfDepth(std::min(other.m_selfDepth, m_parentDepth))
@@ -1132,15 +1141,31 @@ public:
         std::swap(nodes, m_nodes);
         return nodes;
     }
+    // Makes `*owner` the owner of the tree `nodes` for TreeOwner(); returns the previous pair (OwnedArenaSwitch)
+    std::pair<ArenaView, const std::shared_ptr<const void>*> SetNodesOwner(const ArenaView& nodes, const std::shared_ptr<const void>* owner) noexcept
+    {
+        std::pair<ArenaView, const std::shared_ptr<const void>*> previous(m_ownerNodes, m_nodesOwner);
+        m_ownerNodes = nodes;
+        m_nodesOwner = owner;
+        return previous;
+    }
+    [[nodiscard]] const std::shared_ptr<const void>* NodesOwner() const noexcept { return m_nodesOwner; }
 
     auto GetRendererCallback()
     {
         return m_rendererCallback;
     }
-    // What keeps the tree the code runs in alive, for a value that outlives the call (a macro, a recursive loop); null
-    // unless the render's callback frees replaced trees (IRendererCallback::KeepsTreesByValue, docs/tasks/0482)
+    // What keeps the tree the code runs in alive, for a value that outlives the call (a macro, a recursive loop): the
+    // owner the call that runs the code brought (OwnedArenaSwitch), else the render callback's, which is null unless it
+    // frees replaced trees or ends before an outer render (IRendererCallback::KeepsTreesByValue, docs/tasks/0482, 0521)
     [[nodiscard]] std::shared_ptr<const void> TreeOwner() const
     {
+        if (m_nodesOwner && m_ownerNodes == m_nodes)
+        {
+            // OwnedArenaSwitch sets only an owner that holds something
+            JINJA2CPP_ASSERT(*m_nodesOwner);
+            return *m_nodesOwner;
+        }
         return m_rendererCallback && m_rendererCallback->KeepsTreesByValue() ? m_rendererCallback->TreeOwner(m_nodes) : nullptr;
     }
     // The environment the template was loaded in, if any
@@ -1274,6 +1299,25 @@ public:
     {
         m_views.pop_back();
         UpdateFullWalk();
+    }
+    // Ends the scopes above the first `scopes` that a failure left, with the views on them, innermost first: the
+    // closures defined there keep the names the scopes held, as Jinja2 never reaches their ends (FrameEnd::Stopped).
+    // For a render that fails while an outer one may still call its closures (docs/tasks/0525): its own context or a
+    // module's, which see no other context's scopes, so that `scopes` counts theirs. Throws std::bad_alloc
+    void EndScopesLeftByFailure(size_t scopes)
+    {
+        JINJA2CPP_ASSERT(m_parentDepth == 0);
+        auto views = m_views.size();
+        while (views != 0 && m_views[views - 1].scopeIndex >= scopes)
+        {
+            --views;
+        }
+        TruncateViews(views);
+        while (m_scopes.size() > scopes)
+        {
+            CaptureClosures(FrameEnd::Stopped(m_scopes.size()));
+            ExitScope();
+        }
     }
     // The views pushed here, so that a statement leaving by an exception can drop its own
     [[nodiscard]] size_t ViewCount() const { return m_views.size(); }
@@ -1754,6 +1798,11 @@ private:
     const InternalValueMap* m_builtinScope{};
     TemplateFrame* m_templateFrame{};
     ArenaView m_nodes;
+    // The owner of the tree `m_ownerNodes`, which a call of code of another render runs on this context holds
+    // (OwnedArenaSwitch): TreeOwner() uses it while `m_nodes` is that tree. Not owning: the call's own object. Copied
+    // by the contexts a call makes, which end within it; not by CloneWith's, which may outlive it (docs/tasks/0521)
+    ArenaView m_ownerNodes;
+    const std::shared_ptr<const void>* m_nodesOwner = nullptr;
     LoopControl m_loopControl = LoopControl::None;
     // The context this one was made from and how many of its scopes this one sees, below
     // its own; null for a context that copies no scopes
@@ -1970,6 +2019,45 @@ private:
     RenderContext& m_context;
     ArenaView m_prev;
     bool m_switched;
+};
+
+// ArenaSwitch for code that may outlive the render that owns its tree: a macro, loop recursion or block of a
+// nested render's template, run on the context of another render (the outer one's, a module's) after the nested one
+// has ended. `owner`, the closure's own keep-alive, outlives the switch and keeps `nodes` alive: a value the code
+// makes that names the tree (RenderContext::TreeOwner) takes it, and holds it however the closure goes. Null, or
+// holding nothing, for a closure that has none: then it is ArenaSwitch (docs/tasks/0521)
+class OwnedArenaSwitch
+{
+public:
+    OwnedArenaSwitch(RenderContext& context, const ArenaView& nodes, const std::shared_ptr<const void>* owner)
+        : m_switch(context, nodes)
+        , m_context(context)
+        , m_owner(owner && *owner ? owner : nullptr)
+    {
+        if (m_owner)
+        {
+            std::tie(m_prevNodes, m_prevOwner) = context.SetNodesOwner(nodes, m_owner);
+        }
+    }
+    ~OwnedArenaSwitch()
+    {
+        if (m_owner)
+        {
+            // Switches nest: whatever the code in between set, is restored by now
+            JINJA2CPP_ASSERT_NOEXCEPT(m_context.NodesOwner() == m_owner);
+            m_context.SetNodesOwner(m_prevNodes, m_prevOwner);
+        }
+    }
+    OwnedArenaSwitch(const OwnedArenaSwitch&) = delete;
+    OwnedArenaSwitch& operator=(const OwnedArenaSwitch&) = delete;
+
+private:
+    // First: restored after the owner, which names the tree it switched to
+    ArenaSwitch m_switch;
+    RenderContext& m_context;
+    const std::shared_ptr<const void>* m_owner;
+    ArenaView m_prevNodes;
+    const std::shared_ptr<const void>* m_prevOwner = nullptr;
 };
 
 // What a closure keeps of the frames it was defined in once they end before it is called: a
