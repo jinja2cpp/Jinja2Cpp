@@ -2291,6 +2291,9 @@ struct SelfBlockCall
     // Owned: the name is the template's, whose tree has no slot when only its parent defines the blocks, so a module
     // may free it while `self` is stored (docs/tasks/0482)
     std::string templateName;
+    // Who the `self` this block is of is (CreateObjectAdapter), shared by its blocks: a copy of it a frame's copy
+    // rebuilds stays `sameas` it (docs/tasks/0529)
+    std::shared_ptr<const void> identity;
 
     void operator()(const CallParams& params, OutStream& stream, RenderContext& context) const
     {
@@ -2393,16 +2396,18 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
     // What the site keeps (ClosureSite::CaptureOnEnd), while the `self` lives; the caller holds it
     const std::shared_ptr<const void> keepAlive = keepsCapture ? site.Capture() : nullptr;
     InternalValueMap self;
+    std::shared_ptr<const void> identity;
     if (!stack.blocks.empty())
     {
         SelfBlocksOf(stack, callback);
+        identity = std::make_shared<char>();
     }
     for (const auto& block : stack.blocks)
     {
         std::string blockName(block.first);
-        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, stack.self, site, std::string(templateName) }), keepAlive));
+        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, stack.self, site, std::string(templateName), identity }), keepAlive));
     }
-    return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)));
+    return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)), identity.get());
 }
 } // namespace
 
@@ -4100,7 +4105,9 @@ std::optional<InternalValue> RekeptSelf(const InternalValue& value, const KeepAl
         return std::nullopt;
     }
     const auto* repr = map->GetReprArgument();
-    InternalValue rebuilt(CreateObjectAdapter(std::move(blocks), map->GetObjectClass(), repr ? *repr : InternalValue(NoneValue())));
+    // The same object as `value` for `is` and ==: its blocks, which the copy shares, keep the identity
+    const void* identity = items->empty() ? nullptr : GetIf<Callable>(&items->begin()->second)->GetStatementCallable().target<SelfBlockCall>()->identity.get();
+    InternalValue rebuilt(CreateObjectAdapter(std::move(blocks), map->GetObjectClass(), repr ? *repr : InternalValue(NoneValue()), identity));
     if (copies)
     {
         copies->emplace_back(original, rebuilt);

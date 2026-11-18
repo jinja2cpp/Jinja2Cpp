@@ -36,4 +36,4 @@ went into that copy with blocks keeping the capture that keeps the copy: a cycle
 `IMapAccessor::GetObjectItems`) as it does a macro, and `StrengthenCapture` makes its blocks keep the capture again
 when a call reads it. `ModuleCallTest.EveryUseStoredSelfLetGoOfStaysFlat` has the stored `self`, `super()`, top-level
 `self` and `set q = self` rows (26 to 34 allocations a call before); `TemplateModuleChangingSourceTest.SelfSetAtTheTopLevelOutlivesTheInclude`
-pins the output (3.1.6). A weakened `self` read back is a new object: `q is q` across that read is not checked.
+pins the output (3.1.6). A rebuilt `self` keeps the identity its blocks share (`SelfBlockCall::identity`), so it stays `sameas` and == to the original and to other copies (`SelfSetTwiceStaysOneObject`; Codex review of #946). `KeptObjects::ReleaseExpired` looks at 4 entries a call in turn, so many live kept closures cost nothing extra per call.

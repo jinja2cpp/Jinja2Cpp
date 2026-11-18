@@ -4361,14 +4361,18 @@ public:
     [[nodiscard]] const char* GetObjectClass() const override { return m_className; }
     [[nodiscard]] const InternalValue* GetReprArgument() const override { return m_reprArgument ? &*m_reprArgument : nullptr; }
     [[nodiscard]] const void* GetObjectItems() const override { return &m_values.Get(); }
+    [[nodiscard]] const void* GetIdentity() const override { return m_identity ? m_identity : IMapAccessor::GetIdentity(); }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
     }
+    // Who the object is for `is` and ==, when not its map: one that copies of it rebuilt share (CreateObjectAdapter)
+    void SetIdentity(const void* identity) { m_identity = identity; }
 
 private:
     const char* m_className;
     std::optional<InternalValue> m_reprArgument;
+    const void* m_identity = nullptr;
 };
 
 // Python's mappingproxy (docs/tasks/0523): reads its dict live, as the view it came from does
@@ -5075,6 +5079,13 @@ MapAdapter CreateNamespaceAdapter(InternalDict&& values)
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className)
 {
     return MapAdapter(MakeRef<ObjectMapAdapter>(std::move(values), className));
+}
+
+MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument, const void* identity)
+{
+    auto adapter = MakeRef<ObjectMapAdapter>(std::move(values), className, std::move(reprArgument));
+    adapter->SetIdentity(identity);
+    return MapAdapter(std::move(adapter));
 }
 
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument)

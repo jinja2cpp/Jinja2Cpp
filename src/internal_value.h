@@ -1851,6 +1851,9 @@ MapAdapter CreateNamespaceAdapter(TemplateDict&& values);
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className);
 // An object of `className` that prints as <className repr(reprArgument)>
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument);
+// As above, the object being `identity` for `is` and ==, which must live as long as it does: the copies of one object
+// that a frame's copy rebuilds with other values stay the same object (docs/tasks/0529)
+MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument, const void* identity);
 // Python's read-only mappingproxy of `dict`, a dict view's `mapping` (docs/tasks/0523): it reads the dict live and
 // has only the dict's reading methods
 MapAdapter CreateMappingProxy(InternalValue dict);

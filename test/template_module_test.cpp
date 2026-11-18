@@ -869,6 +869,11 @@ TEST_F(TemplateModuleChangingSourceTest, SelfSetTwiceStaysOneObject)
     auto module = Make("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}");
     EXPECT_EQ("[]B0", Call(module.exports["m"]).AsString());
     EXPECT_EQ("[True|True]B0", Call(module.exports["m"]).AsString());
+    // And the same object as a copy stored outside the include (Codex review of #946)
+    AddFile("lib", "{% block b %}B{% endblock %}{% set q = self %}{% set ns.s = q %}{% macro f() %}{{ q is sameas ns.s }}|{{ q == ns.s }}{% endmacro %}{% set ns.f = f %}");
+    jinja2::Template stored(&m_env);
+    ASSERT_TRUE(!!stored.Load("{% set ns = namespace(s=none, f=none) %}{% include 'lib' %}|{{ ns.f() }}"));
+    EXPECT_EQ("B|True|True", stored.RenderAsString({}).value());
 }
 
 TEST_F(TemplateModuleChangingSourceTest, StoredRecursiveLoopRunsItsOldBody)
