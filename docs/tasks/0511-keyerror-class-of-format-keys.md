@@ -23,7 +23,7 @@ needs it), and map it to `PyExc_KeyError` with the key object in python/src/erro
 rows in `ErrorsJinjaMessagesTest.RuntimeErrorsNameTheirPythonClass` and
 `test_percent_formatting_raises_the_class_jinja2_raises`.
 
-**Resolution.** `TemplateRuntimeError::PythonClass::KeyError` (ExtraParams[1] `"KeyError"`), thrown by
+**Resolution** (PR #944). `TemplateRuntimeError::PythonClass::KeyError` (ExtraParams[1] `"KeyError"`), thrown by
 `methods::ThrowKeyError` at the three sites (`%(b)s`, `{0[b]}`, `dict.pop`). The C++ message keeps
 `KeyError: <repr>`, as ErrorInfo's text of a TemplateRuntimeError is the message alone. The key is
 ExtraParams[2] when it is None, a bool, a number or a string, copied so that it outlives the render and the

@@ -25,7 +25,7 @@ evaluated, and make the i18n formatting of an undefined result raise as Jinja2's
 **Done when.** Each case above matches Jinja2 through the module, with rows in python/tests/test_i18n.py and
 python/tests/test_sandbox.py.
 
-**Resolution.** Oldstyle `_`/`gettext` and `{% trans %}` already gave undefined through 0479's guard at the
+**Resolution** (PR #944). Oldstyle `_`/`gettext` and `{% trans %}` already gave undefined through 0479's guard at the
 template's call site, and a `trans` with variables already failed on `Undefined % vars`. Left were:
 - newstyle gettext (src/global_functions.cpp `CallTranslation`): the installed callable is guarded there, and the
   stop's undefined then goes into `rv % variables` as in `_make_new_gettext`: an UndefinedError without
