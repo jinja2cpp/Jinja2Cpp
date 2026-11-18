@@ -9,6 +9,7 @@
 #include <exception>
 #include <new>
 #include <string>
+#include <string_view>
 
 namespace jinja2cpp_py
 {
@@ -151,9 +152,9 @@ std::string ErrorMessage(const jinja2::ErrorInfo& error)
 }
 
 const char* const kIncludedSyntaxNote =
-            "the error is in a template this one includes, imports or extends, which may use syntax the engine lacks. "
-            "Such templates fall back to Jinja2 only when loaded directly (task 0430). To run the whole environment on "
-            "Jinja2, give it a Tier B option, such as extensions=[an extension] or enable_async=True (docs/python.md, \"Fallback\")";
+    "the error is in a template this one includes, imports or extends, which may use syntax the engine lacks. "
+    "Such templates fall back to Jinja2 only when loaded directly (task 0430). To run the whole environment on "
+    "Jinja2, give it a Tier B option, such as extensions=[an extension] or enable_async=True (docs/python.md, \"Fallback\")";
 
 void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
 {
@@ -264,6 +265,20 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         PyErr_SetString(PyExc_RecursionError, "maximum recursion depth exceeded");
         throw nb::python_error();
     case ErrorCode::TemplateRuntimeError:
+        // Python's KeyError(key), whose str() is the key's repr: the engine's message has a `KeyError: ` prefix, and
+        // the key is ExtraParams[2] when the error could keep it (docs/tasks/0511)
+        if (ParamText(error, 1) == "KeyError")
+        {
+            const auto& params = error.GetExtraParams();
+            constexpr std::string_view prefix = "KeyError: ";
+            std::string text = ParamText(error, 0);
+            if (text.compare(0, prefix.size(), prefix) == 0)
+            {
+                text.erase(0, prefix.size());
+            }
+            const nb::object key = params.size() > 2 ? ToPython(params[2]) : nb::object(MakeStr(text));
+            Raise(PyExc_KeyError, nb::handle(PyExc_KeyError)(key));
+        }
         // Python's class of the error, when the engine names it (ExtraParams[1])
         if (auto* type = PythonClassOf(ParamText(error, 1)))
         {

@@ -345,10 +345,17 @@ def test_formatting_a_translation_checks_what_fits_in_one_pass():
         ("{{ t|safe % none }}", "%d"),
         ("{{ gettext(t, a=1) }}", "%(a"),
         ("{{ gettext(t, a=1) }}", "%(a)d %s"),
+        # KeyError(key), whose str() is the key's repr (0511)
+        ("{{ t % {'a': 1} }}", "%(b)s"),
+        ("{{ gettext(t, a=1) }}", "%(b)s"),
+        ("{{ t.format({'a': 1}) }}", "{0[b]}"),
+        ("{{ t.format({'a': 1}) }}", "{0[1]}"),
+        ("{{ {'a': 1}.pop(t) }}", "b"),
+        ("{{ {'a': 1}.pop(t|length) }}", "b"),
     ],
 )
 def test_percent_formatting_raises_the_class_jinja2_raises(source, value):
-    # ValueError, TypeError or OverflowError, as Python's % raises it (0510)
+    # ValueError, TypeError, OverflowError or KeyError, as Python's % raises it (0510, 0511)
     raised = []
     for module in (jinja2, jinja2cpp):
         env = module.Environment(extensions=["jinja2.ext.i18n"])
@@ -378,3 +385,37 @@ def test_an_oldstyle_install_does_not_keep_the_environment_alive():
     del env
     gc.collect()
     assert ref() is None
+
+
+def _stop(*args, **kwargs):
+    raise StopIteration
+
+
+STOP_TEMPLATES = (
+    "[{{ _('a') }}]",
+    "[{{ gettext('a') }}]",
+    "[{{ ngettext('a', 'b', 2) }}]",
+    "[{{ gettext('a', v=1) }}]",
+    "[{{ _('a')|length }}]",
+    "[{% trans %}x{% endtrans %}]",
+    "[{% trans v=1 %}x{{ v }}{% endtrans %}]",
+    "[{% trans n=2 %}x{% pluralize %}y{% endtrans %}]",
+)
+
+
+@pytest.mark.parametrize("source", STOP_TEMPLATES)
+@pytest.mark.parametrize("newstyle", [False, True])
+@pytest.mark.parametrize("autoescape", [False, True])
+@pytest.mark.parametrize("undefined", ["Undefined", "StrictUndefined", "DebugUndefined"])
+def test_a_translation_that_raises_stop_iteration_is_undefined(source, newstyle, autoescape, undefined):
+    # Context.call makes the call undefined; newstyle's `rv % variables` refuses it unless autoescape made it
+    # Markup first (0500)
+    results = []
+    for module in MODULES:
+        env = module.Environment(extensions=["jinja2.ext.i18n"], autoescape=autoescape, undefined=getattr(module, undefined))
+        env.install_gettext_callables(_stop, _stop, newstyle=newstyle)
+        try:
+            results.append(env.from_string(source).render())
+        except Exception as error:  # noqa: BLE001 - the class and message are compared
+            results.append((type(error).__name__, str(error)))
+    assert results[0] == results[1]

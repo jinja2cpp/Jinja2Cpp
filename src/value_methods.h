@@ -78,6 +78,9 @@ void NoteContainerStore(const InternalValue& container, const InternalValue& ite
 // container[key] = value for a list or dict the template owns
 void StoreItem(const InternalValue& container, const InternalValue& key, InternalValue value);
 bool IsContainer(const InternalValue& value);
+// Python's KeyError for the missing `key` of a dict or a % or str.format mapping: the message `KeyError: <repr>`,
+// and the key itself for the Python module when it is a plain value (docs/tasks/0511)
+[[noreturn]] void ThrowKeyError(const InternalValue& key);
 
 // Python's AttributeError text, "'str object' has no attribute 'x'" as Jinja2 words it
 [[noreturn]] void ThrowNoAttribute(const InternalValue& obj, const std::string& name);

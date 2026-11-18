@@ -760,7 +760,18 @@ INSTANTIATE_TEST_SUITE_P(Jinja2Oracle, MacroStopTest, ::testing::Values(
     StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Default, "[]" },
     StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
     StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}]" },
-    StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[]" }));
+    StopCase{ "{% macro m() %}a{% for q in os %}{{ q.p }}{% endfor %}b{% endmacro %}[{{ m() }}]", UndefinedPolicy::Chainable, "[]" },
+    // str.format runs through Context.call: a field that stops makes the whole call undefined (docs/tasks/0500)
+    StopCase{ "[{{ '{0.p}'.format(os[1]) }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "[{{ '{0.p}x'.format(os[1]) ~ 'y' }}]", UndefinedPolicy::Default, "[y]" },
+    StopCase{ "[{{ '{a.p}'.format_map({'a': os[1]}) }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "[{{ ('{0.p}'.format(os[1]))|length }}]", UndefinedPolicy::Default, "[0]" },
+    StopCase{ "[{{ '{0.p}'.format(os[1]) }}]", UndefinedPolicy::Strict, "error: UndefinedError" },
+    StopCase{ "[{{ '{0.p}x'.format(os[1]) ~ 'y' }}]", UndefinedPolicy::Debug, "[{{ undefined value printed: value was undefined because a callable raised a StopIteration exception }}y]" },
+    StopCase{ "[{{ ('{0.p}'|safe).format(os[1]) }}]", UndefinedPolicy::Default, "[]" },
+    StopCase{ "[{{ '{0.p}'.format(os[0]) }}]", UndefinedPolicy::Default, "[1]" },
+    // The arguments are evaluated outside the call: a stop there stays an error
+    StopCase{ "[{{ '{0}'.format(1|stop) }}]", UndefinedPolicy::Default, "error: UserCallableException" }));
 // clang-format on
 
 namespace

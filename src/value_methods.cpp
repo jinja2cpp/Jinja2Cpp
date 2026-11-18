@@ -2,6 +2,7 @@
 
 #include "big_int.h"
 #include "borrowed_cells.h"
+#include "call_stop.h"
 #include "case_mapping.h"
 #include "cycle_collector.h"
 #include "dialect.h"
@@ -1833,7 +1834,7 @@ struct StrOps
         {
             if (map)
             {
-                Raise("KeyError: " + Narrow(View(ToStr(key, true))));
+                ThrowKeyError(key);
             }
             if (value.Kind() == ValueKind::List || value.Kind() == ValueKind::String)
             {
@@ -2110,20 +2111,45 @@ JINJA2CPP_STR_METHOD(Rfind)
 JINJA2CPP_STR_METHOD(Index)
 JINJA2CPP_STR_METHOD(Rindex)
 JINJA2CPP_STR_METHOD(Count)
+// Jinja2 calls str.format through Context.call, the sandbox's format_string too: a StopIteration out of a field's
+// lookup or conversion (a host property, __format__) makes the call's value undefined (docs/tasks/0500)
+template<typename Fn>
+InternalValue FormatGuardingStop(RenderContext& context, Fn&& format)
+{
+    HomeCall::Snapshot snapshot(context);
+    try
+    {
+        return std::forward<Fn>(format)();
+    }
+    catch (...)
+    {
+        detail::KeepFailure();
+    }
+    if (!detail::KeptIsStop())
+    {
+        detail::RethrowKept();
+    }
+    detail::DropKept();
+    snapshot.Undo();
+    return detail::MakeStopUndefined(context);
+}
+
 // str.format and, with formatMap, str.format_map; Markup's escape each field (escape). A sandbox
 // policy may format the string itself (ISandboxPolicy::Format)
 InternalValue FormatString(const InternalValue& self, const CallParams& params, RenderContext& context, bool formatMap, bool escape)
 {
-    if (const auto* policy = context.GetSandboxPolicy())
-    {
-        if (auto formatted = policy->Format(self, formatMap, params, context))
+    return FormatGuardingStop(context, [&]() -> InternalValue {
+        if (const auto* policy = context.GetSandboxPolicy())
         {
-            return std::move(*formatted);
+            if (auto formatted = policy->Format(self, formatMap, params, context))
+            {
+                return std::move(*formatted);
+            }
         }
-    }
-    return ApplyStringConverter(self, [&params, &context, formatMap, escape](auto sv) -> InternalValue {
-        using CharT = typename decltype(sv)::value_type;
-        return formatMap ? StrOps<CharT>::FormatMap(sv, params, context, escape) : StrOps<CharT>::Format(sv, params, context, escape);
+        return ApplyStringConverter(self, [&params, &context, formatMap, escape](auto sv) -> InternalValue {
+            using CharT = typename decltype(sv)::value_type;
+            return formatMap ? StrOps<CharT>::FormatMap(sv, params, context, escape) : StrOps<CharT>::Format(sv, params, context, escape);
+        });
     });
 }
 InternalValue StrFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
@@ -2278,17 +2304,19 @@ InternalValue MarkupJoin(const InternalValue& self, const CallParams& params, Re
 // markupsafe's EscapeFormatter: a policy's result is taken as it is, the engine's is Markup
 InternalValue MarkupFormatString(const InternalValue& self, const CallParams& params, RenderContext& context, bool formatMap)
 {
-    if (const auto* policy = context.GetSandboxPolicy())
-    {
-        if (auto formatted = policy->Format(self, formatMap, params, context))
+    return FormatGuardingStop(context, [&]() -> InternalValue {
+        if (const auto* policy = context.GetSandboxPolicy())
         {
-            return std::move(*formatted);
+            if (auto formatted = policy->Format(self, formatMap, params, context))
+            {
+                return std::move(*formatted);
+            }
         }
-    }
-    return MarkupResult(ApplyStringConverter(self, [&params, &context, formatMap](auto sv) -> InternalValue {
-        using CharT = typename decltype(sv)::value_type;
-        return formatMap ? StrOps<CharT>::FormatMap(sv, params, context, true) : StrOps<CharT>::Format(sv, params, context, true);
-    }));
+        return MarkupResult(ApplyStringConverter(self, [&params, &context, formatMap](auto sv) -> InternalValue {
+            using CharT = typename decltype(sv)::value_type;
+            return formatMap ? StrOps<CharT>::FormatMap(sv, params, context, true) : StrOps<CharT>::Format(sv, params, context, true);
+        }));
+    });
 }
 InternalValue MarkupFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
 {
@@ -2904,9 +2932,7 @@ InternalValue DictPop(const InternalValue& self, const CallParams& params, Rende
         {
             return params.posParams[1];
         }
-        std::string spelling;
-        Apply<visitors::ValueRenderer<char>>(key, spelling, true);
-        Raise("KeyError: " + spelling);
+        ThrowKeyError(key);
     }
     CycleCollector::NoteDropped(p->second);
     auto result = p->second;
@@ -3638,6 +3664,44 @@ void StoreItem(const InternalValue& container, const InternalValue& key, Interna
 bool IsContainer(const InternalValue& value)
 {
     return value.Kind() == ValueKind::List || value.Kind() == ValueKind::Map;
+}
+
+namespace
+{
+// The key a KeyError keeps past the render, owned: None, a bool, a number or a string (a copy, never a view of the
+// template's or the host's text). Nothing for another key: a tuple's items, a callable or a host value may be lent
+// by the render
+std::shared_ptr<const Value> OwnedKey(const InternalValue& key)
+{
+    switch (key.Kind())
+    {
+    case ValueKind::None:
+    case ValueKind::Bool:
+    case ValueKind::Int:
+    case ValueKind::Double:
+    case ValueKind::BigInt:
+        return std::make_shared<const Value>(IntValue2Value(key));
+    case ValueKind::String:
+        if (const auto text = AsStringView<char>(key))
+        {
+            return std::make_shared<const Value>(key.IsMarkup() ? Value(Markup(*text)) : Value(std::string(*text)));
+        }
+        if (const auto text = AsStringView<wchar_t>(key))
+        {
+            return std::make_shared<const Value>(key.IsMarkup() ? Value(WMarkup(*text)) : Value(std::wstring(*text)));
+        }
+        return nullptr;
+    default:
+        return nullptr;
+    }
+}
+} // namespace
+
+void ThrowKeyError(const InternalValue& key)
+{
+    std::string spelling;
+    Apply<visitors::ValueRenderer<char>>(key, spelling, true);
+    throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::KeyError, "KeyError: " + spelling, OwnedKey(key));
 }
 
 bool IsMutable(const InternalValue& value)

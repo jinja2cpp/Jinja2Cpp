@@ -1323,3 +1323,37 @@ def test_a_long_string_reaches_is_safe_attribute_as_an_empty_one_of_its_type():
     assert env.from_string("{% set s = 'x' * 1000000 %}{% set m = s|safe %}" + source).render(t="abc") == ""
     assert seen.count((str, 0)) == 3 and seen.count((Markup, 0)) == 3, seen
     assert seen[-1] == (str, 3), seen
+
+
+class _StopProperty:
+    @property
+    def p(self):
+        raise StopIteration
+
+    def __format__(self, spec):
+        raise StopIteration
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "[{{ '{a.p}'.format_map(d) }}]",
+        "[{{ '{0.p}'.format(o) }}]",
+        "[{{ '{0.p}x'.format(o) ~ 'y' }}]",
+        "[{{ ('{0.p}'.format(o))|length }}]",
+        "[{{ ('{0.p}'|safe).format(o) }}]",
+        "[{{ '{0}'.format(o) }}]",
+        "[{{ '{0:x}'.format(o) }}]",
+    ],
+)
+@pytest.mark.parametrize("undefined", ["Undefined", "StrictUndefined", "DebugUndefined"])
+def test_a_format_field_that_raises_stop_iteration_is_undefined(source, undefined):
+    # The sandbox calls format_string through Context.call: the whole call is undefined (0500)
+    results = []
+    for module in (j2sandbox, jinja2cpp.sandbox):
+        env = module.SandboxedEnvironment(undefined=getattr(jinja2 if module is j2sandbox else jinja2cpp, undefined))
+        try:
+            results.append(env.from_string(source).render(d={"a": _StopProperty()}, o=_StopProperty()))
+        except Exception as error:  # noqa: BLE001 - the class and message are compared
+            results.append((type(error).__name__, str(error)))
+    assert results[0] == results[1]

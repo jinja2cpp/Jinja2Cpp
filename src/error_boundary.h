@@ -6,8 +6,10 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/value.h>
 
 #include <exception>
+#include <memory>
 #include <new>
 #include <optional>
 #include <stdexcept>
@@ -51,6 +53,8 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
     const char* limitField = nullptr;
     // The Python class Jinja2 raises for a TemplateRuntimeError, if the engine knows it
     const char* pythonClass = nullptr;
+    // The missing key of a KeyError, if it has one
+    std::shared_ptr<const Value> key;
     try
     {
         std::rethrow_exception(exception);
@@ -103,6 +107,7 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
         code = ErrorCode::TemplateRuntimeError;
         message = ex.what();
         pythonClass = ex.PythonClassName();
+        key = ex.Key();
         exception = nullptr;
     }
     catch (const RecursionLimitError&)
@@ -150,6 +155,10 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
     if (pythonClass)
     {
         errorData.extraParams.emplace_back(std::string(pythonClass));
+        if (key)
+        {
+            errorData.extraParams.push_back(*key);
+        }
     }
     errorData.exception = std::move(exception);
     return errorData;
