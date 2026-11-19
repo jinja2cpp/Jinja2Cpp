@@ -147,7 +147,7 @@ cannot happen before a tag exists, or it has no end state a release could wait f
 | Publishing wheels to PyPI | publication part of 0248 | Like the other registries, it follows the tag. The drop-in module itself, its wheels built in CI and its test-suite pass rate are in scope (0248) |
 | Parity cases found after the freeze | — | The corpus keeps growing; new divergences found during the RC window are filed for 2.x unless they are crashes, leaks or silent wrong values, which block (G8) |
 
-**Deliberate divergences** stay documented, not bugs. The corpus has 20 `deliberate:` lines, plus
+**Deliberate divergences** stay documented, not bugs. The corpus has 21 `deliberate:` lines, plus
 4 `@nobigint` build lines:
 - integer overflow raises in the default build (0015; big integers are opt-in through 0178's
   backend, hence the 4 `@nobigint` lines), and `range` bounds are int64 (0178, 1 line);
@@ -162,16 +162,18 @@ cannot happen before a tag exists, or it has no end state a release could wait f
 - `%c` of a lone surrogate in wide templates (0106);
 - `str.encode`, `int.to_bytes` and `float.fromhex` are not methods: the engine has no bytes
   type, and `fromhex` is a constructor (0403, 3 lines);
-- names a template sets are not NFKC-normalised (0446, Ruslan 2026-11-12).
+- names a template sets are not NFKC-normalised (0446, Ruslan 2026-11-12);
+- an include of a mapping none of whose names is found reports `TemplatesNotFound`, where
+  Jinja2's exception fails to build itself and escapes `ignore missing` (0494).
 
 Outside the corpus:
 - a call block escapes a callable's plain string result under autoescape, which Jinja2 writes
   raw (0362, Ruslan 2026-11-02);
 - borrowed JSON views start fresh in each module call (0402 option b, Ruslan 2026-11-06).
 
-Corpus on master `68b154ea`: 3576 cases, 3550 match. The upstream pallets/jinja suite through
+Corpus on master `2974054e`: 3695 cases, 3667 match. The upstream pallets/jinja suite through
 the Python module (0355) passes 645 of 856 (#895 closed five more for 0415; 0431-0434 are done).
-Its remaining divergences are filed as 0412, 0435, 0505, 0509 and 0511 (0415, 0433, 0434, 0436, 0456, 0457, 0458, 0476, 0477, 0479 and 0510 are done).
+Its remaining divergences are filed as 0412, 0435 and 0505 (0415, 0433, 0434, 0436, 0456, 0457, 0458, 0476, 0477, 0479, 0509, 0510 and 0511 are done).
 
 ## 6. Confirmed facts for this revision
 
