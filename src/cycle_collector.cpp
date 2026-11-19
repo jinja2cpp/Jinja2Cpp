@@ -404,7 +404,29 @@ void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const v
 
 void KeptObjects::ReleaseAllExpired() noexcept
 {
-    m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const Entry& entry) { return entry.owner.expired(); }), m_kept.end());
+    // The released objects go once the list is whole again: what they hold may keep in turn as it goes
+    std::vector<Entry> released;
+    size_t kept = 0;
+    for (auto& entry : m_kept)
+    {
+        if (entry.owner.expired())
+        {
+            try
+            {
+                released.push_back(std::move(entry));
+                continue;
+            }
+            catch (...) // NOLINT(bugprone-empty-catch): out of memory; the entry stays until the next prune
+            {
+            }
+        }
+        if (&m_kept[kept] != &entry)
+        {
+            m_kept[kept] = std::move(entry);
+        }
+        ++kept;
+    }
+    m_kept.resize(kept);
     m_cursor = 0;
 }
 

@@ -1738,6 +1738,9 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     {
         // Taken: the collecting below may run calls that are guarded in turn
         auto failure = detail::TakeKept();
+        // The pooled frame keeps no values past the loop, also when a capture below fails to allocate; the closures
+        // read the failing pass, in the body scope
+        state->lastPassScope.clear();
         if (detail::IsStop(failure))
         {
             values.CaptureClosures(FrameEnd::Stopped(endScopes));
@@ -1747,8 +1750,6 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         {
             values.CaptureClosures(FrameEnd::Stopped(endScopes));
         }
-        // The pooled frame keeps no values past the loop
-        state->lastPassScope.clear();
         std::rethrow_exception(std::move(failure));
     }
     // A closure defined in the body and kept past the loop sees the frame below it (0373). A recursive loop's body
