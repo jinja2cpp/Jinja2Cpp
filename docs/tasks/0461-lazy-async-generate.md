@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/953
 priority: medium
 area: parity
 depends: [0457]
