@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -1984,8 +1985,11 @@ bool IsStrictUndefined(const InternalValue& value)
     {
         return false;
     }
-    const auto* info = GetUndefinedInfo(value);
-    return !info || info->policy == UndefinedPolicy::Strict;
+    if (const auto* info = GetUndefinedInfo(value))
+    {
+        return info->policy == UndefinedPolicy::Strict;
+    }
+    return true;
 }
 
 // The truth of a folded value; nothing when bool() of it fails

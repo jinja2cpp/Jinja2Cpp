@@ -6,6 +6,7 @@
 #include "internal_value.h"
 #include "lexertk.h"
 #include "markup.h"
+#include "contracts.h"
 #include "node_arena.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
@@ -509,7 +510,7 @@ inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
     // A filter block and a call block write one value, the filtered output or the macro's (an empty one too)
     case NodeKind::FilterStmt:
     case NodeKind::MacroCallStmt:
-        return PieceKind::Output;
+    // A value Jinja2 evaluates at run time
     case NodeKind::ExprRenderer:
         return PieceKind::Output;
     case NodeKind::FoldedExprRenderer:

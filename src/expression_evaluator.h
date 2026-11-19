@@ -758,7 +758,7 @@ public:
     {}
     InternalValue Evaluate(RenderContext&) override;
     // The operator on the evaluated operand
-    InternalValue EvaluateWith(const InternalValue& value) const;
+    [[nodiscard]] InternalValue EvaluateWith(const InternalValue& value) const;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
     // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
     std::uint8_t PrepareFold(const NodeArena& nodes) override;
