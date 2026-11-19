@@ -81,7 +81,7 @@ TYPED_TEST(NlohmannReleaseTest, ReleaseEmptiesAndCopyKeepsTheOrder)
     EXPECT_EQ("text", scalar);
 }
 
-// Past the 64 ancestors the drain keeps, it starts again from the root: a chain much deeper than that, and a wide
+// Past the 256 ancestors the drain keeps, it starts again from the root: a chain much deeper than that, and a wide
 // level below it, still end empty
 TYPED_TEST(NlohmannReleaseTest, ReleaseEmptiesADeepDocument)
 {
