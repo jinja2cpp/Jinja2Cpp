@@ -40,6 +40,6 @@ proposal expected to hit (`ankerl`, `lexertk.h`, fmt, Boost) did not, so it is n
 Boundary-cast audit (`include/jinja2cpp/`, `bindings/`, reflection, callable arguments, the Python module):
 - `HostResult::Set` of an integer type wider than int64 wrapped a `uint64_t` above `INT64_MAX` to a negative
   `int`; it now writes the big `int` a `Value` of it holds (test `FastReadOfWideUnsignedIsNotWrapped`).
-- A user callable's narrow integer parameter truncates its argument (`ArgPromoter`): filed as 0543.
+- A user callable's narrow integer parameter truncates its argument (`ArgPromoter`): filed as 0544.
 - Reflection and `Value`'s integer constructor go through `detail::ToStoredInt`; the JSON bindings read
   `int64_t`/`uint64_t` by kind; the Python module converts with `PyLong_AsLongLongAndOverflow`. No change.
