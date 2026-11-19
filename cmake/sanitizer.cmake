@@ -11,6 +11,21 @@ if(JINJA2CPP_WITH_SANITIZERS STREQUAL address+undefined)
     set(_BASE_ENABLE_SANITIZER_FLAGS "-fsanitize=address,undefined")
 endif()
 
+# Implicit integer truncation and sign change (docs/tasks/0249). Clang only: GCC has no equivalent. A hit fails the
+# run; vendored code that converts implicitly on purpose is listed in the ignore list, our code is fixed instead
+if(JINJA2CPP_SANITIZE_IMPLICIT_CONVERSION)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "JINJA2CPP_SANITIZE_IMPLICIT_CONVERSION needs Clang, not ${CMAKE_CXX_COMPILER_ID}")
+    endif()
+    if(NOT JINJA2CPP_WITH_SANITIZERS STREQUAL address+undefined)
+        message(FATAL_ERROR "JINJA2CPP_SANITIZE_IMPLICIT_CONVERSION goes with JINJA2CPP_WITH_SANITIZERS=address+undefined")
+    endif()
+    list(APPEND _BASE_ENABLE_SANITIZER_FLAGS
+        "-fsanitize=implicit-conversion"
+        "-fno-sanitize-recover=implicit-conversion"
+        "-fsanitize-ignorelist=${CMAKE_CURRENT_LIST_DIR}/implicit-conversion.ignorelist")
+endif()
+
 if(JINJA2CPP_WITH_SANITIZERS STREQUAL memory)
     set(_BASE_ENABLE_SANITIZER_FLAGS "-fsanitize=memory")
 endif()

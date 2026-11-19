@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -2289,4 +2290,48 @@ TEST(PublicHostObjectTest, KeptContainerHandedBackGoesInsideTheRendersWalk)
     EXPECT_EQ("", Render("{% set a = [{}] %}{% set _ = keep(a) %}", { { "keep", keep } }));
     EXPECT_EQ("", Render("{% set b = [1] %}{% set _ = keep(b) %}{% set d = {} %}{% set _ = d.update(h=take(), self=d) %}", { { "keep", keep }, { "take", take } }));
     EXPECT_EQ(1u, kept.size());
+}
+
+// HostResult::Set of an integer type wider than int64 writes the value a Value of it holds: a big int above INT64_MAX,
+// not a wrapped negative one (docs/tasks/0249)
+namespace
+{
+class WideInts final : public IHostObject
+{
+public:
+    [[nodiscard]] const char* TypeName() const override { return "WideInts"; }
+    [[nodiscard]] std::string Str() const override { return "<WideInts>"; }
+    [[nodiscard]] std::string Repr() const override { return "<WideInts>"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view /*name*/) const override { return std::nullopt; }
+    [[nodiscard]] bool GetAttrTo(std::string_view name, HostResult& out) const override
+    {
+        if (name == "u64max")
+        {
+            out.Set(std::numeric_limits<uint64_t>::max());
+        }
+        else if (name == "u64small")
+        {
+            out.Set(uint64_t{ 42 });
+        }
+        else if (name == "u32max")
+        {
+            out.Set(std::numeric_limits<uint32_t>::max());
+        }
+        else if (name == "i8min")
+        {
+            out.Set(std::numeric_limits<int8_t>::min());
+        }
+        else
+        {
+            return false;
+        }
+        return true;
+    }
+};
+} // namespace
+
+TEST(PublicHostObjectTest, FastReadOfWideUnsignedIsNotWrapped)
+{
+    const ValuesMap params{ { "w", MakeHostValue<WideInts>() } };
+    EXPECT_EQ("18446744073709551615 True 42 4294967295 -128", Render("{{ w.u64max }} {{ w.u64max > 0 }} {{ w.u64small }} {{ w.u32max }} {{ w.i8min }}", params));
 }

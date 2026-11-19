@@ -52,11 +52,19 @@ public:
     void Set(bool value);
     //! An `int` within int64
     void Set(int64_t value);
-    //! Any other integer type, as an `int`; an unsigned value above `INT64_MAX` wraps, so pass it as a \ref Value
+    //! Any other integer type, as an `int`; one outside int64 (an unsigned value above `INT64_MAX`) as the big `int` a
+    //! \ref Value of it holds, never wrapped (docs/tasks/0249)
     template<typename T, typename = std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, int64_t>>>
     void Set(T value)
     {
-        Set(static_cast<int64_t>(value));
+        if constexpr (detail::CanExceedInt64<T>)
+        {
+            Set(Value(value));
+        }
+        else
+        {
+            Set(static_cast<int64_t>(value));
+        }
     }
     //! A `float`
     void Set(double value);
