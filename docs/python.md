@@ -181,6 +181,8 @@ engines on a Release build of the module.
   (`TemplateEnv::InstallGettextCallables`); oldstyle, Jinja2's default, installs the callables
   themselves as the four globals, and a `{% trans %}` block loaded while `newstyle_gettext` is off
   formats their result in the engine (`Settings::Extensions::i18nNewstyle`), as Jinja2 does.
+  Before an install and after `uninstall_gettext_translations` the four globals are undefined, as in
+  Jinja2: `_()` and `{% trans %}` raise `UndefinedError` (0417).
 - The sandbox: `jinja2cpp.sandbox` with `SandboxedEnvironment`, `ImmutableSandboxedEnvironment`,
   `SecurityError`, `is_internal_attribute`, `modifies_known_mutable`, `unsafe`, `safe_range`,
   `MAX_RANGE` and the `UNSAFE_*` sets, ported from Jinja2 3.1.6 (see "Sandbox" below).
@@ -513,10 +515,6 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   arguments, the globals and the template's top-level names; its `vars` and `parent` both hold
   all of them (0416). `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and
   `exported_vars` (empty) are not there.
-- Without installed translations (and after `uninstall_gettext_translations`) the engine's
-  `_()` and `{% trans %}` render the message untranslated; Jinja2 raises `UndefinedError`
-  because it has no `gettext` global yet (0417). A `gettext` set in `env.globals` replaces the
-  installed one in both.
 - Sandbox (0412, 0413, 0414): `intercepted_binops` and `intercepted_unops` raise
   `UnsupportedError` (Jinja2's `test_binary_operator_intercepting` and
   `test_unary_operator_intercepting` are `xfail`). A public name of the engine's own values

@@ -9,6 +9,7 @@
 #include "adapters.h"
 
 #include <jinja2cpp/features.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
@@ -19,6 +20,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <initializer_list>
+#include <iterator>
 #include <memory>
 #include <new>
 #include <string>
@@ -794,6 +797,28 @@ void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::hand
     ApplyGettext(true);
 }
 
+void PyEnvironment::AddUninstalledGettext(jinja2::ValuesMap& globals) const
+{
+    if (!m_settings.extensions.i18n)
+    {
+        return;
+    }
+    // An install, newstyle (the engine's callables) or oldstyle (its own in env.globals), sets all four in Jinja2, a
+    // callable left out as None
+    const auto installed = [](const nb::object& callable) { return !callable.is_none(); };
+    if (std::any_of(std::begin(m_gettext), std::end(m_gettext), installed) || std::any_of(std::begin(m_gettextGlobals), std::end(m_gettextGlobals), installed))
+    {
+        return;
+    }
+    for (const char* name : { "gettext", "ngettext", "pgettext", "npgettext" })
+    {
+        jinja2::UndefinedDescription description;
+        description.policy = m_settings.undefinedPolicy;
+        description.name = name;
+        globals.emplace(name, jinja2::MakeUndefined(std::move(description)));
+    }
+}
+
 nb::tuple PyEnvironment::GettextGlobals() const
 {
     nb::list result;
@@ -1149,6 +1174,7 @@ void PyTemplate::RenderWith(Target& target, const nb::args& args, const nb::kwar
     // Held for the render: a callable the render runs may start another engine environment
     const nb::object engineGlobalsBound = env.EngineGlobalsBound();
     auto globals = env.EngineGlobals() ? std::make_shared<jinja2::ValuesMap>(*env.EngineGlobals()) : std::make_shared<jinja2::ValuesMap>();
+    env.AddUninstalledGettext(*globals);
     AddGlobals(*globals, m_envGlobals, state.sandbox != nullptr, held);
     if (!m_globals.is_none())
     {

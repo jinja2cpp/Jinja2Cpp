@@ -181,8 +181,11 @@ def test_an_install_reaches_templates_loaded_before_a_filter_was_replaced(newsty
     assert (first.render(), second.render()) == ("two:afirst", "two:asecond")
     env.uninstall_gettext_translations(None)
     gc.collect()
-    # Untranslated, here as before an install (docs/python.md, 0417), in both
-    assert (first.render(), second.render()) == ("afirst", "asecond")
+    # Undefined again, as before an install (docs/tasks/0417), in both
+    for template in (first, second):
+        with pytest.raises(jinja2cpp.UndefinedError, match="'gettext' is undefined"):
+            template.render()
+    assert env.from_string("{{ 1|f }}{{ gettext is defined }}").render() == "secondFalse"
 
 
 def test_reinstalled_translations_go():

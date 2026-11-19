@@ -47,6 +47,10 @@ public:
     // environment, where its traverse reaches, since one may hold the environment (a bound method of it)
     [[nodiscard]] nb::tuple GettextGlobals() const;
     void SetGettextGlobals(nb::handle callables);
+    // With jinja2.ext.i18n and no translations installed, an undefined value for each gettext global, as Jinja2 has
+    // none of them until an install (docs/tasks/0417): `_()` and `{% trans %}` then raise UndefinedError. Added
+    // where `globals` has no value of that name, below env.globals, which may set one by hand
+    void AddUninstalledGettext(jinja2::ValuesMap& globals) const;
     // transformers' chat-template environment (jinja2cpp.integrations.transformers): the engine's
     // ConfigureForChatTemplates on every rebuild, with `clock` (a callable giving a POSIX
     // timestamp, kept alive by the environment; None for the system clock) as strftime_now's clock
