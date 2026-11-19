@@ -16,6 +16,7 @@
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -89,7 +90,9 @@ using JsonResult = nonstd::expected<T, std::string>;
  * not allocate. `Copy` builds `to` (default-constructed) from `from`; when it throws, `to` holds part of the copy,
  * which `Release` then empties. Without `Copy`, the view copy-assigns. A view of a `std::shared_ptr` empties the
  * document when the last `Value` drops while the view holds the last reference to it: do not lock a
- * `std::weak_ptr` to such a document while that happens.
+ * `std::weak_ptr` to such a document while that happens. Such a pointer must own the document: one with a no-op
+ * deleter or an aliasing one, over a document owned elsewhere, would empty that document; reflect it by
+ * `const Json*` or by const reference, which the view never empties.
  * Random access, which \ref Reflect needs and \ref ToValue does not:
  * ```c++
  * static std::size_t Size(Node);                  // items of an array or members of an object
@@ -360,10 +363,25 @@ struct ReleasedSharedDoc
 
     static void ReleaseIfLast(const std::shared_ptr<J>& shared) noexcept
     {
-        if (shared && shared.use_count() == 1)
+        if (!shared || shared.use_count() != 1) // use_count: a relaxed load, ordered by the fence below
         {
-            Traits<J>::Release(*shared);
+            return;
         }
+        // The last other owner's drop is a release decrement; the acquire fence orders its reads before the drain,
+        // as src/shared_owner.h does (docs/tasks/0339). TSan does not model fences: drop a copy instead, an acq_rel
+        // decrement of the same count
+#if defined(__SANITIZE_THREAD__)
+        std::shared_ptr<J>(shared).reset();
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+        std::shared_ptr<J>(shared).reset();
+#else
+        std::atomic_thread_fence(std::memory_order_acquire);
+#endif
+#else
+        std::atomic_thread_fence(std::memory_order_acquire);
+#endif
+        Traits<J>::Release(*shared);
     }
 
     std::shared_ptr<J> doc;

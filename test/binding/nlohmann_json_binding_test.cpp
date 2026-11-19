@@ -105,7 +105,7 @@ TYPED_TEST(NlohmannReleaseTest, ReleaseEmptiesADeepDocument)
 // The view of a std::shared_ptr empties the document only when it held the last reference to it
 TEST(NlohmannJsonOwnershipTest, SharedDocumentIsEmptiedOnlyByTheLastReference)
 {
-    const auto text = R"({"a": [1, 2]})";
+    const auto* const text = R"({"a": [1, 2]})";
     auto doc = std::make_shared<nlohmann::json>(nlohmann::json::parse(text));
     std::optional<jinja2::Value> view = jinja2::Reflect(doc);
     view.reset();
