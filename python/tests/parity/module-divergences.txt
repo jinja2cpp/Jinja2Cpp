@@ -9,3 +9,4 @@ operators.dict_view_mapping_proxy_tojson accepts 0538 a host dict's mappingproxy
 operators.dict_view_set_sub rejects 0538 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
 operators.dict_view_set_rsub rejects 0538 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
 operators.dict_view_set_loop rejects 0538 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
+subscripts.tuple_of_slices_strict_generator_filters match 0536 the module falls back to Jinja2 for the template the engine rejects (strict generator filters, a deliberate divergence of the engine)
