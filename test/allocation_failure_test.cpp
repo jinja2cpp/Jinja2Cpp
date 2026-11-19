@@ -541,11 +541,8 @@ TEST_F(JsonAllocationFailureTest, BigIntegerIsExactOrThrowsBadAlloc)
     }
 }
 
-// An nlohmann::json document the host keeps, read through a view (Reflect of a const reference; a non-const lvalue
-// would be copied into an owned view) or copied (ToValue):
-// running out of memory while reading it is std::bad_alloc, and the document stays as it was. A document the library
-// owns (Reflect of an rvalue, a std::shared_ptr) is not covered: nlohmann::json's destructor allocates, so running out
-// of memory while the last Value of it drops ends the process (docs/api-2.0.md 3.9, task 0279)
+// An nlohmann::json document the host keeps, read through a view (Reflect of a const reference) or copied (ToValue):
+// running out of memory while reading it is std::bad_alloc, and the document stays as it was (task 0279)
 TEST_F(JsonAllocationFailureTest, NlohmannDocumentReadsOrThrowsBadAlloc)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
@@ -601,6 +598,85 @@ TEST_F(JsonAllocationFailureTest, NlohmannDocumentReadsOrThrowsBadAlloc)
         EXPECT_LT(n, maxAllocations);
     }
     EXPECT_EQ(3u, doc["a"].size());
+}
+
+// A document the view owns (Reflect of an rvalue, of a std::shared_ptr, or the copy of a non-const lvalue) is
+// destroyed by the last Value that reads it, here inside the injection. nlohmann::json's destructor allocates in a
+// noexcept path, so the view empties the document with JsonTraits::Release first, and builds the copy of an lvalue
+// so that a partial copy is emptied the same way: running out of memory is std::bad_alloc, never std::terminate
+// (task 0487)
+TEST_F(JsonAllocationFailureTest, NlohmannOwnedDocumentDropsWithoutAllocating)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    const auto base = nlohmann::json::parse(R"({"a": [1, 2, [3, {"x": "long enough to sit on the heap"}]], "o": {"k": "v", "n": [true, null, 2.5, []]}})");
+    const std::string expected = "1,2|v|4";
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{{ d.a[:2]|join(',') }}|{{ d.o.k }}|{{ d.o.n|length }}"));
+    enum class Source
+    {
+        RValue,
+        LValue,
+        SharedPtr,
+    };
+    for (const Source source : { Source::RValue, Source::LValue, Source::SharedPtr })
+    {
+        SCOPED_TRACE(source == Source::RValue ? "rvalue" : source == Source::LValue ? "lvalue"
+                                                                                    : "shared_ptr");
+        long n = 0;
+        for (; n < maxAllocations; ++n)
+        {
+            nlohmann::json doc = base;
+            auto shared = std::make_shared<nlohmann::json>(base);
+            bool threw = false;
+            bool fired = false;
+            Result<std::string> result;
+            OnFreshThread([&] {
+                const Injection injection(n);
+                try
+                {
+                    Value view;
+                    switch (source)
+                    {
+                    case Source::RValue:
+                        view = Reflect(std::move(doc));
+                        break;
+                    case Source::LValue:
+                        view = Reflect(doc);
+                        break;
+                    case Source::SharedPtr:
+                        view = Reflect(std::move(shared));
+                        break;
+                    }
+                    result = tpl.RenderAsString(ValuesMap{ { "d", std::move(view) } });
+                }
+                catch (const std::bad_alloc&)
+                {
+                    threw = true;
+                }
+                fired = Injection::Fired();
+            });
+            if (!threw)
+            {
+                ASSERT_TRUE(result.has_value()) << "allocation " << n << ": " << result.error().ToString();
+                ASSERT_EQ(expected, result.value()) << "allocation " << n;
+            }
+            // A copied lvalue stays as it was; an rvalue is moved only once the view's storage is allocated
+            if (source == Source::LValue)
+            {
+                ASSERT_EQ(base, doc) << "allocation " << n;
+            }
+            else if (source == Source::RValue)
+            {
+                ASSERT_TRUE(doc == base || doc.is_null()) << "allocation " << n;
+            }
+            if (!fired)
+            {
+                break;
+            }
+        }
+        EXPECT_LT(0, n) << "no allocation reached the injection";
+        EXPECT_LT(n, maxAllocations);
+    }
 }
 
 // A module the host keeps and calls once per request: what a call imports with context ends

@@ -79,7 +79,17 @@ using JsonResult = nonstd::expected<T, std::string>;
  * static const void* Identity(Node);             // the value's address, equal for two nodes of one value while the
  *                                                 // document lives (IJsonNode::NodeIdentity); null identity when absent
  * static constexpr bool IsHandle = true;          // Json does not own its storage: Reflect(Json) borrows it
+ * static void Release(Json& doc) noexcept;        // empties a document the view owns before its destructor runs
+ * static void Copy(const Json& from, Json& to);   // the copy Reflect makes of a non-const lvalue, with Release
  * ```
+ * `Release` is for a library whose destructor allocates in a `noexcept` path, where running out of memory ends the
+ * process (nlohmann::json, docs/tasks/0487). The view calls it on a document it owns (from an rvalue, a copied
+ * lvalue, or a `std::shared_ptr` the view holds the last reference to) just before destroying it, and on the copy
+ * of a document that ran out of memory; it must not allocate, and it leaves `doc` a document whose destructor does
+ * not allocate. `Copy` builds `to` (default-constructed) from `from`; when it throws, `to` holds part of the copy,
+ * which `Release` then empties. Without `Copy`, the view copy-assigns. A view of a `std::shared_ptr` empties the
+ * document when the last `Value` drops while the view holds the last reference to it: do not lock a
+ * `std::weak_ptr` to such a document while that happens.
  * Random access, which \ref Reflect needs and \ref ToValue does not:
  * ```c++
  * static std::size_t Size(Node);                  // items of an array or members of an object
@@ -300,6 +310,63 @@ struct HasIdentity : std::false_type
 template<typename J>
 struct HasIdentity<J, std::void_t<decltype(Traits<J>::Identity(std::declval<NodeOf<J>>()))>> : std::true_type
 {
+};
+
+template<typename J, typename = void>
+struct HasRelease : std::false_type
+{
+};
+template<typename J>
+struct HasRelease<J, std::void_t<decltype(Traits<J>::Release(std::declval<J&>()))>> : std::bool_constant<noexcept(Traits<J>::Release(std::declval<J&>()))>
+{
+};
+
+template<typename J, typename = void>
+struct HasCopy : std::false_type
+{
+};
+template<typename J>
+struct HasCopy<J, std::void_t<decltype(Traits<J>::Copy(std::declval<const J&>(), std::declval<J&>()))>> : std::true_type
+{
+};
+
+//! A document the view owns, emptied by JsonTraits::Release before its destructor runs (docs/tasks/0487)
+template<typename J>
+struct ReleasedDoc
+{
+    ReleasedDoc() = default;
+    ReleasedDoc(const ReleasedDoc&) = delete;
+    ReleasedDoc(ReleasedDoc&&) = delete;
+    ReleasedDoc& operator=(const ReleasedDoc&) = delete;
+    ReleasedDoc& operator=(ReleasedDoc&&) = delete;
+    ~ReleasedDoc() { Traits<J>::Release(doc); }
+
+    J doc;
+};
+
+//! A shared document the view holds; emptied by JsonTraits::Release when the view drops the last reference to it
+template<typename J>
+struct ReleasedSharedDoc
+{
+    explicit ReleasedSharedDoc(std::shared_ptr<J> shared) noexcept
+        : doc(std::move(shared))
+    {
+    }
+    ReleasedSharedDoc(const ReleasedSharedDoc&) = delete;
+    ReleasedSharedDoc(ReleasedSharedDoc&&) = delete;
+    ReleasedSharedDoc& operator=(const ReleasedSharedDoc&) = delete;
+    ReleasedSharedDoc& operator=(ReleasedSharedDoc&&) = delete;
+    ~ReleasedSharedDoc() { ReleaseIfLast(doc); }
+
+    static void ReleaseIfLast(const std::shared_ptr<J>& shared) noexcept
+    {
+        if (shared && shared.use_count() == 1)
+        {
+            Traits<J>::Release(*shared);
+        }
+    }
+
+    std::shared_ptr<J> doc;
 };
 
 template<typename J, typename = void>
@@ -991,23 +1058,51 @@ struct Reflector<Json, json::EnableReflector<Json>>
                   "jinja2::Reflect needs JsonTraits<Json>::Size, At and Find, and every function returning a plain value; "
                   "this JSON type supports only jinja2::ToValue (a copy)");
 
-    static Value Create(Json doc)
+    // A copy of a non-const lvalue
+    static Value Create(const Json& doc)
     {
         using T = json::Traits<Json>;
-        if constexpr (json::IsHandle<Json>::value)
+        if (IsBorrowed(doc))
         {
             return json::MakeValue<Json>(json::Ref<Json>{ T::Root(doc), nullptr });
         }
+        if constexpr (json::HasRelease<Json>::value)
+        {
+            // The partial copy of a copy that runs out of memory stays in `owned`, which empties it
+            auto owned = std::make_shared<json::ReleasedDoc<Json>>();
+            if constexpr (json::HasCopy<Json>::value)
+            {
+                T::Copy(doc, owned->doc);
+            }
+            else
+            {
+                owned->doc = doc;
+            }
+            return Own(std::move(owned));
+        }
         else
         {
-            const JsonKind kind = T::Kind(T::Root(doc));
-            if (kind != JsonKind::Array && kind != JsonKind::Object)
-            {
-                return json::MakeValue<Json>(json::Ref<Json>{ T::Root(doc), nullptr });
-            }
-            auto owned = std::make_shared<const Json>(std::move(doc));
-            const auto& root = *owned;
-            return json::MakeValue<Json>(json::Ref<Json>{ T::Root(root), std::move(owned) });
+            return Own(std::make_shared<const Json>(doc));
+        }
+    }
+
+    static Value Create(Json&& doc)
+    {
+        using T = json::Traits<Json>;
+        if (IsBorrowed(doc))
+        {
+            return json::MakeValue<Json>(json::Ref<Json>{ T::Root(doc), nullptr });
+        }
+        if constexpr (json::HasRelease<Json>::value)
+        {
+            // Allocated before the move, so running out of memory leaves `doc` as it was
+            auto owned = std::make_shared<json::ReleasedDoc<Json>>();
+            owned->doc = std::move(doc);
+            return Own(std::move(owned));
+        }
+        else
+        {
+            return Own(std::make_shared<const Json>(std::move(doc)));
         }
     }
 
@@ -1027,8 +1122,59 @@ struct Reflector<Json, json::EnableReflector<Json>>
         {
             return Value();
         }
-        const Json& root = *doc;
-        return json::MakeValue<Json>(json::Ref<Json>{ json::Traits<Json>::Root(root), std::shared_ptr<const void>(std::move(doc)) });
+        if constexpr (json::HasRelease<Json>::value && !std::is_const_v<U>)
+        {
+            std::shared_ptr<json::ReleasedSharedDoc<Json>> owned;
+            try
+            {
+                owned = std::make_shared<json::ReleasedSharedDoc<Json>>(nullptr);
+            }
+            catch (...)
+            {
+                // `doc` drops while this unwinds; empty it first when it is the last reference
+                json::ReleasedSharedDoc<Json>::ReleaseIfLast(doc);
+                throw;
+            }
+            owned->doc = std::move(doc);
+            const Json& root = *owned->doc;
+            return json::MakeValue<Json>(json::Ref<Json>{ json::Traits<Json>::Root(root), std::shared_ptr<const void>(std::move(owned)) });
+        }
+        else
+        {
+            const Json& root = *doc;
+            return json::MakeValue<Json>(json::Ref<Json>{ json::Traits<Json>::Root(root), std::shared_ptr<const void>(std::move(doc)) });
+        }
+    }
+
+private:
+    // A handle and a scalar document are not owned by the view: a handle borrows its storage, a scalar is read at once
+    static bool IsBorrowed(const Json& doc)
+    {
+        using T = json::Traits<Json>;
+        if constexpr (json::IsHandle<Json>::value)
+        {
+            return true;
+        }
+        else
+        {
+            const JsonKind kind = T::Kind(T::Root(doc));
+            return kind != JsonKind::Array && kind != JsonKind::Object;
+        }
+    }
+
+    template<typename Owned>
+    static Value Own(std::shared_ptr<Owned> owned)
+    {
+        const Json* root = nullptr;
+        if constexpr (std::is_same_v<std::remove_const_t<Owned>, Json>)
+        {
+            root = owned.get();
+        }
+        else
+        {
+            root = &owned->doc;
+        }
+        return json::MakeValue<Json>(json::Ref<Json>{ json::Traits<Json>::Root(*root), std::shared_ptr<const void>(std::move(owned)) });
     }
 };
 } // namespace detail
