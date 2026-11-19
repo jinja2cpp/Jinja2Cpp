@@ -172,7 +172,8 @@ such a container stays counted, [0483](tasks/0483-render-memory-uncharged-releas
 render makes (loop state, macros, generators, undefined values, big integers) by its own size
 ([0478](tasks/0478-render-memory-uncounted-objects.md)), as well as the scopes' name maps, the modules an
 `import` makes and the names a closure kept past its frame copies
-([0508](tasks/0508-render-memory-scopes-modules.md)): a macro call's scope takes about a kilobyte while it runs,
+([0508](tasks/0508-render-memory-scopes-modules.md)), and a macro's function storage
+([0530](tasks/0530-render-memory-callable-and-context-storage.md)): a macro call's scope takes about a kilobyte while it runs,
 so a budget under a few hundred KiB can stop deep recursion before `maxRenderDepth` does. It is an estimate of the engine's own
 storage; what such an object allocates apart, the host's data and allocator overhead are not
 counted, so give the host process room beyond it. A step is an approximate unit that can change between releases too; set

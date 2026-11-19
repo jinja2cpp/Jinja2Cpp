@@ -424,11 +424,29 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             {
                 // What it imported is its own from now on, even if a module importing it fails
                 std::for_each(from, kept.end(), [](KeptModule& entry) { entry.owned = true; });
+                // The module ShareModule just shared imported those: it keeps them for its life (0528). When noting
+                // it fails, the module may end before them, which only leaves them kept: what it named of theirs
+                // holds their values, so that it ends only once nothing does
+                if (from != kept.end() && lastShared)
+                {
+                    try
+                    {
+                        keepers.push_back(lastShared);
+                    }
+                    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the comment above says what is kept
+                    {
+                    }
+                }
                 return;
             }
             // A module that failed is not shared: what it imported ends with the call too, but
             // what a module it imported that was shared imported
             kept.erase(std::remove_if(from, kept.end(), [](const KeptModule& entry) { return !entry.owned; }), kept.end());
+        }
+        void ShareModule(const IRendererCallback::LoadTemplateResult& tpl, ImportedModule& sharedModule) override
+        {
+            Impl::RendererCallback::ShareModule(tpl, sharedModule);
+            lastShared = &sharedModule;
         }
         ImportedModule& AddModule(std::unique_ptr<ImportedModule> newModule) override
         {
@@ -443,6 +461,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         {
             return std::any_of(kept.begin(), kept.end(), [candidate](const KeptModule& entry) { return entry.module == candidate; });
         }
+        // A shared module that imported modules at its top level, which it keeps (EndReplacedSharedModules)
+        [[nodiscard]] bool Keeps(const ImportedModule* candidate) const { return std::find(keepers.begin(), keepers.end(), candidate) != keepers.end(); }
 
         // The host's calls running, nested when a host callable calls the module again
         std::size_t calls = 0;
@@ -455,6 +475,10 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             bool owned;
         };
         std::vector<KeptModule> kept;
+        // The shared modules whose top level imported one of `kept` (Keeps)
+        std::vector<const ImportedModule*> keepers;
+        // The module ShareModule shared last, which LeaveSharedModule then leaves
+        const ImportedModule* lastShared = nullptr;
     };
 
     // One host's call of an export: what it loads into the module's callback ends with it,
@@ -464,9 +488,10 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     {
     public:
         // `holdsHandles`: the module holds handles of the callback's table of templates (its blocks)
-        CallScope(Callback& callback, bool holdsHandles)
+        CallScope(Callback& callback, bool holdsHandles, KeptObjects& kept)
             : m_callback(callback)
             , m_holdsHandles(holdsHandles)
+            , m_kept(kept)
             , m_mark(callback.MarkCall())
             , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
         {
@@ -484,8 +509,15 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
             // A call that failed leaves what its error views as it is until the error is made,
             // then prunes (PruneAfterFailedCall, docs/tasks/0503)
+            // What closures the host's calls let go of kept goes now, before the slots are asked who holds them
+            if (m_callback.calls == 0)
+            {
+                m_kept.ReleaseExpired();
+            }
             if (m_succeeded && m_callback.calls == 0 && m_callback.HasReplaced())
             {
+                // The shared modules of replaced templates first, so that their trees go in the same pass (0528)
+                m_callback.EndReplacedSharedModules([&owner](const ImportedModule* candidate) { return owner.IsKept(candidate) || owner.Keeps(candidate); });
                 m_callback.PruneReplaced(m_holdsHandles);
             }
         }
@@ -496,6 +528,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     private:
         Callback& m_callback;
         bool m_holdsHandles;
+        KeptObjects& m_kept;
         typename Callback::CallMark m_mark;
         // A call made from a shared module's top level (a host callable there) imports for
         // itself: its modules end with it
@@ -666,7 +699,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // among them (docs/tasks/0480)
             NoteDropped();
             // Then what the call loads, which its collector sees go
-            CallScope callScope(*callback, module->HoldsTemplateHandles());
+            CallScope callScope(*callback, module->HoldsTemplateHandles(), kept);
             // Then the module's context as the call found it, which a failed call would leave
             // with its scopes pushed
             const HomeCall::Restore restore(module->Context());
