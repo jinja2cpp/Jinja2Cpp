@@ -61,6 +61,6 @@ the container stack under its dict's identity. 6: a host view type in the module
 over it, read it live (Python's `changed size` and `keys changed` errors included); a view inside itself prints `...`;
 the item 9 edges match Python or turned out to match already (a set `in` a view raises in Python too; `xmlattr` of a
 mappingproxy works in Python); `mro` of a class is refused in the module's sandbox. Items 5-7 and the edges found on
-the way moved to 0543.
+the way moved to 0545.
 
 **Done when** items 8 and 9 have corpus cases that match or are recorded deliberate, and the four corpus cases above match in narrow and wide runs and their divergence lines go.
