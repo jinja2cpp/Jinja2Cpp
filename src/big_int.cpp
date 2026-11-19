@@ -232,6 +232,16 @@ void MultiplySchoolbook(Limbs& out, LimbSpan left, LimbSpan right, Radix radix)
     }
 }
 
+// The conversions below recurse about 2 log2(n / 32) deep, which the bit cap bounds; a
+// conversion that starts deep in a nested render still checks the stack (REVIEW.md)
+void CheckConversionStack()
+{
+    if (StackNearlyExhausted())
+    {
+        throw RecursionLimitError();
+    }
+}
+
 // left * right in left.size() + right.size() limbs
 template<typename Radix>
 Limbs Multiply(LimbSpan left, LimbSpan right, Radix radix)
@@ -254,6 +264,7 @@ Limbs Multiply(LimbSpan left, LimbSpan right, Radix radix)
         }
         return out;
     }
+    CheckConversionStack();
     if (2 * right.size() <= left.size())
     {
         // Unbalanced: `left` in pieces as long as `right`
@@ -344,6 +355,7 @@ private:
             }
             return result;
         }
+        CheckConversionStack();
         // The largest Block 2^k below the length, so that both halves are shorter than the source
         size_t level = 0;
         while ((Block << (level + 1)) < source.size())
