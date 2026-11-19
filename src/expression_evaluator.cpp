@@ -292,8 +292,11 @@ bool OutputFoldsAt(RenderContext& values, NodeRef<Expression> expr, bool byChoic
         {
             return true;
         }
-        const auto* info = GetUndefinedInfo(value);
-        return !info || info->policy != UndefinedPolicy::Strict;
+        if (const auto* info = GetUndefinedInfo(value))
+        {
+            return info->policy != UndefinedPolicy::Strict;
+        }
+        return true;
     }
     catch (const std::exception&)
     {
