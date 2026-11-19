@@ -46,3 +46,18 @@ divergence.
 **Done when.** A strict chain of N operators around a tuple-of-slices subscript evaluates O(N)
 nodes at Load (a step-limit test as `LimitsEnvTest.StrictFilterChainFoldsInLinearSteps`), and
 the generator filters either fold as in Jinja2 or are recorded as a divergence.
+
+**Result (parity batch 10 B).** FoldEvaluator links an operator candidate whose operand is a candidate (the
+left one of a binary operator, the operand of a unary one) as a step after it, as 0527 did for filter
+steps: its value is `BinaryExpression::EvaluateWithLeft` / `UnaryExpression::EvaluateWith` on the kept value,
+and whether it folds (IsFoldableAt) is taken from the step before, so a strict chain of N operators evaluates
+N of them (`LimitsEnvTest.StrictOperatorChainFoldsInLinearSteps`: 400 `or`, `+` and `not`, maxRenderSteps
+20000; the `or` chain fails without the links). A filter's value error (an `ErrorInfo` of
+`InvalidValueType`, `|abs`) is Impossible in the fold. Under StrictUndefined the leading operands of an
+`and`/`or`, a `~` and a conditional's test are checked even where the node does not fold
+(`FoldCandidate::leadingOperands`): a strict undefined among them fails the Load as Jinja2's bool()/str()
+does (`[1][:, :] or x`, `[1][:, :] ~ x`, `x if [1][:, :]`, `1 if 1 else x if [1][:, :] else x`). The
+generator filters are a deliberate divergence (`subscripts.tuple_of_slices_strict_generator_filters`):
+folding them would need lazy filters at render too, as the sealed tree evaluates the filter again each render.
+New corpus cases `tuple_of_slices_strict_*`. Left for 0543: steps inside a filter's argument and nested
+subscript levels, the memory kept steps hold, the per-render constant.

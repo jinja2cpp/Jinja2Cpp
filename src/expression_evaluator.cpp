@@ -638,7 +638,11 @@ InternalValue FilteredExpression::Evaluate(RenderContext& values)
 InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    auto value = values.Nodes()[m_expr].Evaluate(values);
+    return EvaluateWith(values.Nodes()[m_expr].Evaluate(values));
+}
+
+InternalValue UnaryExpression::EvaluateWith(const InternalValue& value) const
+{
     if (m_oper == LogicalNot)
     {
         return !ConvertToBool(value);
@@ -732,6 +736,16 @@ bool BinaryExpression::IsFoldableAt(RenderContext& values) const
             return true;
         }
     }
+    return OperandFoldsAt(values, m_rightExpr, m_rightFold);
+}
+
+bool BinaryExpression::LeftFoldsAt(RenderContext& values) const
+{
+    return OperandFoldsAt(values, m_leftExpr, m_leftFold);
+}
+
+bool BinaryExpression::RightFoldsAt(RenderContext& values) const
+{
     return OperandFoldsAt(values, m_rightExpr, m_rightFold);
 }
 

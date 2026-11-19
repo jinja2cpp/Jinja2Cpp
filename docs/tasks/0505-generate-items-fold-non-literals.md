@@ -36,3 +36,12 @@ conditional fold (`FoldByChoice`, `IsFoldableAt`) applies as in `FinalizedExpres
 `SinkGetsThePiecesJinja2Folds` (narrow and wide, with the row's expectation updated), the docs/python.md
 bullet is dropped, and `bench/count.py` shows Load and the non-piece Render/RenderSink rows within
 +0.5% of master.
+
+**Result (parity batch 10 B).** A `{{ }}` Jinja2 folds is a node kind of its own (`FoldedExpressionRenderer`,
+`FoldedByChoiceRenderer`, which evaluates the test as `FinalizedExpressionRenderer::FoldsAt` does), so the usual
+`{{ }}` keeps its size and a render that writes each piece reads the kind (`PieceOf`). The parser walks an
+output's expression (PrepareFold) only when it read no name, or holds a conditional whose test or an
+`and`/`or` whose left operand read none (`ExpressionParser::m_readsName`, `m_foldChoice`): an expression that
+reads a name folds only by the side such a test picks (FULL contract checks assert it on every `{{ }}`). The
+three templates yield Jinja2's items (`OutputTest.SinkGetsThePiecesJinja2Folds`, test_generate.py); the
+docs/python.md bullet is gone. `bench/count.py` against master: Load +0.20% to +0.45% (chat_qwen, the most).

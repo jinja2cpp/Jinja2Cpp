@@ -35,7 +35,7 @@ struct FoldCandidate
     // The tuple-slice subscripts inside it, numbered in the order the parser made them: [from, to)
     unsigned from = 0;
     unsigned to = 0;
-    // Its PrepareFold, never 0
+    // Its PrepareFold; 0 only for a candidate with leadingOperands, which never folds
     std::uint8_t fold = 0;
     // The whole value of an output: folds whatever its value, which is printed
     bool output = false;
@@ -44,6 +44,11 @@ struct FoldCandidate
     // failure into Impossible, so it only does not fold; that of `and`, `or`, `~`, a conditional
     // and an output lets the UndefinedError out (docs/tasks/0484)
     bool failsLoad = true;
+    // With StrictUndefined, not an output's: the operands before the first that does not fold of an `and`, `or`
+    // (its left one) or `~`, or a conditional's test. Jinja2's as_const evaluates them in turn, and the strict
+    // undefined one of them gives fails the compile in bool() or str() before an operand that does not fold is
+    // reached: `[1][:, :] or x`, `[1][:, :] ~ x`, `x if [1][:, :]` (docs/tasks/0536)
+    std::uint32_t leadingOperands = 0;
 };
 
 // The subscripts of one top-level expression and where it may fold; the error is the Load's
