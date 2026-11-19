@@ -6231,6 +6231,436 @@
    "env": {},
    "templates": {},
    "output": "[('a', 1)]|[2, 1]|('b', 2)|<class 'dict_reversekeyiterator'>"
+  },
+  {
+   "id": "operators.set_in_set",
+   "template": "{{ (d.keys() - []) in (d.keys() - []) }}|{{ (d.keys() - []) in [d.keys() - []] }}|{{ (d.keys() - []) not in (d.keys() - []) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|True|True"
+  },
+  {
+   "id": "operators.set_in_view_unhashable",
+   "template": "{{ (d.keys() - []) in d.keys() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'set'"
+   }
+  },
+  {
+   "id": "operators.set_sub_undefined",
+   "template": "{{ d.keys() - undefined }}|{{ d.items() - undefined }}|{{ d.values() - undefined }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'undefined' is undefined"
+   }
+  },
+  {
+   "id": "operators.set_sub_undefined_set",
+   "template": "{{ (d.keys() - []) - undefined }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'undefined' is undefined"
+   }
+  },
+  {
+   "id": "operators.set_last",
+   "template": "{{ (d.keys() - []) | last }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'set' object is not reversible"
+   }
+  },
+  {
+   "id": "operators.mapping_proxy_urlencode",
+   "template": "{{ d.keys().mapping | urlencode }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "not enough values to unpack (expected 2, got 1)"
+   }
+  },
+  {
+   "id": "operators.mapping_proxy_random",
+   "template": "{{ d.keys().mapping | random }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "0"
+   }
+  },
+  {
+   "id": "operators.mapping_proxy_xmlattr",
+   "template": "{{ d.keys().mapping | xmlattr }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": " a=\"1\""
+  },
+  {
+   "id": "operators.mapping_proxy_pprint_cycle",
+   "template": "{% set p = {} %}{% do p.update({'p': p.keys().mapping}) %}{{ p | pprint }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'p': mappingproxy({'p': mappingproxy({...})})}"
+  },
+  {
+   "id": "operators.class_method_mro_unbound",
+   "template": "{{ ((1).__class__.mro | string)[:30] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "<built-in method mro of type o"
+  },
+  {
+   "id": "operators.class_call_str_two_positional",
+   "template": "{{ ''.__class__(1, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "str() argument 'encoding' must be str, not int"
+   }
+  },
+  {
+   "id": "operators.class_call_markup_keyword",
+   "template": "{{ ('a'|safe).__class__(x=1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Markup.__new__() got an unexpected keyword argument 'x'"
+   }
+  },
+  {
+   "id": "operators.class_call_markup_two_positional",
+   "template": "{{ ('a'|safe).__class__(1, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "str() argument 'encoding' must be str, not int"
+   }
+  },
+  {
+   "id": "operators.class_call_undefined_keyword",
+   "template": "{{ zzz.__class__(x=1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Undefined.__init__() got an unexpected keyword argument 'x'"
+   }
+  },
+  {
+   "id": "operators.class_mro_with_argument",
+   "template": "{{ (1).__class__.mro(1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "int.mro() takes no arguments (1 given)"
+   }
+  },
+  {
+   "id": "operators.class_mro_with_keyword",
+   "template": "{{ (1).__class__.mro(x=1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "int.mro() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "operators.class_mro_of_str_with_argument",
+   "template": "{{ ''.__class__.mro(1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "str.mro() takes no arguments (1 given)"
+   }
   }
  ]
 }

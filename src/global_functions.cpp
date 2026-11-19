@@ -1323,6 +1323,14 @@ InternalValue CallPythonClass(std::string_view className, const CallParams& para
     }
     if (className == "Markup")
     {
+        // Markup.__new__(cls, base='', encoding=None, errors='strict'): `base` is positional only
+        for (const auto& kw : params.kwParams)
+        {
+            if (kw.first != "encoding" && kw.first != "errors")
+            {
+                ThrowTypeError("Markup.__new__() got an unexpected keyword argument '" + kw.first + "'");
+            }
+        }
         CheckClassArguments("Markup", params, 1);
         return params.posParams.empty() ? InternalValue(std::string()).SetMarkup() : ApplyBuiltinFilter("safe", CallParams(), params.posParams.front(), context);
     }

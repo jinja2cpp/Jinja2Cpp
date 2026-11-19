@@ -2375,3 +2375,19 @@ TEST(TokenBudget, GeneratorsAndHostLists)
     TokenRender<Template>(env, "{{ g|pack(10)|length }}", { { "g", std::move(endless) } }, &code);
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, code);
 }
+
+// random.choice of a mappingproxy reads it at a random index below its len() (docs/tasks/0538): over many draws both
+// keys of {0: 'zero', 1: 'one'} come up, and an index that is no key is Python's KeyError
+TEST(RandomFilterTest, MappingProxyPicksARandomIndex)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% set p = {0: 'zero', 1: 'one'}.keys().mapping %}{% for i in range(200) %}{{ p | random }},{% endfor %}").has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_NE(std::string::npos, result.value().find("zero,"));
+    EXPECT_NE(std::string::npos, result.value().find("one,"));
+
+    Template missing;
+    ASSERT_TRUE(missing.Load("{{ {'a': 1}.keys().mapping | random }}").has_value());
+    EXPECT_FALSE(missing.RenderAsString({}).has_value());
+}

@@ -682,11 +682,15 @@ const PyHost* AsPyHost(const jinja2::Value& value)
 
 namespace
 {
-nb::object Stub(const char* name)
+nb::object StubClass(const char* name)
 {
     // A class of that name, for an object of the engine that has no Python class: loop, a macro, a cycler
-    const auto type = Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type)));
-    return Steal(PyObject_CallNoArgs(type.ptr()));
+    return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type)));
+}
+
+nb::object Stub(const char* name)
+{
+    return Steal(PyObject_CallNoArgs(StubClass(name).ptr()));
 }
 
 // A Python object of the kind of `obj`, for is_safe_attribute to look at: the value itself when it is
@@ -708,6 +712,11 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
         if (const char* objectClass = map->GetObjectClass())
         {
             synthetic = true;
+            if (std::string_view(objectClass) == "type")
+            {
+                // A class object (`dict`, `cycler`, `x.__class__`): a type for is_safe_attribute, which refuses `mro` of one
+                return StubClass(objectClass);
+            }
             return Stub(objectClass);
         }
         return nb::dict();
@@ -740,6 +749,19 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
     return ToPython(empty ? *empty : obj);
 }
 
+// Whether the policy gets `obj` as the stand-in of a callable that is no class: a function (the sandbox's range, a
+// global function, a host callable) or a macro
+bool IsCallableStandIn(const jinja2::Value& obj)
+{
+    if (obj.GetIf<jinja2::UserCallable>())
+    {
+        return true;
+    }
+    const auto* map = obj.GetIf<jinja2::GenericMap>();
+    const char* objectClass = map ? map->GetObjectClass() : nullptr;
+    return objectClass && (std::string_view(objectClass) == "function" || std::string_view(objectClass) == "Macro");
+}
+
 // The ISandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
 // for the engine's values. It borrows the environment, which holds the engine environment that holds this
 class PySandboxPolicy final : public jinja2::ISandboxPolicy
@@ -756,14 +778,25 @@ public:
         // Python's objects have attributes the engine's values have not: __class__, __init__, ...
         // A public name is the environment's to judge only when its is_safe_attribute is not Jinja2's, which
         // refuses private names and the methods of lists and dicts that change them (the engine does the latter)
+        // `mro` is asked too: Jinja2 refuses it of a class, which only the stand-in of a class object shows
         const bool isPrivate = !name.empty() && name[0] == '_';
-        if (!isPrivate && !m_allNames)
+        if (!isPrivate && !m_allNames && name != "mro")
         {
             return std::nullopt;
         }
         bool synthetic = false;
         const auto representative = Representative(obj, synthetic);
         const auto pyName = MakeStr(name);
+        if (name == "mro" && IsCallableStandIn(obj))
+        {
+            // The engine's class objects have mro; a callable Python holds as no class (the sandbox's range is
+            // safe_range, a function; a macro) has not, and Jinja2's getattr gives its undefined. Other objects
+            // (namespace(), self, a module) may hold an item or macro named mro: the engine reads it
+            const auto undefined = Steal(PyObject_GetAttrString(m_environment, "undefined"));
+            const auto args = Steal(PyTuple_New(0));
+            const auto kwargs = Steal(Py_BuildValue("{s:O,s:O}", "obj", representative.ptr(), "name", pyName.ptr()));
+            return ToEngine(Steal(PyObject_Call(undefined.ptr(), args.ptr(), kwargs.ptr())));
+        }
         nb::object owned = nb::none();
         // A real Python object has the attribute or has not. An object of the engine that is only
         // a stand-in (loop, a macro, self) is taken to have every name, private or public that a custom

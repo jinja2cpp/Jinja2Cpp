@@ -477,14 +477,14 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | done |
 | [0408](0408-bench-gate-driver-capabilities.md) | Detect the base bench driver's features by a capability marker | ci | low | open |
 | [0409](0409-truncate-tokens-shrink-bound.md) | Bound the host calls of truncate_tokens' shrink loop | robustness | low | done |
-| [0410](0410-python-include-join-path.md) | `include`, `import` and `extends` do not call `env.join_path` | parity | low | open |
+| [0410](0410-python-include-join-path.md) | `include`, `import` and `extends` do not call `env.join_path` | parity | low | done |
 | [0411](0411-python-module-export-types.md) | `make_module` exports lose the type of a namespace, a cycler, a range and an undefined | parity | low | open |
 | [0412](0412-python-sandbox-operator-interception.md) | Sandbox: `intercepted_binops`, `intercepted_unops`, `call_binop` and `call_unop` | api | low | open |
 | [0413](0413-strict-undefined-sort-unique-key.md) | `sort` and `unique` with `attribute=` do not fail on a StrictUndefined key | parity | low | done |
 | [0414](0414-python-sandbox-policy-on-engine-values.md) | Sandbox policy on the engine's own values | api | low | open |
 | [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | done |
 | [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | open |
-| [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | open |
+| [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | done |
 | [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | done |
 | [0419](0419-print-statement.md) | `{% print expr %}` is a parse error in the engine | parity | low | done |
 | [0420](0420-range-and-engine-object-leftovers.md) | Range and engine-object leftovers of 0401 | parity | low | done |
@@ -528,7 +528,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0458](0458-include-errors-classes.md) | Include and constructor errors with Jinja2's classes | parity | low | done |
 | [0459](0459-render-memory-budget.md) | A memory budget for one render | robustness | medium | done |
 | [0460](0460-module-namespace-replaced-self-holding-list-leak.md) | A self-holding list a module call stores in a namespace leaks once a later call replaces it | robustness | medium | done |
-| [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | open |
+| [0461](0461-lazy-async-generate.md) | Lazy async iteration of a render, for Starlette and FastAPI streaming | parity | medium | done |
 | [0462](0462-suspended-generate-cycle-leak.md) | A reference cycle through a suspended generator is not collected | robustness | low | done |
 | [0463](0463-outer-render-sees-nested-global-write.md) | The outer render does not see a global a nested render changed first | robustness | low | done |
 | [0464](0464-lower-upper-tests-cased-letters.md) | `lower` and `upper` tests: a string with no cased letter is neither | parity | medium | done |
@@ -583,7 +583,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0519](0519-module-call-fixed-cost-creep.md) | A module call's fixed cost grew 4.3% in three weeks, one named exception at a time | perf | low | done |
 | [0520](0520-drift-report-slow-creep.md) | The drift report cannot see creep slower than 3% per 10 merges | perf | low | done |
 | [0521](0521-give-kept-nested-trees-back-early.md) | Give the trees kept for nested renders back before the keeper ends, and copy their params lazily | robustness | medium | done |
-| [0522](0522-nested-load-other-thread-or-assign.md) | Host code inside a first Load that reloads on another thread, or assigns the template, still frees it | robustness | low | in-progress |
+| [0522](0522-nested-load-other-thread-or-assign.md) | Host code inside a first Load that reloads on another thread, or assigns the template, still frees it | robustness | low | done |
 | [0523](0523-dict-view-live-and-set-ops.md) | What dict views still lack after 0496 | parity | low | done |
 | [0524](0524-nested-render-generic-params-outlive-host.md) | A nested render's GenericList param stored in a shared global is read after the host freed it | robustness | high | done |
 | [0525](0525-nested-render-error-after-storing-closure.md) | A closure stored by a nested render that then fails reads its names as ended | parity | low | done |
@@ -599,8 +599,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | open |
 | [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | open |
 | [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | open |
-| [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | open |
+| [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | done |
 | [0539](0539-nested-trees-held-by-kept-closures-and-loops.md) | Kept closures and a dropped recursive loop still hold nested trees after 0521 | robustness | low | open |
-| [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | open |
+| [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | done |
 | [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
+| [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |

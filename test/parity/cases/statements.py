@@ -677,4 +677,18 @@ CASES = [
     ("if_expr_chained_if_line", "{{ (1 if true\n\n if false).x }}"),
     ("if_expr_chained_if_inner_line", "{{ (1 if false\n\n if true).x }}"),
     ("if_expr_chained_if_in_for", "{% for i in [1, 2] if i if true %}{{ i }}{% endfor %}"),
+    # A loop over a dict reads it live, as Python's dict iterator (docs/tasks/0538)
+    ('for_dict_live_pop_current_add', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% do e.pop(k) %}{% do e.update({k ~ 'x': 1}) %}{{ k }}{% endfor %}", DO),
+    ('for_dict_live_value_change', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% do e.update({'b': 7}) %}{{ e[k] }}{% endfor %}", DO),
+    ('for_dict_live_replace_later', "{% set e = {'a': 1, 'b': 2, 'c': 3} %}{% for k in e %}{% if k == 'a' %}{% do e.pop('c') %}{% do e.update({'d': 4}) %}{% endif %}{{ k }}{% endfor %}", DO),
+    ('for_dict_live_loop_length', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{{ loop.length }}{{ loop.last }}{% endfor %}", DO),
+    ('for_dict_live_filter', "{% set e = {'a': 1, 'b': 2} %}{% for k in e if k != 'a' %}{{ k }}{% else %}none{% endfor %}", DO),
+    ('for_dict_live_empty_else', '{% set e = {} %}{% for k in e %}{{ k }}{% else %}none{% endfor %}', DO),
+    ('for_dict_live_recursive', "{% set e = {'a': {'b': {}}} %}{% for k in e recursive %}{{ k }}{% if e[k] %}{{ loop(e[k]) }}{% endif %}{% endfor %}", DO),
+    ('for_dict_live_readd_current', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% do e.pop('a') if k == 'a' else None %}{% do e.update({'a': 5}) if k == 'a' else None %}{{ k }}{% endfor %}", DO),
+    ('for_dict_live_items_readd_later', "{% set e = {'a': 1, 'b': 2} %}{% for k, v in e.items() %}{% do e.pop('b') if k == 'a' else None %}{% do e.update({'b': 8}) if k == 'a' else None %}{{ k }}{{ v }}{% endfor %}", DO),
+    ('for_dict_live_nonstring_keys', "{% set e = {1: 'x', 2.5: 'y', (1, 2): 'z'} %}{% for k in e %}{{ k }}={{ e[k] }};{% endfor %}", DO),
+    ('for_dict_live_nested', "{% set e = {'a': 1} %}{% for k in e %}{% for j in e %}{{ k }}{{ j }}{% endfor %}{% endfor %}", DO),
+    ('for_dict_live_namespace', '{% set ns = namespace(a=1) %}{% for k in ns %}{{ k }}{% endfor %}', DO),
+    ('for_dict_live_clear', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% do e.clear() %}{{ k }}{% endfor %}", DO),
 ]

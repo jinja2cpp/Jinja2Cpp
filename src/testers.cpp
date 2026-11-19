@@ -465,6 +465,11 @@ bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
     {
         // A set hashes the item before it looks (docs/tasks/0523)
         CheckUndefinedUse(baseVal, UndefinedUse::Operator);
+        // A set looked up is made a frozenset first, which no set holds (docs/tasks/0538)
+        if (const auto probe = AsList(baseVal); probe && probe->GetIteratorKind() == IteratorKind::Set)
+        {
+            return false;
+        }
         if (const char* type = UnhashableType(baseVal))
         {
             ThrowUnhashable(type);
