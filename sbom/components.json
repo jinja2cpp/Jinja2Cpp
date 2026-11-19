@@ -556,6 +556,24 @@
       "evidence": [{"file": "python/tests/upstream/requirements.txt", "contains": ["trio==0.27.0"]}]
     },
     {
+      "id": "python-starlette",
+      "name": "Starlette",
+      "version": "1.10.0",
+      "license": "BSD-3-Clause",
+      "supplier": "Kludex",
+      "url": "https://github.com/Kludex/starlette",
+      "purl": "pkg:pypi/starlette@1.10.0",
+      "delivery": "system",
+      "role": "test",
+      "phases": ["dev"],
+      "exposure": "none",
+      "selected_by": "pip install -r python/tests/requirements.txt (Python module CI job)",
+      "used_for": "Streams a template through StreamingResponse over Template.generate_async (python/tests/test_generate.py, docs/tasks/0461)",
+      "why": "The use case of the lazy async iterator; pinned to the version it was checked with",
+      "lighten": "Not part of any build",
+      "evidence": [{"file": "python/tests/requirements.txt", "contains": ["starlette==1.10.0"]}]
+    },
+    {
       "id": "python-transformers",
       "name": "transformers",
       "version": "5.22.1",

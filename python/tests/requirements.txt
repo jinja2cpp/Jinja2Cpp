@@ -1,0 +1,3 @@
+# What python/tests/test_generate.py streams a template through: Starlette's StreamingResponse over
+# generate_async (docs/tasks/0461)
+starlette==1.10.0

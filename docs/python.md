@@ -223,7 +223,7 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 | Feature | What happens |
 |---|---|
 | A custom `Extension` class (not `do`, `loopcontrols`, `i18n`), a dotted name of one | the environment is a Jinja2 environment |
-| `enable_async=True`, `render_async`, `generate_async` | the environment is a Jinja2 environment; on a native template `render_async` is Jinja2's (it raises as Jinja2 does without `enable_async`) |
+| `enable_async=True`, `render_async`, `generate_async` | the environment is a Jinja2 environment; on a native template `render_async` is Jinja2's (it raises as Jinja2 does without `enable_async`), and `generate_async` streams the engine's lazy render (Differences, 0461) |
 | `context_class`, `code_generator_class` of your own on an `Environment` subclass | the environment is a Jinja2 environment |
 | `env.policies` with a key Jinja2C++ has no equivalent for or a changed value (it has none) | the templates loaded from then on are Jinja2's |
 | `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
@@ -488,9 +488,13 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - A `generate()` generator renders on the thread of its first `next()`: `next()` on another thread
   raises `RuntimeError`, which ends the generator, where Jinja2 goes on there (0457 D2). To hand a
   render to another thread (Starlette's or FastAPI's `StreamingResponse` over a sync iterator calls
-  `next()` in a thread pool), `render()` the template or pass `list(t.generate())`; a lazy async iterator
-  is task 0461. A generator closed or collected on another thread, or after the interpreter began to
+  `next()` in a thread pool), stream `t.generate_async()` instead, or `render()` the template. A generator closed or collected on another thread, or after the interpreter began to
   exit, is not resumed: its render stops where it was, and what it held is not released.
+- `generate_async()` of a native template is `generate()` as an async iterator: each item renders when the
+  event loop's thread asks for it, so `StreamingResponse(t.generate_async(...))` streams (0461). Jinja2
+  allows it only with `enable_async=True` and raises `RuntimeError` without; here `enable_async=True`
+  makes the environment Jinja2's, whose `generate_async` awaits what callables return. A native
+  template's does not await them, as Jinja2 without async mode. `render_async` stays Jinja2's.
 - A reference cycle through a suspended generator is collected, as Jinja2's is, when it runs
   through the generator's arguments or the globals of its render (a param that refers back to the
   generator, 0462); one through a value the template made from them while it runs (`{% set y = x.y %}`

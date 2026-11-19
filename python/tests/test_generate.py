@@ -410,3 +410,144 @@ def test_the_interpreter_exits_with_a_suspended_generator(where):
     )
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
+
+
+# --- generate_async: the lazy render as an async iterator (docs/tasks/0461) -----------------------------------------
+
+
+def _async_items(template, **params):
+    import asyncio
+
+    async def collect():
+        return [item async for item in template.generate_async(**params)]
+
+    return asyncio.run(collect())
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "a{{ x }}b{% for i in range(3) %}<{{ i }}>{% endfor %}",
+        "{% macro m() %}M{{ caller() }}{% endmacro %}{% call m() %}C{% endcall %}",
+        "",
+    ],
+)
+def test_generate_async_yields_the_items_of_jinja2s(source, mode):
+    native = _async_items(jinja2cpp.Environment().from_string(source), x=1)
+    oracle = _async_items(jinja2.Environment(enable_async=True).from_string(source), x=1)
+    assert native == oracle
+    assert native == list(jinja2cpp.Environment().from_string(source).generate(x=1))
+
+
+@lazy_only
+def test_generate_async_renders_each_item_when_it_is_asked_for():
+    import asyncio
+
+    calls = []
+    template = jinja2cpp.Template("{{ f(1) }}" + LONG + "{{ f(2) }}")
+
+    async def run():
+        items = template.generate_async(f=lambda n: calls.append((n, threading.get_ident())) or str(n))
+        assert calls == []
+        assert await items.__anext__() == "1"
+        assert [n for n, _ in calls] == [1]  # the second call has not run yet
+        rest = [item async for item in items]
+        assert rest == [LONG, "2"]
+        return threading.get_ident()
+
+    loop_thread = asyncio.run(run())
+    assert [thread for _, thread in calls] == [loop_thread, loop_thread]
+
+
+@lazy_only
+def test_generate_async_closed_early_stops_the_render():
+    import asyncio
+
+    calls = []
+    template = jinja2cpp.Template("{{ f(1) }}{{ f(2) }}{{ f(3) }}")
+
+    async def run():
+        items = template.generate_async(f=lambda n: calls.append(n) or str(n))
+        assert await items.__anext__() == "1"
+        await items.aclose()
+
+    asyncio.run(run())
+    assert calls == [1]
+
+
+def test_generate_async_raises_after_the_items_before_the_error(mode):
+    import asyncio
+
+    template = jinja2cpp.Environment(undefined=jinja2cpp.StrictUndefined).from_string("a{{ b }}{{ missing }}")
+
+    async def run():
+        seen = []
+        with pytest.raises(jinja2cpp.UndefinedError):
+            async for item in template.generate_async(b="B"):
+                seen.append(item)
+        return seen
+
+    assert asyncio.run(run()) == ["a", "B"]
+
+
+def test_generate_async_of_an_async_environment_is_jinja2s():
+    # enable_async=True makes the environment Jinja2's; its generate_async awaits what callables return
+    import asyncio
+
+    async def value():
+        return "V"
+
+    template = jinja2cpp.Environment(enable_async=True).from_string("{{ f() }}!")
+    assert "".join(_async_items(template, f=value)) == "V!"
+    assert type(template).generate_async is not jinja2cpp.Template.generate_async
+    assert asyncio.iscoroutinefunction(value)
+
+
+@lazy_only
+def test_starlette_streams_generate_async():
+    # Starlette's StreamingResponse iterates an async iterator on the event loop's thread, where it runs a sync
+    # iterator's next() in a thread pool (iterate_in_threadpool), which a lazy generate() may refuse (docs/python.md).
+    # The app is called as an ASGI server calls it, so that each chunk is seen when it is sent
+    import asyncio
+
+    pytest.importorskip("starlette")
+    from starlette.applications import Starlette
+    from starlette.responses import StreamingResponse
+    from starlette.routing import Route
+
+    source = "{% for i in range(20) %}<{{ f(i) }}>" + "y" * 100 + "{% endfor %}"
+    events = []
+
+    def f(i):
+        events.append(("call", i))
+        return str(i)
+
+    template = jinja2cpp.Template(source)
+
+    async def endpoint(request):
+        return StreamingResponse(template.generate_async(f=f), media_type="text/plain")
+
+    app = Starlette(routes=[Route("/", endpoint)])
+
+    async def get(path):
+        chunks = []
+
+        async def receive():
+            await asyncio.sleep(3600)  # the client never disconnects
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            if message["type"] == "http.response.body" and message.get("body"):
+                events.append(("chunk", len(chunks)))
+                chunks.append(message["body"].decode())
+
+        scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "GET", "scheme": "http",
+                 "path": path, "raw_path": path.encode(), "query_string": b"", "root_path": "", "headers": [],
+                 "server": ("test", 80), "client": ("test", 1)}
+        await app(scope, receive, send)
+        return "".join(chunks)
+
+    body = asyncio.run(get("/"))
+    assert body == jinja2.Template(source).render(f=str)
+    # The first chunk is sent before the second callable runs
+    assert events.index(("chunk", 0)) < events.index(("call", 1))

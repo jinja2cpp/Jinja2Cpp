@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:fab5a319-c413-571e-bb3e-c918193a7591",
+  "serialNumber": "urn:uuid:a965e4f2-b2c1-52f0-a352-caa59c2d2cd7",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -1971,6 +1971,64 @@
     },
     {
       "type": "library",
+      "bom-ref": "python-starlette",
+      "name": "Starlette",
+      "version": "1.10.0",
+      "supplier": {
+        "name": "Kludex"
+      },
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/starlette@1.10.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/Kludex/starlette"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "test"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "dev"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "none"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "system"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "pip install -r python/tests/requirements.txt (Python module CI job)"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Streams a template through StreamingResponse over Template.generate_async (python/tests/test_generate.py, docs/tasks/0461)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "The use case of the lazy async iterator; pinned to the version it was checked with"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Not part of any build"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "python-transformers",
       "name": "transformers",
       "version": "5.22.1",
@@ -2957,6 +3015,7 @@
         "python-markupsafe",
         "python-pytest",
         "python-trio",
+        "python-starlette",
         "python-transformers",
         "python",
         "clang-tidy",
