@@ -1674,7 +1674,8 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     auto appendPair = [&](const InternalValue& key, const InternalValue& value) {
         query += (query.empty() ? "" : "&") + UrlQuote(asText(key), true) + "=" + UrlQuote(asText(value), true);
     };
-    if (objectMap && !objectIterates)
+    // A mappingproxy is no dict to it: its keys are the pairs to unpack (docs/tasks/0538)
+    if (objectMap && !objectIterates && !objectMap->GetProxiedMapping())
     {
         for (auto& [key, value] : objectMap->GetEntries())
         {

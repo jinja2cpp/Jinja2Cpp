@@ -221,6 +221,19 @@ TEST(PublicSandboxPolicyTest, TemplateObjectsReachThePolicyWithTheirClass)
     }
 }
 
+TEST(PublicSandboxPolicyTest, AClassGlobalReachesThePolicyAsAType)
+{
+    auto policy = std::make_shared<const ToyPolicy>();
+    TemplateEnv env;
+    env.GetSettings().sandboxPolicy = policy;
+    RenderOrError(env, "{{ dict.a }}|{{ cycler.b }}|{{ range.c }}");
+    const auto asked = policy->Asked();
+    for (const char* expected : { "a of type", "b of type", "c of function" })
+    {
+        EXPECT_NE(std::find(asked.begin(), asked.end(), expected), asked.end()) << expected;
+    }
+}
+
 TEST(PublicSandboxPolicyTest, TheEnginesFormatAsksAboutFieldAttributes)
 {
     auto policy = std::make_shared<const ToyPolicy>();

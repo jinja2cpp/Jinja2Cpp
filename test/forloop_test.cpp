@@ -735,3 +735,33 @@ TEST(ForLoopFilterOrderTest, FilterSideEffectsRunInPythonOrder)
         EXPECT_EQ(c.log, log) << c.tpl;
     }
 }
+
+// A walk over a dict the host passed stays on the host's items when the template changes the dict, which changes a
+// copy the template makes of it (docs/tasks/0538). Python, whose dict is the host's, reads the change; the results
+// below are the same in both, since the changes keep the keys and come after the value is read
+TEST(ForLoopHostDictTest, ChangedWhileItsViewIsWalked)
+{
+    const struct
+    {
+        const char* tpl;
+        const char* out;
+    } cases[] = {
+        { R"({% for k, v in hd.items() %}{{ k }}{{ v }}{% do hd.update({"a": 7}) %}{% endfor %})", "a1b2c3" },
+        { R"({% for k in hd.keys() %}{% do hd.update({"a": 7}) %}{{ k }}{% endfor %})", "abc" },
+        { R"({% for v in hd.values() %}{% do hd.setdefault("a", 1) %}{{ v }}{% endfor %})", "123" },
+        { R"({% set it = hd.items() %}{% for k, v in it %}{% do hd.update({"c": 9}) %}{{ k }}{% endfor %})", "abc" },
+        { R"({% for k in hd %}{% do hd.update({"b": 5}) %}{{ k }}{% endfor %})", "abc" },
+    };
+    Settings settings;
+    settings.extensions.doStatement = true;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    for (const auto& c : cases)
+    {
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(c.tpl).has_value()) << c.tpl;
+        auto result = tpl.RenderAsString({ { "hd", ValuesMap{ { "a", 1 }, { "b", 2 }, { "c", 3 } } } });
+        ASSERT_TRUE(result.has_value()) << c.tpl << ": " << result.error().ToString();
+        EXPECT_EQ(c.out, result.value()) << c.tpl;
+    }
+}

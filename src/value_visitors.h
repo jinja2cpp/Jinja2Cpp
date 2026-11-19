@@ -784,7 +784,13 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
     bool isTuple = list.IsTuple();
     ContainerStack ownContainers;
     auto& containers = m_containers ? *m_containers : ownContainers;
-    if (!EnterContainer(list.GetIdentity(), containers, isTuple ? "(...)" : "[...]"))
+    // A dict view inside itself prints as ..., as Python's view repr (docs/tasks/0538)
+    const char* placeholder = isTuple ? "(...)" : "[...]";
+    if (list.GetViewMapping())
+    {
+        placeholder = "...";
+    }
+    if (!EnterContainer(list.GetIdentity(), containers, placeholder))
     {
         return;
     }

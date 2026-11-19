@@ -142,7 +142,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             }
             return !list->GetSize() || std::any_of(list->begin(), list->end(), [](const InternalValue& item) { return HasSinglePassList(item); });
         }
-        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping())
         {
             const auto entries = map->GetEntries();
             return std::any_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return HasSinglePassList(entry.key) || HasSinglePassList(entry.value); });
@@ -173,7 +173,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             }
             return InternalValue(std::move(copy));
         }
-        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping())
         {
             TemplateDict copy;
             for (const auto& entry : map->GetEntries())
@@ -297,7 +297,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             return ItemsWidthAtMost(*list, limit);
         }
-        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        // A mappingproxy is measured by its repr, as pprint's _safe_repr takes it (docs/tasks/0538)
+        if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping())
         {
             return EntriesWidthAtMost(map->GetEntries(), limit);
         }
@@ -603,10 +604,12 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             visitors::ValueRenderer<char>(str, true)(map);
             return str;
         }
-        // mappingproxy({...}) (docs/tasks/0523)
-        if (const auto* proxied = map.GetProxiedMapping())
+        // mappingproxy({...}) (docs/tasks/0523): pprint's _safe_repr takes its repr, in the dict's order, and a
+        // reference cycle through it prints {...} (docs/tasks/0538)
+        if (map.GetProxiedMapping())
         {
-            return "mappingproxy(" + Print(*proxied, m_context) + ")";
+            visitors::ValueRenderer<char>(str, true)(map);
+            return str;
         }
         auto os = std::back_inserter(str);
 
