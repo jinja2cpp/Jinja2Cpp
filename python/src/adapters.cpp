@@ -774,6 +774,15 @@ public:
         bool synthetic = false;
         const auto representative = Representative(obj, synthetic);
         const auto pyName = MakeStr(name);
+        if (name == "mro" && !PyType_Check(representative.ptr()))
+        {
+            // The engine's class objects have mro; a value Python holds as no class (the sandbox's range is
+            // safe_range, a function) has not, and Jinja2's getattr gives its undefined
+            const auto undefined = Steal(PyObject_GetAttrString(m_environment, "undefined"));
+            const auto args = Steal(PyTuple_New(0));
+            const auto kwargs = Steal(Py_BuildValue("{s:O,s:O}", "obj", representative.ptr(), "name", pyName.ptr()));
+            return ToEngine(Steal(PyObject_Call(undefined.ptr(), args.ptr(), kwargs.ptr())));
+        }
         nb::object owned = nb::none();
         // A real Python object has the attribute or has not. An object of the engine that is only
         // a stand-in (loop, a macro, self) is taken to have every name, private or public that a custom

@@ -9,3 +9,6 @@ operators.dict_view_mapping_proxy_tojson accepts 0543 a host dict's mappingproxy
 operators.dict_view_set_sub rejects 0543 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
 operators.dict_view_set_rsub rejects 0543 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
 operators.dict_view_set_loop rejects 0543 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
+operators.set_in_set rejects 0543 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
+operators.mapping_proxy_urlencode accepts 0543 a host dict's mappingproxy is a mapping to urlencode
+operators.mapping_proxy_random accepts 0543 a host dict's mappingproxy is a mapping to random
