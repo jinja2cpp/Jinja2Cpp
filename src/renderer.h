@@ -220,7 +220,10 @@ class ExpressionRenderer : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ExprRenderer;
-    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::ExprRenderer || kind == NodeKind::FinalizedExprRenderer || kind == NodeKind::StaticExprRenderer; }
+    static bool MatchesKind(NodeKind kind)
+    {
+        return kind == NodeKind::ExprRenderer || kind == NodeKind::FinalizedExprRenderer || kind == NodeKind::StaticExprRenderer || kind == NodeKind::FoldedExprRenderer || kind == NodeKind::FoldedByChoiceExprRenderer;
+    }
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_expression);
@@ -237,11 +240,6 @@ public:
     ExpressionRenderer& operator=(ExpressionRenderer&&) = delete;
 
     void Render(OutStream& os, RenderContext& values) override { values.Nodes()[m_expression].Render(os, values); }
-
-    // Whether the expression is a literal, which Jinja2 folds into the text around it (generate()'s pieces,
-    // PieceOf). Asked only by a render that writes each piece, so the tree keeps no flag for it. In volatile
-    // code a folded value is a StaticOutputRenderer, so what is left there does not fold
-    [[nodiscard]] bool IsLiteralAt(RenderContext& values) const;
 
 protected:
     // FinalizedExpressionRenderer derives from it
@@ -401,6 +399,32 @@ private:
     bool m_byChoice;
 };
 
+// `{{ ... }}` of a value Jinja2's compiler folds into the text around it (CodeGenerator.visit_Output): a
+// constant, or with byChoice one by the side a foldable test picks (Expression::IsFoldableAt). It renders as
+// an ExpressionRenderer; only a render that writes each piece asks how it folds (generate()'s pieces,
+// PieceOf). A kind of its own for each, so that no `{{ }}` grows a field for it (docs/tasks/0505)
+template<bool byChoice>
+class FoldedOutputRenderer final : public ExpressionRenderer
+{
+public:
+    static constexpr NodeKind Kind = byChoice ? NodeKind::FoldedByChoiceExprRenderer : NodeKind::FoldedExprRenderer;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
+    explicit FoldedOutputRenderer(NodeRef<Expression> expr)
+        : ExpressionRenderer(expr)
+    {
+    }
+
+    // Whether Jinja2 folds the value at compile time. Volatile code makes a folded value a
+    // StaticOutputRenderer, so what is left there does not fold
+    [[nodiscard]] bool FoldsAt(RenderContext& values) const
+    {
+        return !values.IsVolatileAutoescape() && (!byChoice || values.Nodes()[m_expression].IsFoldableAt(values));
+    }
+};
+using FoldedExpressionRenderer = FoldedOutputRenderer<false>;
+using FoldedByChoiceRenderer = FoldedOutputRenderer<true>;
+
 // Template text in volatile code (RenderContext::IsVolatileAutoescape) when Settings::finalize
 // is set. Jinja2 cannot fold the text there, so it writes
 // (escape if autoescape else str)(finalize((Markup if autoescape else identity)(text))) at run
@@ -433,33 +457,44 @@ private:
     InternalValue m_finalize;
 };
 
-// finalize: Settings::finalize as a callable, or undefined. isVolatile: in volatile code
-// (RenderContext::IsVolatileAutoescape), where a folded value is a StaticOutputRenderer
-inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize, bool isVolatile = false)
+// MakeExpressionRenderer of a value that may fold: one Settings::finalize finalizes, one in volatile code, or
+// one the parser found may fold (mayFold). Out of line, so that the usual `{{ }}` pays nothing for it
+JINJA2CPP_NOINLINE inline NodeRef<IRendererBase> MakeFoldingExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize, bool isVolatile)
 {
+    const auto fold = nodes[expr].PrepareFold(nodes);
     if (GetIf<Callable>(&finalize))
     {
         using Fold = FinalizedExpressionRenderer::Fold;
-        const auto fold = nodes[expr].PrepareFold(nodes);
         return nodes.Make<FinalizedExpressionRenderer>(expr, finalize, fold == FoldAlways ? Fold::Always : (fold == FoldByChoice ? Fold::ByChoice : Fold::Never));
+    }
+    if (fold == 0)
+    {
+        return nodes.Make<ExpressionRenderer>(expr);
     }
     if (isVolatile)
     {
-        if (const auto fold = nodes[expr].PrepareFold(nodes))
-        {
-            return nodes.Make<StaticOutputRenderer>(expr, fold == FoldByChoice);
-        }
+        return nodes.Make<StaticOutputRenderer>(expr, fold == FoldByChoice);
     }
-    // Its fold only says how generate() splits the output, so a render that writes each piece checks
-    // for a literal then (ExpressionRenderer::IsLiteralAt): a walk of every `{{ }}` (PrepareFold) costs
-    // each Load about 3% on expression-heavy templates
-    return nodes.Make<ExpressionRenderer>(expr);
+    // Its fold only says how generate() splits the output
+    if (fold == FoldByChoice)
+    {
+        return nodes.Make<FoldedByChoiceRenderer>(expr);
+    }
+    return nodes.Make<FoldedExpressionRenderer>(expr);
 }
 
-inline bool ExpressionRenderer::IsLiteralAt(RenderContext& values) const
+// finalize: Settings::finalize as a callable, or undefined. isVolatile: in volatile code
+// (RenderContext::IsVolatileAutoescape), where a folded value is a StaticOutputRenderer. mayFold: false when
+// the parser knows the expression does not fold (ExpressionParser::m_foldChoice)
+inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize, bool isVolatile = false, bool mayFold = false)
 {
-    const auto& nodes = values.Nodes();
-    return !values.IsVolatileAutoescape() && nodes[m_expression].ConstantAt(nodes) != nullptr;
+    if (mayFold || isVolatile || GetIf<Callable>(&finalize))
+    {
+        return MakeFoldingExpressionRenderer(nodes, expr, finalize, isVolatile);
+    }
+    // The parser skips the walk only where it finds nothing to fold
+    JINJA2CPP_ASSERT(nodes[expr].PrepareFold(nodes) == 0);
+    return nodes.Make<ExpressionRenderer>(expr);
 }
 
 inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
@@ -476,7 +511,11 @@ inline PieceKind PieceOf(NodeRef<IRendererBase> node, RenderContext& values)
     case NodeKind::MacroCallStmt:
         return PieceKind::Output;
     case NodeKind::ExprRenderer:
-        return nodes[nodes.As<ExpressionRenderer>(node)].IsLiteralAt(values) ? PieceKind::Folded : PieceKind::Output;
+        return PieceKind::Output;
+    case NodeKind::FoldedExprRenderer:
+        return nodes[nodes.As<FoldedExpressionRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
+    case NodeKind::FoldedByChoiceExprRenderer:
+        return nodes[nodes.As<FoldedByChoiceRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
     case NodeKind::FinalizedExprRenderer:
         return nodes[nodes.As<FinalizedExpressionRenderer>(node)].FoldsAt(values) ? PieceKind::Folded : PieceKind::Output;
     case NodeKind::StaticExprRenderer:

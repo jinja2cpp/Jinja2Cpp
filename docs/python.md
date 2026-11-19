@@ -500,8 +500,6 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   generators nested in each other's callables on a thread, or when no stack can be reserved.
 - `generate()` yields `Markup` items where Jinja2 does (0493), but a `{% filter %}` block whose filter
   returns something else than a string (`length`) yields its `str()`, as the engine's output is text.
-  Jinja2 folds a constant expression that is not a literal (`a{{ 1 + 2 }}b`) into the text around it,
-  one `str` item; here it is an item of its own, `Markup` under autoescape (0535).
 - A Python loader's `get_source` runs again when a template it gave fails to compile, to show
   the line of the error (twice more with the default fallback, which loads it through Jinja2);
   Jinja2 calls it once.

@@ -331,6 +331,12 @@ private:
     // one that may fold its tuple-slice subscripts away go to UnknownCallables::FoldCandidates,
     // which the parsers of one template share, so that a parser, made for each tag, owns no list
     bool m_outputRoot = false;
+    // Since Parse began (or, inside a conditional's test, since the test began) a name was read; and a
+    // conditional or an `and`/`or` was parsed whose test or left operand read none. An expression that
+    // reads a name folds only by the side such a test picks, so Parse walks an expression for its fold
+    // (PrepareFold) only when it read no name or has such a choice (docs/tasks/0505)
+    bool m_readsName = false;
+    bool m_foldChoice = false;
     // What the chain ParseFilterExpression parses filters, in an expression, and
     // m_tupleSliceSubscripts before it (NoteChainStep); null for a filter tag's chain
     NodeRef<Expression> m_chainOperand;

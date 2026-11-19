@@ -204,6 +204,8 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
     const auto& startTok = lexer.PeekNextToken();
     // The output is the top-level expression (FoldCheck): the expressions in it are none
     m_outputRoot = true;
+    m_readsName = false;
+    m_foldChoice = false;
     const unsigned foldFrom = m_tupleSliceSubscripts;
     auto evaluator = ParseTupleOrExpression(lexer);
     if (!evaluator)
@@ -234,9 +236,9 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    auto result = MakeExpressionRenderer(m_nodes, *evaluator, m_finalize, m_volatile);
-
-    return result;
+    // An expression that reads a name folds only by the side a conditional or `and`/`or` picks (m_foldChoice):
+    // most `{{ }}` then skip the walk (PrepareFold), which costs a Load of expression-heavy templates about 3%
+    return MakeExpressionRenderer(m_nodes, *evaluator, m_finalize, m_volatile, !m_readsName || m_foldChoice);
 }
 
 struct UnknownCallables::FoldState
@@ -603,6 +605,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
 
         const auto& tok = lexer.NextToken();
         chain.BeforeRight();
+        // The left operand may fold only if it read no name, or by a choice already noted (m_foldChoice)
+        m_foldChoice = m_foldChoice || (!m_readsName && (op.operation == BinaryExpression::LogicalAnd || op.operation == BinaryExpression::LogicalOr));
         // Every binary operator is left-associative, '**' included: Jinja2 reads 2 ** 3 ** 2 as 64
         auto right = op.precedence == Precedence::Pow ? ParseUnaryPlusMinus(lexer) : ParseBinary(lexer, Tighter(op.precedence));
         if (!right)
@@ -799,6 +803,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
             break;
         }
         auto ref = ValueRefExpression::Make(m_nodes, name);
+        m_readsName = true;
         m_names.AddUse(ref);
         if (m_names.ReadsOpen())
         {
@@ -1762,11 +1767,15 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
     try
     {
         const unsigned foldFrom = m_tupleSliceSubscripts;
+        // The value before `if` may read a name the test does not: the test's own reads decide (m_foldChoice)
+        const bool valueReadName = std::exchange(m_readsName, false);
         auto testExpr = ParseBinary(lexer, Precedence::Or);
         if (!testExpr)
         {
             return MakeUnexpected(testExpr.error());
         }
+        m_foldChoice = m_foldChoice || !m_readsName;
+        m_readsName = m_readsName || valueReadName;
         // Folded by the optimizer whatever the conditional does (FoldCheck)
         NoteFoldCandidate(*testExpr, foldFrom);
 

@@ -96,6 +96,10 @@ def test_stream_buffers_the_items(mode):
         "x" * 2000 + "{% if 1 %}" + "y" * 200 + "{{ 1 }}" + "z" * 200 + "{% endif %}{% set s = 'q' * 900 %}a{{ s }}b",
         "{% for i in [] recursive %}{{ i }}{% endfor %}{% for i in seq recursive %}{% endfor %}x",
         "{% autoescape y %}a{{ 1 }}b{{ 2 }}{{ 3 }}{% endautoescape %}{% autoescape true %}{{ '<' }}a{{ '<' }}{% endautoescape %}",
+        # docs/tasks/0505: Jinja2 folds an operator, a subscript, a filter or a conditional of constants too
+        "a{{ 1 + 2 }}b{{ 'q'|upper }}c",
+        "{{ [1][0] }}x",
+        "a{{ 1 if true else y }}b{{ 1 if 1 + 1 else y }}{{ y or 1 }}c",
     ],
 )
 def test_items_are_jinja2s(source, mode):
@@ -117,6 +121,8 @@ def test_items_are_jinja2s(source, mode):
         "{% filter upper %}a{{ x }}{% endfilter %}{% filter e %}<{% endfilter %}{% set s %}a{{ x }}{% endset %}{{ s }}",
         "{% for i in [1] %}{{ i }}{% endfor %}{% for i in [1] recursive %}{{ i }}{% endfor %}",
         "{% block b %}B{{ x }}{% endblock %}{{ self.b() }}{% include 'inc' %}{% if 1 %}t{% endif %}{{ y }}",
+        # docs/tasks/0535: a folded constant is str, under autoescape too
+        "a{{ 1 + 1 }}b{{ 'a' | upper }}{{ 'a' ~ 'b' }}{{ [1, 2] }}{{ -1 }}{{ not true }}{{ x if 0 else 'e' }}c{{ '<' ~ x }}",
     ],
 )
 def test_items_are_markup_where_jinja2s_are(source, autoescape, mode):

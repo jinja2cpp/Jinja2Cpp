@@ -300,9 +300,14 @@ TEST(OutputTest, SinkGetsThePiecesJinja2Folds)
         { "{{ none }}{{ true }}{{ 1.5 }}", { "NoneTrue1.5" } },
         { "a{# c #}b", { "ab" } },
         { "a{% raw %}r{% endraw %}b", { "arb" } },
-        // Only a literal folds here: Jinja2 folds an operator or a filter of literals too (a3bQc, 1a)
-        { "a{{ 1 + 2 }}b{{ 'q'|upper }}c", { "a", "3", "b", "Q", "c" } },
-        { "{{ 1 if true else y }}a", { "1", "a" } },
+        // Jinja2 folds what its optimizer evaluates (as_const): an operator, a subscript or a filter of literals,
+        // a conditional by the side a foldable test picks (docs/tasks/0505, 0535); not what reads a name
+        { "a{{ 1 + 2 }}b{{ 'q'|upper }}c", { "a3bQc" } },
+        { "{{ [1][0] }}x", { "1x" } },
+        { "a{{ 1 if true else y }}b", { "a1b" } },
+        { "a{{ 1 if 1 + 1 else y }}b{{ y if 0 else 'e' }}c", { "a1bec" } },
+        { "a{{ 1 + 1 == 2 or y }}b{{ 'a' ~ 'b' }}{{ [1, 2] }}{{ -1 }}{{ not true }}c", { "aTruebab[1, 2]-1Falsec" } },
+        { "a{{ y or 1 }}b{{ 1 if y else 2 }}c{{ y ~ 1 }}d", { "a", "1", "b", "2", "c", "1", "d" } },
         { "a{{ y }}b{{ 1 }}c", { "a", "", "b1c" } },
         { "{% for i in [1, 2] %}a{{ 1 }}b{% endfor %}", { "a1b", "a1b" } },
         { "{% if 1 %}a{{ 2 }}{% endif %}c", { "a2", "c" } },
@@ -401,6 +406,10 @@ TEST(OutputTest, SinkLearnsWhichPiecesAreMarkup)
         { "a{{ x }}b", true, { { "a", false }, { "&lt;", true }, { "b", false } } },
         { "a{{ x }}b", false, { { "a", false }, { "<", false }, { "b", false } } },
         { "a{{ 'c' }}b", true, { { "acb", false } } },
+        // Folded constants are str in Jinja2 under autoescape too (docs/tasks/0535)
+        { "a{{ 1 + 1 }}b{{ 'a'|upper }}{{ '<' ~ 'b' }}{{ x if 0 else 'e' }}", true, { { "a2bA&lt;be", false } } },
+        { "a{{ 1 + 1 }}b", false, { { "a2b", false } } },
+        { "a{{ y or 1 }}b", true, { { "a", false }, { "1", true }, { "b", false } } },
         { "{% autoescape v %}a{{ x }}b{% endautoescape %}", true, { { "a", true }, { "&lt;", true }, { "b", true } } },
         { "{% autoescape v %}a{{ x }}b{% endautoescape %}", false, { { "a", true }, { "&lt;", true }, { "b", true } } },
         { "{% autoescape v %}a{{ 'k' }}b{% endautoescape %}", true, { { "a", true }, { "k", false }, { "b", true } } },
