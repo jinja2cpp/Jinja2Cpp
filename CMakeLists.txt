@@ -19,6 +19,9 @@ set_property(CACHE JINJA2CPP_WITH_SANITIZERS PROPERTY STRINGS ${JINJA2CPP_SANITI
 # Clang's -fsanitize=implicit-conversion on top of address+undefined (docs/tasks/0249): a silent
 # integer truncation or sign change fails the run. Vendored code is ignored (cmake/implicit-conversion.ignorelist)
 option(JINJA2CPP_SANITIZE_IMPLICIT_CONVERSION "Add -fsanitize=implicit-conversion to the address+undefined sanitizer build (Clang only)" OFF)
+if (JINJA2CPP_SANITIZE_IMPLICIT_CONVERSION AND NOT JINJA2CPP_WITH_SANITIZERS STREQUAL "address+undefined")
+    message(FATAL_ERROR "JINJA2CPP_SANITIZE_IMPLICIT_CONVERSION goes with JINJA2CPP_WITH_SANITIZERS=address+undefined")
+endif ()
 if (DEFINED JINJA2CPP_USE_REGEX)
     # The lexer no longer uses a regex (docs/tasks/0086), so Boost.Regex is not needed (0090).
     message(DEPRECATION "JINJA2CPP_USE_REGEX is deprecated and ignored: Jinja2Cpp no longer uses Boost.Regex")
