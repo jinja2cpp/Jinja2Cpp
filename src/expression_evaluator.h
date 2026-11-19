@@ -85,6 +85,12 @@ protected:
 
 using Expression = ExpressionEvaluatorBase;
 
+// Whether Jinja2's compiler, which folds `{{ expr }}` (visit_Output) when its as_const and str() succeed, folds
+// that of an expression whose PrepareFold is not 0 (byChoice: FoldByChoice). Evaluates it: an error, or a strict
+// undefined that str() refuses, means Jinja2 evaluates it at run time (Impossible). Asked only by a render that
+// writes each piece (FoldedOutputRenderer, docs/tasks/0505)
+bool OutputFoldsAt(RenderContext& values, NodeRef<ExpressionEvaluatorBase> expr, bool byChoice);
+
 // What Expression::PrepareFold says of a value: Jinja2 folds it always, or by a choice
 enum FoldBits : std::uint8_t
 {

@@ -416,11 +416,11 @@ public:
     {
     }
 
-    // Whether Jinja2 folds the value at compile time. Volatile code makes a folded value a
-    // StaticOutputRenderer, so what is left there does not fold
+    // Whether Jinja2 folds the value at compile time, which takes evaluating it (OutputFoldsAt). Volatile code
+    // makes a folded value a StaticOutputRenderer, so what is left there does not fold
     [[nodiscard]] bool FoldsAt(RenderContext& values) const
     {
-        return !values.IsVolatileAutoescape() && (!byChoice || values.Nodes()[m_expression].IsFoldableAt(values));
+        return !values.IsVolatileAutoescape() && OutputFoldsAt(values, m_expression, byChoice);
     }
 };
 using FoldedExpressionRenderer = FoldedOutputRenderer<false>;

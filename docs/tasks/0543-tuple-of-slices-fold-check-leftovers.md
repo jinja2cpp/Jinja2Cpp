@@ -21,6 +21,16 @@ shares: [test/limits_test.cpp]
   it runs. Caching it needs per-template storage for the constants the Load computed, since sealed
   nodes are shared and immutable (Codex P2 on #865).
 
+- with StrictUndefined `failsLoad` of an `and`, `or` or `~` candidate takes any failure of an operand for
+  the UndefinedError Jinja2 lets out, where a unary operator's or a filter's failure is Impossible: Jinja2
+  renders `b` for `{% if false and (none or (not (1, 2)[:, :])) %}a{% endif %}b`,
+  `{% if false and (-([1, 2]) or ([1][:, :] + 1)) %}a{% endif %}b` and
+  `{% if false and ((false) ~ ([1][:, :]|float)) %}a{% endif %}b`, which fail the Load here (on master too).
+  `FoldCandidate::leadingOperands` now finds the real UndefinedError cases, so `failsLoad` could narrow to them;
+- a strict undefined from another source than a tuple-of-slices subscript fails Jinja2's compile as a
+  conditional's test or in a `~` (`{{ 1 if []|max else 2 }}`, `{{ 1.5 ~ ([]|max) }}`) and fails the render
+  here: the fold check runs only for templates with such subscripts (verifier on 0536).
+
 **Proposal.** Link SubscriptExpression and IsExpression candidates on their value operand as 0536 links
 operators, drop a step's value once its last later step has read it, and measure whether the per-render
 constant is worth a per-template table.

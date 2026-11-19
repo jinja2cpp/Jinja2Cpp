@@ -22,6 +22,7 @@
 #include "value_methods.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
@@ -277,6 +278,36 @@ std::optional<bool> TryFoldTruth(RenderContext& values, NodeRef<Expression> expr
     }
 }
 } // namespace
+
+bool OutputFoldsAt(RenderContext& values, NodeRef<Expression> expr, bool byChoice)
+{
+    try
+    {
+        if (byChoice && !values.Nodes()[expr].IsFoldableAt(values))
+        {
+            return false;
+        }
+        const auto value = values.Nodes()[expr].Evaluate(values);
+        if (!value.IsUndefined())
+        {
+            return true;
+        }
+        const auto* info = GetUndefinedInfo(value);
+        return !info || info->policy != UndefinedPolicy::Strict;
+    }
+    catch (const std::exception&)
+    {
+        return false;
+    }
+    catch (const ErrorInfo&)
+    {
+        return false;
+    }
+    catch (const ErrorInfoW&)
+    {
+        return false;
+    }
+}
 
 std::uint8_t Expression::PrepareFold(const NodeArena& nodes)
 {

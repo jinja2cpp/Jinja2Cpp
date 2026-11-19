@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0456]
-touches: [src/renderer.h, src/expression_evaluator.h, src/expression_evaluator.cpp]
+touches: [src/renderer.h, src/expression_evaluator.h, src/expression_evaluator.cpp, src/expression_parser.cpp, src/expression_parser.h, src/node_arena.h, src/node_arena.cpp, src/template_parser.cpp]
 shares: [test/output_test.cpp, python/tests/test_generate.py, docs/python.md]
 ---
 # generate() items: Jinja2 folds a constant operator, subscript or filter into the text
@@ -42,6 +42,6 @@ bullet is dropped, and `bench/count.py` shows Load and the non-piece Render/Rend
 `{{ }}` keeps its size and a render that writes each piece reads the kind (`PieceOf`). The parser walks an
 output's expression (PrepareFold) only when it read no name, or holds a conditional whose test or an
 `and`/`or` whose left operand read none (`ExpressionParser::m_readsName`, `m_foldChoice`): an expression that
-reads a name folds only by the side such a test picks (FULL contract checks assert it on every `{{ }}`). The
+reads a name folds only by the side such a test picks (FULL contract checks assert it on every `{{ }}`). Whether it folds then takes evaluating it, as Jinja2's as_const does: a value that fails, or a strict undefined str() refuses, is a piece of its own (`OutputTest.SinkGetsThePiecesBeforeAFailingConstant`). The
 three templates yield Jinja2's items (`OutputTest.SinkGetsThePiecesJinja2Folds`, test_generate.py); the
 docs/python.md bullet is gone. `bench/count.py` against master: Load +0.20% to +0.45% (chat_qwen, the most).

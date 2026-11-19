@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0456, 0493]
-touches: [src/renderer.h, src/expression_evaluator.h, src/expression_evaluator.cpp]
+touches: [src/renderer.h, src/expression_evaluator.h, src/expression_evaluator.cpp, src/expression_parser.cpp, src/expression_parser.h, src/node_arena.h]
 shares: [python/tests/test_generate.py, test/output_test.cpp]
 ---
 # generate() items of constant output that is not a literal

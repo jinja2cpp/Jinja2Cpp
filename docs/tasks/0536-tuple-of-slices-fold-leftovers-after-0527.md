@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0527]
-touches: [src/expression_parser.cpp#FoldCheckPasses]
+touches: [src/expression_parser.cpp#FoldCheckPasses, src/expression_parser.h, src/expression_evaluator.h, src/expression_evaluator.cpp]
 shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt]
 ---
 # Tuple-of-slices folds: generator filters, operator chains and the per-render value

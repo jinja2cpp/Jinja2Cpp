@@ -20,6 +20,7 @@
 #include <new>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -373,6 +374,46 @@ TEST(OutputTest, SinkGetsThePiecesJinja2Folds)
     RecordingSink<char> sink;
     ASSERT_TRUE(child.RenderTo(sink, { { "x", 1 } }, options));
     EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "A", "<", "P1Q", ">", "Z" }));
+}
+
+TEST(OutputTest, SinkGetsThePiecesBeforeAFailingConstant)
+{
+    // docs/tasks/0505, Jinja2 3.1.6's generate(): a constant whose as_const or str() fails is evaluated at run
+    // time, so the text before it is an item of its own, yielded before the error (verifier on 0505)
+    const std::vector<std::tuple<std::string, bool, std::vector<std::string>>> rows = {
+        { "a{{ 1 / 0 }}b", false, { "a" } },
+        { "x{{ 1 }}{{ -none }}", false, { "x1" } },
+        { "x{{ 1 }}{{ 1 if []|abs else 2 }}b", false, { "x1" } },
+        { "{% for i in [1] %}x{{ 1 }}{{ 1 // 0 }}{% endfor %}", false, { "x1" } },
+        { "a{{ [][0] }}b", true, { "a" } },
+    };
+    RenderOptions options;
+    options.writeEachPiece = true;
+    for (const auto& [source, strict, expected] : rows)
+    {
+        TemplateEnv env;
+        env.GetSettings().undefinedPolicy = strict ? UndefinedPolicy::Strict : UndefinedPolicy::Default;
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        RecordingSink<char> sink;
+        sink.eachPiece = true;
+        EXPECT_FALSE(tpl.RenderTo(sink, {}, options)) << source;
+        EXPECT_EQ(sink.chunks, expected) << source;
+
+        TemplateW wide(&env);
+        ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end()))) << source;
+        RecordingSink<wchar_t> wideSink;
+        wideSink.eachPiece = true;
+        EXPECT_FALSE(wide.RenderTo(wideSink, {}, options)) << source;
+        ASSERT_EQ(wideSink.chunks.size(), expected.size()) << source;
+    }
+    // Under the default undefined the item's str() is empty, and Jinja2 folds it
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("a{{ [][0] }}b{{ [1][5] }}c"));
+    RecordingSink<char> sink;
+    sink.eachPiece = true;
+    ASSERT_TRUE(tpl.RenderTo(sink, {}, options));
+    EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "abc" }));
 }
 
 // Records each piece with whether the render said it is Markup (RenderOptions::pieceIsMarkup)
