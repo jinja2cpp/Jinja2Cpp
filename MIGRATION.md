@@ -93,6 +93,14 @@ v.IsFloat() ? double(v.AsFloat()) : v.AsDouble();   // 2.0: either kind
 
 Values a template computes are `double`, as before.
 
+### `Reflect(std::move(ptr))` takes the `std::shared_ptr`
+
+*Task 0487.* `jinja2::Reflect` of an rvalue `std::shared_ptr` moves the pointer into the
+view, so the caller's pointer is empty afterwards (1.x copied it). Reflect an lvalue to keep
+yours. With the nlohmann binding, a view that holds the last reference to a document empties it
+before destroying it, so the pointer must own the document: reflect a document owned elsewhere
+(a no-op deleter, an aliasing pointer) by `const` reference or pointer.
+
 ### `Result<T>` and expected-lite
 
 *Task 0070.* `Load` and `Render` return `jinja2::Result<T>` (`ResultW<T>` for wide

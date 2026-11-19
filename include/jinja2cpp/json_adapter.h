@@ -87,7 +87,7 @@ using JsonResult = nonstd::expected<T, std::string>;
  * process (nlohmann::json, docs/tasks/0487). The view calls it on a document it owns (from an rvalue, a copied
  * lvalue, or a `std::shared_ptr` the view holds the last reference to) just before destroying it, and on the copy
  * of a document that ran out of memory; it must not allocate, and it leaves `doc` a document whose destructor does
- * not allocate. `Copy` builds `to` (default-constructed) from `from`; when it throws, `to` holds part of the copy,
+ * not allocate (it may stop short on a pathological document, to bound its work). `Copy` builds `to` (default-constructed) from `from`; when it throws, `to` holds part of the copy,
  * which `Release` then empties. Without `Copy`, the view copy-assigns. A view of a `std::shared_ptr` empties the
  * document when the last `Value` drops while the view holds the last reference to it: do not lock a
  * `std::weak_ptr` to such a document while that happens. Such a pointer must own the document: one with a no-op
@@ -1142,26 +1142,27 @@ struct Reflector<Json, json::EnableReflector<Json>>
         }
         if constexpr (json::HasRelease<Json>::value && !std::is_const_v<U>)
         {
-            std::shared_ptr<json::ReleasedSharedDoc<Json>> owned;
-            try
+            // A scalar or a handle needs no holder: destroying it does not allocate
+            if (!IsBorrowed(*doc))
             {
-                owned = std::make_shared<json::ReleasedSharedDoc<Json>>(nullptr);
+                std::shared_ptr<json::ReleasedSharedDoc<Json>> owned;
+                try
+                {
+                    owned = std::make_shared<json::ReleasedSharedDoc<Json>>(nullptr);
+                }
+                catch (...)
+                {
+                    // `doc` drops while this unwinds; empty it first when it is the last reference
+                    json::ReleasedSharedDoc<Json>::ReleaseIfLast(doc);
+                    throw;
+                }
+                owned->doc = std::move(doc);
+                const Json& root = *owned->doc;
+                return json::MakeValue<Json>(json::Ref<Json>{ json::Traits<Json>::Root(root), std::shared_ptr<const void>(std::move(owned)) });
             }
-            catch (...)
-            {
-                // `doc` drops while this unwinds; empty it first when it is the last reference
-                json::ReleasedSharedDoc<Json>::ReleaseIfLast(doc);
-                throw;
-            }
-            owned->doc = std::move(doc);
-            const Json& root = *owned->doc;
-            return json::MakeValue<Json>(json::Ref<Json>{ json::Traits<Json>::Root(root), std::shared_ptr<const void>(std::move(owned)) });
         }
-        else
-        {
-            const Json& root = *doc;
-            return json::MakeValue<Json>(json::Ref<Json>{ json::Traits<Json>::Root(root), std::shared_ptr<const void>(std::move(doc)) });
-        }
+        const Json& root = *doc;
+        return json::MakeValue<Json>(json::Ref<Json>{ json::Traits<Json>::Root(root), std::shared_ptr<const void>(std::move(doc)) });
     }
 
 private:

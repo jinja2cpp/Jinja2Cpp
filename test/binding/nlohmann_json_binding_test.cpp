@@ -10,6 +10,7 @@
 #include <memory>
 #include <utility>
 #include <optional>
+#include <string>
 #include <string_view>
 
 // The rendering rows live in the conformance suite (conformance.h), which runs them on both nlohmann types; this
@@ -100,6 +101,50 @@ TYPED_TEST(NlohmannReleaseTest, ReleaseEmptiesADeepDocument)
     jinja2::JsonTraits<Json>::Release(doc);
     EXPECT_TRUE(doc.is_array());
     EXPECT_TRUE(doc.empty());
+}
+
+// Copy appends the members in order (no lookup per key) and hands a deep document to nlohmann's own copy past
+// its depth cap; Release bounds its work on a chain far deeper than its ancestor ring and leaves the rest to the
+// destructor
+TYPED_TEST(NlohmannReleaseTest, WideAndDeepDocuments)
+{
+    using Json = TypeParam;
+    using Traits = jinja2::JsonTraits<Json>;
+    Json wide = Json::object();
+    for (int key = 3000; key > 0; --key)
+    {
+        wide["k" + std::to_string(key)] = Json::array({ key });
+    }
+    Json wideCopy;
+    Traits::Copy(wide, wideCopy);
+    EXPECT_EQ(wide.dump(), wideCopy.dump());
+    Traits::Release(wideCopy);
+    EXPECT_TRUE(wideCopy.empty());
+
+    Json deep = Json::array();
+    Json* cur = &deep;
+    for (int level = 0; level < 100000; ++level)
+    {
+        cur->push_back(Json::array());
+        cur = &cur->back();
+    }
+    cur->push_back("leaf");
+    Json deepCopy;
+    {
+        Json shallow = Json::array();
+        Json* at = &shallow;
+        for (int level = 0; level < 400; ++level)
+        {
+            at->push_back(Json::object({ { "k", Json::array() } }));
+            at = &at->back()["k"];
+        }
+        Traits::Copy(shallow, deepCopy);
+        EXPECT_EQ(shallow, deepCopy);
+        Traits::Release(deepCopy);
+        Traits::Release(shallow);
+    }
+    Traits::Release(deep); // bounded: returns with part of the chain left
+    EXPECT_TRUE(deep.is_array());
 }
 
 // The view of a std::shared_ptr empties the document only when it held the last reference to it

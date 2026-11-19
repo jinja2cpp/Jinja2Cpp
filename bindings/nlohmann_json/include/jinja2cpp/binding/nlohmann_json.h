@@ -91,16 +91,19 @@ struct NlohmannJsonTraits : DomJsonTraits<Json>
      *
      * Destroying a scalar or an empty container frees memory and allocates none, so the drain removes the last child
      * of the deepest container on the current path until the root is empty. It keeps the last `MaxTrail` ancestors
-     * on the stack and starts again from the root when a deeper path runs out of them: O(n) for a document up to
-     * that depth, and at worst O(n * depth / MaxTrail) beyond it.
+     * on the stack and starts again from the root when a deeper path runs out of them. The work is capped at a
+     * constant times the values removed: a document much deeper than `MaxTrail` (a chain of more than about 1500
+     * levels) is emptied only partly, and its destructor, which allocates, frees the rest.
      */
     static void Release(Json& doc) noexcept
     {
         std::array<Json*, MaxTrail> trail{};
         std::size_t top = 0;   // the slot of the next ancestor in the ring
         std::size_t depth = 0; // the ancestors the ring holds
+        std::size_t steps = 0;
+        std::size_t removed = 0;
         Json* cur = &doc;
-        for (;;)
+        for (; steps <= ReleaseWorkSlack + ReleaseWorkPerValue * removed; ++steps)
         {
             Json* child = LastChild(*cur);
             if (!child)
@@ -130,6 +133,7 @@ struct NlohmannJsonTraits : DomJsonTraits<Json>
             else
             {
                 PopLast(*cur);
+                ++removed;
             }
         }
     }
@@ -138,55 +142,10 @@ struct NlohmannJsonTraits : DomJsonTraits<Json>
      * \brief Copies `from` into the default-constructed `to`, building it in place
      *
      * When an allocation fails, `to` holds the part copied so far and every container in it is whole, so `Release`
-     * can empty it. nlohmann's own copy would destroy its partial copy on the way out, which allocates.
+     * can empty it. nlohmann's own copy would destroy its partial copy on the way out, which allocates. Below
+     * `MaxCopyDepth` levels the copy is nlohmann's own, whose recursion takes less stack.
      */
-    static void Copy(const Json& from, Json& to)
-    {
-        if (from.is_array())
-        {
-            to = Json(Json::value_t::array);
-            auto& items = to.template get_ref<typename Json::array_t&>();
-            items.reserve(from.size());
-            for (const Json& item : from)
-            {
-                if (item.is_array() || item.is_object())
-                {
-                    items.emplace_back();
-                    Copy(item, items.back());
-                }
-                else
-                {
-                    items.push_back(item);
-                }
-            }
-        }
-        else if (from.is_object())
-        {
-            to = Json(Json::value_t::object);
-            auto& members = to.template get_ref<typename Json::object_t&>();
-            if constexpr (HasReserve<typename Json::object_t>::value)
-            {
-                // ordered_json keeps its members in a vector of pairs with const keys, which a reallocation copies
-                members.reserve(from.size());
-            }
-            for (auto item = from.begin(); item != from.end(); ++item)
-            {
-                auto& value = members.emplace(item.key(), Json()).first->second;
-                if (item->is_array() || item->is_object())
-                {
-                    Copy(*item, value);
-                }
-                else
-                {
-                    value = *item;
-                }
-            }
-        }
-        else
-        {
-            to = from;
-        }
-    }
+    static void Copy(const Json& from, Json& to) { CopyAt(from, to, 0); }
 
     template<typename F>
     static void ForEachMember(Node node, F onMember)
@@ -202,16 +161,78 @@ struct NlohmannJsonTraits : DomJsonTraits<Json>
     }
 
 private:
-    static constexpr std::size_t MaxTrail = 64;
+    static constexpr std::size_t MaxTrail = 256;
+    static constexpr std::size_t ReleaseWorkPerValue = 8;
+    static constexpr std::size_t ReleaseWorkSlack = 4096;
+    static constexpr std::size_t MaxCopyDepth = 512;
 
     template<typename C, typename = void>
-    struct HasReserve : std::false_type
+    struct HasContainer : std::false_type
     {
     };
     template<typename C>
-    struct HasReserve<C, std::void_t<decltype(std::declval<C&>().reserve(std::size_t{}))>> : std::true_type
+    struct HasContainer<C, std::void_t<typename C::Container>> : std::true_type
     {
     };
+
+    static void CopyAt(const Json& from, Json& to, std::size_t level)
+    {
+        if (level >= MaxCopyDepth || !(from.is_array() || from.is_object()))
+        {
+            to = from;
+            return;
+        }
+        if (from.is_array())
+        {
+            to = Json(Json::value_t::array);
+            auto& items = to.template get_ref<typename Json::array_t&>();
+            items.reserve(from.size());
+            for (const Json& item : from)
+            {
+                if (item.is_array() || item.is_object())
+                {
+                    items.emplace_back();
+                    CopyAt(item, items.back(), level + 1);
+                }
+                else
+                {
+                    items.push_back(item);
+                }
+            }
+            return;
+        }
+        to = Json(Json::value_t::object);
+        auto& members = to.template get_ref<typename Json::object_t&>();
+        using Members = typename Json::object_t;
+        if constexpr (HasContainer<Members>::value)
+        {
+            // ordered_json keeps its members in a vector of pairs with const keys, which a reallocation would copy
+            members.reserve(from.size());
+        }
+        for (auto item = from.begin(); item != from.end(); ++item)
+        {
+            // The keys are unique and come in the container's order: append, without the lookup of emplace
+            Json* value = nullptr;
+            if constexpr (HasContainer<Members>::value)
+            {
+                auto& vec = static_cast<typename Members::Container&>(members);
+                vec.emplace_back(item.key(), Json());
+                value = &vec.back().second;
+            }
+            else
+            {
+                value = &members.emplace_hint(members.end(), item.key(), Json())->second;
+            }
+            if (item->is_array() || item->is_object())
+            {
+                CopyAt(*item, *value, level + 1);
+            }
+            else
+            {
+                *value = *item;
+            }
+        }
+    }
 
     // The last child of a non-empty array or object, null for a scalar or an empty container
     static Json* LastChild(Json& node) noexcept
