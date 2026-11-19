@@ -566,7 +566,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0502](0502-stored-loop-namespace-assign.md) | A stored recursive loop that sets a namespace attribute fails after its include ended | parity | low | done |
 | [0503](0503-replaced-trees-slots-and-failed-calls.md) | Replaced trees that hold a slot, or that a failed call loaded, still stay | robustness | low | done |
 | [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | done |
-| [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
+| [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | done |
 | [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | done |
 | [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | done |
 | [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | done |
@@ -596,8 +596,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0532](0532-copy-nested-render-params-lazily.md) | Copy the params of a nested render when a value of them is stored, not on every render | perf | low | open |
 | [0533](0533-nested-with-context-module-closure-importer-names.md) | A macro of a module imported with context by a nested render loses the importer's names once that render ends | parity | low | open |
 | [0534](0534-fuzz-oldstyle-i18n.md) | Fuzz the oldstyle gettext parser path | robustness | low | open |
-| [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | open |
-| [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | open |
+| [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | done |
+| [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | done |
 | [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | open |
 | [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | done |
 | [0539](0539-nested-trees-held-by-kept-closures-and-loops.md) | Kept closures and a dropped recursive loop still hold nested trees after 0521 | robustness | low | open |
@@ -605,3 +605,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
 | [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |
+| [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | open |

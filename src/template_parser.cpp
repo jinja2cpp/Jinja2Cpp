@@ -1917,7 +1917,8 @@ StatementsParser::ParseResult StatementsParser::ParsePrint(LexScanner& lexer, St
         {
             continue;
         }
-        auto output = MakeExpressionRenderer(m_nodes, *expr, exprParser.GetFinalize(), isVolatile);
+        // A print tag is rare: it walks its expression for the fold (FoldedExpressionRenderer)
+        auto output = MakeExpressionRenderer(m_nodes, *expr, exprParser.GetFinalize(), isVolatile, true);
         m_bodies.Add(check == OutputCheck::Guard ? m_nodes.Make<OutputCheckStatement>(output) : output, m_tagOffset);
     }
     return {};

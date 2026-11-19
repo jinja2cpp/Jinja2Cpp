@@ -97,6 +97,8 @@ enum class NodeKind : std::uint8_t
     ExprRenderer,
     FinalizedExprRenderer,
     StaticExprRenderer,
+    FoldedExprRenderer,
+    FoldedByChoiceExprRenderer,
     FinalizedText,
     TemplateRoot,
     ForStmt,
@@ -1033,6 +1035,8 @@ constexpr bool NeedsNoContext(NodeKind kind)
     case NodeKind::RawText:
     case NodeKind::ExprRenderer:
     case NodeKind::StaticExprRenderer:
+    case NodeKind::FoldedExprRenderer:
+    case NodeKind::FoldedByChoiceExprRenderer:
     case NodeKind::IfStmt:
     case NodeKind::ElseBranchStmt:
         return true;

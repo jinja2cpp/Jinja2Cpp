@@ -85,6 +85,14 @@ protected:
 
 using Expression = ExpressionEvaluatorBase;
 
+// Whether Jinja2's compiler, which folds `{{ expr }}` (visit_Output) when its as_const and str() succeed, folds
+// that of an expression whose PrepareFold is not 0 (byChoice: FoldByChoice). Evaluates it: an error, or a strict
+// undefined that str() refuses, means Jinja2 evaluates it at run time (Impossible). Asked only by a render that
+// writes each piece (FoldedOutputRenderer, docs/tasks/0505). When it folds, the value is kept for key, the
+// renderer that writes it next (RenderContext::KeepFoldedValue), so that it is not evaluated twice. An allocation
+// failure or an exceeded limit fails the render here
+bool OutputFoldsAt(RenderContext& values, NodeRef<ExpressionEvaluatorBase> expr, bool byChoice, const void* key);
+
 // What Expression::PrepareFold says of a value: Jinja2 folds it always, or by a choice
 enum FoldBits : std::uint8_t
 {
@@ -757,10 +765,13 @@ public:
         , m_expr(std::move(expr))
     {}
     InternalValue Evaluate(RenderContext&) override;
+    // The operator on the evaluated operand
+    [[nodiscard]] InternalValue EvaluateWith(const InternalValue& value) const;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
     // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
     std::uint8_t PrepareFold(const NodeArena& nodes) override;
     [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
+    [[nodiscard]] NodeRef<Expression> GetOperand() const { return m_expr; }
 
 private:
     Operation m_oper;
@@ -883,7 +894,14 @@ public:
     BinaryExpression& operator=(BinaryExpression&&) = delete;
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsLogical() const { return m_oper == LogicalAnd || m_oper == LogicalOr; }
+    [[nodiscard]] bool IsOr() const { return m_oper == LogicalOr; }
     InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
+    // For the Load's fold check (FoldCheckPasses), on a node whose PrepareFold ran: the left operand, whether it
+    // folds at all, and whether each operand folds in this render (IsFoldableAt)
+    [[nodiscard]] NodeRef<Expression> GetLeftExpr() const { return m_leftExpr; }
+    [[nodiscard]] bool LeftFolds() const { return m_leftFold != 0; }
+    [[nodiscard]] bool LeftFoldsAt(RenderContext& values) const;
+    [[nodiscard]] bool RightFoldsAt(RenderContext& values) const;
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
@@ -1020,6 +1038,7 @@ public:
     // A chain whose operands Jinja2 folds by the side a foldable test picks: the render
     // decides whether it is folded (IsFoldableAt)
     void SetFoldedByChoice() { m_foldedByChoice = true; }
+    [[nodiscard]] ArenaSpan<NodeRef<Expression>> GetOperands() const { return m_operands; }
 
 private:
     InternalValue EvaluatePair(NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, RenderContext& context) const;

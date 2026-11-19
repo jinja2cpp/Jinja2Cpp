@@ -4596,6 +4596,370 @@
    "output": "[1]"
   },
   {
+   "id": "subscripts.tuple_of_slices_strict_generator_filters",
+   "template": "{{ ([1][:, :]|batch(2)) is defined }}|{{ ([1][:, :]|slice(2)) is defined }}|{{ ([1][:, :]|unique) is defined }}|{{ ([1][:, :]|default([])|items) is defined }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "True|True|True|True"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_conditional_value_error",
+   "template": "{% if false and (1 if [1][:, :]|abs else 2) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_conditional_unfolded_branch",
+   "template": "{% if false and (1 if 1 else x if [1][:, :] else x) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_conditional_unfolded_alt",
+   "template": "{% if false and (0|list if 1 else [1][:, :] ~ x) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_and_unfolded",
+   "template": "{% if false and ([1][:, :] and x) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_or_unfolded",
+   "template": "{% if false and ([1][:, :] or x) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_concat_unfolded",
+   "template": "{% if false and ([1][:, :] ~ x) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_unfolded_operands_pass",
+   "template": "{% if false and (x ~ [1][:, :]) %}a{% endif %}b|{% if false and (x if 1 else [1][:, :]) %}a{% endif %}b|{% if false and (x if [1][:, :] is defined else 2) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b|b|b"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_conditional_unfolded_test",
+   "template": "{% if false and (x if [1][:, :]) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_operator_chain",
+   "template": "{% if [1][:, :] is undefined or a or b or c %}y{% endif %}|{% if not not not ([1][:, :] is defined) %}n{% endif %}|{% set q = ([1][:, :] is undefined) + 1 + 2 + 3 %}{{ q }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "y|n|7"
+  },
+  {
    "id": "subscripts.tuple_of_slices_dropped_filter_argument",
    "template": "{{ x|first([1][:, :]) }}",
    "context": {

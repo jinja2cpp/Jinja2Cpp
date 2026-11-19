@@ -20,6 +20,7 @@
 #include <new>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -300,9 +301,14 @@ TEST(OutputTest, SinkGetsThePiecesJinja2Folds)
         { "{{ none }}{{ true }}{{ 1.5 }}", { "NoneTrue1.5" } },
         { "a{# c #}b", { "ab" } },
         { "a{% raw %}r{% endraw %}b", { "arb" } },
-        // Only a literal folds here: Jinja2 folds an operator or a filter of literals too (a3bQc, 1a)
-        { "a{{ 1 + 2 }}b{{ 'q'|upper }}c", { "a", "3", "b", "Q", "c" } },
-        { "{{ 1 if true else y }}a", { "1", "a" } },
+        // Jinja2 folds what its optimizer evaluates (as_const): an operator, a subscript or a filter of literals,
+        // a conditional by the side a foldable test picks (docs/tasks/0505, 0535); not what reads a name
+        { "a{{ 1 + 2 }}b{{ 'q'|upper }}c", { "a3bQc" } },
+        { "{{ [1][0] }}x", { "1x" } },
+        { "a{{ 1 if true else y }}b", { "a1b" } },
+        { "a{{ 1 if 1 + 1 else y }}b{{ y if 0 else 'e' }}c", { "a1bec" } },
+        { "a{{ 1 + 1 == 2 or y }}b{{ 'a' ~ 'b' }}{{ [1, 2] }}{{ -1 }}{{ not true }}c", { "aTruebab[1, 2]-1Falsec" } },
+        { "a{{ y or 1 }}b{{ 1 if y else 2 }}c{{ y ~ 1 }}d", { "a", "1", "b", "2", "c", "1", "d" } },
         { "a{{ y }}b{{ 1 }}c", { "a", "", "b1c" } },
         { "{% for i in [1, 2] %}a{{ 1 }}b{% endfor %}", { "a1b", "a1b" } },
         { "{% if 1 %}a{{ 2 }}{% endif %}c", { "a2", "c" } },
@@ -370,6 +376,107 @@ TEST(OutputTest, SinkGetsThePiecesJinja2Folds)
     EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "A", "<", "P1Q", ">", "Z" }));
 }
 
+TEST(OutputTest, SinkGetsThePiecesBeforeAFailingConstant)
+{
+    // docs/tasks/0505, Jinja2 3.1.6's generate(): a constant whose as_const or str() fails is evaluated at run
+    // time, so the text before it is an item of its own, yielded before the error (verifier on 0505)
+    const std::vector<std::tuple<std::string, bool, std::vector<std::string>>> rows = {
+        { "a{{ 1 / 0 }}b", false, { "a" } },
+        { "x{{ 1 }}{{ -none }}", false, { "x1" } },
+        { "x{{ 1 }}{{ 1 if []|abs else 2 }}b", false, { "x1" } },
+        { "{% for i in [1] %}x{{ 1 }}{{ 1 // 0 }}{% endfor %}", false, { "x1" } },
+        { "a{{ [][0] }}b", true, { "a" } },
+    };
+    RenderOptions options;
+    options.writeEachPiece = true;
+    for (const auto& [source, strict, expected] : rows)
+    {
+        TemplateEnv env;
+        env.GetSettings().undefinedPolicy = strict ? UndefinedPolicy::Strict : UndefinedPolicy::Default;
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        RecordingSink<char> sink;
+        sink.eachPiece = true;
+        EXPECT_FALSE(tpl.RenderTo(sink, {}, options)) << source;
+        EXPECT_EQ(sink.chunks, expected) << source;
+
+        TemplateW wide(&env);
+        ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end()))) << source;
+        RecordingSink<wchar_t> wideSink;
+        wideSink.eachPiece = true;
+        EXPECT_FALSE(wide.RenderTo(wideSink, {}, options)) << source;
+        ASSERT_EQ(wideSink.chunks.size(), expected.size()) << source;
+    }
+    // Under the default undefined the item's str() is empty, and Jinja2 folds it
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("a{{ [][0] }}b{{ [1][5] }}c"));
+    RecordingSink<char> sink;
+    sink.eachPiece = true;
+    ASSERT_TRUE(tpl.RenderTo(sink, {}, options));
+    EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "abc" }));
+}
+
+TEST(OutputTest, PiecesEvaluateAFoldedConstantOnce)
+{
+    // docs/tasks/0505, Codex on #955: asking whether a constant folds evaluates it, and its output writes that
+    // value, so a render that writes each piece takes no more steps (Settings::Limits::maxRenderSteps) than one
+    // that does not
+    const std::string source = "{% for i in [1, 2, 3, 4, 5, 6, 7, 8] %}a{{ [1, 2] | sum }}b{{ 'x' ~ 1 if true }}{% endfor %}";
+    auto minSteps = [](const auto& text, bool eachPiece) {
+        for (std::uint64_t steps = 1; steps != 5000; ++steps)
+        {
+            TemplateEnv env;
+            env.GetSettings().limits.maxRenderSteps = steps;
+            using Tpl = std::conditional_t<std::is_same_v<std::decay_t<decltype(text)>, std::string>, Template, TemplateW>;
+            using CharT = typename std::decay_t<decltype(text)>::value_type;
+            Tpl tpl(&env);
+            EXPECT_TRUE(tpl.Load(text));
+            RecordingSink<CharT> sink;
+            sink.eachPiece = eachPiece;
+            RenderOptions options;
+            options.writeEachPiece = eachPiece;
+            if (tpl.RenderTo(sink, {}, options))
+            {
+                return steps;
+            }
+        }
+        return std::uint64_t{ 0 };
+    };
+    const auto plain = minSteps(source, false);
+    ASSERT_NE(plain, 0U);
+    EXPECT_EQ(minSteps(source, true), plain);
+    const std::wstring wide(source.begin(), source.end());
+    EXPECT_EQ(minSteps(wide, true), minSteps(wide, false));
+}
+
+TEST(OutputTest, PiecesSkipTheFoldAfterALoopControl)
+{
+    // Codex on #955: after a break or continue nothing renders the next node, so a render that writes each piece
+    // does not evaluate it to ask whether it folds; here that evaluation exceeds maxSequenceSize
+    for (const std::string source : { "a{% for i in [1, 2] %}b{% break %}{{ 'x' * 32 }}{% endfor %}c", "a{% for i in [1, 2] %}b{% continue %}{{ 'x' * 32 }}{% endfor %}c" })
+    {
+        TemplateEnv env;
+        env.GetSettings().extensions.loopControls = true;
+        env.GetSettings().limits.maxSequenceSize = 16;
+        RenderOptions options;
+        options.writeEachPiece = true;
+
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        RecordingSink<char> sink;
+        sink.eachPiece = true;
+        const auto rendered = tpl.RenderTo(sink, {}, options);
+        ASSERT_TRUE(rendered) << source << ": " << rendered.error().ToString();
+        EXPECT_EQ(sink.output, source.find("break") != std::string::npos ? "abc" : "abbc") << source;
+
+        TemplateW wide(&env);
+        ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end()))) << source;
+        RecordingSink<wchar_t> wideSink;
+        wideSink.eachPiece = true;
+        EXPECT_TRUE(wide.RenderTo(wideSink, {}, options)) << source;
+    }
+}
+
 // Records each piece with whether the render said it is Markup (RenderOptions::pieceIsMarkup)
 template<typename CharT>
 class MarkupRecordingSink final : public BasicOutputSink<CharT>
@@ -401,6 +508,10 @@ TEST(OutputTest, SinkLearnsWhichPiecesAreMarkup)
         { "a{{ x }}b", true, { { "a", false }, { "&lt;", true }, { "b", false } } },
         { "a{{ x }}b", false, { { "a", false }, { "<", false }, { "b", false } } },
         { "a{{ 'c' }}b", true, { { "acb", false } } },
+        // Folded constants are str in Jinja2 under autoescape too (docs/tasks/0535)
+        { "a{{ 1 + 1 }}b{{ 'a'|upper }}{{ '<' ~ 'b' }}{{ x if 0 else 'e' }}", true, { { "a2bA&lt;be", false } } },
+        { "a{{ 1 + 1 }}b", false, { { "a2b", false } } },
+        { "a{{ y or 1 }}b", true, { { "a", false }, { "1", true }, { "b", false } } },
         { "{% autoescape v %}a{{ x }}b{% endautoescape %}", true, { { "a", true }, { "&lt;", true }, { "b", true } } },
         { "{% autoescape v %}a{{ x }}b{% endautoescape %}", false, { { "a", true }, { "&lt;", true }, { "b", true } } },
         { "{% autoescape v %}a{{ 'k' }}b{% endautoescape %}", true, { { "a", true }, { "k", false }, { "b", true } } },
