@@ -373,7 +373,7 @@ TEST_F(IncludeTest, JoinPathResolvesTagNames)
         EXPECT_TRUE(result.has_value());
         return result ? result.value() : std::string();
     };
-    auto expectCalls = [&calls](std::vector<std::string> expected) {
+    auto expectCalls = [&calls](const std::vector<std::string>& expected) {
         EXPECT_EQ(expected, calls);
         calls.clear();
     };

@@ -211,6 +211,34 @@ def test_join_path_template_not_found_raised_by_the_function():
     assert results[0] == results[1]
 
 
+@pytest.mark.parametrize(
+    "source, joined",
+    [
+        ("{% import './nope' as x %}", None),
+        ("{% from './nope' import f %}", None),
+        ("{% include './nope' %}", None),
+        ("{% extends './nope' %}", None),
+        ("{% include 'x' %}", ""),
+    ],
+)
+def test_join_path_names_the_joined_template_when_it_is_missing(source, joined):
+    results = []
+    for module in modules():
+
+        def join(self, template, parent, joined=joined):
+            if joined is not None:
+                return joined
+            return parent.rsplit("/", 1)[0] + "/" + template[2:] if template.startswith("./") else template
+
+        env = join_env(module, [], join=join)
+        env.loader = module.DictLoader({"a/main": source})
+        try:
+            results.append(env.get_template("a/main").render())
+        except module.TemplateNotFound as error:
+            results.append((type(error).__name__, str(error), error.name))
+    assert results[0] == results[1]
+
+
 def test_join_path_that_loads_a_template():
     def join(self, template, parent):
         self.get_template("a/x")

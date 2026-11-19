@@ -3632,6 +3632,11 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     // Resolved on every render: the name may change between renders or loop iterations
     auto& callback = *values.GetRendererCallback();
     const auto& tpl = callback.LoadTemplateAt(name, nodes, this);
+    // A missing name is reported as join_path made it (docs/tasks/0410), before the module's own loads join others
+    if (const auto* joined = callback.LastJoinedName())
+    {
+        name = InternalValue(*joined);
+    }
     // Throws if the template failed to load
     if (!VisitTemplateImpl<bool>(tpl, true, [](const auto& /*tplPtr*/) { return true; }))
     {

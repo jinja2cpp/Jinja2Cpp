@@ -1449,7 +1449,7 @@ private:
             }
             return LoadJoined(*join, name, from, site);
         }
-        [[nodiscard]] const std::string* LastJoinedName() const override { return m_joinedName.empty() ? nullptr : &m_joinedName; }
+        [[nodiscard]] const std::string* LastJoinedName() const override { return m_loaded && m_loaded->joinedName ? &*m_loaded->joinedName : nullptr; }
 
         [[nodiscard]] const LoadTemplateResult* FindLoadedBy(const void* site) const override
         {
@@ -1841,6 +1841,8 @@ private:
             std::vector<std::pair<const void*, const LoadTemplateResult*>> bySite;
             // The modules the render imported, freed before the trees their macros run in
             std::vector<std::unique_ptr<ImportedModule>> modules;
+            // The name the last tag load joined (LoadJoined, docs/tasks/0410); empty when it joined none
+            std::optional<std::string> joinedName;
             // The modules imported without context, by the template they were made from. A
             // render imports few templates, so a list beats hashing
             std::vector<std::pair<const LoadTemplateResult*, ImportedModule*>> sharedModules;
@@ -1858,7 +1860,8 @@ private:
         // strings, and tags of a template without a name, are loaded as written
         JINJA2CPP_NOINLINE const LoadTemplateResult& LoadJoined(const JoinPathFunction& join, const InternalValue& name, const ArenaView& from, const void* /*site*/) const
         {
-            m_joinedName.clear();
+            auto& joined = Loaded().joinedName;
+            joined.reset();
             const auto* origin = from.Origin();
             auto text = GetAsSameString(std::string(), name);
             if (!origin || !origin->name || !origin->isNamed || !text)
@@ -1866,10 +1869,9 @@ private:
                 return LoadTemplate(name);
             }
             // Before the load registers anything: what the function throws leaves the render as it was
-            m_joinedName = join(text.value(), *origin->name);
-            return LoadTemplate(m_joinedName);
+            joined = join(text.value(), *origin->name);
+            return LoadTemplate(*joined);
         }
-        mutable std::string m_joinedName;
         mutable std::unique_ptr<LoadedTemplates> m_loaded;
         // SetKeeper's: null but for a render nested in another one that shares its globals
         CycleCollector* m_keeper = nullptr;
