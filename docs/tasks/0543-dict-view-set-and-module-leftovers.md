@@ -22,10 +22,15 @@ template that works in Jinja2 from working here (Jinja2 3.1.6):
 3. A `set` (0523) has only `isdisjoint`, `-` with another set or view, `in`, `len` and comparison; none of Python's
    other set methods (`union`, `intersection`, `add`, `|`, `&`, `^`, ...). `pprint` of a long set breaks it over lines
    as a list would, unsorted (Python sorts it).
+4. (From 0538's item 9 work.) `{{ d | random }}` of a non-empty dict gives a key; Python's `random.choice` indexes it
+   and raises `KeyError: 0` unless the dict has a key 0 (0538 made a mappingproxy do so, not a dict). And `pprint` of a
+   mappingproxy wider than 80 columns still walks its dict for the line breaks, so a cycle through such a proxy hits
+   the recursion limit where Python prints `{...}`.
 
 **Proposal.** 1: the indent filter reports a non-string the way Python's `+=` does. 2: a host view type in the module
 (python/src) that hands Python a real view or set of the engine's items, and the engine's set operators for a host
-view, read through its items. 3: the set methods and operators over the engine's set (value_methods.cpp), with corpus
+view, read through its items. 4: the random filter of a dict as of its mappingproxy; the wide pprint path takes the
+container stack. 3: the set methods and operators over the engine's set (value_methods.cpp), with corpus
 cases for each.
 
 **Done when** the module-divergences lines above are gone, the set methods have corpus cases that match in narrow and
