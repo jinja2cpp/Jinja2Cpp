@@ -26,6 +26,10 @@ template that works in Jinja2 from working here (Jinja2 3.1.6):
    and raises `KeyError: 0` unless the dict has a key 0 (0538 made a mappingproxy do so, not a dict). And `pprint` of a
    mappingproxy wider than 80 columns still walks its dict for the line breaks, so a cycle through such a proxy hits
    the recursion limit where Python prints `{...}`.
+5. (From 0540.) The engine's `range` is a class global: `{{ range.mro() }}` renders a list, where Jinja2's `range` is a
+   function and the call is UndefinedError (in the module's sandbox `range` is Jinja2's `safe_range`). And
+   `Markup.format` of a host object with `__html__` and a non-empty spec keeps the engine's formatting, where
+   markupsafe raises that the object does not define `__html_format__` (not probed further).
 
 **Proposal.** 1: the indent filter reports a non-string the way Python's `+=` does. 2: a host view type in the module
 (python/src) that hands Python a real view or set of the engine's items, and the engine's set operators for a host
