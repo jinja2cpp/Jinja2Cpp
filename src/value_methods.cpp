@@ -1978,6 +1978,42 @@ struct StrOps
         Raise("unmatched '{' in format spec");
     }
 
+    struct FormatStop final : std::exception
+        , StopIteration
+    {
+    };
+
+    // format(value, spec) of a host object that has a __format__ (Python's objects always do): its result, and
+    // whether that is a Markup, which Markup.format takes as it is. The sandbox's formatter has run before
+    // (ISandboxPolicy::Format) and reads attributes through its own checkpoint, so it does not come here
+    static std::optional<std::pair<Str, bool>> HostFormat(const InternalValue& value, View spec, RenderContext& context)
+    {
+        const auto* host = GetHostObject(value);
+        if (!host || host->IsMarkupLike() || context.GetSandboxPolicy())
+        {
+            return std::nullopt;
+        }
+        auto method = host->GetAttr("__format__");
+        if (!method || method->IsUndefined())
+        {
+            return std::nullopt;
+        }
+        CallParams callParams;
+        callParams.posParams.push_back(InternalValue(TargetString(Str(spec))));
+        const auto result = CallExpression::CallValue(context, std::move(*method), callParams);
+        if (result.IsUndefined())
+        {
+            // The host's call turned a StopIteration into undefined (Context.call); in Python it leaves str.format,
+            // which FormatGuardingStop turns into the format call's undefined (docs/tasks/0500)
+            throw FormatStop();
+        }
+        if (!IsStringValue(result) && !result.IsMarkup())
+        {
+            Raise("__format__ must return a str, not " + TypeName(result));
+        }
+        return std::make_pair(ToStr(result, false), result.IsMarkup());
+    }
+
     // One replacement field. Its value is looked up first, then the nested fields of its spec
     // are expanded, so '{:{}}' numbers the value 0 and the width 1.
     // escape: Markup's format() (markupsafe's EscapeFormatter), which escapes each field after
@@ -2007,6 +2043,10 @@ struct StrOps
         {
             expanded = Build(field.spec, params, numbering, context, escape, depth - 1);
             spec = expanded;
+        }
+        if (auto hosted = HostFormat(value, spec, context))
+        {
+            return escape && !hosted->second ? EscapeText<CharT>(hosted->first, context.GetRendererCallback()) : hosted->first;
         }
         if (!escape)
         {

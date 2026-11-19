@@ -396,6 +396,64 @@ def test_stop_iteration_from_a_call_is_undefined():
         assert template.render() == "[]"
 
 
+class _Fmt:
+    """A host object with a __format__ of its own, as a Python object that has one."""
+
+    def __format__(self, spec):
+        return "F<" + spec + ">"
+
+    def __str__(self):
+        return "S"
+
+
+class _FmtRaises:
+    def __init__(self, error):
+        self.error = error
+
+    def __format__(self, spec):
+        raise self.error
+
+
+class _FmtInt:
+    def __format__(self, spec):
+        return 1
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ '{0}'.format(o) }}",
+        "{{ '{}|{:>4}'.format(o, o) }}",
+        "{{ '{0:>4}'.format(o) }}",
+        "{{ '{0:{1}}'.format(o, 3) }}",
+        "{{ '{0!s:>3}'.format(o) }}",
+        "{{ '{0!r}'.format(o)|length > 0 }}",
+        "{{ '{x:>4}'.format_map({'x': o}) }}",
+        "{{ '<{0}>'.format(o) }}",
+    ],
+)
+def test_str_format_asks_a_host_object_for_its_format(source):
+    assert_same(source, {"o": _Fmt()})
+
+
+def test_markup_format_escapes_a_host_objects_format():
+    class Amp:
+        def __format__(self, spec):
+            return "<" + spec + ">"
+
+    assert_same("{{ '{0:a&b}'.format(o) }}|{{ ('<{0}>'|safe).format(o) }}|{{ ('{0:x}'|safe).format(o) }}", {"o": Amp()}, {"autoescape": True})
+
+
+@pytest.mark.parametrize("source", ["{{ '{0}'.format(o) }}", "{{ '{0:>4}'.format(o) }}", "{{ '{x}'.format_map({'x': o}) }}"])
+def test_a_raising_format_is_undefined_for_stop_iteration_and_an_error_otherwise(source):
+    assert_same("[" + source + "]", {"o": _FmtRaises(StopIteration())})
+    for module in (jinja2cpp, jinja2):
+        with pytest.raises(ValueError, match="boom"):
+            module.Environment().from_string(source).render(o=_FmtRaises(ValueError("boom")))
+        with pytest.raises((TypeError, module.TemplateRuntimeError), match="__format__ must return a str, not int"):
+            module.Environment().from_string(source).render(o=_FmtInt())
+
+
 class _Page:
     """A host object whose property raises StopIteration, as an attribute lookup in a macro."""
 

@@ -682,11 +682,15 @@ const PyHost* AsPyHost(const jinja2::Value& value)
 
 namespace
 {
-nb::object Stub(const char* name)
+nb::object StubClass(const char* name)
 {
     // A class of that name, for an object of the engine that has no Python class: loop, a macro, a cycler
-    const auto type = Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type)));
-    return Steal(PyObject_CallNoArgs(type.ptr()));
+    return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type)));
+}
+
+nb::object Stub(const char* name)
+{
+    return Steal(PyObject_CallNoArgs(StubClass(name).ptr()));
 }
 
 // A Python object of the kind of `obj`, for is_safe_attribute to look at: the value itself when it is
@@ -708,6 +712,11 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
         if (const char* objectClass = map->GetObjectClass())
         {
             synthetic = true;
+            if (std::string_view(objectClass) == "type")
+            {
+                // A class object (`dict`, `cycler`, `x.__class__`): a type for is_safe_attribute, which refuses `mro` of one
+                return StubClass(objectClass);
+            }
             return Stub(objectClass);
         }
         return nb::dict();
@@ -756,8 +765,9 @@ public:
         // Python's objects have attributes the engine's values have not: __class__, __init__, ...
         // A public name is the environment's to judge only when its is_safe_attribute is not Jinja2's, which
         // refuses private names and the methods of lists and dicts that change them (the engine does the latter)
+        // `mro` is asked too: Jinja2 refuses it of a class, which only the stand-in of a class object shows
         const bool isPrivate = !name.empty() && name[0] == '_';
-        if (!isPrivate && !m_allNames)
+        if (!isPrivate && !m_allNames && name != "mro")
         {
             return std::nullopt;
         }

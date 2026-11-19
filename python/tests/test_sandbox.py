@@ -565,6 +565,15 @@ def test_doctests_of_the_policy_functions():
     assert doctest.testmod(sandbox).failed == 0
 
 
+@pytest.mark.parametrize("source", ["{{ dict.mro() }}", "{{ cycler.mro() }}", "{{ x.mro() }}", "{{ x.mro }}", "{{ [].__class__ }}", "{{ range.mro }}", "{{ range.__mro__ }}"])
+def test_mro_of_a_class_is_refused_as_jinja2_does(source):
+    # is_internal_attribute: `mro` of a type is unsafe (0538 item 8); the stand-in the policy judges is a type
+    ours, theirs = _both(source, {"x": int})
+    assert ours == theirs, source
+    if source.endswith("mro() }}"):
+        assert ours[0] == "exception" and ours[1] == "SecurityError", source
+
+
 def test_range_is_capped_like_safe_range():
     from jinja2cpp.sandbox import MAX_RANGE
     from jinja2cpp.sandbox import safe_range

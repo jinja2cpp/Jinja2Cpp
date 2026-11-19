@@ -54,7 +54,8 @@ public:
      *
      * @param obj   The value, as a host callable gets it: `loop` and a namespace as a snapshot of their
      *              attributes (\ref GenericMap::GetObjectClass names their class), a macro, `caller` or a
-     *              global function such as `range` as an empty map of class "Macro" or "function"
+     *              global function such as `range` as an empty map of class "Macro" or "function" (a class that
+     *              is a global, `dict` or `cycler` but not `range`, is of class "type")
      * @param name  The attribute's name
      */
     [[nodiscard]] virtual std::optional<Value> NativeAttribute(const Value& obj, std::string_view name) const = 0;

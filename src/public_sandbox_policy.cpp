@@ -51,12 +51,26 @@ private:
     const char* m_class;
 };
 
+// The Python class of a callable's stand-in: Macro, function, or type for a class that is a global (dict, cycler, ...),
+// whose `mro` Jinja2's is_internal_attribute refuses; Jinja2's range is a function
+const char* StandInClass(const Callable& callable, const InternalValue& obj)
+{
+    if (callable.GetKind() == Callable::Macro)
+    {
+        return "Macro";
+    }
+    const auto& attributes = callable.GetAttributes();
+    const auto name = attributes ? attributes->find("__name__") : InternalValueMap::const_iterator();
+    const bool isRange = attributes && name != attributes->end() && IsStringValue(name->second) && AsString(name->second) == "range";
+    return !isRange && ClassObjectAttribute(obj, "__bases__") ? "type" : "function";
+}
+
 // `obj` as the policy gets it
 Value PolicyValue(const InternalValue& obj)
 {
     if (const auto* callable = GetIf<Callable>(&obj); callable && callable->GetKind() != Callable::UserCallable)
     {
-        return Value(GenericMap(std::make_shared<const CallableStandIn>(callable->GetKind() == Callable::Macro ? "Macro" : "function")));
+        return Value(GenericMap(std::make_shared<const CallableStandIn>(StandInClass(*callable, obj))));
     }
     return ToHostValue(obj);
 }
