@@ -137,7 +137,6 @@ public:
         detail::VisitSlotNameRefs(refs, m_slotNames);
         detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
         detail::VisitSlotNameRefs(refs, m_elseResetsAtEnd);
-        refs(m_bodyReads);
     }
 
     ForStatement(AssignTarget target, NodeRef<Expression> expr, NodeRef<Expression> ifExpr, bool isRecursive)
@@ -188,13 +187,11 @@ public:
     void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
     // The same for the `else` body
     void SetElseResetsAtEnd(ArenaSpan<SlotName> names) { m_elseResetsAtEnd = names; }
-    // The hashes of the names an unfiltered recursive loop's body reads (NameResolver::EndReads): what its levels
-    // keep of the frames around it (RenderLoopInScopes, docs/tasks/0539)
-    void SetBodyReads(NodeArena& nodes, Span<const std::size_t> reads)
-    {
-        m_bodyReads = nodes.MakeSpan(reads);
-        m_bodyReadsKnown = true;
-    }
+    // A recursive loop's body is a function in Jinja2, which resets nothing: whether a closure defined there reads
+    // the names its last pass stored (docs/tasks/0537), and, for an unfiltered one, the hashes of the names the body
+    // reads (NameResolver::EndReads), what its levels keep of the frames around it (docs/tasks/0539). Those take the
+    // place of the resets, which a recursive loop has none of: the node stays as large. Defined in statements.cpp
+    void SetRecursiveBody(NodeArena& nodes, bool keepsLastPass, Span<const std::size_t> reads);
     [[nodiscard]] ArenaSpan<SlotName> GetBinderNames() const { return m_slotNames; }
     // Gives the names the loop binds slots of its unit's frame from `first`: `loop`, the
     // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
@@ -225,6 +222,8 @@ private:
     bool m_isRecursive{};
     bool m_filterReadsLoop{};
     bool m_bodyReadsLoop{};
+    // SetRecursiveBody's
+    bool m_keepsLastPass{};
     NodeRef<IRendererBase> m_mainBody;
     NodeRef<IRendererBase> m_elseBody;
     // Unique for the process, unlike the address: a reused loop frame keeps the names this
@@ -235,11 +234,10 @@ private:
     SlotIndex m_firstSlot;
     UnitId m_unit;
     ArenaSpan<SlotName> m_slotNames;
+    // A recursive loop's: the names its body reads, by hash only (SetRecursiveBody); a filtered one reads any name,
+    // as its filter's reads are not recorded
     ArenaSpan<SlotName> m_resetsAtEnd;
     ArenaSpan<SlotName> m_elseResetsAtEnd;
-    // SetBodyReads'; a filtered recursive loop reads any name (its filter's reads are not recorded)
-    ArenaSpan<std::size_t> m_bodyReads;
-    bool m_bodyReadsKnown{};
 
     static uint64_t NewLoopId();
 };

@@ -1576,7 +1576,33 @@ JINJA2CPP_NOINLINE void CaptureLastPass(RenderContext& values, ScopeRef& bodySco
     values.CaptureClosures(FrameEnd::Stopped(endScopes));
     bodyScope.Clear();
 }
+
+// What the outermost level of a recursive loop keeps of the frames around it, which may end before a level stored past
+// them runs: the names its body reads, `reads` by hash (ForStatement::SetRecursiveBody), or every name when
+// `readsAll`. Out of line: few loops outlive their frames
+JINJA2CPP_NOINLINE std::shared_ptr<ClosureCapture> CaptureRecursiveSite(ClosureSite& site, RenderContext& values, Span<const SlotName> reads, bool readsAll)
+{
+    SmallVector<std::size_t, 16> hashes;
+    hashes.reserve(reads.size());
+    for (const auto& name : reads)
+    {
+        hashes.push_back(name.hash);
+    }
+    return site.CaptureOnEnd(values, Span<const std::size_t>(hashes.data(), hashes.size()), readsAll);
+}
 } // namespace
+
+void ForStatement::SetRecursiveBody(NodeArena& nodes, bool keepsLastPass, Span<const std::size_t> reads)
+{
+    m_keepsLastPass = keepsLastPass;
+    SmallVector<SlotName, 8> names;
+    names.reserve(reads.size());
+    for (const auto hash : reads)
+    {
+        names.push_back(SlotName{ ArenaText(), hash });
+    }
+    m_resetsAtEnd = nodes.MakeSpan(Span<const SlotName>(names.data(), names.size()));
+}
 
 void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
 {
@@ -1621,7 +1647,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             // frames around it, so that a chain of them through a name nothing reads does not hold each tree (0539)
             if (state->recursiveSite.OutlivesItsFrames(values))
             {
-                state->recursiveCapture = state->recursiveSite.CaptureOnEnd(values, values.Nodes()[m_bodyReads], !m_bodyReadsKnown);
+                state->recursiveCapture = CaptureRecursiveSite(state->recursiveSite, values, values.Nodes()[m_resetsAtEnd], static_cast<bool>(m_ifExpr));
             }
         }
         state->recursiveAutoescape = values.IsStaticAutoescape();
@@ -1661,7 +1687,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     // The scopes of the loop's end, which a call that stops closes over as the end does
     const size_t endScopes = values.GetScopesCount() - 1;
     // A recursive loop's body is a function in Jinja2: its closures read the names the last pass left (docs/tasks/0537)
-    const bool keepsLastPass = m_isRecursive && !m_resetsAtEnd.empty();
+    const bool keepsLastPass = m_keepsLastPass;
     bool failed = false;
     try
     {
@@ -2827,7 +2853,7 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
     // a name nothing reads holds, such as the `loop` of an earlier nested render, would keep that render's tree
     // (docs/tasks/0539)
     ClosureCapture keeps;
-    keeps.readsAll = end.count == 0 && m_parent;
+    keeps.readsAll = end.count == 0 && static_cast<bool>(m_parent);
     for (const auto& capture : ending)
     {
         keeps.AddReads(*capture);
@@ -3498,24 +3524,10 @@ void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopH
     }
 }
 
-// Renders the included `tpl` in `innerContext`, made from `values`. Its closures keep what it saw, its parents'
-// names too: Jinja2 renders it with a copy of the context. Also when it fails in a context that ends before the
-// render (docs/tasks/0531); every included context ends so, and is not asked
+// Renders `tpl` for `include` in `innerContext`, made from `values`: the names it sets stay its own
 template<typename CharT>
-void RenderIncludedBody(const TemplateImpl<CharT>& tpl, OutStream& os, const RenderContext& values, RenderContext& innerContext)
+JINJA2CPP_ALWAYS_INLINE void RenderIncludedIn(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values, RenderContext& innerContext)
 {
-    const auto end = [] { return FrameEnd{ 0, true, 0, 0 }; };
-    RenderFailingFrame(innerContext, values, [&] { innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName()); }, end);
-    innerContext.CaptureClosures(end());
-}
-
-// Renders `tpl` for `include`: the names it sets stay its own
-template<typename CharT>
-void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
-{
-    RenderContext innerContext = values.Clone(withContext);
-    // Its macros and `self` kept past the include see what it saw (0323)
-    innerContext.SetEndsBeforeRender();
     if (withContext)
     {
         // Jinja2 renders it in a new Context, with an EvalContext of its own
@@ -3530,13 +3542,38 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
             LoopHiding hidden;
             HideIncludingLoop(values, innerContext, hidden);
             innerContext.SetNodes(tpl.Nodes());
-            RenderIncludedBody(tpl, os, values, innerContext);
+            innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
             return;
         }
     }
-
     innerContext.SetNodes(tpl.Nodes());
-    RenderIncludedBody(tpl, os, values, innerContext);
+    innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
+}
+
+// Renders `tpl` for `include`. Its closures keep what it saw, its parents' names too: Jinja2 renders it with a copy
+// of the context. Also when it fails where the context of `values` ends before the render: something outside may
+// still hold them (docs/tasks/0531)
+template<typename CharT>
+void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
+{
+    RenderContext innerContext = values.Clone(withContext);
+    // Its macros and `self` kept past the include see what it saw (0323)
+    innerContext.SetEndsBeforeRender();
+    bool failed = false;
+    try
+    {
+        RenderIncludedIn(tpl, withContext, os, values, innerContext);
+    }
+    catch (...)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        EndFailedFrame(innerContext, values, FrameEnd{ 0, true, 0, 0 });
+    }
+    innerContext.CaptureClosures(FrameEnd{ 0, true, 0, 0 });
 }
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)

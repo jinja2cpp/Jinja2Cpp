@@ -862,12 +862,15 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     auto info = PopStatement(statementsInfo);
     auto& renderer = m_nodes.Get<ForStatement>(info.renderer);
     renderer.SetMainBody(TakeBody(info));
-    // A recursive loop's body is a function in Jinja2, whose names its closures keep (FrameEnd::Stopped): for it the
-    // names tell only that its last pass is kept (docs/tasks/0537)
-    renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
-    if (renderer.IsRecursive() && !renderer.HasFilter())
+    // A recursive loop's body is a function in Jinja2, whose names its closures keep (FrameEnd::Stopped)
+    if (!renderer.IsRecursive())
     {
-        renderer.SetBodyReads(m_nodes, m_names.EndReads(info.useMark));
+        renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
+    }
+    else
+    {
+        const bool keepsLastPass = !m_names.NamesResetAtEnd(info.frame, m_nodes).empty();
+        renderer.SetRecursiveBody(m_nodes, keepsLastPass, renderer.HasFilter() ? Span<const std::size_t>() : m_names.EndReads(info.useMark));
     }
     renderer.SetBodyReadsLoop(renderer.IsRecursive() || bodyEndReads != info.marks.loopReads);
     // An included template reads the loop it is included from only outside its own loops' bodies
