@@ -87,6 +87,9 @@ void CycleCollector::Finish() noexcept
         {
             auto& target = keeper->m_module ? keeper->m_module->kept : keeper->NotesForKeep().kept;
             m_notes->kept.MoveInto(target);
+            // A closure an earlier nested render stored and this one let go of keeps its copy, and the tree that
+            // owns, no longer than a few such renders (docs/tasks/0539)
+            target.ReleaseExpired();
         }
         catch (...) // NOLINT(bugprone-empty-catch): out of memory; the closures read what was not moved as ended
         {
@@ -180,6 +183,18 @@ bool CycleCollector::Keeps(const void* tree) noexcept
     GiveBack(note.bytes);
     note.bytes = 0;
     return false;
+}
+
+void CycleCollector::ReleaseExpiredKept() noexcept
+{
+    if (m_module)
+    {
+        m_module->kept.ReleaseAllExpired();
+    }
+    else if (m_notes)
+    {
+        m_notes->kept.ReleaseAllExpired();
+    }
 }
 
 void CycleCollector::GiveBackExpired() noexcept
@@ -385,6 +400,12 @@ void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const v
         m_pruneAt = std::max(MinPruneAt, m_kept.size() * 2);
     }
     m_kept.push_back(Entry{ std::move(owner), std::move(object), names });
+}
+
+void KeptObjects::ReleaseAllExpired() noexcept
+{
+    m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const Entry& entry) { return entry.owner.expired(); }), m_kept.end());
+    m_cursor = 0;
 }
 
 void KeptObjects::MoveInto(KeptObjects& other)

@@ -1617,10 +1617,11 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         else
         {
             state->recursiveSite = ClosureSite(values);
-            // Its body reads any name: the loop's names are not recorded as a macro body's are
+            // Only the names its body reads, as a macro's capture: a level stored past the loop keeps no more of the
+            // frames around it, so that a chain of them through a name nothing reads does not hold each tree (0539)
             if (state->recursiveSite.OutlivesItsFrames(values))
             {
-                state->recursiveCapture = state->recursiveSite.CaptureOnEnd(values, {}, true);
+                state->recursiveCapture = state->recursiveSite.CaptureOnEnd(values, values.Nodes()[m_bodyReads], !m_bodyReadsKnown);
             }
         }
         state->recursiveAutoescape = values.IsStaticAutoescape();
@@ -2821,9 +2822,12 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
     }
     // What the closures of the frame and of the frames above it read there: the copy keeps
     // those, the frame below sees them read too. An included template's top level keeps every
-    // name, as Jinja2's context of the include does
+    // name, as Jinja2's context of the include does. A render's own context, or a module's, that ends before an outer
+    // render (CaptureClosuresForOuter) keeps what its closures read only: a value stored at its top level that only
+    // a name nothing reads holds, such as the `loop` of an earlier nested render, would keep that render's tree
+    // (docs/tasks/0539)
     ClosureCapture keeps;
-    keeps.readsAll = end.count == 0;
+    keeps.readsAll = end.count == 0 && m_parent;
     for (const auto& capture : ending)
     {
         keeps.AddReads(*capture);

@@ -601,6 +601,8 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     {
         isRecursive = true;
     }
+    // The names an unfiltered recursive loop's body reads, which its levels keep of the frames around it (0539)
+    const bool recordsReads = isRecursive && !ifExpr;
 
     if (!ifExpr && lexer.PeekNextToken() != Token::Eof)
     {
@@ -613,6 +615,10 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = renderer;
     statementInfo.marks = m_nodes.Marks();
+    if (recordsReads)
+    {
+        statementInfo.useMark = m_names.BeginReads();
+    }
     statementInfo.frame = m_names.PushFor(outerFrame, renderer, isRecursive);
     if (filterFrame != NameResolver::NoFrame)
     {
@@ -859,6 +865,10 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     // A recursive loop's body is a function in Jinja2, whose names its closures keep (FrameEnd::Stopped): for it the
     // names tell only that its last pass is kept (docs/tasks/0537)
     renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
+    if (renderer.IsRecursive() && !renderer.HasFilter())
+    {
+        renderer.SetBodyReads(m_nodes, m_names.EndReads(info.useMark));
+    }
     renderer.SetBodyReadsLoop(renderer.IsRecursive() || bodyEndReads != info.marks.loopReads);
     // An included template reads the loop it is included from only outside its own loops' bodies
     const bool inFor = std::any_of(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& outer) { return outer.type == StatementInfo::ForStatement; });

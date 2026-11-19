@@ -117,6 +117,8 @@ public:
             m_kept.pop_back();
         }
     }
+    // Releases what every owner that has expired kept: before a tree is refused for want of budget (docs/tasks/0539)
+    void ReleaseAllExpired() noexcept;
     // Moves to `other` what is still of use. Throws std::bad_alloc, and then keeps what it did not move
     void MoveInto(KeptObjects& other);
     // Notes to the collector running on this thread the values of the kept copies of names: a
@@ -314,6 +316,8 @@ public:
         const std::uint64_t bytes = tree->TreeBytes();
         if (bytes > detail::RenderMemoryLeftOf(this))
         {
+            // The copies of names that closures nothing holds any more kept, which may own trees (docs/tasks/0539)
+            ReleaseExpiredKept();
             GiveBackExpired();
         }
         std::uint64_t taken = 0;
@@ -333,6 +337,8 @@ public:
     }
     // Gives back to the budget what the noted trees took that nothing owns any more, and forgets them
     void GiveBackExpired() noexcept;
+    // Releases what KeepUntilEnd holds for owners that have expired (KeptObjects::ReleaseAllExpired)
+    void ReleaseExpiredKept() noexcept;
     // The noted trees something still owns, and all the notes, expired ones too: what a test reads to see that a
     // loop of nested renders keeps neither (docs/tasks/0521)
     [[nodiscard]] size_t KeptTreeCount() const noexcept;

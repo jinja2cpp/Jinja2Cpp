@@ -137,6 +137,7 @@ public:
         detail::VisitSlotNameRefs(refs, m_slotNames);
         detail::VisitSlotNameRefs(refs, m_resetsAtEnd);
         detail::VisitSlotNameRefs(refs, m_elseResetsAtEnd);
+        refs(m_bodyReads);
     }
 
     ForStatement(AssignTarget target, NodeRef<Expression> expr, NodeRef<Expression> ifExpr, bool isRecursive)
@@ -187,6 +188,13 @@ public:
     void SetResetsAtEnd(ArenaSpan<SlotName> names) { m_resetsAtEnd = names; }
     // The same for the `else` body
     void SetElseResetsAtEnd(ArenaSpan<SlotName> names) { m_elseResetsAtEnd = names; }
+    // The hashes of the names an unfiltered recursive loop's body reads (NameResolver::EndReads): what its levels
+    // keep of the frames around it (RenderLoopInScopes, docs/tasks/0539)
+    void SetBodyReads(NodeArena& nodes, Span<const std::size_t> reads)
+    {
+        m_bodyReads = nodes.MakeSpan(reads);
+        m_bodyReadsKnown = true;
+    }
     [[nodiscard]] ArenaSpan<SlotName> GetBinderNames() const { return m_slotNames; }
     // Gives the names the loop binds slots of its unit's frame from `first`: `loop`, the
     // target names, then the target names again for the filter (docs/design/0117-name-slots-plan.md)
@@ -229,6 +237,9 @@ private:
     ArenaSpan<SlotName> m_slotNames;
     ArenaSpan<SlotName> m_resetsAtEnd;
     ArenaSpan<SlotName> m_elseResetsAtEnd;
+    // SetBodyReads'; a filtered recursive loop reads any name (its filter's reads are not recorded)
+    ArenaSpan<std::size_t> m_bodyReads;
+    bool m_bodyReadsKnown{};
 
     static uint64_t NewLoopId();
 };
