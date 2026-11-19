@@ -1995,12 +1995,16 @@ struct StrOps
         {
             return std::nullopt;
         }
-        auto method = host->GetAttr("__format__");
+        // Python looks a special method up on the type, past the instance's own attributes: type(x).__format__(x, spec)
+        const auto cls = host->GetAttr("__class__");
+        const auto* clsHost = cls ? GetHostObject(*cls) : nullptr;
+        auto method = clsHost ? clsHost->GetAttr("__format__") : std::nullopt;
         if (!method || method->IsUndefined())
         {
             return std::nullopt;
         }
         CallParams callParams;
+        callParams.posParams.push_back(value);
         callParams.posParams.push_back(InternalValue(TargetString(Str(spec))));
         const auto result = CallExpression::CallValue(context, std::move(*method), callParams);
         if (result.IsUndefined())

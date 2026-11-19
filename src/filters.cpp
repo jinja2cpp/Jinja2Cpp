@@ -1472,17 +1472,21 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 throw TemplateRuntimeError("'"s + view + "' object is not subscriptable");
             }
         }
-        // random.choice of a mappingproxy reads it at an index: its key 0, or a KeyError (docs/tasks/0538)
+        // random.choice of a mappingproxy reads it at a random index below its len(): that key's value, or a
+        // KeyError (docs/tasks/0538)
         if (m_mode == RandomMode)
         {
             if (const auto proxy = AsMap(baseVal); proxy && proxy->GetProxiedMapping() && proxy->GetSize() != 0)
             {
-                const InternalValue first(int64_t{ 0 });
-                if (const auto found = proxy->FindItem(first))
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<size_t> dis(0, proxy->GetSize() - 1);
+                const InternalValue index(static_cast<int64_t>(dis(gen)));
+                if (const auto found = proxy->FindItem(index))
                 {
                     return KeepMarkup(baseVal, WithParent(baseVal, *found));
                 }
-                methods::ThrowKeyError(first);
+                methods::ThrowKeyError(index);
             }
         }
         // random.choice of a host object with len() but no items to pick (a Python dict_keys) fails

@@ -444,6 +444,17 @@ def test_markup_format_escapes_a_host_objects_format():
     assert_same("{{ '{0:a&b}'.format(o) }}|{{ ('<{0}>'|safe).format(o) }}|{{ ('{0:x}'|safe).format(o) }}", {"o": Amp()}, {"autoescape": True})
 
 
+def test_format_is_looked_up_on_the_type():
+    # str.format resolves __format__ as a special method: an instance attribute of that name is not it
+    class Shadowed:
+        def __str__(self):
+            return "S"
+
+    o = Shadowed()
+    o.__format__ = lambda spec: "shadow"
+    assert_same("{{ '{0}'.format(o) }}|{{ '{0!s}'.format(o) }}", {"o": o})
+
+
 @pytest.mark.parametrize("source", ["{{ '{0}'.format(o) }}", "{{ '{0:>4}'.format(o) }}", "{{ '{x}'.format_map({'x': o}) }}"])
 def test_a_raising_format_is_undefined_for_stop_iteration_and_an_error_otherwise(source):
     assert_same("[" + source + "]", {"o": _FmtRaises(StopIteration())})
