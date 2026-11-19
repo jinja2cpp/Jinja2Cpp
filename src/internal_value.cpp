@@ -5431,8 +5431,22 @@ std::optional<InternalValue> ClassObjectAttribute(const InternalValue& value, st
     {
         return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
     }
-    // mro(): a new list of the same classes
-    return InternalValue(Callable(Callable::GlobalFunc, [items = std::move(items)](const CallParams&, RenderContext&) { return ListAdapter::CreateAdapter(InternalValueList(items)); }));
+    // mro(): a new list of the same classes; type.mro takes no arguments, as CPython words its refusal
+    Callable mro(Callable::GlobalFunc, [items = std::move(items), name](const CallParams& params, RenderContext&) {
+        if (!params.kwParams.empty())
+        {
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, std::string(name) + ".mro() takes no keyword arguments");
+        }
+        if (!params.posParams.empty())
+        {
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, std::string(name) + ".mro() takes no arguments (" + std::to_string(params.posParams.size()) + " given)");
+        }
+        return ListAdapter::CreateAdapter(InternalValueList(items));
+    });
+    // Printed as Python's <built-in method mro of type object at 0x...>
+    mro.SetBoundMethod(nullptr, "mro");
+    mro.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__self__", value } }));
+    return InternalValue(std::move(mro));
 }
 
 std::optional<InternalValue> MakeClassObject(const InternalValue& value)

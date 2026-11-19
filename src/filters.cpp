@@ -1460,11 +1460,29 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 }
                 throw TemplateRuntimeError("object of type '"s + iterator + "' has no len()");
             }
+            // A set has len() but no order to reverse: `last` is reversed(set), unlike a dict view's (docs/tasks/0538)
+            if (m_mode == LastItemMode && iterated->GetIteratorKind() == IteratorKind::Set)
+            {
+                throw TemplateRuntimeError("'set' object is not reversible");
+            }
             // A dict view has len() and reversed() but no items to pick (docs/tasks/0489)
             // An empty one fails in random.choice before the subscript, which Jinja2 makes undefined
             if (const char* view = m_mode == RandomMode && iterated->GetSize().value_or(0) != 0 ? DictViewTypeName(iterated->GetIteratorKind()) : nullptr)
             {
                 throw TemplateRuntimeError("'"s + view + "' object is not subscriptable");
+            }
+        }
+        // random.choice of a mappingproxy reads it at an index: its key 0, or a KeyError (docs/tasks/0538)
+        if (m_mode == RandomMode)
+        {
+            if (const auto proxy = AsMap(baseVal); proxy && proxy->GetProxiedMapping() && proxy->GetSize() != 0)
+            {
+                const InternalValue first(int64_t{ 0 });
+                if (const auto found = proxy->FindItem(first))
+                {
+                    return KeepMarkup(baseVal, WithParent(baseVal, *found));
+                }
+                methods::ThrowKeyError(first);
             }
         }
         // random.choice of a host object with len() but no items to pick (a Python dict_keys) fails
