@@ -59,5 +59,5 @@ N of them (`LimitsEnvTest.StrictOperatorChainFoldsInLinearSteps`: 400 `or`, `+` 
 does (`[1][:, :] or x`, `[1][:, :] ~ x`, `x if [1][:, :]`, `1 if 1 else x if [1][:, :] else x`). The
 generator filters are a deliberate divergence (`subscripts.tuple_of_slices_strict_generator_filters`):
 folding them would need lazy filters at render too, as the sealed tree evaluates the filter again each render.
-New corpus cases `tuple_of_slices_strict_*`. Left for 0543: steps inside a filter's argument and nested
+New corpus cases `tuple_of_slices_strict_*`. Left for 0546: steps inside a filter's argument and nested
 subscript levels, the memory kept steps hold, the per-render constant.
