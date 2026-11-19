@@ -964,7 +964,6 @@ TEST_F(LimitsEnvTest, GivenBackTreesCreditOnlyTheirCharge)
     EXPECT_GT(start, 0U);
     EXPECT_LE(maxLeft, start);
 }
-#endif
 
 // 0539: a closure that reads a name, or a recursive `loop`, stored by each nested render and dropped by the next, keeps
 // its tree no longer than something holds it: with no budget at most a few trees are live, and 1 MiB holds the loop
@@ -991,6 +990,7 @@ TEST_F(LimitsEnvTest, DroppedNestedClosuresGiveTheirTreesBack)
         EXPECT_TRUE(budgeted.has_value()) << body.substr(0, 80) << ": " << (budgeted ? std::string() : budgeted.error().ToString());
     }
 }
+#endif
 
 // 0521: 20000 nested renders of a new 2 KB template that stores nothing fit 1 MiB: each tree is given back once
 // nothing owns it (0492 failed this loop)
