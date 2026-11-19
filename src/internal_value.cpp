@@ -3442,7 +3442,8 @@ private:
 // changed under a key, and a key added while it walks, are seen. Python fails a step once the dict's size changed,
 // and once it finds an entry after it has given as many as the dict had when the walk started (keys replaced); an
 // entry it stopped at that was erased (or erased and added again) leaves no position to go on from, and fails the
-// same way. A host mapping cannot change during a render: its items are read when the walk starts
+// same way. A host mapping cannot change during a render (a template that changes it changes a copy it makes): its
+// items are read when the walk starts
 class DictViewEnumerator final : public IListAccessorEnumerator
 {
 public:
@@ -3485,7 +3486,9 @@ public:
         {
             throw TemplateRuntimeError("dictionary changed size during iteration");
         }
-        if (!dict)
+        // A walk that started over a host mapping stays on its items: a template that changes the host's dict
+        // changes a copy it made of it (docs/tasks/0538)
+        if (!m_live || !dict)
         {
             ++m_pos;
             m_done = m_pos >= m_items.size();

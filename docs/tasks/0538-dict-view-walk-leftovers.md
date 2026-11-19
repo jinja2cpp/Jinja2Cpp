@@ -57,4 +57,10 @@ the layout pin allows (a bit in `KeyTableHolder`, or a count kept by the accesso
 `DictView` of a dict the template owns (statements.cpp, after batch 9 C lands). 4: the view enters
 the container stack under its dict's identity. 6: a host view type in the module (python/src).
 
+**Resolution (batch 10 A).** Items 1-4, 8 and 9 are fixed: a walk of a dict the template owns, and a `for` loop
+over it, read it live (Python's `changed size` and `keys changed` errors included); a view inside itself prints `...`;
+the item 9 edges match Python or turned out to match already (a set `in` a view raises in Python too; `xmlattr` of a
+mappingproxy works in Python); `mro` of a class is refused in the module's sandbox. Items 5-7 and the edges found on
+the way moved to 0543.
+
 **Done when** items 8 and 9 have corpus cases that match or are recorded deliberate, and the four corpus cases above match in narrow and wide runs and their divergence lines go.

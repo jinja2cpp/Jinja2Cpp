@@ -749,6 +749,19 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
     return ToPython(empty ? *empty : obj);
 }
 
+// Whether the policy gets `obj` as the stand-in of a callable that is no class: a function (the sandbox's range, a
+// global function, a host callable) or a macro
+bool IsCallableStandIn(const jinja2::Value& obj)
+{
+    if (obj.GetIf<jinja2::UserCallable>())
+    {
+        return true;
+    }
+    const auto* map = obj.GetIf<jinja2::GenericMap>();
+    const char* objectClass = map ? map->GetObjectClass() : nullptr;
+    return objectClass && (std::string_view(objectClass) == "function" || std::string_view(objectClass) == "Macro");
+}
+
 // The ISandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
 // for the engine's values. It borrows the environment, which holds the engine environment that holds this
 class PySandboxPolicy final : public jinja2::ISandboxPolicy
@@ -774,10 +787,11 @@ public:
         bool synthetic = false;
         const auto representative = Representative(obj, synthetic);
         const auto pyName = MakeStr(name);
-        if (name == "mro" && !PyType_Check(representative.ptr()))
+        if (name == "mro" && IsCallableStandIn(obj))
         {
-            // The engine's class objects have mro; a value Python holds as no class (the sandbox's range is
-            // safe_range, a function) has not, and Jinja2's getattr gives its undefined
+            // The engine's class objects have mro; a callable Python holds as no class (the sandbox's range is
+            // safe_range, a function; a macro) has not, and Jinja2's getattr gives its undefined. Other objects
+            // (namespace(), self, a module) may hold an item or macro named mro: the engine reads it
             const auto undefined = Steal(PyObject_GetAttrString(m_environment, "undefined"));
             const auto args = Steal(PyTuple_New(0));
             const auto kwargs = Steal(Py_BuildValue("{s:O,s:O}", "obj", representative.ptr(), "name", pyName.ptr()));

@@ -31,11 +31,26 @@ template that works in Jinja2 from working here (Jinja2 3.1.6):
    `Markup.format` of a host object with `__html__` and a non-empty spec keeps the engine's formatting, where
    markupsafe raises that the object does not define `__html_format__` (not probed further).
 
+6. (From 0538's verifier.) Live dict walks: a `loop` kept past a `break` (`set ns.l = loop`) collects the rest of
+   the walk when the loop ends, so a dict changed in the body makes the loop fail with `changed size` where Python
+   fails only if the kept loop is iterated; a kept loop's `length` after the dict was cleared reads the old size. An
+   entry erased and added again under the walk reuses its node address on glibc, so the walk goes on silently
+   (Python raises `keys changed`), or, as a new node, raises where CPython continues (its answer depends on compaction).
+   An entry `loop.last`/`nextitem` peeked that the body erases and replaces fails the next step; Python goes on. Lazy
+   pipelines (`e.keys() | map`, `e | items`, `e | reverse`) and loops over a mappingproxy still walk a snapshot.
+7. (From 0538's verifier.) `{% set v = e.values() %}{% do e.update({'v': v}) %}{{ e | pprint }}` hits the recursion
+   limit; Python prints `{'a': 1, 'v': dict_values([1, ...])}`. `Markup('x', encoding='utf-8')` (through
+   `('a'|safe).__class__`) renders where Python raises `decoding str is not supported`. `(1).__class__.mro.__name__` is
+   empty (Python `mro`). An `int()`/`float()` error quotes the whole text, as Python does; a cap would be kinder to logs.
+
 **Proposal.** 1: the indent filter reports a non-string the way Python's `+=` does. 2: a host view type in the module
 (python/src) that hands Python a real view or set of the engine's items, and the engine's set operators for a host
 view, read through its items. 4: the random filter of a dict as of its mappingproxy; the wide pprint path takes the
 container stack. 3: the set methods and operators over the engine's set (value_methods.cpp), with corpus
 cases for each.
 
-**Done when** the module-divergences lines above are gone, the set methods have corpus cases that match in narrow and
+6-7: the kept loop collects what it can and fails only when iterated; pprint takes the container stack for views;
+Markup's `encoding` refuses a str base.
+
+**Done when** the module-divergences lines above are gone, items 4-7 have corpus cases that match or are recorded deliberate, the set methods have corpus cases that match in narrow and
 wide runs, and `d.keys() | indent` reports Python's message.
