@@ -135,8 +135,9 @@ private:
                 nodes[*child].Render(os, values);
                 if constexpr (flushEach)
                 {
-                    // Each node's output is a piece of its own, but a run of folded output is one
-                    const auto next = child + 1 != end ? PieceOf(child[1], values) : PieceKind::Statement;
+                    // Each node's output is a piece of its own, but a run of folded output is one. After a
+                    // break or continue nothing renders the next node, so nothing asks how it folds
+                    const auto next = child + 1 != end && !values.HasLoopControl() ? PieceOf(child[1], values) : PieceKind::Statement;
                     if (piece != PieceKind::Folded || next != PieceKind::Folded)
                     {
                         if (piece == PieceKind::Statement)

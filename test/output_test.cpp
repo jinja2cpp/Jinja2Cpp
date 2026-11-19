@@ -449,6 +449,34 @@ TEST(OutputTest, PiecesEvaluateAFoldedConstantOnce)
     EXPECT_EQ(minSteps(wide, true), minSteps(wide, false));
 }
 
+TEST(OutputTest, PiecesSkipTheFoldAfterALoopControl)
+{
+    // Codex on #955: after a break or continue nothing renders the next node, so a render that writes each piece
+    // does not evaluate it to ask whether it folds; here that evaluation exceeds maxSequenceSize
+    for (const std::string source : { "a{% for i in [1, 2] %}b{% break %}{{ 'x' * 32 }}{% endfor %}c", "a{% for i in [1, 2] %}b{% continue %}{{ 'x' * 32 }}{% endfor %}c" })
+    {
+        TemplateEnv env;
+        env.GetSettings().extensions.loopControls = true;
+        env.GetSettings().limits.maxSequenceSize = 16;
+        RenderOptions options;
+        options.writeEachPiece = true;
+
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        RecordingSink<char> sink;
+        sink.eachPiece = true;
+        const auto rendered = tpl.RenderTo(sink, {}, options);
+        ASSERT_TRUE(rendered) << source << ": " << rendered.error().ToString();
+        EXPECT_EQ(sink.output, source.find("break") != std::string::npos ? "abc" : "abbc") << source;
+
+        TemplateW wide(&env);
+        ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end()))) << source;
+        RecordingSink<wchar_t> wideSink;
+        wideSink.eachPiece = true;
+        EXPECT_TRUE(wide.RenderTo(wideSink, {}, options)) << source;
+    }
+}
+
 // Records each piece with whether the render said it is Markup (RenderOptions::pieceIsMarkup)
 template<typename CharT>
 class MarkupRecordingSink final : public BasicOutputSink<CharT>
