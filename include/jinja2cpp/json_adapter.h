@@ -29,6 +29,16 @@
 #include <utility>
 #include <vector>
 
+// GCC and Clang each say it their own way (ReleasedSharedDoc, as src/shared_owner.h)
+#ifdef __SANITIZE_THREAD__
+#define JINJA2CPP_JSON_ADAPTER_TSAN 1
+#endif
+#ifdef __has_feature
+#if __has_feature(thread_sanitizer)
+#define JINJA2CPP_JSON_ADAPTER_TSAN 1
+#endif
+#endif
+
 namespace jinja2
 {
 inline namespace v2
@@ -370,14 +380,8 @@ struct ReleasedSharedDoc
         // The last other owner's drop is a release decrement; the acquire fence orders its reads before the drain,
         // as src/shared_owner.h does (docs/tasks/0339). TSan does not model fences: drop a copy instead, an acq_rel
         // decrement of the same count
-#if defined(__SANITIZE_THREAD__)
+#ifdef JINJA2CPP_JSON_ADAPTER_TSAN
         std::shared_ptr<J>(shared).reset();
-#elif defined(__has_feature)
-#if __has_feature(thread_sanitizer)
-        std::shared_ptr<J>(shared).reset();
-#else
-        std::atomic_thread_fence(std::memory_order_acquire);
-#endif
 #else
         std::atomic_thread_fence(std::memory_order_acquire);
 #endif

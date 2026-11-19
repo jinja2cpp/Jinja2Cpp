@@ -14,7 +14,6 @@
 #include <string> // IWYU pragma: keep (Key() before nlohmann_json 3.11)
 #include <string_view>
 #include <type_traits>
-#include <utility>
 
 namespace jinja2
 {
@@ -103,7 +102,7 @@ struct NlohmannJsonTraits : DomJsonTraits<Json>
         std::size_t steps = 0;
         std::size_t removed = 0;
         Json* cur = &doc;
-        for (; steps <= ReleaseWorkSlack + ReleaseWorkPerValue * removed; ++steps)
+        for (; steps <= ReleaseWorkSlack + (ReleaseWorkPerValue * removed); ++steps)
         {
             Json* child = LastChild(*cur);
             if (!child)
@@ -234,33 +233,30 @@ private:
         }
     }
 
-    // The last child of a non-empty array or object, null for a scalar or an empty container
+    // The last child of a non-empty array or object, null for a scalar or an empty container; get_ptr does not throw
     static Json* LastChild(Json& node) noexcept
     {
-        if (node.is_array())
+        if (auto* items = node.template get_ptr<typename Json::array_t*>())
         {
-            auto& items = node.template get_ref<typename Json::array_t&>();
-            return items.empty() ? nullptr : &items.back();
+            return items->empty() ? nullptr : &items->back();
         }
-        if (node.is_object())
+        if (auto* members = node.template get_ptr<typename Json::object_t*>())
         {
-            auto& members = node.template get_ref<typename Json::object_t&>();
-            return members.empty() ? nullptr : &std::prev(members.end())->second;
+            return members->empty() ? nullptr : &std::prev(members->end())->second;
         }
         return nullptr;
     }
 
-    // Removes the last child of `node`, a scalar or an empty container
+    // Removes the last child of `node`, a non-empty container whose last child is a scalar or an empty container
     static void PopLast(Json& node) noexcept
     {
-        if (node.is_array())
+        if (auto* items = node.template get_ptr<typename Json::array_t*>())
         {
-            node.template get_ref<typename Json::array_t&>().pop_back();
+            items->pop_back();
         }
-        else
+        else if (auto* members = node.template get_ptr<typename Json::object_t*>())
         {
-            auto& members = node.template get_ref<typename Json::object_t&>();
-            members.erase(std::prev(members.end()));
+            members->erase(std::prev(members->end()));
         }
     }
 };
