@@ -8,10 +8,11 @@
 #include <gtest/gtest.h>
 
 #include <memory>
-#include <utility>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 
 // The rendering rows live in the conformance suite (conformance.h), which runs them on both nlohmann types; this
 // file keeps what is specific to the binding: its traits, its pointer overloads of Reflect (docs/tasks/0311)
@@ -50,7 +51,15 @@ class NlohmannReleaseTest : public ::testing::Test
 {
 };
 using NlohmannJsonTypes = ::testing::Types<nlohmann::json, nlohmann::ordered_json>;
-TYPED_TEST_SUITE(NlohmannReleaseTest, NlohmannJsonTypes);
+struct NlohmannJsonTypeNames
+{
+    template<typename T>
+    static std::string GetName(int /*index*/)
+    {
+        return std::is_same_v<T, nlohmann::json> ? "json" : "ordered_json";
+    }
+};
+TYPED_TEST_SUITE(NlohmannReleaseTest, NlohmannJsonTypes, NlohmannJsonTypeNames);
 
 TYPED_TEST(NlohmannReleaseTest, ReleaseEmptiesAndCopyKeepsTheOrder)
 {
