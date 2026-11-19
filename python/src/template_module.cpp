@@ -467,6 +467,8 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
             values[std::string(Utf8View(name))] = convert.Convert(value);
         }
     }
+    // The globals are among the params here (Template.make_module)
+    env.AddUninstalledGettext(values);
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
     state.environment = m_environment.ptr();

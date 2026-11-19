@@ -288,12 +288,73 @@ def test_syntax_errors_as_jinja2():
         assert kinds[0] == kinds[1] == "TemplateSyntaxError", source
 
 
-def test_without_installed_translations_the_engine_leaves_messages_as_they_are():
-    # Jinja2 has no gettext until one is installed and raises UndefinedError (docs/python.md)
-    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
-    assert env.from_string("{{ _('Hello') }}{% trans %}Hi{% endtrans %}").render() == "HelloHi"
-    with pytest.raises(jinja2.exceptions.UndefinedError):
-        jinja2.Environment(extensions=["jinja2.ext.i18n"]).from_string("{{ _('Hello') }}").render()
+@pytest.mark.parametrize("undefined", ["Undefined", "StrictUndefined"])
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ _('Hello') }}",
+        "{% trans %}Hi{% endtrans %}",
+        "{% trans n=2 %}a{% pluralize %}b{% endtrans %}",
+        "{{ gettext('x') }}",
+        "{{ ngettext('a', 'b', 1) }}",
+        "{{ pgettext('c', 'x') }}",
+        "{{ npgettext('c', 'a', 'b', 1) }}",
+        "{{ gettext is defined }}{{ _ is defined }}",
+        "{{ gettext }}",
+        "{% import 'm' as m %}{{ m.f() }}",
+        "{% include 'm' %}{% from 'm' import f %}{{ f() }}",
+    ],
+)
+def test_without_installed_translations_the_gettext_globals_are_undefined(source, undefined):
+    # docs/tasks/0417: Jinja2 has no gettext globals until translations are installed, and none again after
+    # uninstall_gettext_translations: a call raises UndefinedError, as `{% trans %}` does
+    def run(module, install):
+        env = module.Environment(
+            extensions=["jinja2.ext.i18n"],
+            undefined=getattr(module, undefined),
+            loader=module.DictLoader({"m": "{% macro f() %}{{ _('q') }}{% endmacro %}{{ gettext('i') }}"}),
+        )
+        if install:
+            env.install_null_translations()
+            env.uninstall_gettext_translations(None)
+        try:
+            return env.from_string(source).render()
+        except module.UndefinedError as error:
+            return f"UndefinedError: {error}"
+
+    for install in (False, True):
+        assert run(jinja2cpp, install) == run(jinja2, install)
+
+
+def test_an_install_defines_the_gettext_globals_again():
+    def run(module):
+        env = module.Environment(extensions=["jinja2.ext.i18n"])
+        results = []
+        env.install_gettext_callables(lambda s: s.upper(), lambda s, p, n: s if n == 1 else p, newstyle=False)
+        # Oldstyle with no pgettext: Jinja2 sets it to None, which is defined
+        results.append(env.from_string("{{ _('a') }}{% trans %}b{% endtrans %}{{ pgettext is defined }}").render())
+        env.uninstall_gettext_translations(None)
+        env.install_null_translations(newstyle=True)
+        results.append(env.from_string("{{ _('a') }}{{ ngettext('x', 'y', 2) }}{{ gettext is defined }}").render())
+        env.uninstall_gettext_translations(None)
+        # A gettext set by hand is the one `_()` calls, installed or not
+        env.globals["gettext"] = lambda s: "hand:" + s
+        results.append(env.from_string("{{ _('a') }}").render())
+        results.append(env.from_string("{{ x }}").make_module({"x": 1}).__str__())
+        return results
+
+    assert run(jinja2cpp) == run(jinja2)
+
+
+def test_without_installed_translations_make_module_sees_no_gettext():
+    def run(module):
+        env = module.Environment(extensions=["jinja2.ext.i18n"])
+        try:
+            return str(env.from_string("{{ gettext('x') }}").make_module())
+        except module.UndefinedError as error:
+            return f"UndefinedError: {error}"
+
+    assert run(jinja2cpp) == run(jinja2) == "UndefinedError: 'gettext' is undefined"
 
 
 @pytest.mark.parametrize(

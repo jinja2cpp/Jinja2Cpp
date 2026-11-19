@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0354]
-touches: [python/jinja2cpp/ext.py, python/src/environment.cpp]
+touches: [python/src/environment.cpp, python/src/environment.h, python/src/template_module.cpp]
 shares: [python/tests/test_i18n.py, docs/python.md]
 ---
 # `_()` and `{% trans %}` work before translations are installed

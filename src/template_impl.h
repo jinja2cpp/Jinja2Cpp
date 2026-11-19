@@ -542,6 +542,7 @@ public:
         m_origin.source = &source;
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
+        m_origin.isNamed = isNamed;
         ResetMetadataCache();
         return std::optional<BasicErrorInfo<CharT>>();
     }
@@ -1437,9 +1438,23 @@ private:
             return *entry.latest;
         }
 
+        // A tag whose template has a join-path function (TemplateEnv::SetJoinPath, docs/tasks/0410): one load and one
+        // check without
+        [[nodiscard]] const LoadTemplateResult& LoadTemplateAt(const InternalValue& name, const ArenaView& from, const void* site) const override
+        {
+            const auto* join = m_host->m_settings->joinPath.get();
+            if (!join)
+            {
+                return LoadTemplate(name);
+            }
+            return LoadJoined(*join, name, from, site);
+        }
+        [[nodiscard]] const std::string* LastJoinedName() const override { return m_loaded && m_loaded->joinedName ? &*m_loaded->joinedName : nullptr; }
+
         [[nodiscard]] const LoadTemplateResult* FindLoadedBy(const void* site) const override
         {
-            if (!m_loaded)
+            // The function runs at every use of the tag
+            if (!m_loaded || m_host->m_settings->joinPath)
             {
                 return nullptr;
             }
@@ -1450,7 +1465,7 @@ private:
         void SetLoadedBy(const void* site, const LoadTemplateResult& tpl) const override
         {
             // With EveryUse a template changed during the render is seen by its next use
-            if (m_host->m_settings->settings.templateLookup == TemplateLookup::OncePerRender)
+            if (m_host->m_settings->settings.templateLookup == TemplateLookup::OncePerRender && !m_host->m_settings->joinPath)
             {
                 Loaded().bySite.emplace_back(site, &tpl);
             }
@@ -1879,6 +1894,8 @@ private:
             std::vector<std::pair<const void*, const LoadTemplateResult*>> bySite;
             // The modules the render imported, freed before the trees their macros run in
             std::vector<std::unique_ptr<ImportedModule>> modules;
+            // The name the last tag load joined (LoadJoined, docs/tasks/0410); empty when it joined none
+            std::optional<std::string> joinedName;
             // The modules imported without context, by the template they were made from. A
             // render imports few templates, so a list beats hashing
             std::vector<std::pair<const LoadTemplateResult*, ImportedModule*>> sharedModules;
@@ -1891,6 +1908,22 @@ private:
                 m_loaded = std::make_unique<LoadedTemplates>();
             }
             return *m_loaded;
+        }
+        // The name the tag in `from` is loaded by: the function's result for a name it was given. Names that are not
+        // strings, and tags of a template without a name, are loaded as written
+        JINJA2CPP_NOINLINE const LoadTemplateResult& LoadJoined(const JoinPathFunction& join, const InternalValue& name, const ArenaView& from, const void* /*site*/) const
+        {
+            auto& joined = Loaded().joinedName;
+            joined.reset();
+            const auto* origin = from.Origin();
+            auto text = GetAsSameString(std::string(), name);
+            if (!origin || !origin->name || !origin->isNamed || !text)
+            {
+                return LoadTemplate(name);
+            }
+            // Before the load registers anything: what the function throws leaves the render as it was
+            joined = join(text.value(), *origin->name);
+            return LoadTemplate(*joined);
         }
         mutable std::unique_ptr<LoadedTemplates> m_loaded;
         // SetKeeper's: null but for a render nested in another one that shares its globals

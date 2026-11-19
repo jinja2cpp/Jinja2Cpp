@@ -3,8 +3,8 @@ status: open
 priority: medium
 area: parity
 depends: [0457]
-touches: [python/jinja2cpp/environment.py, python/src/environment.cpp]
-shares: [python/tests/test_generate.py, docs/python.md]
+touches: [python/jinja2cpp/environment.py, python/tests/requirements.txt, sbom/components.json, .github/workflows/python.yml]
+shares: [python/tests/test_generate.py, docs/python.md, sbom/jinja2cpp-full.cdx.json, sbom/jinja2cpp-full.spdx.json]
 ---
 # Lazy async iteration of a render, for Starlette and FastAPI streaming
 

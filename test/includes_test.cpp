@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -336,4 +337,132 @@ TEST_F(IncludeTest, TestChoiceIncludesFromHostList)
     const auto* tried = std::get_if<jinja2::GenericList>(&result.error().GetExtraParams().at(0).GetData());
     ASSERT_NE(nullptr, tried);
     EXPECT_EQ(2ULL, tried->GetSize().value());
+}
+
+// The tags call the environment's join-path function with the name of the template whose source holds them, and
+// load what it returns, as Python's Environment.join_path does (docs/tasks/0410)
+TEST_F(IncludeTest, JoinPathResolvesTagNames)
+{
+    std::vector<std::string> calls;
+    m_env.SetJoinPath([&calls](const std::string& name, const std::string& parent) {
+        calls.push_back(name + "@" + parent);
+        if (name.compare(0, 2, "./") != 0)
+        {
+            return name;
+        }
+        return parent.substr(0, parent.rfind('/') + 1) + name.substr(2);
+    });
+    AddFile("a/x", "AX");
+    AddFile("b/x", "BX");
+    AddFile("a/y", "AY");
+    AddFile("c/y", "CY");
+    AddFile("c/z", "CZ");
+    AddFile("a/mac", "{% macro f() %}{% include './x' %}{% endmacro %}{% macro g() %}[{{ caller() }}]{% endmacro %}{% set v = 'V' %}");
+    AddFile("b/base", "{% include './x' %}{% block c %}{% endblock %}");
+    AddFile("a/p", "{% include './x' %}");
+    AddFile("b/p", "{% include './x' %}");
+
+    auto renderNamed = [this](const std::string& name) {
+        auto tpl = m_env.LoadTemplate(name);
+        EXPECT_TRUE(tpl.has_value());
+        if (!tpl)
+        {
+            return std::string();
+        }
+        auto result = tpl.value().RenderAsString({});
+        EXPECT_TRUE(result.has_value());
+        return result ? result.value() : std::string();
+    };
+    auto expectCalls = [&calls](const std::vector<std::string>& expected) {
+        EXPECT_EQ(expected, calls);
+        calls.clear();
+    };
+
+    AddFile("a/main", "{% include './x' %}");
+    EXPECT_EQ("AX", renderNamed("a/main"));
+    expectCalls({ "./x@a/main" });
+
+    AddFile("a/imp", "{% import './mac' as m %}{{ m.v }}{% from './mac' import v as w %}{{ w }}");
+    EXPECT_EQ("VV", renderNamed("a/imp"));
+    expectCalls({ "./mac@a/imp", "./mac@a/imp" });
+
+    AddFile("a/child", "{% extends './base0' %}{% block c %}{% include './y' %}{% endblock %}");
+    AddFile("a/base0", "<{% block c %}{% endblock %}>");
+    EXPECT_EQ("<AY>", renderNamed("a/child"));
+    expectCalls({ "./base0@a/child", "./y@a/child" });
+
+    AddFile("a/list", "{% include ['./none', './x'] %}");
+    EXPECT_EQ("AX", renderNamed("a/list"));
+    expectCalls({ "./none@a/list", "./x@a/list" });
+
+    // The template of the macro, not of the caller
+    AddFile("c/main", "{% import 'a/mac' as m %}{{ m.f() }}");
+    EXPECT_EQ("AX", renderNamed("c/main"));
+    expectCalls({ "a/mac@c/main", "./x@a/mac" });
+
+    // The calling template for the body of a call block
+    AddFile("c/call", "{% import 'a/mac' as m %}{% call m.g() %}{% include './y' %}{% endcall %}");
+    EXPECT_EQ("[CY]", renderNamed("c/call"));
+    expectCalls({ "a/mac@c/call", "./y@c/call" });
+
+    // The base's own tag is joined with the base's name, a block of the child with the child's
+    AddFile("c/child", "{% extends 'b/base' %}{% block c %}{% include './z' %}{% endblock %}");
+    EXPECT_EQ("BXCZ", renderNamed("c/child"));
+    expectCalls({ "b/base@c/child", "./x@b/base", "./z@c/child" });
+
+    AddFile("c/loop", "{% for i in range(2) %}{% include './z' %}{% endfor %}");
+    EXPECT_EQ("CZCZ", renderNamed("c/loop"));
+    expectCalls({ "./z@c/loop", "./z@c/loop" });
+
+    // The joined name is the cache key: two templates with the same tag name load different files
+    AddFile("c/keys", "{% include 'a/p' %}{% include 'b/p' %}");
+    EXPECT_EQ("AXBX", renderNamed("c/keys"));
+    expectCalls({ "a/p@c/keys", "./x@a/p", "b/p@c/keys", "./x@b/p" });
+
+    // A single name that is not found is reported joined
+    AddFile("a/miss", "{% include './nope' %}");
+    auto miss = m_env.LoadTemplate("a/miss");
+    ASSERT_TRUE(miss.has_value());
+    auto missResult = miss.value().RenderAsString({});
+    ASSERT_FALSE(missResult.has_value());
+    EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, missResult.error().GetCode());
+    const auto* tried = std::get_if<jinja2::GenericList>(&missResult.error().GetExtraParams().at(0).GetData());
+    ASSERT_NE(nullptr, tried);
+    EXPECT_EQ("a/nope", (*tried->begin()).AsString());
+    calls.clear();
+
+    // A template without a name is not joined
+    EXPECT_EQ("AX", Render("{% include 'a/x' %}"));
+    expectCalls({});
+
+    // An exception of the function fails the render
+    m_env.SetJoinPath([](const std::string&, const std::string&) -> std::string { throw std::runtime_error("no join"); });
+    // A template cached before keeps the function it was loaded with
+    AddFile("a/main2", "{% include './x' %}");
+    auto thrown = m_env.LoadTemplate("a/main2");
+    ASSERT_TRUE(thrown.has_value());
+    EXPECT_FALSE(thrown.value().RenderAsString({}).has_value());
+
+    // Without a function the names load as written
+    m_env.SetJoinPath({});
+    AddFile("./x", "PLAIN");
+    AddFile("a/main3", "{% include './x' %}");
+    EXPECT_EQ("PLAIN", renderNamed("a/main3"));
+}
+
+TEST_F(IncludeTest, JoinPathWideTemplate)
+{
+    std::vector<std::string> calls;
+    m_env.SetJoinPath([&calls](const std::string& name, const std::string& parent) {
+        calls.push_back(name + "@" + parent);
+        return "a/" + name;
+    });
+    AddFile("a/x", "AX");
+    AddFile("w/main", "{% include 'x' %}");
+    auto tpl = m_env.LoadTemplateW("w/main");
+    ASSERT_TRUE(tpl.has_value());
+    auto result = tpl.value().RenderAsString({});
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(L"AX", result.value());
+    EXPECT_EQ((std::vector<std::string>{ "x@w/main" }), calls);
 }

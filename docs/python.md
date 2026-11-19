@@ -116,8 +116,13 @@ engines on a Release build of the module.
 - Subclasses of `Environment` and `Template` in Python, as in Jinja2: an `__init__` that
   forwards its keyword arguments, attributes of any name, and `env.template_class` (the class
   `from_string`, `get_template` and `select_template` make; a subclass of `jinja2cpp.Template`).
-  `get_template(name, parent=...)` and `select_template` call `env.join_path`, which a subclass
-  may override.
+  `get_template(name, parent=...)`, `select_template` and the tags `include`, `import`, `from` and
+  `extends` call `env.join_path(name, parent)` (the tags with the name of the template whose source holds
+  them, not for a template from `from_string`), which a subclass may override; the joined name is what
+  is loaded and cached (0410). The engine learns of an override when a template loads: a `join_path`
+  assigned or overridden after a load applies to the templates loaded after it, and a template loaded
+  earlier keeps loading names as written. An exception of `join_path` fails the render with it, also
+  a `TemplateNotFound` that Jinja2 would skip for `ignore missing` or a name of a list.
 - `env.select_template`, `env.get_or_select_template`, `env.list_templates(extensions=None,
   filter_func=None)` and `env.join_path`.
 - `template.generate()` and `template.stream()` with `TemplateStream` (`dump`,
@@ -181,6 +186,8 @@ engines on a Release build of the module.
   (`TemplateEnv::InstallGettextCallables`); oldstyle, Jinja2's default, installs the callables
   themselves as the four globals, and a `{% trans %}` block loaded while `newstyle_gettext` is off
   formats their result in the engine (`Settings::Extensions::i18nNewstyle`), as Jinja2 does.
+  Before an install and after `uninstall_gettext_translations` the four globals are undefined, as in
+  Jinja2: `_()` and `{% trans %}` raise `UndefinedError` (0417).
 - The sandbox: `jinja2cpp.sandbox` with `SandboxedEnvironment`, `ImmutableSandboxedEnvironment`,
   `SecurityError`, `is_internal_attribute`, `modifies_known_mutable`, `unsafe`, `safe_range`,
   `MAX_RANGE` and the `UNSAFE_*` sets, ported from Jinja2 3.1.6 (see "Sandbox" below).
@@ -221,7 +228,7 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 | Feature | What happens |
 |---|---|
 | A custom `Extension` class (not `do`, `loopcontrols`, `i18n`), a dotted name of one | the environment is a Jinja2 environment |
-| `enable_async=True`, `render_async`, `generate_async` | the environment is a Jinja2 environment; on a native template `render_async` is Jinja2's (it raises as Jinja2 does without `enable_async`) |
+| `enable_async=True`, `render_async`, `generate_async` | the environment is a Jinja2 environment; on a native template `render_async` is Jinja2's (it raises as Jinja2 does without `enable_async`), and `generate_async` streams the engine's lazy render (Differences, 0461) |
 | `context_class`, `code_generator_class` of your own on an `Environment` subclass | the environment is a Jinja2 environment |
 | `env.policies` with a key Jinja2C++ has no equivalent for or a changed value (it has none) | the templates loaded from then on are Jinja2's |
 | `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
@@ -467,10 +474,6 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `env.filters` at each render: a template loaded before `env.filters['f']` is replaced keeps
   calling the old `f`. The environment lets go of a replaced one once the templates loaded with
   it go (0406); a load after a filter or test is replaced or removed reads the loader again.
-- `{% include %}`, `{% import %}`, `{% from %}` and `{% extends %}` read the loader through the
-  engine, not through `env.get_template(name, parent=...)`, so an overridden `join_path` is not
-  called for them (Jinja2 calls it with the including template's name); `get_template` and
-  `select_template` call it (0410).
 - An exported macro of `make_module` and `module` has `name`, `arguments`, `catch_kwargs`, `catch_varargs` and
   `caller` as Jinja2's `Macro` has them (0434).
 - `make_module` and `module` give the exports as Python values the host API can carry: a
@@ -486,9 +489,13 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - A `generate()` generator renders on the thread of its first `next()`: `next()` on another thread
   raises `RuntimeError`, which ends the generator, where Jinja2 goes on there (0457 D2). To hand a
   render to another thread (Starlette's or FastAPI's `StreamingResponse` over a sync iterator calls
-  `next()` in a thread pool), `render()` the template or pass `list(t.generate())`; a lazy async iterator
-  is task 0461. A generator closed or collected on another thread, or after the interpreter began to
+  `next()` in a thread pool), stream `t.generate_async()` instead, or `render()` the template. A generator closed or collected on another thread, or after the interpreter began to
   exit, is not resumed: its render stops where it was, and what it held is not released.
+- `generate_async()` of a native template is `generate()` as an async iterator: each item renders when the
+  event loop's thread asks for it, so `StreamingResponse(t.generate_async(...))` streams (0461). Jinja2
+  allows it only with `enable_async=True` and raises `RuntimeError` without; here `enable_async=True`
+  makes the environment Jinja2's, whose `generate_async` awaits what callables return. A native
+  template's does not await them, as Jinja2 without async mode. `render_async` stays Jinja2's.
 - A reference cycle through a suspended generator is collected, as Jinja2's is, when it runs
   through the generator's arguments or the globals of its render (a param that refers back to the
   generator, 0462); one through a value the template made from them while it runs (`{% set y = x.y %}`
@@ -513,10 +520,6 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   arguments, the globals and the template's top-level names; its `vars` and `parent` both hold
   all of them (0416). `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and
   `exported_vars` (empty) are not there.
-- Without installed translations (and after `uninstall_gettext_translations`) the engine's
-  `_()` and `{% trans %}` render the message untranslated; Jinja2 raises `UndefinedError`
-  because it has no `gettext` global yet (0417). A `gettext` set in `env.globals` replaces the
-  installed one in both.
 - Sandbox (0412, 0413, 0414): `intercepted_binops` and `intercepted_unops` raise
   `UnsupportedError` (Jinja2's `test_binary_operator_intercepting` and
   `test_unary_operator_intercepting` are `xfail`). A public name of the engine's own values

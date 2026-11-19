@@ -264,9 +264,17 @@ class Template(_jinja2cpp.Template):
         """Jinja2's ``render_async`` (it needs ``enable_async=True``)."""
         return _mapped_await(fallback.jinja2_template_of(self, "Template.render_async").render_async(*args, **kwargs))
 
-    def generate_async(self, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        """Jinja2's ``generate_async`` (it needs ``enable_async=True``)."""
-        return _mapped_aiter(fallback.jinja2_template_of(self, "Template.generate_async").generate_async(*args, **kwargs))
+    async def generate_async(self, *args: t.Any, **kwargs: t.Any) -> t.AsyncIterator[str]:
+        """``generate`` as an async iterator (docs/tasks/0461): each item renders when the event loop asks for it,
+        on the loop's thread, so that ``StreamingResponse(t.generate_async(...))`` streams. Jinja2 allows it only with
+        ``enable_async=True``, which here hands the environment to Jinja2; as in Jinja2 without async mode, what a
+        callable returns is not awaited."""
+        items = self.generate(*args, **kwargs)
+        try:
+            for item in items:
+                yield item
+        finally:
+            items.close()
 
     def __repr__(self) -> str:
         if self.name is None:
@@ -296,6 +304,11 @@ class FallbackTemplate:
         fallback._count("renders_fallback")
         with fallback.mapped():
             yield from self._jinja2_template.generate(*args, **kwargs)
+
+    def generate_async(self, *args: t.Any, **kwargs: t.Any) -> t.AsyncIterator[str]:
+        # Jinja2's, which needs enable_async=True as in Jinja2
+        fallback._count("renders_fallback")
+        return _mapped_aiter(self._jinja2_template.generate_async(*args, **kwargs))
 
     def make_module(self, vars: t.Optional[t.Dict[str, t.Any]] = None, shared: bool = False, locals: t.Optional[t.Mapping[str, t.Any]] = None) -> t.Any:
         with fallback.mapped():
@@ -715,6 +728,10 @@ class Environment(_jinja2cpp.Environment):
     def join_path(self, template: str, parent: str) -> str:
         """Join a template with the parent. By default all the lookups are relative to the loader root, so this is a noop; override it to change that."""
         return template
+
+    def _join_path_overridden(self) -> bool:
+        """Whether a subclass or this instance replaces join_path: the engine then calls it for the tags that load templates."""
+        return type(self).join_path is not Environment.join_path or "join_path" in getattr(self, "__dict__", ())
 
     def _load_template(self, name: t.Any, globals: t.Optional[t.Mapping[str, t.Any]]) -> Template:
         if self._uses_jinja2() and isinstance(name, str):

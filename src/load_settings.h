@@ -106,7 +106,8 @@ struct LoadSettings
     explicit LoadSettings(const Settings& setts,
                           const BigIntBackend* backend = nullptr,
                           Dialect templateDialect = Dialect::Jinja2,
-                          std::shared_ptr<const std::vector<std::string>> safeParams = nullptr)
+                          std::shared_ptr<const std::vector<std::string>> safeParams = nullptr,
+                          std::shared_ptr<const JoinPathFunction> joinPathFn = nullptr)
         : settings(setts)
         , narrow(setts)
         , wide(setts)
@@ -121,6 +122,7 @@ struct LoadSettings
         , sandboxPolicy(setts.sandboxPolicy ? MakeEngineSandboxPolicy(setts.sandboxPolicy) : nullptr)
         , promptEscaper(AutoescapePromptEscaper(settings))
         , promptSafeParams(std::move(safeParams))
+        , joinPath(std::move(joinPathFn))
     {
     }
 
@@ -160,6 +162,8 @@ struct LoadSettings
     // The params whose strings a render marks prompt-safe (ChatTemplateOptions::promptSafeParams, docs/tasks/0394), as
     // the environment set them: null for none. Marked only in prompt mode (promptEscaper set)
     std::shared_ptr<const std::vector<std::string>> promptSafeParams;
+    // TemplateEnv::SetJoinPath's function, null for none (docs/tasks/0410)
+    std::shared_ptr<const JoinPathFunction> joinPath;
 
     // The names a render marks: none outside prompt mode
     [[nodiscard]] const std::vector<std::string>* PromptSafeParamsToMark() const noexcept { return promptEscaper ? promptSafeParams.get() : nullptr; }

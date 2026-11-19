@@ -34,6 +34,9 @@ class TemplateEnvImpl;
 struct TemplateEnvAccess;
 } // namespace detail
 
+//! The function of \ref TemplateEnv::SetJoinPath
+using JoinPathFunction = std::function<std::string(const std::string& name, const std::string& parent)>;
+
 //! What a template may do with an undefined value: a missing variable, attribute or item (Jinja2 `undefined`)
 enum class UndefinedPolicy
 {
@@ -368,6 +371,22 @@ public:
     bool SetBigIntBackend(const BigIntBackend* backend) noexcept;
     //! The backend set by \ref SetBigIntBackend, or the built-in one
     [[nodiscard]] const BigIntBackend* GetBigIntBackend() const noexcept;
+
+    /*!
+     * \brief Set the function that maps the name an `include`, `import`, `from` or `extends` tag names to the name
+     * that is loaded, as Python Jinja2's `Environment.join_path(name, parent)` does
+     *
+     * `parent` is the as-loaded name of the template whose source holds the tag: the template of a macro for a tag in
+     * its body, the template that wrote a block for a tag in the block, the calling template for a tag in a `call`
+     * body. The function is not called for a template without a name (one made from a string) or for a name that is
+     * not a string; those names are loaded as written. It is called on the rendering thread at every use of the tag
+     * (for each name of a list). An exception it throws fails the render with it. The result is loaded as
+     * \ref LoadTemplate loads a name (the same filesystem handler checks) and is the cache key of the render and of the
+     * environment; a missing template of a single name is reported by the joined name.
+     * A template uses the function its environment had when the template was made, as it does the settings.
+     * An empty function loads names as written. The method is thread-unsafe, as \ref SetSettings is.
+     */
+    void SetJoinPath(JoinPathFunction joinPath);
 
     /*!
      * \brief Add pointer to file system handler with the specified prefix

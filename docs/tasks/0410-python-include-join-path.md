@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0354]
-touches: [python/src/loaders.cpp, python/src/environment.cpp#LoadTemplate, python/jinja2cpp/environment.py]
+touches: [include/jinja2cpp/template_env.h, src/load_settings.h, src/render_context.h, src/template_env.cpp, src/template_env_impl.h, src/template_impl.h, src/render_failure.h, src/statements.cpp, python/src/environment.cpp, python/src/environment.h, python/jinja2cpp/environment.py]
 shares: [python/tests/test_environment_api.py, docs/python.md]
 ---
 # `include`, `import` and `extends` do not call `env.join_path`
@@ -27,3 +27,12 @@ the engine's loader path, so that the cache key is the joined name as in Jinja2.
 
 **Done when** the pytest case compares an overriding subclass's `include`, `import`, `from` and
 `extends` with Jinja2's, and the docs/python.md difference is removed.
+
+**Decision (2026-11-19, batch 10 D).** The module includes only public headers, so the private callback of the
+proposal cannot reach it: the hook is the additive public `TemplateEnv::SetJoinPath(JoinPathFunction)`, stored in
+the environment's load settings (no new `Settings` field, no public struct changes size), and called through
+`IRendererCallback::LoadTemplateAt` by the four tags with the as-loaded name of the template whose tree holds the
+tag (`ArenaView::Origin`). Without a function a tag pays one load and one check. Left as documented
+differences: a `TemplateNotFound` raised by `join_path` fails `ignore missing` and lists, where Jinja2 skips the
+name, and a name that is not a string is not joined.
+

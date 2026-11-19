@@ -122,6 +122,12 @@ struct IRendererCallback : IComparable
     // until it ends, so the reference stays valid for the rest of the render (docs/tasks/0105)
     [[nodiscard]] virtual const LoadTemplateResult& LoadTemplate(const std::string& fileName) const = 0;
     [[nodiscard]] virtual const LoadTemplateResult& LoadTemplate(const InternalValue& fileName) const = 0;
+    // The template an `include`, `import`, `from` or `extends` tag in the tree `from` names, loaded as LoadTemplate loads
+    // it, but joined with the name of the template `from` belongs to first when the environment has a join-path
+    // function (TemplateEnv::SetJoinPath, docs/tasks/0410). `site` is the statement
+    [[nodiscard]] virtual const LoadTemplateResult& LoadTemplateAt(const InternalValue& name, const ArenaView& /*from*/, const void* /*site*/) const { return LoadTemplate(name); }
+    // The name the last LoadTemplateAt joined, null when it joined none
+    [[nodiscard]] virtual const std::string* LastJoinedName() const { return nullptr; }
     // What the statement `site`, whose template name is a constant, loaded earlier in this
     // render, so that it does not look the name up again (docs/tasks/0154); null before its
     // first use, and always with TemplateLookup::EveryUse, where each use looks it up
