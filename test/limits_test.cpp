@@ -966,7 +966,8 @@ TEST_F(LimitsEnvTest, GivenBackTreesCreditOnlyTheirCharge)
 }
 
 // 0539: a closure that reads a name, or a recursive `loop`, stored by each nested render and dropped by the next, keeps
-// its tree no longer than something holds it: with no budget at most a few trees are live, and 1 MiB holds the loop
+// its tree no longer than something holds it: with no budget at most a few trees are live, and a budget of a few
+// trees holds the loop
 TEST_F(LimitsEnvTest, DroppedNestedClosuresGiveTheirTreesBack)
 {
     const std::string pop = "{% if g %}{% set _ = g.pop() %}{% endif %}";
@@ -986,7 +987,10 @@ TEST_F(LimitsEnvTest, DroppedNestedClosuresGiveTheirTreesBack)
         auto result = RenderNestedLoads<char>(m_env, "{% for i in range(2000) %}{{ inner() }}{% endfor %}", 0, false, false, probe, {}, body);
         ASSERT_TRUE(result.has_value()) << result.error().ToString();
         EXPECT_LE(maxLive, 4U) << body.substr(0, 80);
-        auto budgeted = RenderNestedLoads<char>(m_env, "{% for i in range(2000) %}{{ inner() }}{% endfor %}", std::uint64_t{ 1 } << 20, false, false, {}, {}, body);
+        // A few live trees of the 32 KB template take about 1 MiB in an MSVC Debug build: 4 MiB holds them there too,
+        // where the 64 kept before 0539 do not
+        const std::uint64_t budget = body.size() > 10000 ? std::uint64_t{ 4 } << 20 : std::uint64_t{ 1 } << 20;
+        auto budgeted = RenderNestedLoads<char>(m_env, "{% for i in range(2000) %}{{ inner() }}{% endfor %}", budget, false, false, {}, {}, body);
         EXPECT_TRUE(budgeted.has_value()) << body.substr(0, 80) << ": " << (budgeted ? std::string() : budgeted.error().ToString());
     }
 }
