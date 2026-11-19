@@ -22,6 +22,7 @@
 #include "value_visitors.h"
 
 #include <fmt/format.h>
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/markup.h>
 
 #include <algorithm>
@@ -32,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
