@@ -1524,7 +1524,7 @@ void ForStatement::RenderElse(OutStream& os, RenderContext& values)
 void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
 {
     bool isConverted = false;
-    auto loopItems = ConvertToList(loopVal, isConverted, false);
+    auto loopItems = ConvertToLoopList(loopVal, isConverted);
     if (!isConverted)
     {
         CheckIterable(loopVal);
@@ -1696,7 +1696,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     values.BindSlot(slots[0], names[0].hash, MapAdapter(&state->accessor, ValueObjectPtr(state)));
 
     bool isConverted = false;
-    auto loopItems = ConvertToList(loopVal, isConverted, false);
+    auto loopItems = ConvertToLoopList(loopVal, isConverted);
     if (!isConverted)
     {
         CheckIterable(loopVal);

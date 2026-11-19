@@ -2458,6 +2458,8 @@ inline bool IsHiddenCallSlot(const MapRef& map, std::string_view name)
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
+// What a `for` loop walks: ConvertToList(val, isConverted, false), but a dict the template owns as a live keys view
+ListAdapter ConvertToLoopList(const InternalValue& val, bool& isConverted);
 
 // Containers of values (lists, call arguments, slots) move them when they grow only if the
 // move cannot throw; otherwise they copy every item (docs/tasks/0140)

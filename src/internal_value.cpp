@@ -1239,6 +1239,22 @@ ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool stri
     return *result;
 }
 
+ListAdapter ConvertToLoopList(const InternalValue& val, bool& isConverted)
+{
+    // A dict the template owns is walked through a keys view, live as Python's dict iterator (docs/tasks/0538); an
+    // object stored as a map (namespace()) or one with an iteration of its own (`loop`) converts as before
+    if (const auto map = AsMap(val); map && map->GetMutableItems() && !map->GetObjectClass())
+    {
+        isConverted = true;
+        if (ListAdapter items; map->GetIteration(items))
+        {
+            return items;
+        }
+        return ListAdapter::CreateDictView(val, IteratorKind::DictKeys);
+    }
+    return ConvertToList(val, isConverted, false);
+}
+
 template<typename T>
 class ByRef
 {
@@ -3313,9 +3329,9 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
 
 // The view dict.keys(), values() or items() returns: it keeps its dict (docs/tasks/0496) and reads
 // it live, as Python's does (0523), so that a view taken before a change sees the change. A walk
-// takes the items when it starts and, as Python's, fails at the next step once the dict's size
-// changed; a dict can lose and gain entries while it is walked, so the walk never holds a
-// position in it
+// (DictViewEnumerator) reads the dict live too and, as Python's, fails at the next step once the
+// dict's size changed; a dict can lose and gain entries while it is walked, so the walk holds the
+// token of its entry rather than a position in the dict
 class DictView final : public IListAccessor
 {
 public:
@@ -3373,6 +3389,12 @@ public:
         const auto map = AsMap(m_mapping);
         return map ? map->GetSize() : 0;
     }
+    // The dict the template owns that the view reads, or null for a host mapping
+    [[nodiscard]] const TemplateDict* OwnDict() const
+    {
+        const auto map = AsMap(m_mapping);
+        return map ? map->GetMutableItems() : nullptr;
+    }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override { return LiveSize(); }
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
@@ -3415,7 +3437,12 @@ private:
     InternalValue m_mapping;
 };
 
-// A walk of a DictView: the items it had when the walk started
+// A walk of a DictView. Over a dict the template owns it reads the dict live, as Python's dict iterator does
+// (docs/tasks/0538): each step finds the entry it stopped at again by its token and goes on from it, so a value
+// changed under a key, and a key added while it walks, are seen. Python fails a step once the dict's size changed,
+// and once it finds an entry after it has given as many as the dict had when the walk started (keys replaced); an
+// entry it stopped at that was erased (or erased and added again) leaves no position to go on from, and fails the
+// same way. A host mapping cannot change during a render: its items are read when the walk starts
 class DictViewEnumerator final : public IListAccessorEnumerator
 {
 public:
@@ -3424,30 +3451,63 @@ public:
     {
     }
 
-    void Reset() override { m_pos = InvalidPos; }
+    void Reset() override
+    {
+        m_pos = InvalidPos;
+        m_current = InternalValue();
+    }
     bool MoveNext() override
     {
         if (!m_view)
         {
             return false;
         }
+        const auto* dict = m_view->OwnDict();
         if (m_pos == InvalidPos)
         {
-            m_items = m_view->Items();
             m_startSize = m_view->LiveSize();
             m_pos = 0;
-        }
-        else
-        {
-            if (m_view->LiveSize() != m_startSize)
+            m_done = false;
+            m_live = dict != nullptr;
+            if (!dict)
             {
-                throw TemplateRuntimeError("dictionary changed size during iteration");
+                m_items = m_view->Items();
+                m_done = m_items.empty();
+                return !m_done;
             }
-            ++m_pos;
+            return Take(*dict, dict->Items().begin());
         }
-        return m_pos < m_items.size();
+        if (m_done)
+        {
+            return false;
+        }
+        if (m_view->LiveSize() != m_startSize)
+        {
+            throw TemplateRuntimeError("dictionary changed size during iteration");
+        }
+        if (!dict)
+        {
+            ++m_pos;
+            m_done = m_pos >= m_items.size();
+            return !m_done;
+        }
+        const auto& entries = dict->Items();
+        const auto at = entries.find(m_token);
+        if (at == entries.end() || NodeId(*at) != m_node)
+        {
+            throw TemplateRuntimeError("dictionary keys changed during iteration");
+        }
+        ++m_pos;
+        return Take(*dict, std::next(at));
     }
-    [[nodiscard]] InternalValue GetCurrent() const override { return m_pos < m_items.size() ? m_items[m_pos] : InternalValue(); }
+    [[nodiscard]] InternalValue GetCurrent() const override
+    {
+        if (m_live)
+        {
+            return m_current;
+        }
+        return m_pos < m_items.size() ? m_items[m_pos] : InternalValue();
+    }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
     {
         return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<DictViewEnumerator>{}, *this);
@@ -3461,7 +3521,7 @@ public:
     }
     bool Rebind(const IListAccessor* list) override
     {
-        // Another view, or none: the items of the last walk go, their buffer stays
+        // Another view, or none: the items of the last walk go, their buffers stay
         const auto* view = dynamic_cast<const DictView*>(list);
         if (list && !view)
         {
@@ -3470,6 +3530,8 @@ public:
         m_view = view;
         m_pos = InvalidPos;
         m_items.clear();
+        m_token.clear();
+        m_current = InternalValue();
         return true;
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -3481,10 +3543,42 @@ public:
 private:
     static constexpr size_t InvalidPos = std::numeric_limits<size_t>::max();
 
+    // The entry's address, kept as a number: it tells whether the entry found by the token is the one the walk
+    // stopped at, and is never used to reach an entry
+    static std::uintptr_t NodeId(const InternalDict::value_type& entry) noexcept { return reinterpret_cast<std::uintptr_t>(&entry); } // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+
+    // Stops at `at`, or ends the walk at the end of the dict. Python gives at most as many entries as the dict had
+    // when the walk started, and fails when it finds one more (a key replaced by another)
+    bool Take(const TemplateDict& dict, InternalDict::const_iterator at)
+    {
+        if (at == dict.Items().end())
+        {
+            m_current = InternalValue();
+            m_done = true;
+            return false;
+        }
+        if (m_pos >= m_startSize)
+        {
+            throw TemplateRuntimeError("dictionary keys changed during iteration");
+        }
+        m_token = at->first;
+        m_node = NodeId(*at);
+        m_current = m_view->Item(dict.KeyOf(at->first), at->second);
+        return true;
+    }
+
     const DictView* m_view;
+    // A host mapping's items, read when the walk started
     InternalValueList m_items;
+    // The entry of a template's dict the walk stopped at: its token, its address and its item
+    std::string m_token;
+    std::uintptr_t m_node = 0;
+    InternalValue m_current;
     size_t m_startSize = 0;
+    // The number of entries given before the current one
     size_t m_pos = InvalidPos;
+    bool m_live = false;
+    bool m_done = false;
 };
 
 std::optional<ListAccessorEnumeratorPtr> DictView::CreateListAccessorEnumerator() const
