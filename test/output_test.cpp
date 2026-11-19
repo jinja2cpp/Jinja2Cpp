@@ -416,6 +416,39 @@ TEST(OutputTest, SinkGetsThePiecesBeforeAFailingConstant)
     EXPECT_EQ(sink.chunks, (std::vector<std::string>{ "abc" }));
 }
 
+TEST(OutputTest, PiecesEvaluateAFoldedConstantOnce)
+{
+    // docs/tasks/0505, Codex on #955: asking whether a constant folds evaluates it, and its output writes that
+    // value, so a render that writes each piece takes no more steps (Settings::Limits::maxRenderSteps) than one
+    // that does not
+    const std::string source = "{% for i in [1, 2, 3, 4, 5, 6, 7, 8] %}a{{ [1, 2] | sum }}b{{ 'x' ~ 1 if true }}{% endfor %}";
+    auto minSteps = [](const auto& text, bool eachPiece) {
+        for (std::uint64_t steps = 1; steps != 5000; ++steps)
+        {
+            TemplateEnv env;
+            env.GetSettings().limits.maxRenderSteps = steps;
+            using Tpl = std::conditional_t<std::is_same_v<std::decay_t<decltype(text)>, std::string>, Template, TemplateW>;
+            using CharT = typename std::decay_t<decltype(text)>::value_type;
+            Tpl tpl(&env);
+            EXPECT_TRUE(tpl.Load(text));
+            RecordingSink<CharT> sink;
+            sink.eachPiece = eachPiece;
+            RenderOptions options;
+            options.writeEachPiece = eachPiece;
+            if (tpl.RenderTo(sink, {}, options))
+            {
+                return steps;
+            }
+        }
+        return std::uint64_t{ 0 };
+    };
+    const auto plain = minSteps(source, false);
+    ASSERT_NE(plain, 0U);
+    EXPECT_EQ(minSteps(source, true), plain);
+    const std::wstring wide(source.begin(), source.end());
+    EXPECT_EQ(minSteps(wide, true), minSteps(wide, false));
+}
+
 // Records each piece with whether the render said it is Markup (RenderOptions::pieceIsMarkup)
 template<typename CharT>
 class MarkupRecordingSink final : public BasicOutputSink<CharT>

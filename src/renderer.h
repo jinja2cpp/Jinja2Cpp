@@ -420,7 +420,18 @@ public:
     // makes a folded value a StaticOutputRenderer, so what is left there does not fold
     [[nodiscard]] bool FoldsAt(RenderContext& values) const
     {
-        return !values.IsVolatileAutoescape() && OutputFoldsAt(values, m_expression, byChoice);
+        return !values.IsVolatileAutoescape() && OutputFoldsAt(values, m_expression, byChoice, this);
+    }
+
+    // The value FoldsAt evaluated, when it just asked; otherwise the expression renders itself
+    void Render(OutStream& os, RenderContext& values) override
+    {
+        if (auto value = values.TakeFoldedValue(this))
+        {
+            WriteOutput(os, *value, values);
+            return;
+        }
+        ExpressionRenderer::Render(os, values);
     }
 };
 using FoldedExpressionRenderer = FoldedOutputRenderer<false>;

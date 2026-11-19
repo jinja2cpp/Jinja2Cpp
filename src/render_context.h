@@ -1260,6 +1260,23 @@ public:
     // Sets every mode: a module's context, which its template's code runs in
     void ResetAutoescape(bool autoescape) { m_autoescapeModes = { autoescape, autoescape, autoescape, false }; }
     [[nodiscard]] bool IsVolatileAutoescape() const { return m_autoescapeModes.isVolatile; }
+    // The value a folded `{{ }}` (key: its renderer) was evaluated to when a render that writes each piece asked
+    // whether it folds (OutputFoldsAt), so that rendering it next writes that value instead of evaluating it again
+    void KeepFoldedValue(const void* key, InternalValue value)
+    {
+        m_foldedKey = key;
+        m_foldedValue = std::move(value);
+    }
+    // The value KeepFoldedValue kept for key, which it gives up; nullopt when it kept none for key
+    std::optional<InternalValue> TakeFoldedValue(const void* key)
+    {
+        if (m_foldedKey != key || !key)
+        {
+            return std::nullopt;
+        }
+        m_foldedKey = nullptr;
+        return std::exchange(m_foldedValue, InternalValue());
+    }
     // Makes this context the root of a new runtime autoescape setting: an included
     // template's, which Jinja2 renders in a new Context
     void NewEvalContext() { m_evalContext = NewEvalContextId(); }
@@ -1862,6 +1879,9 @@ private:
     // A scope left empty, kept for the next EnterScope; copies do not take it
     std::optional<InternalValueMap> m_spareScope;
     AutoescapeModes m_autoescapeModes;
+    // KeepFoldedValue: a copy does not take it
+    const void* m_foldedKey = nullptr;
+    InternalValue m_foldedValue;
     // Contexts with the same id share Jinja2's EvalContext (NewEvalContext)
     uint32_t m_evalContext{};
     static uint32_t NewEvalContextId()

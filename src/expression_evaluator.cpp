@@ -38,6 +38,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -279,7 +280,7 @@ std::optional<bool> TryFoldTruth(RenderContext& values, NodeRef<Expression> expr
 }
 } // namespace
 
-bool OutputFoldsAt(RenderContext& values, NodeRef<Expression> expr, bool byChoice)
+bool OutputFoldsAt(RenderContext& values, NodeRef<Expression> expr, bool byChoice, const void* key)
 {
     try
     {
@@ -287,16 +288,35 @@ bool OutputFoldsAt(RenderContext& values, NodeRef<Expression> expr, bool byChoic
         {
             return false;
         }
-        const auto value = values.Nodes()[expr].Evaluate(values);
-        if (!value.IsUndefined())
+        auto value = values.Nodes()[expr].Evaluate(values);
+        if (value.IsUndefined())
         {
-            return true;
+            if (const auto* info = GetUndefinedInfo(value); info && info->policy == UndefinedPolicy::Strict)
+            {
+                return false;
+            }
         }
-        if (const auto* info = GetUndefinedInfo(value))
-        {
-            return info->policy != UndefinedPolicy::Strict;
-        }
+        // The render writes this value next (FoldedOutputRenderer::Render)
+        values.KeepFoldedValue(key, std::move(value));
         return true;
+    }
+    // What fails the render whenever it happens, rather than what Jinja2's as_const turns into a run-time
+    // evaluation (FinalizedExpressionRenderer::TryFinalize)
+    catch (const detail::HostUnrecoverableError&)
+    {
+        throw;
+    }
+    catch (const std::bad_alloc&)
+    {
+        throw;
+    }
+    catch (const ResourceLimitError&)
+    {
+        throw;
+    }
+    catch (const RecursionLimitError&)
+    {
+        throw;
     }
     catch (const std::exception&)
     {
