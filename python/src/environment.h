@@ -22,6 +22,8 @@ namespace jinja2cpp_py
 // engine environment (BoundObjects), which the environment and every Template loaded from that engine
 // environment hold. tp_traverse reports them, so a cycle through a closure in env.filters or
 // env.globals is collected (0248 D4)
+struct JoinPathTarget;
+
 class PyEnvironment
 {
 public:
@@ -117,6 +119,9 @@ public:
 
 private:
     void Rebuild();
+    // Installs or removes the engine environment's join-path function as the environment's class (or instance)
+    // overrides join_path or not (docs/tasks/0410)
+    void SyncJoinPath();
     void SetLoader(nb::handle loader);
     void SetAutoescape(nb::handle value);
     void SetExtensions(nb::handle value);
@@ -177,6 +182,11 @@ private:
     std::shared_ptr<const jinja2::ValuesMap> m_engineGlobals;
     nb::object m_engineGlobalsBound = nb::none();
     bool m_cleared = false;
+    // The borrowed environment object the join-path function calls, nulled with the environment (Clear): shared with
+    // the functions of every engine environment made, which then leave names as they are
+    std::shared_ptr<JoinPathTarget> m_joinTarget;
+    // Whether m_env has the function
+    bool m_joinPathSet = false;
 };
 
 // A render that writes each of Jinja2's items to a sink (PyTemplate::RenderSuspended)

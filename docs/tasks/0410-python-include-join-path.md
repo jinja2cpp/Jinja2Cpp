@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0354]
-touches: [python/src/loaders.cpp, python/src/environment.cpp#LoadTemplate, python/jinja2cpp/environment.py]
+touches: [include/jinja2cpp/template_env.h, src/load_settings.h, src/render_context.h, src/template_env.cpp, src/template_env_impl.h, src/template_impl.h, src/render_failure.h, src/statements.cpp, python/src/environment.cpp, python/src/environment.h, python/jinja2cpp/environment.py]
 shares: [python/tests/test_environment_api.py, docs/python.md]
 ---
 # `include`, `import` and `extends` do not call `env.join_path`

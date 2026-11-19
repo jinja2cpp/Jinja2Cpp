@@ -114,19 +114,117 @@ def test_get_template_calls_join_path():
     assert seen[: len(seen) // 2] == seen[len(seen) // 2 :]
 
 
-def test_include_does_not_go_through_join_path():
-    # Jinja2 calls environment.get_template(name, parent=template name) for an include; the
-    # engine's include reads the loader directly (docs/python.md, known differences)
+JOIN_TEMPLATES = {
+    "a/main": "{% include './x' %}|{% import './mac' as m %}{{ m.f() }}|{% from './mac' import g %}{{ g() }}",
+    "a/x": "AX",
+    "a/y": "AY",
+    "a/mac": "{% macro f() %}{% include './y' %}{% endmacro %}{% macro g() %}G{% endmacro %}",
+    "a/child": "{% extends './base' %}{% block c %}{% include './y' %}{% endblock %}",
+    "a/base": "<{% block c %}{% endblock %}{% include './x' %}>",
+    "a/list": "{% include ['./none', './x'] %}{% include ['./none', './y'] ignore missing %}",
+    "a/loop": "{% for i in range(2) %}{% include './x' %}{% endfor %}",
+    "a/missing": "{% include './nope' %}",
+    "a/missing_list": "{% include ['./nope', './nope2'] %}",
+    "a/ignored": "[{% include './nope' ignore missing %}]",
+    "a/extends_missing": "{% extends './nope' %}",
+    "a/p": "{% include './x' %}",
+    "b/p": "{% include './x' %}",
+    "b/x": "BX",
+    "top": "{% include 'a/p' %}{% include 'b/p' %}",
+    "from_top": "{% include 'a/main' %}",
+    "caller": "{% import 'a/mac' as m %}{% call m.f() %}{% endcall %}{% include './x' ignore missing %}",
+}
+
+
+def join_env(module, calls, join=None):
+    def default_join(self, template, parent):
+        calls.append((template, parent))
+        if template.startswith("./"):
+            return parent.rsplit("/", 1)[0] + "/" + template[2:]
+        return template
+
+    class Env(module.Environment):
+        join_path = join or default_join
+
+    return Env(loader=module.DictLoader(JOIN_TEMPLATES))
+
+
+def run_join(module, name):
     calls = []
+    env = join_env(module, calls)
+    try:
+        result = env.get_template(name).render()
+    except Exception as error:  # noqa: BLE001 - compared by class and message
+        result = (type(error).__name__, str(error))
+    return result, calls
 
-    class Env(jinja2cpp.Environment):
-        def join_path(self, template, parent):
-            calls.append((template, parent))
-            return template
 
-    env = Env(loader=jinja2cpp.DictLoader({"page": "{% include 'part' %}", "part": "P"}))
-    assert env.get_template("page").render() == "P"
-    assert calls == []
+@pytest.mark.parametrize("name", sorted(JOIN_TEMPLATES))
+def test_tags_go_through_join_path(name):
+    assert run_join(jinja2cpp, name) == run_join(jinja2, name)
+
+
+def test_join_path_joined_name_is_the_cache_key():
+    result, calls = run_join(jinja2cpp, "top")
+    assert result == "AXBX"
+    assert calls == run_join(jinja2, "top")[1]
+
+
+def test_join_path_not_called_for_from_string():
+    for module in modules():
+        calls = []
+        env = join_env(module, calls)
+        assert env.from_string("{% include 'a/x' %}").render() == "AX"
+        assert calls == []
+
+
+def test_join_path_exception_propagates():
+    class Boom(Exception):
+        pass
+
+    def join(self, template, parent):
+        raise Boom(template)
+
+    outcomes = []
+    for module in modules():
+        env = join_env(module, [], join=join)
+        with pytest.raises(Boom) as info:
+            env.get_template("a/main").render()
+        outcomes.append(str(info.value))
+    assert outcomes[0] == outcomes[1]
+
+
+def test_join_path_template_not_found_raised_by_the_function():
+    results = []
+    for module in modules():
+
+        def join(self, template, parent, module=module):
+            raise module.TemplateNotFound(template)
+
+        env = join_env(module, [], join=join)
+        # Not `ignore missing` or a list: there Jinja2 skips the name, and the engine fails with the exception (docs/python.md)
+        for source in ("{% include './x' %}",):
+            try:
+                results.append(env.from_string(source).render())
+            except Exception as error:  # noqa: BLE001
+                results.append((type(error).__name__, str(error)))
+    assert results[0] == results[1]
+
+
+def test_join_path_that_loads_a_template():
+    def join(self, template, parent):
+        self.get_template("a/x")
+        return "a/" + template[2:] if template.startswith("./") else template
+
+    outputs = [join_env(module, [], join=join).get_template("top").render() for module in modules()]
+    assert outputs[0] == outputs[1]
+
+
+def test_join_path_set_on_the_instance():
+    for module in modules():
+        env = module.Environment(loader=module.DictLoader(JOIN_TEMPLATES))
+        env.join_path = lambda template, parent: "b/x" if template == "./x" else template
+        assert env.get_template("a/p").render() == "BX"
 
 
 def collect(module, call):

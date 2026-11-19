@@ -3291,7 +3291,7 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
     }
 
     auto name = values.Nodes()[m_templateExpr].Evaluate(values);
-    const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
+    const auto& tpl = values.GetRendererCallback()->LoadTemplateAt(name, values.Nodes(), this);
     auto& templates = values.GetRendererCallback()->Templates();
     frame->parent = VisitTemplateImpl<TemplateNode<TemplateRenderer>>(tpl, true, [&templates](const auto& tplPtr) {
         return TemplateNode<TemplateRenderer>{ templates.Add(tplPtr->Nodes()), tplPtr->GetRenderer() };
@@ -3512,13 +3512,13 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
             {
                 return true;
             }
-            rendered = doRender(callback->LoadTemplate(tryName));
+            rendered = doRender(callback->LoadTemplateAt(tryName, values.Nodes(), this));
             return !rendered;
         });
     }
     else
     {
-        const auto& tpl = callback->LoadTemplate(templateNames);
+        const auto& tpl = callback->LoadTemplateAt(templateNames, values.Nodes(), this);
         rendered = doRender(tpl);
         if (rendered && m_isConstant)
         {
@@ -3544,7 +3544,8 @@ void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(con
         }
         else
         {
-            files.push_back(templateNames);
+            const auto* joined = callback->LastJoinedName();
+            files.push_back(joined ? InternalValue(*joined) : templateNames);
             extraParams.push_back(IntValue2Value(ListAdapter::CreateAdapter(std::move(files))));
         }
 
@@ -3630,7 +3631,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 
     // Resolved on every render: the name may change between renders or loop iterations
     auto& callback = *values.GetRendererCallback();
-    const auto& tpl = callback.LoadTemplate(name);
+    const auto& tpl = callback.LoadTemplateAt(name, nodes, this);
     // Throws if the template failed to load
     if (!VisitTemplateImpl<bool>(tpl, true, [](const auto& /*tplPtr*/) { return true; }))
     {

@@ -729,6 +729,10 @@ class Environment(_jinja2cpp.Environment):
         """Join a template with the parent. By default all the lookups are relative to the loader root, so this is a noop; override it to change that."""
         return template
 
+    def _join_path_overridden(self) -> bool:
+        """Whether a subclass or this instance replaces join_path: the engine then calls it for the tags that load templates."""
+        return type(self).join_path is not Environment.join_path or "join_path" in getattr(self, "__dict__", ())
+
     def _load_template(self, name: t.Any, globals: t.Optional[t.Mapping[str, t.Any]]) -> Template:
         if self._uses_jinja2() and isinstance(name, str):
             return self._from_jinja2(lambda j: j.get_template(name, None, globals))  # type: ignore[no-any-return]

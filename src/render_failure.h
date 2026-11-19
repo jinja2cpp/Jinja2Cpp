@@ -27,6 +27,8 @@ struct TemplateOrigin
     const void* source = nullptr;
     const std::string* name = nullptr;
     bool isWide = false;
+    // Whether the template has a name of its own: not one made from a string (docs/tasks/0410)
+    bool isNamed = false;
 };
 
 // A render error that has its location in the template (docs/api-2.0.md, 2.1 rule 8): thrown

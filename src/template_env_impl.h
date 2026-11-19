@@ -115,6 +115,8 @@ public:
     // docs/tasks/0394), kept in m_loadSettings as the dialect is. Empty: none
     void SetPromptSafeParams(std::vector<std::string> names);
     std::shared_ptr<const std::vector<std::string>> GetPromptSafeParams() const;
+    // TemplateEnv::SetJoinPath's function for templates loaded from now on, kept in m_loadSettings. Empty: none
+    void SetJoinPath(JoinPathFunction joinPath);
 
 private:
     const BigIntBackend* BigIntBackendLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
@@ -123,10 +125,12 @@ private:
 
     std::shared_ptr<const std::vector<std::string>> PromptSafeParamsLocked() const JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->promptSafeParams : nullptr; }
 
+    std::shared_ptr<const JoinPathFunction> JoinPathLocked() const JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->joinPath : nullptr; }
+
     // New settings from `settings`, keeping what the environment set besides them
     LoadSettingsPtr MakeLoadSettingsLocked(const BigIntBackend* backend) const JINJA2CPP_REQUIRES(m_loadSettingsGuard)
     {
-        return std::make_shared<const LoadSettings>(settings, backend, DialectLocked(), PromptSafeParamsLocked());
+        return std::make_shared<const LoadSettings>(settings, backend, DialectLocked(), PromptSafeParamsLocked(), JoinPathLocked());
     }
 
     mutable Mutex m_loadSettingsGuard;

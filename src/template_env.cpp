@@ -295,7 +295,7 @@ void TemplateEnvImpl::ReplaceSettings(Settings newSettings)
 {
     const WriterLock<Mutex> l(m_loadSettingsGuard);
     // Made first: when it throws, nothing has changed
-    auto loadSettings = std::make_shared<const LoadSettings>(newSettings, BigIntBackendLocked(), DialectLocked(), PromptSafeParamsLocked());
+    auto loadSettings = std::make_shared<const LoadSettings>(newSettings, BigIntBackendLocked(), DialectLocked(), PromptSafeParamsLocked(), JoinPathLocked());
     settings = std::move(newSettings);
     m_loadSettings = std::move(loadSettings);
 }
@@ -338,7 +338,7 @@ void TemplateEnvImpl::SetDialect(Dialect dialect)
     {
         return;
     }
-    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect, PromptSafeParamsLocked());
+    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect, PromptSafeParamsLocked(), JoinPathLocked());
 }
 
 void TemplateEnvImpl::SetPromptSafeParams(std::vector<std::string> names)
@@ -349,7 +349,18 @@ void TemplateEnvImpl::SetPromptSafeParams(std::vector<std::string> names)
     {
         return;
     }
-    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked(), std::move(safeParams));
+    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked(), std::move(safeParams), JoinPathLocked());
+}
+
+void TemplateEnvImpl::SetJoinPath(JoinPathFunction joinPath)
+{
+    auto function = joinPath ? std::make_shared<const JoinPathFunction>(std::move(joinPath)) : nullptr;
+    const WriterLock<Mutex> l(m_loadSettingsGuard);
+    if (!function && !JoinPathLocked())
+    {
+        return;
+    }
+    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked(), PromptSafeParamsLocked(), std::move(function));
 }
 
 std::shared_ptr<const std::vector<std::string>> TemplateEnvImpl::GetPromptSafeParams() const
@@ -559,6 +570,11 @@ bool TemplateEnv::SetBigIntBackend(const BigIntBackend* backend) noexcept
         return false;
     }
     return m_impl->SetBigIntBackend(backend);
+}
+
+void TemplateEnv::SetJoinPath(JoinPathFunction joinPath)
+{
+    m_impl->SetJoinPath(std::move(joinPath));
 }
 
 const BigIntBackend* TemplateEnv::GetBigIntBackend() const noexcept

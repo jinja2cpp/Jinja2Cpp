@@ -116,8 +116,13 @@ engines on a Release build of the module.
 - Subclasses of `Environment` and `Template` in Python, as in Jinja2: an `__init__` that
   forwards its keyword arguments, attributes of any name, and `env.template_class` (the class
   `from_string`, `get_template` and `select_template` make; a subclass of `jinja2cpp.Template`).
-  `get_template(name, parent=...)` and `select_template` call `env.join_path`, which a subclass
-  may override.
+  `get_template(name, parent=...)`, `select_template` and the tags `include`, `import`, `from` and
+  `extends` call `env.join_path(name, parent)` (the tags with the name of the template whose source holds
+  them, not for a template from `from_string`), which a subclass may override; the joined name is what
+  is loaded and cached (0410). The engine learns of an override when a template loads: a `join_path`
+  assigned or overridden after a load applies to the templates loaded after it, and a template loaded
+  earlier keeps loading names as written. An exception of `join_path` fails the render with it, also
+  a `TemplateNotFound` that Jinja2 would skip for `ignore missing` or a name of a list.
 - `env.select_template`, `env.get_or_select_template`, `env.list_templates(extensions=None,
   filter_func=None)` and `env.join_path`.
 - `template.generate()` and `template.stream()` with `TemplateStream` (`dump`,
@@ -469,10 +474,6 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `env.filters` at each render: a template loaded before `env.filters['f']` is replaced keeps
   calling the old `f`. The environment lets go of a replaced one once the templates loaded with
   it go (0406); a load after a filter or test is replaced or removed reads the loader again.
-- `{% include %}`, `{% import %}`, `{% from %}` and `{% extends %}` read the loader through the
-  engine, not through `env.get_template(name, parent=...)`, so an overridden `join_path` is not
-  called for them (Jinja2 calls it with the including template's name); `get_template` and
-  `select_template` call it (0410).
 - An exported macro of `make_module` and `module` has `name`, `arguments`, `catch_kwargs`, `catch_varargs` and
   `caller` as Jinja2's `Macro` has them (0434).
 - `make_module` and `module` give the exports as Python values the host API can carry: a

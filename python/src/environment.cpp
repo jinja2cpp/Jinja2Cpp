@@ -256,7 +256,18 @@ PyEnvironment::PyEnvironment(nb::kwargs kwargs)
     }
 }
 
-PyEnvironment::~PyEnvironment() = default;
+struct JoinPathTarget
+{
+    PyObject* env = nullptr;
+};
+
+PyEnvironment::~PyEnvironment()
+{
+    if (m_joinTarget)
+    {
+        m_joinTarget->env = nullptr;
+    }
+}
 
 void PyEnvironment::Keep(nb::handle object)
 {
@@ -642,10 +653,82 @@ void PyEnvironment::RetireEngine() noexcept
     m_bound = nb::object();
 }
 
+namespace
+{
+// `env.join_path(name, parent)` for the tags that load templates (TemplateEnv::SetJoinPath)
+std::string CallJoinPath(PyObject* env, const std::string& name, const std::string& parent)
+{
+    try
+    {
+        const nb::object result = nb::steal(PyObject_CallMethod(env, "join_path", "OO", MakeStr(name).ptr(), MakeStr(parent).ptr()));
+        if (!result.is_valid())
+        {
+            throw nb::python_error();
+        }
+        if (PyUnicode_Check(result.ptr()) == 0)
+        {
+            PyErr_SetString(PyExc_TypeError, "join_path must return a str");
+            throw nb::python_error();
+        }
+        Py_ssize_t size = 0;
+        const char* text = PyUnicode_AsUTF8AndSize(result.ptr(), &size);
+        if (!text)
+        {
+            throw nb::python_error();
+        }
+        return std::string(text, static_cast<std::size_t>(size));
+    }
+    catch (nb::python_error& error)
+    {
+        if (!error.matches(PyExc_Exception))
+        {
+            // KeyboardInterrupt, SystemExit: noted for the render, as a callable's (CallPython)
+            if (auto* render = CurrentRender(); render && !render->abort)
+            {
+                render->abort = std::make_exception_ptr(nb::python_error(error));
+            }
+        }
+        throw;
+    }
+}
+} // namespace
+
+void PyEnvironment::SyncJoinPath()
+{
+    const auto self = nb::find(this);
+    const nb::object overridden = nb::steal(PyObject_CallMethod(self.ptr(), "_join_path_overridden", nullptr));
+    if (!overridden.is_valid())
+    {
+        throw nb::python_error();
+    }
+    const bool on = PyObject_IsTrue(overridden.ptr()) > 0;
+    if (on == m_joinPathSet)
+    {
+        return;
+    }
+    if (on)
+    {
+        if (!m_joinTarget)
+        {
+            m_joinTarget = std::make_shared<JoinPathTarget>();
+        }
+        m_joinTarget->env = self.ptr();
+        m_env->SetJoinPath([target = m_joinTarget](const std::string& name, const std::string& parent) {
+            return target->env ? CallJoinPath(target->env, name, parent) : name;
+        });
+    }
+    else
+    {
+        m_env->SetJoinPath({});
+    }
+    m_joinPathSet = on;
+}
+
 void PyEnvironment::Rebuild()
 {
     RetireEngine();
     m_env = std::make_shared<jinja2::TemplateEnv>();
+    m_joinPathSet = false;
     // What it borrows: the translations first (ApplyGettext), then the callables of the settings and the loader, and the
     // filters and tests as Prepared binds them. The templates loaded from the engine environment before keep its list
     m_bound = NewBoundList();
@@ -863,6 +946,7 @@ PyEnvironment::Engine PyEnvironment::Prepared()
     {
         Rebuild();
     }
+    SyncJoinPath();
     if (m_sandboxed)
     {
         // is_safe_attribute may have been replaced since the last load, on the class or the instance
@@ -894,6 +978,7 @@ PyEnvironment::Engine PyEnvironment::Prepared()
         Rebuild();
         filters = Entries(m_filters, "filters");
         tests = Entries(m_tests, "tests");
+        SyncJoinPath();
     }
     auto sync = [this](std::vector<std::pair<std::string, PyObject*>>& entries, std::vector<std::pair<std::string, PyObject*>>& bound, bool isFilter) {
         if (entries == bound)
@@ -1081,6 +1166,10 @@ void PyEnvironment::Clear() noexcept
 {
     // The engine borrows what goes now: it is dropped first, and the environment is unusable
     m_cleared = true;
+    if (m_joinTarget)
+    {
+        m_joinTarget->env = nullptr;
+    }
     m_env.reset();
     m_retired.clear();
     if (m_loaderHandler)
