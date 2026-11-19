@@ -1,5 +1,6 @@
 ---
 status: open
+pr:
 priority: low
 area: robustness
 depends: [0270, 0271]
@@ -39,3 +40,19 @@ text, then choose one or more of:
 
 **Done when.** A cap-sized radix literal loads in under 50 ms in Release, and `bit_length`,
 `{:x}` and `float` on it run in under 10 ms each, measured by a test or a bench case.
+
+**Done in this PR (Release, GCC -O3, a 4-core cloud runner; timings vary by about 20%).**
+
+- Conversions split the number in halves by a power of the source radix and multiply in the
+  target radix (Karatsuba past 48 limbs, a schoolbook base case whose 64-bit columns carry once
+  every 17 rows in base 10^9), so a conversion is about O(n^1.6) rather than O(n^2). The same code
+  serves base 10^9 (decimal form), 2^32 (binary form, `bit_length`, `{:x}`, `{:o}`, `{:b}`,
+  `bit_count`) and b^k (`BigInt::ToDigits` / `FromDigits` in other bases).
+- A power-of-two literal or `int(s, base)` gets its exact width from its digits before
+  converting, so one over the cap fails in about a millisecond (it took 2.2 s), and a value made
+  by a backend is not converted back to count its bits.
+- Measured: the 262144-`f` hex literal loads in 0.12-0.21 s (was 2.3 s); `bit_length()` and
+  `'{:x}'.format(x)` on it take about 0.1 s each (were 0.46 s); `|float` already failed at once.
+
+**Not met.** The 50 ms load and 10 ms per operation targets need the binary form to be stored
+rather than recomputed, which is a value-model change: moved to task 0543.

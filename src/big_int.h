@@ -43,7 +43,7 @@ JINJA2CPP_EXPORT InternalValue IntegerFromDouble(double val);
 // The decimal form for str() and repr(): ValueError past MaxIntStrDigits, as CPython raises
 JINJA2CPP_EXPORT std::string_view CheckedDecimal(const BigIntView& val);
 
-// The digits of |val| in base 2, 8 or 16, lower case
+// The digits of |val| in a power-of-two base (2 to 32), lower case
 JINJA2CPP_EXPORT std::string MagnitudeInBase(const BigIntView& val, int base);
 
 // Python's int.bit_length(): the bits of |val|
