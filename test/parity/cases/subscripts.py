@@ -201,6 +201,8 @@ CASES = [
     ("tuple_of_slices_strict_subscript_step_missing_item", "{% if false and ((([1][:, :] is undefined)|string)[9] or 1) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_subscript_step_missing_attr", "{% if false and ((([1][:, :] is undefined)|string).x ~ 1) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_subscript_step_impossible", "{% if false and (((([1][:, :] is undefined)|string)[9]|abs) or 1) %}a{% endif %}b|{% if false and ((([1][:, :] is undefined) is divisibleby(0)) or 1) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    # an output's own fold catches every error (visit_Output); only a strict undefined it prints fails the compile (0556)
+    ("tuple_of_slices_strict_output_fold_error_unrendered", "{% if false %}{{ ([1][:, :] is undefined)|length }}{% endif %}b", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_subscript_steps", "{{ ((([1][:, :] is undefined)|string)[0]) ~ x }}|{{ ((([1][:, :])|default('ab'))[1]) is string }}"),
     # a filter drops an argument it does not take; the argument's fold is still checked (0497)
     ("tuple_of_slices_dropped_filter_argument", "{{ x|first([1][:, :]) }}"),

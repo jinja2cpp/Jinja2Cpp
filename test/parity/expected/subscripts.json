@@ -5404,6 +5404,40 @@
    "output": "b|b"
   },
   {
+   "id": "subscripts.tuple_of_slices_strict_output_fold_error_unrendered",
+   "template": "{% if false %}{{ ([1][:, :] is undefined)|length }}{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b"
+  },
+  {
    "id": "subscripts.tuple_of_slices_subscript_steps",
    "template": "{{ ((([1][:, :] is undefined)|string)[0]) ~ x }}|{{ ((([1][:, :])|default('ab'))[1]) is string }}",
    "context": {

@@ -12,3 +12,4 @@ operators.dict_view_set_loop rejects 0545 the engine has no `-` for a host dict'
 operators.set_in_set rejects 0545 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
 operators.mapping_proxy_random accepts 0545 a host dict's mappingproxy is a mapping to random
 subscripts.tuple_of_slices_strict_generator_filters match 0536 the module falls back to Jinja2 for the template the engine rejects (strict generator filters, a deliberate divergence of the engine)
+subscripts.tuple_of_slices_strict_output_fold_error_unrendered match 0556 the module falls back to Jinja2 for the template the engine rejects

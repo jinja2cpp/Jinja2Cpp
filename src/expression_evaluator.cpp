@@ -550,12 +550,12 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     return EvaluateIndices(ApplyFirstIndex(*root, values), 1, m_subscriptExprs.size(), values, false);
 }
 
-// One returned object, so that it is constructed in the caller's storage
 InternalValue SubscriptExpression::EvaluateWithValue(InternalValue value, RenderContext& values) const
 {
     return EvaluateIndices(std::move(value), 0, m_subscriptExprs.size(), values, false);
 }
 
+// One returned object, so that it is constructed in the caller's storage
 InternalValue SubscriptExpression::ApplyFirstIndex(const InternalValue& root, RenderContext& values) const
 {
     InternalValue cur = ApplyIndex(root, m_subscriptExprs[0], values);

@@ -2598,6 +2598,25 @@
    }
   },
   {
+   "id": "undefined.strict_fold_unfolded_operand_conditional",
+   "template": "{% if false and (([1][:, :] is undefined) or ((\"ab\" if []|max else \"ab\") ~ d)) %}a{% endif %}b",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "No aggregated item, sequence was empty."
+   }
+  },
+  {
    "id": "undefined.strict_fold_short_circuited_operand",
    "template": "{{ 1 or ([]|max ~ 1) }}",
    "context": {
