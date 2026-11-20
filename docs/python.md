@@ -230,7 +230,7 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 | A custom `Extension` class (not `do`, `loopcontrols`, `i18n`), a dotted name of one | the environment is a Jinja2 environment |
 | `enable_async=True`, `render_async`, `generate_async` | the environment is a Jinja2 environment; on a native template `render_async` is Jinja2's (it raises as Jinja2 does without `enable_async`), and `generate_async` streams the engine's lazy render (Differences, 0461) |
 | `context_class`, `code_generator_class` of your own on an `Environment` subclass | the environment is a Jinja2 environment |
-| `env.policies` with a key Jinja2C++ has no equivalent for or a changed value (it has none) | the templates loaded from then on are Jinja2's |
+| `env.policies` with a value the engine cannot take (a number for `urlize.rel`, a one-shot iterator for `urlize.extra_schemes`, a missing key, a `json.dumps_kwargs` that is not a dict); `urlize`, `truncate`, `tojson` and `{% trans %}` read the others natively (0435) | the templates loaded from then on are Jinja2's; one set after a native load raises `UnsupportedError` naming the key when the template renders |
 | `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
 | `compile_expression`, `lex`, `preprocess`, `compile` | called on a Jinja2 environment of the same configuration |
 | `Template.blocks`, `new_context`, `root_render_func` | read from the template loaded by Jinja2 from the same source or name |
@@ -450,6 +450,11 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 
 ## Differences from Jinja2
 
+- `env.policies` is read at each render (`urlize.rel`, `urlize.target`, `urlize.extra_schemes`, `truncate.leeway`,
+  `json.dumps_function`, `json.dumps_kwargs`) and compared with a copy, so an in-place edit counts; `ext.i18n.trimmed` is read
+  when a template loads, as Jinja2 reads it when it compiles `{% trans %}`. `compiler.ascii_str` and unknown keys are ignored,
+  as Jinja2 3 does. The macros of `t.module` and `make_module` keep the policies of the load of their template (Jinja2's read
+  the environment's at each call, 0435).
 - Template errors that Jinja2 raises as Python's own exceptions (`ZeroDivisionError`,
   `TypeError` from an operator) are `TemplateRuntimeError` with the same message, except where the engine
   names the class: `%` formatting (also of `format` and newstyle `gettext`) raises `ValueError`,
