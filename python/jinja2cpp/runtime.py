@@ -195,7 +195,7 @@ class Context:
         if not isinstance(key, str):
             return missing
         # Every name the call site sees: Jinja2's loop and block bodies hand a call the names a `set` there stored, which
-        # the engine does not tell from a loop's targets (task 0554)
+        # the engine does not tell from a loop's targets (task 0558)
         found, value = self._handle.lookup(key)
         return value if found else missing
 

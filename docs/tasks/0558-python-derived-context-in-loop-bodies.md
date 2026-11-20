@@ -35,4 +35,4 @@ context when that view is not empty. Check a loop in a macro (Jinja2's macro fra
 have `_loop_vars` too) and nested loops (only the innermost body's names count).
 
 **Done when.** The probe rows render the same in `python/tests/test_context.py` with both engines, the four
-upstream tests still pass, and the `docs/python.md` sentence naming 0554 is gone.
+upstream tests still pass, and the `docs/python.md` sentence naming 0558 is gone.

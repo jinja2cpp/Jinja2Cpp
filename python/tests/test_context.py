@@ -118,7 +118,7 @@ def make_split_env(module):
 )
 def test_context_splits_top_level_names_from_arguments(source):
     # Context.vars holds the template's top-level names, Context.parent its arguments and globals, and a loop variable,
-    # a with name or a macro's local is in neither (task 0416). A lookup of one of those finds it, unlike Jinja2's (0554)
+    # a with name or a macro's local is in neither (task 0416). A lookup of one of those finds it, unlike Jinja2's (0558)
     both(make_split_env, source, w=2)
 
 

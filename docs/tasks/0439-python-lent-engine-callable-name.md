@@ -32,4 +32,4 @@ UserCallable&)` (template.h) returns the repr the engine prints for it (`<class 
 `<bound method LoopContext.cycle of <LoopContext 1/2>>`) and Python's type name, while the call it was lent to runs
 on this thread, and nullopt otherwise. The module's `TemplateValue` uses them for `repr()`, `str()` and its error
 messages. The probe prints as in Jinja2 (`test_a_lent_engine_callable_prints_as_jinja2s`). Mapping the class globals
-to Python's own objects, for `type(x)` and `x is range`, is 0555: it would lose the round trip a lent callable keeps.
+to Python's own objects, for `type(x)` and `x is range`, is 0559: it would lose the round trip a lent callable keeps.

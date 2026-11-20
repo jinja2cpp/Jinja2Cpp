@@ -21,4 +21,4 @@ engine's globals where Python returns them to the template, so that `{{ f(range)
 today, through the lent callable) stays True. Weigh the cost of the check on the conversion of every Python callable.
 
 **Done when.** `type(x)` and `x is range` match Jinja2 in a `python/tests/test_context.py` row, the identity row
-stays green, and the `docs/python.md` sentence naming 0555 is gone.
+stays green, and the `docs/python.md` sentence naming 0559 is gone.
