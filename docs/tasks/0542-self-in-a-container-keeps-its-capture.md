@@ -22,3 +22,17 @@ the containers the copy holds, with a bound on the walk.
 
 **Done when** `ModuleCallTest.EveryUseStoredSelfLetGoOfStaysFlat` has the list and dict rows and they stay flat, clean
 under address+undefined.
+
+**Findings (batch 11 A, 2026-11-20).** The second option was tried and is not sound. Rebuilding a list or dict of the
+include's copy with a weakened `self` inside (only when the frame's names alone hold it, aliasing kept, bounded walk)
+keeps the five list, dict and nested rows flat (+31,000 to +43,000 live allocations over 1,000 calls before). It has
+no safe read side, though: a call that takes the `self` out of the rebuilt container and stores it
+(`{% set ns.s = l[0] %}`) keeps a `self` that keeps nothing. Once the closure that held the include's capture is gone,
+`ns.s.b()` renders `B1` where Jinja2 and master render `B1T1`. Strengthening on read would rebuild the container on
+every macro call (`CopyCaptured` runs per call), at a per-element cost, and would break the sharing of the list by
+reference (`l.append` in one call seen by the next). Mutating the shared container in place brings the cycle back.
+What is left is the first option: let the module's call collector traverse the copy and the capture (a
+`ClosureCapture` is not a traversed object today, and `Callable` keep-alives are not visited by `TraverseBoxed`), so
+that copy -> container -> `self` -> capture -> copy is collected once nothing outside holds the capture. That is a
+change to the cycle collector's object model, so it wants an architect plan first. The prototype is in the project files at
+`0542/container-weakening-prototype.patch`.

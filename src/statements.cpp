@@ -1533,8 +1533,13 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement,
             home.PushFrameView({}, homeCall.Link());
         }
         // Jinja2's loop(...) returns Markup by the setting the loop is compiled under, the
-        // runtime one in volatile code
-        InternalValue result(RenderToString(home.GetRendererCallback(), [&](OutStream& stream) { statement->RenderLoop(var, stream, home, level + 1, &site); }));
+        // runtime one in volatile code. A level that fails closes over the scopes it sees below the loop, through the
+        // link, as a macro's body does (docs/tasks/0550)
+        const size_t levelScopes = home.GetScopesCount();
+        const size_t link = isLinked ? homeCall.Link() : ScopeView::NoLink;
+        InternalValue result(RenderToString(home.GetRendererCallback(), [&](OutStream& stream) {
+            RenderFailingFrame(home, home, [&] { statement->RenderLoop(var, stream, home, level + 1, &site); }, [levelScopes, link] { return FrameEnd::Call(levelScopes, link); });
+        }));
         result.SetMarkup(home.IsOutputAutoescape());
         if (isLinked)
         {
@@ -1568,11 +1573,21 @@ void ForStatement::RenderElse(OutStream& os, RenderContext& values)
 
 namespace
 {
+// The reads SetRecursiveBody put first in `names`, without a name, and the stores after them
+std::size_t RecursiveReadsCount(Span<const SlotName> names)
+{
+    return static_cast<std::size_t>(std::find_if(names.begin(), names.end(), [](const SlotName& name) { return !name.name.empty(); }) - names.begin());
+}
+
 // The end of a recursive loop whose body defines closures: they keep the names its last pass left, as Jinja2's body
 // function does (docs/tasks/0537). Out of line: few loops are recursive
-JINJA2CPP_NOINLINE void CaptureLastPass(RenderContext& values, ScopeRef& bodyScope, InternalValueMap& lastPass, size_t endScopes)
+JINJA2CPP_NOINLINE void CaptureLastPass(RenderContext& values, ScopeRef& bodyScope, InternalValueMap& lastPass, size_t endScopes, Span<const SlotName> names)
 {
     bodyScope.RestoreFrom(lastPass);
+    // A name an earlier pass stored and the last one did not: Jinja2's body function resolved it at the start of the
+    // pass, as the frame below had it then, which the body cannot have changed since; undefined when it had none
+    // (docs/tasks/0551)
+    values.BindFromBelow(bodyScope, names.subspan(RecursiveReadsCount(names)));
     values.CaptureClosures(FrameEnd::Stopped(endScopes));
     bodyScope.Clear();
 }
@@ -1580,8 +1595,9 @@ JINJA2CPP_NOINLINE void CaptureLastPass(RenderContext& values, ScopeRef& bodySco
 // What the outermost level of a recursive loop keeps of the frames around it, which may end before a level stored past
 // them runs: the names its body reads, `reads` by hash (ForStatement::SetRecursiveBody), or every name when
 // `readsAll`. Out of line: few loops outlive their frames
-JINJA2CPP_NOINLINE std::shared_ptr<ClosureCapture> CaptureRecursiveSite(ClosureSite& site, RenderContext& values, Span<const SlotName> reads, bool readsAll)
+JINJA2CPP_NOINLINE std::shared_ptr<ClosureCapture> CaptureRecursiveSite(ClosureSite& site, RenderContext& values, Span<const SlotName> names, bool readsAll)
 {
+    const auto reads = names.subspan(0, RecursiveReadsCount(names));
     SmallVector<std::size_t, 16> hashes;
     hashes.reserve(reads.size());
     for (const auto& name : reads)
@@ -1592,17 +1608,20 @@ JINJA2CPP_NOINLINE std::shared_ptr<ClosureCapture> CaptureRecursiveSite(ClosureS
 }
 } // namespace
 
-void ForStatement::SetRecursiveBody(NodeArena& nodes, bool keepsLastPass, Span<const std::size_t> reads)
+void ForStatement::SetRecursiveBody(NodeArena& nodes, ArenaSpan<SlotName> stores, Span<const std::size_t> reads)
 {
-    m_keepsLastPass = keepsLastPass;
+    m_keepsLastPass = !stores.empty();
+    const auto stored = nodes[stores];
     SmallVector<SlotName, 8> names;
-    names.reserve(reads.size());
+    names.reserve(reads.size() + stored.size());
     for (const auto hash : reads)
     {
         names.push_back(SlotName{ ArenaText(), hash });
     }
+    names.insert(names.end(), stored.begin(), stored.end());
     m_resetsAtEnd = nodes.MakeSpan(Span<const SlotName>(names.data(), names.size()));
 }
+
 
 void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
 {
@@ -1757,7 +1776,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     JINJA2CPP_ASSERT(values.GetScopesCount() - 1 == endScopes);
     if (keepsLastPass)
     {
-        CaptureLastPass(values, bodyScope, state->lastPassScope, endScopes);
+        CaptureLastPass(values, bodyScope, state->lastPassScope, endScopes, values.Nodes()[m_resetsAtEnd]);
     }
     else
     {
@@ -2521,6 +2540,60 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
 }
 } // namespace
 
+namespace
+{
+const InternalValueMap* SelfBlocksOfValue(const InternalValue& value);
+} // namespace
+
+void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* capture, HomeCallSaved& saved, size_t link)
+{
+    while (capture && IsEmpty(capture->endedSelf))
+    {
+        capture = capture->outer.get();
+    }
+    if (!capture)
+    {
+        return;
+    }
+    const auto* items = SelfBlocksOfValue(capture->endedSelf);
+    if (!items)
+    {
+        return;
+    }
+    // Callables, as SelfBlocksOfValue checked
+    const auto* block = GetIf<Callable>(&items->begin()->second)->GetStatementCallable().target<SelfBlockCall>();
+    // The template is still running (a `self` kept past a frame of it that ended): its frame is in place
+    if (!block || block->owner->live)
+    {
+        return;
+    }
+    // The copy of the template's top level, which the capture holding `self` keeps (CaptureClosures)
+    auto topLevel = capture->names.lock();
+    if (!topLevel)
+    {
+        return;
+    }
+    {
+        auto scope = context.EnterScope();
+        ClosureKept kept;
+        kept.frames.push_back(std::move(topLevel));
+        CopyCaptured(scope, kept);
+    }
+    if (link < context.GetScopesCount() - 1)
+    {
+        context.PushFrameView({}, link);
+    }
+    // A frame Enter made for the call is replaced: the new one is entered from the frame that one was (verifier)
+    auto* outer = saved.callFrame ? saved.callFrame->outer : context.GetTemplateFrame();
+    auto& frame = saved.callFrame.emplace();
+    frame.blocks = &block->owner->ended;
+    frame.baseDepth = context.GetScopesCount();
+    frame.name = block->templateName;
+    frame.outer = outer;
+    frame.self = capture->endedSelf;
+    context.SetTemplateFrame(&frame);
+}
+
 LookupResult RenderContext::FindSelf(const std::string& name)
 {
     auto* frame = m_templateFrame;
@@ -2877,6 +2950,11 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
         // Read as `self` in the scopes over the caller's top level (FindSelf), unless set there
         if (endedSelf)
         {
+            // Also where the template's blocks are found for its closures, whatever `self` names (0552)
+            for (const auto& capture : ending)
+            {
+                capture->endedSelf = *endedSelf;
+            }
             names->emplace("self", std::move(*endedSelf));
         }
     }
