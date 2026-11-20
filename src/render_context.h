@@ -16,6 +16,7 @@
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/prompt.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>

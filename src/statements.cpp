@@ -654,7 +654,7 @@ struct LoopState : ValueObject
         catch (const TemplateRuntimeError& error)
         {
             // Only the failure of a dict walk (RuntimeError in Python) waits for the loop to be iterated
-            if (!keptPastStatement || lazyFilter || std::string_view(error.what()).substr(0, 11) != "dictionary ")
+            if (!keptPastStatement || lazyFilter != nullptr || std::string_view(error.what()).substr(0, 11) != "dictionary ")
             {
                 throw;
             }

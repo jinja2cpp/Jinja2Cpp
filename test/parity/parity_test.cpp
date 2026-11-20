@@ -31,6 +31,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <set>
 #include <stdexcept>
@@ -470,6 +471,38 @@ std::string ApplyExtensions(const Json& extensions, jinja2::Settings& settings)
     return {};
 }
 
+// urlize.extra_schemes: a list of schemes, or a str, which Python iterates a character at a time (ASCII here)
+void ApplyExtraSchemes(const Json& val, jinja2::FilterPolicies& out)
+{
+    if (val.is_string())
+    {
+        out.urlizeExtraSchemes.clear();
+        for (const char ch : val.get<std::string>())
+        {
+            out.urlizeExtraSchemes.emplace_back(1, ch);
+        }
+        return;
+    }
+    out.urlizeExtraSchemes = val.is_null() ? std::vector<std::string>() : val.get<std::vector<std::string>>();
+}
+
+// json.dumps_kwargs: json.dumps' own defaults for what the dict leaves out; Jinja2's default dict is {"sort_keys": true}
+void ApplyJsonDumpsKwargs(const Json& val, jinja2::FilterPolicies& out)
+{
+    out.jsonSortKeys = val.value("sort_keys", false);
+    out.jsonEnsureAscii = val.value("ensure_ascii", true);
+    out.jsonIndent.reset();
+    if (auto indent = val.find("indent"); indent != val.end() && !indent->is_null())
+    {
+        out.jsonIndent = indent->is_string() ? indent->get<std::string>() : std::string(static_cast<std::size_t>(indent->get<int>()), ' ');
+    }
+    out.jsonSeparators.reset();
+    if (auto separators = val.find("separators"); separators != val.end() && !separators->is_null())
+    {
+        out.jsonSeparators = std::make_pair((*separators)[0].get<std::string>(), (*separators)[1].get<std::string>());
+    }
+}
+
 // env.policies of a case (Jinja2's spelling) onto Settings::filterPolicies and the i18n default. Returns the first
 // policy Jinja2C++ cannot express, or an empty string
 std::string ApplyPolicies(const Json& policies, jinja2::Settings& settings)
@@ -489,19 +522,7 @@ std::string ApplyPolicies(const Json& policies, jinja2::Settings& settings)
         }
         else if (key == "urlize.extra_schemes")
         {
-            if (val.is_string())
-            {
-                // Python iterates a str: one scheme a character (ASCII here)
-                out.urlizeExtraSchemes.clear();
-                for (const char ch : val.get<std::string>())
-                {
-                    out.urlizeExtraSchemes.emplace_back(1, ch);
-                }
-            }
-            else
-            {
-                out.urlizeExtraSchemes = val.is_null() ? std::vector<std::string>() : val.get<std::vector<std::string>>();
-            }
+            ApplyExtraSchemes(val, out);
         }
         else if (key == "truncate.leeway")
         {
@@ -513,19 +534,7 @@ std::string ApplyPolicies(const Json& policies, jinja2::Settings& settings)
         }
         else if (key == "json.dumps_kwargs")
         {
-            // json.dumps' own defaults for what the dict leaves out; Jinja2's default dict is {"sort_keys": true}
-            out.jsonSortKeys = val.value("sort_keys", false);
-            out.jsonEnsureAscii = val.value("ensure_ascii", true);
-            out.jsonIndent.reset();
-            if (auto indent = val.find("indent"); indent != val.end() && !indent->is_null())
-            {
-                out.jsonIndent = indent->is_string() ? indent->get<std::string>() : std::string(static_cast<std::size_t>(indent->get<int>()), ' ');
-            }
-            out.jsonSeparators.reset();
-            if (auto separators = val.find("separators"); separators != val.end() && !separators->is_null())
-            {
-                out.jsonSeparators = std::make_pair((*separators)[0].get<std::string>(), (*separators)[1].get<std::string>());
-            }
+            ApplyJsonDumpsKwargs(val, out);
         }
         else
         {
