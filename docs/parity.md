@@ -35,11 +35,11 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Nov 2026):
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | statements | 622 | 612 | 10 | 0 | 0 | 0 | 0 | 0 | 0165, 0214, 0366, 0390, 0399, 0446 |
 | string_filters | 544 | 544 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| subscripts | 149 | 148 | 0 | 1 | 0 | 0 | 0 | 0 | 0536 |
+| subscripts | 163 | 161 | 0 | 2 | 0 | 0 | 0 | 0 | 0536, 0556 |
 | tests | 74 | 73 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
-| undefined | 160 | 160 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| undefined | 164 | 161 | 0 | 0 | 3 | 0 | 0 | 0 | 0555 |
 | whitespace | 59 | 59 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **3738** | **3713** | **14** | **10** | **1** | **0** | **0** | **0** | |
+| **total** | **3756** | **3727** | **14** | **11** | **4** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
