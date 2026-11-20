@@ -502,12 +502,19 @@ template<typename T>
 struct TypedParamUnwrapper
 {
     TypedParam<T>* param;
-    std::string_view paramName;
     using ValueType = typename TypedParam<T>::decayed_t;
-    TypedParamUnwrapper(TypedParam<T>& p, std::string_view name)
-        : param(&p)
-        , paramName(name)
+    struct NoInfo
     {
+    };
+    // Kept only for an integer parameter, to name it in an error: other parameters pay nothing
+    std::conditional_t<IsRangeCheckedParam<ValueType>, const ArgInfo*, NoInfo> info;
+    TypedParamUnwrapper(TypedParam<T>& p, const ArgInfo& argInfo)
+        : param(&p)
+    {
+        if constexpr (IsRangeCheckedParam<ValueType>)
+        {
+            info = &argInfo;
+        }
     }
 
     template<typename U>
@@ -555,7 +562,7 @@ struct TypedParamUnwrapper
         else if constexpr (NeedsRangeCheck<U, ValueType>())
         {
             // Checked here, where the parameter's name is known
-            CheckArgRange<ValueType>(paramName, v);
+            CheckArgRange<ValueType>(info->paramName, v);
             param->SetValue(static_cast<ValueType>(v));
         }
         else
@@ -622,7 +629,7 @@ struct ValueParam
 };
 
 template<typename T>
-auto TypedUnwrapParam(const Value& value, std::string_view paramName)
+auto TypedUnwrapParam(const Value& value, const ArgInfo& info)
 {
     if constexpr (std::is_same_v<std::decay_t<T>, Value>)
     {
@@ -638,7 +645,7 @@ auto TypedUnwrapParam(const Value& value, std::string_view paramName)
         }
         else
         {
-            TypedParamUnwrapper<T> visitor(param, paramName);
+            TypedParamUnwrapper<T> visitor(param, info);
             std::visit(ParamUnwrapper<TypedParamUnwrapper<T>>(&visitor), value.GetData());
         }
         return param;
@@ -656,7 +663,7 @@ struct ParamList
 template<typename... T, typename Fn, typename... ArgDescr>
 Value InvokeWithParamTypes(ParamList<T...> /*types*/, const Fn& fn, const UserCallableParams& params, const ArgDescr&... ad)
 {
-    auto typedParams = std::make_tuple(TypedUnwrapParam<T>(GetParamValue(params, ad), ad.paramName)...);
+    auto typedParams = std::make_tuple(TypedUnwrapParam<T>(GetParamValue(params, ad), ad)...);
     return std::apply(
         [&fn](auto&... args) {
             bool hasValue = (true && ... && args.HasValue());

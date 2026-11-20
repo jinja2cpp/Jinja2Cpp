@@ -47,3 +47,8 @@ time: nothing changes for `int64_t`, `double` and `bool` parameters given an int
 for its 32-bit signed integer parameter"); the joint visit of a generic callable checks in `ArgPromoter` without a
 name. The message is formatted out of line by the exported `detail::ThrowArgumentOutOfRange` (src/value.cpp, an
 additive ABI change), which throws the engine's `IntegerOutOfRangeError`.
+
+**Cost.** No bench workload calls a `MakeCallable` function, so a callgrind probe rendered
+`{% for x in range(1000) %}{{ f(x) }}{% endfor %}` five times against master c25c2ff (Release, instructions per
+call): an `int` parameter +9 (+0.29%, the check itself), an `int64_t` one +2 (+0.06%), a `double` one 0, an
+`unsigned` plus an `int` given a float +23 (+0.57%). `bench/count.py`: every benchmark within ±0.01%.
