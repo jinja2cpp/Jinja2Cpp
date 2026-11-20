@@ -316,9 +316,11 @@ def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_
         simulate=None):
     """One TLC run. simulate=(seconds, depth, seed) samples random behaviours instead of the BFS"""
     kind, scope, overrides, invariants, note = spec
-    overrides = dict(overrides, **(extra or {}))
+    overrides = dict(overrides)
     if kind == "exhaustive" or simulate:
-        overrides.setdefault("MaxLevel", UNBOUNDED)
+        # Past the run's own level bound too (Codex review of #969); only --set MaxLevel stays
+        overrides["MaxLevel"] = UNBOUNDED
+    overrides.update(extra or {})
     if simulate:
         # Random behaviours: no verdict to keep, and the time budget ends the run
         cache, timeout = None, simulate[0]
