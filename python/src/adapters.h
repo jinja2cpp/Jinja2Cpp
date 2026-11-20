@@ -69,6 +69,7 @@ public:
     [[nodiscard]] bool IsTuple() const override;
     [[nodiscard]] bool IsMarkupLike() const override;
     [[nodiscard]] std::string Html() const override;
+    [[nodiscard]] std::optional<std::string> HtmlFormat(std::string_view spec) const override;
     [[nodiscard]] bool IsNumber() const override;
     [[nodiscard]] std::optional<jinja2::Value> ToInt() const override;
     [[nodiscard]] std::optional<jinja2::Value> ToFloat() const override;

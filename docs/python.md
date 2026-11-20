@@ -454,7 +454,10 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `json.dumps_function`, `json.dumps_kwargs`) and compared with a copy, so an in-place edit counts; `ext.i18n.trimmed` is read
   when a template loads, as Jinja2 reads it when it compiles `{% trans %}`. `compiler.ascii_str` and unknown keys are ignored,
   as Jinja2 3 does. The macros of `t.module` and `make_module` keep the policies of the load of their template (Jinja2's read
-  the environment's at each call, 0435).
+  the environment's at each call, 0435). A filter whose arguments are all constants (`{{ 'abcdefghijk'|truncate(10) }}`,
+  `{{ {'a': 1}|tojson }}`) follows a policy changed after the load, where Jinja2 folds it to its value when it compiles the
+  template; the engine does not fold. Only the current `json.dumps_function` is kept: a template loaded under an earlier one
+  keeps it for as long as the template lives, and a replaced one is released with the last template that used it.
 - Template errors that Jinja2 raises as Python's own exceptions (`ZeroDivisionError`,
   `TypeError` from an operator) are `TemplateRuntimeError` with the same message, except where the engine
   names the class: `%` formatting (also of `format` and newstyle `gettext`) raises `ValueError`,
@@ -538,7 +541,9 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `UnsupportedError` (Jinja2's `test_binary_operator_intercepting` and
   `test_unary_operator_intercepting` are `xfail`). A public name of the engine's own values
   (`s.upper`, `d.items`) is asked of `is_safe_attribute` only when the subclass overrides it,
-  the immutable form's refusal of the engine's list and dict methods is the engine's own, a
+  the immutable form's refusal of the engine's list and dict methods is the engine's own (it also refuses a set's
+  `intersection_update`, which Jinja2 3.1.6's `_mutable_spec` leaves out of its `MutableSet` list, so that the
+  immutable form there lets it change the set; the engine fails closed on purpose, 0545), a
   bound method of the engine's values (`s.upper`) has `__self__` (the string, which Jinja2's
   sandbox refuses as a private name; it hands the template nothing it did not hold), a dict key named like an
   attribute (`{'__class__': 1}.__class__`) reads the key, `f.__call__` of a macro or global

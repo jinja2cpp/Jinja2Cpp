@@ -1751,6 +1751,12 @@ public:
         const auto list = m_identity ? std::nullopt : AsList(m_container);
         return list && list->IsTuple();
     }
+    // A dict view or set the template made stays one for the host (GenericList::GetViewClass)
+    [[nodiscard]] const char* GetViewClass() const override
+    {
+        const auto list = m_identity ? std::nullopt : AsList(m_container);
+        return list ? DictViewTypeName(list->GetIteratorKind()) : nullptr;
+    }
 
 private:
     [[nodiscard]] const InternalValueList* Items() const

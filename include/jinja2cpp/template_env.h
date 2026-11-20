@@ -196,7 +196,8 @@ struct Settings
     //! With this flag such names are looked up when they run instead
     bool userCallablesAsFilters = false;
     //! Makes the methods that change a list or dict in place (`append`, `pop`, `update`, `clear`, ...) unsafe
-    //! attributes, as Jinja2's `ImmutableSandboxedEnvironment` does: calling one fails with ErrorCode::SecurityError.
+    //! attributes, as Jinja2's `ImmutableSandboxedEnvironment` does: calling one fails with ErrorCode::SecurityError. A set's
+    //! `intersection_update` is refused too, which Jinja2 3.1.6's list of the methods that change a set leaves out (it fails closed).
     //! Off by default
     bool immutableContainers = false;
     //! A sandbox for the engine's values (\ref ISandboxPolicy, jinja2cpp/sandbox_policy.h). Unset by default. Compared

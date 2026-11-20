@@ -741,7 +741,8 @@ void PyEnvironment::Rebuild()
             Keep(*object);
         }
     }
-    if (m_policiesDumps.is_valid())
+    m_dumpsKept = m_policiesDumps.is_valid();
+    if (m_dumpsKept)
     {
         Keep(m_policiesDumps);
     }
@@ -974,7 +975,7 @@ std::shared_ptr<const jinja2::FilterPolicies> PyEnvironment::RefreshPolicies()
     const auto optionalText = [](const nb::object& value) -> std::optional<std::string> {
         return value.is_none() ? std::nullopt : std::optional<std::string>(Utf8(value));
     };
-    auto policies = std::make_shared<jinja2::FilterPolicies>();
+    auto policies = std::make_unique<jinja2::FilterPolicies>();
     policies->urlizeRel = Utf8(field("rel"));
     policies->urlizeTarget = optionalText(field("target"));
     for (const auto scheme : field("schemes"))
@@ -995,15 +996,40 @@ std::shared_ptr<const jinja2::FilterPolicies> PyEnvironment::RefreshPolicies()
         policies->jsonDumps = BorrowedCallable(dumps);
     }
     const bool trimmed = Truth(field("trimmed"));
-    // Kept by the list of the engine environment the templates loaded from now on belong to (Rebuild keeps it in a new
-    // one); the templates loaded before keep the callable they have in theirs
     m_policiesSnapshot = nb::object(converted[0]);
-    m_policiesDumps = dumps.is_none() ? nb::object() : dumps;
-    if (m_env && !dumps.is_none())
+    // The policies own the wrapper of json.dumps_function while a render holds them (the callable only borrows it); the
+    // environment's reference is the one Traverse reports. The list of the engine environment keeps it for the
+    // templates loaded with it, which a new one drops: Prepared builds one that holds only the current wrapper
+    const bool listHoldsDumps = m_dumpsKept;
+    if (dumps.is_none())
     {
-        Keep(dumps);
+        m_policies = std::move(policies);
+        m_policiesDumps = nb::handle();
     }
-    m_policies = std::move(policies);
+    else
+    {
+        PyObject* const owned = dumps.inc_ref().ptr();
+        m_policies = std::shared_ptr<const jinja2::FilterPolicies>(policies.release(), [owned](const jinja2::FilterPolicies* released) {
+            const nb::gil_scoped_acquire gil;
+            Py_DECREF(owned);
+            delete released;
+        });
+        m_policiesDumps = dumps;
+    }
+    if (m_env && (listHoldsDumps || !dumps.is_none()))
+    {
+        if (listHoldsDumps)
+        {
+            // The templates loaded before keep the list that holds the wrapper they use; the next load rebuilds the
+            // engine environment, so that a replaced wrapper does not stay for the life of this one
+            RetireEngine();
+        }
+        else
+        {
+            Keep(dumps);
+            m_dumpsKept = true;
+        }
+    }
     m_settings.filterPolicies = *m_policies;
     m_settings.extensions.i18nTrimmed = trimmed;
     if (m_env)
@@ -1222,10 +1248,11 @@ nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::
 
 int PyEnvironment::Traverse(visitproc visit, void* arg) const
 {
-    for (const auto* object : { &m_globals, &m_filters, &m_tests, &m_loader, &m_undefined, &m_finalize, &m_autoescape, &m_extensions, &m_options, &m_policiesSnapshot, &m_policiesDumps })
+    for (const auto* object : { &m_globals, &m_filters, &m_tests, &m_loader, &m_undefined, &m_finalize, &m_autoescape, &m_extensions, &m_options, &m_policiesSnapshot })
     {
         Py_VISIT(object->ptr());
     }
+    Py_VISIT(m_policiesDumps.ptr());
     Py_VISIT(m_bound.ptr());
     Py_VISIT(m_engineGlobalsBound.ptr());
     Py_VISIT(m_chatClock.ptr());
@@ -1265,7 +1292,7 @@ void PyEnvironment::Clear() noexcept
     m_undefined = nb::none();
     m_finalize = nb::none();
     m_policiesSnapshot = nb::object();
-    m_policiesDumps = nb::object();
+    m_policiesDumps = nb::handle();
     m_policies.reset();
     m_autoescape = nb::none();
     m_extensions = nb::none();

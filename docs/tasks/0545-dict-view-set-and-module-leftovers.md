@@ -66,4 +66,12 @@ to `IListItemAccessor` changes its vtable, accepted while the G1 freeze is postp
 (cases added). Item 5's `range.mro()` matches in a plain environment (the oracle's `range` is the builtin class);
 in the module's sandbox it is `safe_range`'s UndefinedError. Deliberate lines (tag 0545): sets changed in a loop
 over them (follow-up 0560), an entry erased and re-added on every pass, and the lazy pipelines and mappingproxy
-loops that walk a snapshot. Not probed: `Markup.format` of a host `__html__` object with a non-empty spec.
+loops that walk a snapshot.
+
+**Verifier round 1 (2026-11-20).** Public API: `IHostObject::HtmlFormat(spec)` (virtual, default nullopt), what
+`Markup.format` makes of a field with `__html_format__` or `__html__` as markupsafe's EscapeFormatter has it; the
+Python module asks markupsafe's own formatter, so the order and the ValueError for a spec are Jinja2's. Additive
+(a vtable change, as `GetViewClass`). Set methods count the hash tables they build against `maxRenderMemory` for the
+call. Not fixed: `{{ l|pprint }}` of a list that holds itself fails with the recursion limit, where Python prints
+`[<Recursion on list with id=...>]` (pprint's `_safe_repr`, not the `[...]` of `repr`); the output carries the
+object's address, so no corpus case can match it.

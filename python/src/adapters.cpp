@@ -593,6 +593,26 @@ std::string PyHost::Html() const
     return Utf8(Steal(PyObject_CallMethod(m_object, "__html__", nullptr)));
 }
 
+std::optional<std::string> PyHost::HtmlFormat(std::string_view spec) const
+{
+    if (m_kind != Kind::Other)
+    {
+        return std::nullopt;
+    }
+    if (PyObject_HasAttrString(m_object, "__html_format__") == 0 && !IsMarkupLike())
+    {
+        return std::nullopt;
+    }
+    // markupsafe's own formatter, so that its order (__html_format__, then __html__ without a spec) and its errors are
+    // the ones Markup.format has
+    static PyObject* const formatter = [] {
+        const auto markupsafe = nb::module_::import_("markupsafe");
+        return markupsafe.attr("EscapeFormatter")(markupsafe.attr("escape")).release().ptr();
+    }();
+    const auto text = Steal(PyUnicode_FromStringAndSize(spec.data(), static_cast<Py_ssize_t>(spec.size())));
+    return Utf8(Steal(PyObject_CallMethod(formatter, "format_field", "OO", m_object, text.ptr())));
+}
+
 bool PyHost::IsNumber() const
 {
     if (m_kind != Kind::Other)

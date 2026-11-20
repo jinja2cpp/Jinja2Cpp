@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace jinja2
@@ -118,6 +119,9 @@ public:
     // autoescape, and is `escaped`
     [[nodiscard]] virtual bool IsMarkupLike() const { return false; }
     [[nodiscard]] virtual std::string Html() const { return Str(); }
+    // What Markup.format makes of the object as a field with `spec` (EscapeFormatter.format_field of an object with
+    // __html_format__ or __html__): the escaped text, or nullopt for an object with neither
+    [[nodiscard]] virtual std::optional<std::string> HtmlFormat(std::string_view /*spec*/) const { return std::nullopt; }
     // isinstance(x, numbers.Number); int(x) and float(x) (nullopt: the object has no such value)
     [[nodiscard]] virtual bool IsNumber() const { return false; }
     [[nodiscard]] virtual std::optional<InternalValue> ToInt() const { return std::nullopt; }

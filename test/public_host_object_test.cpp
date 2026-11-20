@@ -2341,11 +2341,32 @@ TEST(PublicHostObjectTest, DictViewsAndSetsOfTheEngineAreNamedToTheHost)
     // IListItemAccessor::GetViewClass: the Python type of the engine's own views, which a host may give its own type (0545)
     std::string seen;
     const ValuesMap params{ { "probe", Probe([&seen](const UserCallableParams& p) {
-                                  const auto* list = p["x"].GetIf<GenericList>();
+                                  const Value x = p["x"];
+                                  const auto* list = x.GetIf<GenericList>();
                                   const char* viewClass = list ? list->GetViewClass() : nullptr;
                                   seen += (viewClass ? viewClass : "-") + std::string(";");
                                   return Value();
                               }) } };
     Render("{% set d = {'a': 1} %}{{ probe(d.keys()) }}{{ probe(d.values()) }}{{ probe(d.items()) }}{{ probe(d.keys() - []) }}{{ probe([1]) }}{{ probe((1, 2)) }}", params);
     EXPECT_EQ("dict_keys;dict_values;dict_items;set;-;-;", seen);
+}
+
+// A host's dict_keys is a set view for the engine (host::AsSetView): `-` reads its keys; a host dict on the right of
+// an engine view's `-` is read as its keys, as Python reads it (0545)
+TEST(PublicHostObjectTest, HostDictKeysAndHostDictsTakeThePartOfASetInSetOperations)
+{
+    ToySpec keys;
+    keys.typeName = "dict_keys";
+    keys.iteration = std::vector<Value>{ Value("a"), Value("b") };
+    keys.indexable = true;
+    ToySpec dict;
+    dict.mapping = true;
+    dict.iteration = std::vector<Value>{ Value("a") };
+    dict.indexable = true;
+    dict.items = { { "a", Value(1) } };
+    const ValuesMap params{ { "k", MakeToy(keys) }, { "d", MakeToy(dict) } };
+    EXPECT_EQ("['b']", Render("{{ (k - ['a'])|list }}", params));
+    EXPECT_EQ("['c']", Render("{{ ({'a': 1, 'c': 2}.keys() - d)|list }}", params));
+    EXPECT_EQ("['c']", Render("{{ ({'a': 1, 'c': 2}.keys() - k)|list }}", params));
+    EXPECT_EQ("['b']", Render("{{ (k - d)|list }}", params));
 }

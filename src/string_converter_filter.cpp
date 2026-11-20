@@ -1978,16 +1978,18 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
             rel += (rel.empty() ? String() : String(1, ' ')) + part;
         }
 
-        auto targetVal = this->GetArgumentValue("target", context);
+        bool targetGiven = false;
+        auto targetVal = this->GetArgumentValue("target", context, targetGiven);
         auto target = GetAsSameString(srcStr, targetVal).value_or(String());
-        // None or unset: the policy's target
-        if (IsEmpty(targetVal) && policies.urlizeTarget)
+        // None or unset: the policy's target. An undefined one that is passed is no None: it adds no target
+        if (!FunctionBase::IsArgumentSet(targetVal, targetGiven) && policies.urlizeTarget)
         {
             target = ConvertString<String>(*policies.urlizeTarget);
         }
 
         std::vector<String> extraSchemes;
-        auto schemesVal = this->GetArgumentValue("extra_schemes", context);
+        bool schemesGiven = false;
+        auto schemesVal = this->GetArgumentValue("extra_schemes", context, schemesGiven);
         // A string is iterated too, one scheme per character, none of them valid
         if (auto text = GetAsSameString(srcStr, schemesVal); text && !text->empty())
         {
@@ -2004,7 +2006,7 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
             extraSchemes.push_back(std::move(*str));
         };
         auto addScheme = [&srcStr, &addSchemeText](const InternalValue& scheme) { addSchemeText(GetAsSameString(srcStr, scheme)); };
-        if (IsEmpty(schemesVal))
+        if (!FunctionBase::IsArgumentSet(schemesVal, schemesGiven))
         {
             // None or unset: the policy's schemes (urlize.extra_schemes), checked like the argument
             for (const auto& scheme : policies.urlizeExtraSchemes)

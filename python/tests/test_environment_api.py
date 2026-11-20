@@ -757,3 +757,36 @@ def test_a_dumps_function_is_collected_with_the_environment():
     del env, dumper, template
     gc.collect()
     assert [ref() for ref in refs] == [None, None, None]
+
+
+def test_replaced_dumps_functions_are_not_kept():
+    # Only the current json.dumps_function stays; a template loaded before keeps the one it was loaded with
+    class Dumper:
+        def __init__(self, tag):
+            self.tag = tag
+
+        def __call__(self, value, **kwargs):
+            return self.tag
+
+    env = jinja2cpp.Environment()
+    refs = []
+    old = env.from_string("{{ 1|tojson }}")
+    first = Dumper("0")
+    refs.append(weakref.ref(first))
+    env.policies["json.dumps_function"] = first
+    template = env.from_string("{{ 1|tojson }}")
+    assert template.render() == "0"
+    del first
+    for i in range(1, 200):
+        dumper = Dumper(str(i))
+        refs.append(weakref.ref(dumper))
+        env.policies["json.dumps_function"] = dumper
+        del dumper
+        assert env.from_string("{{ 1|tojson }}").render() == str(i)
+        assert old.render() == str(i)
+    gc.collect()
+    assert sum(ref() is not None for ref in refs) <= 3
+    assert template.render() == "199"
+    env.policies["json.dumps_function"] = None
+    gc.collect()
+    assert sum(ref() is not None for ref in refs) <= 2

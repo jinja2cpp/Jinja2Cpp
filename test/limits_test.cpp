@@ -169,6 +169,9 @@ std::vector<LimitCase> Cases()
         // A list past the budget fails before its buffer is allocated, and sort() gives back the buffer it replaces
         // (Codex on #849)
         { "MemoryHugeListUpFront", "{{ range(2**26)|list|length }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        { "MemorySetSubsetOfRange", "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ s.issubset(range(3000000)) }}", [](auto& l) { l.maxRenderMemory = 1 << 26; }, "maxRenderMemory" },
+        { "MemorySetUnionOfRange", "{% set s = {1: 0}.keys() - [] %}{% set s = s.union(range(3000000)) %}{{ s|length }}", [](auto& l) { l.maxRenderMemory = 1 << 26; }, "maxRenderMemory" },
+        { "MemorySetOpsGiveTheirTableBack", "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% for i in range(20000) %}{% set _ = s.issubset(range(100)) %}{% set _ = s.intersection(range(100)) %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         { "MemorySortAfterClear", "{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.clear() %}{% set _ = x.sort() %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         { "MemorySortKeepsCount", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.sort() %}{% set _ = ns.l.append(x) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         // Every object counts, not only the slot that holds it (docs/tasks/0478): the lists below alone take at most

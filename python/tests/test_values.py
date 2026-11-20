@@ -444,6 +444,62 @@ def test_markup_format_escapes_a_host_objects_format():
     assert_same("{{ '{0:a&b}'.format(o) }}|{{ ('<{0}>'|safe).format(o) }}|{{ ('{0:x}'|safe).format(o) }}", {"o": Amp()}, {"autoescape": True})
 
 
+class _Html:
+    """__html__ gives a str, which Markup.format escapes (markupsafe's EscapeFormatter)."""
+
+    def __html__(self):
+        return "<b>h</b>"
+
+    def __format__(self, spec):
+        return "F" + spec
+
+
+class _HtmlMarkup:
+    def __html__(self):
+        return markupsafe.Markup("<b>m</b>")
+
+
+class _HtmlFormat:
+    def __html__(self):
+        return "<i>"
+
+    def __html_format__(self, spec):
+        return "<" + spec + ">"
+
+
+class _OnlyHtmlFormat:
+    def __html_format__(self, spec):
+        return markupsafe.Markup("<u" + spec + ">")
+
+
+@pytest.mark.parametrize("cls", [_Html, _HtmlMarkup, _HtmlFormat, _OnlyHtmlFormat])
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ ('{0}'|safe).format(o) }}",
+        "{{ ('<{0}>'|safe).format(o) }}",
+        "{{ ('{0:>5}'|safe).format(o) }}",
+        "{{ ('{x:a&b}'|safe).format_map({'x': o}) }}",
+        "{{ '{0}'.format(o)|length }}",
+    ],
+)
+def test_markup_format_of_a_host_object_with_html(cls, source):
+    results = []
+    for module in (jinja2, jinja2cpp):
+        try:
+            results.append(module.Environment(autoescape=True).from_string(source).render(o=cls()))
+        except (ValueError, module.TemplateRuntimeError) as error:
+            results.append("error: " + str(error).split(" given, but")[0])
+    assert results[0] == results[1], results
+
+
+def test_markup_format_of_a_host_object_with_html_and_a_spec_is_a_value_error():
+    for module in (jinja2, jinja2cpp):
+        template = module.Environment(autoescape=True).from_string("{{ ('{0:>5}'|safe).format(o) }}")
+        with pytest.raises(Exception, match="Format specifier >5 given, but .*_Html.* does not define __html_format__"):
+            template.render(o=_Html())
+
+
 def test_format_is_looked_up_on_the_type():
     # str.format resolves __format__ as a special method: an instance attribute of that name is not it
     class Shadowed:

@@ -1991,7 +1991,7 @@ struct StrOps
     static std::optional<std::pair<Str, bool>> HostFormat(const InternalValue& value, View spec, RenderContext& context)
     {
         const auto* host = GetHostObject(value);
-        if (!host || host->IsMarkupLike() || context.GetSandboxPolicy())
+        if (!host || context.GetSandboxPolicy())
         {
             return std::nullopt;
         }
@@ -2049,6 +2049,17 @@ struct StrOps
         {
             expanded = Build(field.spec, params, numbering, context, escape, depth - 1);
             spec = expanded;
+        }
+        if (escape && !context.GetSandboxPolicy())
+        {
+            // An object with __html_format__ or __html__ formats itself as markupsafe's EscapeFormatter has it
+            if (const auto* host = GetHostObject(value))
+            {
+                if (auto html = host->HtmlFormat(ConvertString<std::string>(std::basic_string<CharT>(spec))))
+                {
+                    return ConvertString<Str>(*html);
+                }
+            }
         }
         if (auto hosted = HostFormat(value, spec, context))
         {
@@ -3143,9 +3154,31 @@ const MethodInfo DictViewMethods[] = {
 // order they came. A method that changes it changes that list, as a list's do; Python's order is its hash
 // table's, which no template can rely on
 
+// The hash table a set method builds of the items it reads lives for the call only and is no value the render
+// counts, so each of its entries is charged to the render's memory budget (maxRenderMemory) and given back when the
+// call ends: `s.issubset(range(3000000))` fails with the limit as any other big allocation does
+class SetScratch
+{
+public:
+    SetScratch() = default;
+    SetScratch(const SetScratch&) = delete;
+    SetScratch& operator=(const SetScratch&) = delete;
+    ~SetScratch() { ReleaseRenderMemory(m_charged); }
+    // One more entry of a table that is being built
+    void Entry()
+    {
+        constexpr std::uint64_t bytes = sizeof(InternalDict::value_type) + (2 * sizeof(void*));
+        ChargeRenderMemory(bytes);
+        m_charged += bytes;
+    }
+
+private:
+    std::uint64_t m_charged = 0;
+};
+
 // The items of `range` by their hash tokens; an unhashable item is Python's TypeError
 template<typename Range>
-InternalDict SetEntries(const Range& range)
+InternalDict SetEntries(const Range& range, SetScratch& scratch)
 {
     InternalDict entries;
     for (const auto& item : range)
@@ -3158,6 +3191,7 @@ InternalDict SetEntries(const Range& range)
         }
         if (entries.try_emplace(std::move(*token), item).second)
         {
+            scratch.Entry();
             CheckSequenceSize(uint64_t{ entries.size() }, "a set");
         }
     }
@@ -3165,7 +3199,7 @@ InternalDict SetEntries(const Range& range)
 }
 
 // The items of the iterable a set method takes (a string's characters, a dict's keys), hashed
-InternalDict SetArgumentEntries(const InternalValue& arg)
+InternalDict SetArgumentEntries(const InternalValue& arg, SetScratch& scratch)
 {
     bool isConverted = false;
     const auto other = ConvertToList(arg, isConverted, false);
@@ -3173,7 +3207,7 @@ InternalDict SetArgumentEntries(const InternalValue& arg)
     {
         Raise("'" + TypeName(arg) + "' object is not iterable");
     }
-    return SetEntries(other);
+    return SetEntries(other, scratch);
 }
 
 InternalValue MakeSet(const InternalDict& entries)
@@ -3196,13 +3230,14 @@ enum class SetOp : uint8_t
 };
 
 // The items of `source` that are (keepPresent) or are not in `reference`
-InternalDict SetFiltered(const InternalDict& source, const InternalDict& reference, bool keepPresent)
+InternalDict SetFiltered(const InternalDict& source, const InternalDict& reference, bool keepPresent, SetScratch& scratch)
 {
     InternalDict kept;
     for (const auto& entry : source)
     {
         if ((reference.find(entry.first) != reference.end()) == keepPresent)
         {
+            scratch.Entry();
             kept.try_emplace(entry.first, entry.second);
         }
     }
@@ -3210,12 +3245,13 @@ InternalDict SetFiltered(const InternalDict& source, const InternalDict& referen
 }
 
 // The items of `other` added to `entries`
-void SetUnionInto(InternalDict& entries, const InternalDict& other)
+void SetUnionInto(InternalDict& entries, const InternalDict& other, SetScratch& scratch)
 {
     for (const auto& item : other)
     {
         if (entries.try_emplace(item.first, item.second).second)
         {
+            scratch.Entry();
             CheckSequenceSize(uint64_t{ entries.size() }, "a set");
         }
     }
@@ -3223,7 +3259,7 @@ void SetUnionInto(InternalDict& entries, const InternalDict& other)
 
 // The items of `entries` that `other` has. They come from the argument, as Python's do (2.0 for 2), unless it is a set
 // larger than the receiver
-InternalDict SetIntersection(const InternalDict& entries, const InternalDict& other, const InternalValue& arg)
+InternalDict SetIntersection(const InternalDict& entries, const InternalDict& other, const InternalValue& arg, SetScratch& scratch)
 {
     const auto list = AsList(arg);
     const bool fromReceiver = list && list->GetIteratorKind() == IteratorKind::Set && other.size() > entries.size();
@@ -3232,6 +3268,7 @@ InternalDict SetIntersection(const InternalDict& entries, const InternalDict& ot
     {
         if (const auto found = other.find(entry.first); found != other.end())
         {
+            scratch.Entry();
             kept.try_emplace(entry.first, fromReceiver ? entry.second : found->second);
         }
     }
@@ -3239,11 +3276,12 @@ InternalDict SetIntersection(const InternalDict& entries, const InternalDict& ot
 }
 
 // The items that only one of `entries` and `other` has
-InternalDict SetSymmetricDifference(const InternalDict& entries, const InternalDict& other)
+InternalDict SetSymmetricDifference(const InternalDict& entries, const InternalDict& other, SetScratch& scratch)
 {
-    auto result = SetFiltered(entries, other, false);
-    for (const auto& item : SetFiltered(other, entries, false))
+    auto result = SetFiltered(entries, other, false, scratch);
+    for (const auto& item : SetFiltered(other, entries, false, scratch))
     {
+        scratch.Entry();
         result.try_emplace(item.first, item.second);
     }
     CheckSequenceSize(uint64_t{ result.size() }, "a set");
@@ -3251,25 +3289,25 @@ InternalDict SetSymmetricDifference(const InternalDict& entries, const InternalD
 }
 
 // The set `op` makes of the receiver and the iterables of the call; every argument is read before anything is made
-InternalDict SetCombine(SetOp op, const InternalValue& self, const CallParams& params)
+InternalDict SetCombine(SetOp op, const InternalValue& self, const CallParams& params, SetScratch& scratch)
 {
-    auto entries = SetEntries(ListOf(self));
+    auto entries = SetEntries(ListOf(self), scratch);
     for (const auto& arg : params.posParams)
     {
-        const auto other = SetArgumentEntries(arg);
+        const auto other = SetArgumentEntries(arg, scratch);
         switch (op)
         {
         case SetOp::Union:
-            SetUnionInto(entries, other);
+            SetUnionInto(entries, other, scratch);
             break;
         case SetOp::Intersection:
-            entries = SetIntersection(entries, other, arg);
+            entries = SetIntersection(entries, other, arg, scratch);
             break;
         case SetOp::Difference:
-            entries = SetFiltered(entries, other, false);
+            entries = SetFiltered(entries, other, false, scratch);
             break;
         case SetOp::SymmetricDifference:
-            entries = SetSymmetricDifference(entries, other);
+            entries = SetSymmetricDifference(entries, other, scratch);
             break;
         }
     }
@@ -3282,13 +3320,14 @@ InternalValue SetCombined(const InternalValue& self, const CallParams& params, R
     constexpr const char* names[] = { "union", "intersection", "difference", "symmetric_difference" };
     constexpr bool single = op == SetOp::SymmetricDifference;
     CheckArgs(params, names[static_cast<size_t>(op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
-    return MakeSet(SetCombine(op, self, params));
+    SetScratch scratch;
+    return MakeSet(SetCombine(op, self, params, scratch));
 }
 
 // The receiver's items become `entries`, which SetCombine made from them
-InternalValue SetReplace(const InternalValue& self, const InternalDict& entries)
+InternalValue SetReplace(const InternalValue& self, const InternalDict& entries, SetScratch& scratch)
 {
-    const auto before = SetEntries(ListOf(self));
+    const auto before = SetEntries(ListOf(self), scratch);
     auto& items = MutableItems(self);
     ReserveCounted(items, entries.size());
     for (const auto& entry : before)
@@ -3319,22 +3358,25 @@ InternalValue SetCombinedUpdate(const InternalValue& self, const CallParams& par
     constexpr const char* names[] = { "update", "intersection_update", "difference_update", "symmetric_difference_update" };
     constexpr bool single = op == SetOp::SymmetricDifference;
     CheckArgs(params, names[static_cast<size_t>(op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
-    return SetReplace(self, SetCombine(op, self, params));
+    SetScratch scratch;
+    return SetReplace(self, SetCombine(op, self, params, scratch), scratch);
 }
 
 InternalValue SetIsSubset(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "issubset", 1, 1);
-    const auto other = SetArgumentEntries(params.posParams[0]);
-    const auto entries = SetEntries(ListOf(self));
+    SetScratch scratch;
+    const auto other = SetArgumentEntries(params.posParams[0], scratch);
+    const auto entries = SetEntries(ListOf(self), scratch);
     return std::all_of(entries.begin(), entries.end(), [&other](const auto& entry) { return other.find(entry.first) != other.end(); });
 }
 
 InternalValue SetIsSuperset(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "issuperset", 1, 1);
-    const auto other = SetArgumentEntries(params.posParams[0]);
-    const auto entries = SetEntries(ListOf(self));
+    SetScratch scratch;
+    const auto other = SetArgumentEntries(params.posParams[0], scratch);
+    const auto entries = SetEntries(ListOf(self), scratch);
     return std::all_of(other.begin(), other.end(), [&entries](const auto& entry) { return entries.find(entry.first) != entries.end(); });
 }
 

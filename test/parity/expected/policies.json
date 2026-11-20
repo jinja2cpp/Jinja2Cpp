@@ -215,6 +215,48 @@
    "output": "see <a href=\"http://example.com/c\" rel=\"noopener\" target=\"a&#34;b\">http://example.com/c</a> now"
   },
   {
+   "id": "policies.urlize_target_argument_undefined",
+   "template": "{{ 'http://a.com ssh:b'|urlize(target=nope) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.target": "_x",
+     "urlize.extra_schemes": [
+      "ssh:"
+     ]
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://a.com\" rel=\"noopener\">http://a.com</a> <a href=\"ssh:b\" rel=\"noopener\">ssh:b</a>"
+  },
+  {
+   "id": "policies.urlize_schemes_argument_undefined",
+   "template": "{{ 'http://a.com ssh:b'|urlize(extra_schemes=nope) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.target": "_x",
+     "urlize.extra_schemes": [
+      "ssh:"
+     ]
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://a.com\" rel=\"noopener\" target=\"_x\">http://a.com</a> ssh:b"
+  },
+  {
    "id": "policies.urlize_schemes_default",
    "template": "{{ 'ssh:a@b tel:123 http://example.com'|urlize }}",
    "context": {
@@ -462,6 +504,28 @@
    },
    "templates": {},
    "output": "abcdefg..."
+  },
+  {
+   "id": "policies.truncate_leeway_argument_undefined",
+   "template": "{{ 'abcdefghijklmnop'|truncate(10, leeway=nope) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "truncate.leeway": 0
+    }
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
   },
   {
    "id": "policies.truncate_leeway_argument_wins",

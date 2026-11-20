@@ -169,7 +169,10 @@ private:
     // json.dumps_kwargs the policies call, kept by the list of every engine environment (Keep) and reported by Traverse
     std::shared_ptr<const jinja2::FilterPolicies> m_policies = std::make_shared<const jinja2::FilterPolicies>();
     nb::object m_policiesSnapshot;
-    nb::object m_policiesDumps;
+    // Not an owning reference: m_policies owns it (RefreshPolicies), and Traverse reports that one
+    nb::handle m_policiesDumps;
+    // Whether the list m_bound holds the wrapper m_policiesDumps (or an earlier one): a change of it starts a new list
+    bool m_dumpsKept = false;
     nb::object m_globals;
     nb::object m_filters;
     nb::object m_tests;

@@ -31,6 +31,8 @@ CASES = [
     ("urlize_target_argument", "{{ 'http://example.com'|urlize(target='_top') }}", pol(urlize__target="_blank")),
     ("urlize_target_argument_none", "{{ 'http://example.com'|urlize(target=none) }}", pol(urlize__target="_blank")),
     ("urlize_target_escaped", URL, pol(urlize__target='a"b')),
+    ("urlize_target_argument_undefined", "{{ 'http://a.com ssh:b'|urlize(target=nope) }}", pol(urlize__target="_x", urlize__extra_schemes=["ssh:"])),
+    ("urlize_schemes_argument_undefined", "{{ 'http://a.com ssh:b'|urlize(extra_schemes=nope) }}", pol(urlize__target="_x", urlize__extra_schemes=["ssh:"])),
     # urlize.extra_schemes
     ("urlize_schemes_default", SCHEMES),
     ("urlize_schemes_policy", SCHEMES, pol(urlize__extra_schemes=["ssh:", "tel:"])),
@@ -46,6 +48,7 @@ CASES = [
     ("truncate_leeway_large", TRUNCATE, pol(truncate__leeway=100)),
     ("truncate_leeway_negative", TRUNCATE, pol(truncate__leeway=-1)),
     ("truncate_leeway_argument_none", "{{ 'abcdefghijklmnop'|truncate(10, leeway=none) }}", pol(truncate__leeway=0)),
+    ("truncate_leeway_argument_undefined", "{{ 'abcdefghijklmnop'|truncate(10, leeway=nope) }}", pol(truncate__leeway=0)),
     ("truncate_leeway_argument_wins", "{{ 'abcdefghijklmnop'|truncate(10, leeway=9) }}", pol(truncate__leeway=0)),
     # json.dumps_kwargs
     ("tojson_default", DICT),

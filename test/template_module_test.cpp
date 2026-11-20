@@ -1376,3 +1376,37 @@ TEST_F(TemplateModuleTest, KeptSelfHoldingExportGoesWithTheHostsValue)
         }
     }
 }
+
+// 0545: a dict view or set a module's call hands a host callable keeps its Python type for the host
+// (IListItemAccessor::GetViewClass of CallListView)
+TEST_F(TemplateModuleTest, AViewOfAModuleCallKeepsItsViewClass)
+{
+    auto seen = std::make_shared<std::string>();
+    jinja2::ValuesMap params;
+    params["keep"] = jinja2::UserCallable(
+        [seen](const jinja2::UserCallableParams& p) {
+            const jinja2::Value x = p["x"];
+            const auto* list = x.GetIf<jinja2::GenericList>();
+            const auto viewClassOf = [](const jinja2::GenericList* l) { return l && l->GetViewClass() ? l->GetViewClass() : "-"; };
+            if (list && list->GetViewClass() == nullptr && list->GetSize().value_or(0) == 5)
+            {
+                // The views in a list the template made
+                const auto* indexer = list->GetAccessor()->GetIndexer();
+                for (int64_t i = 0; i < 5; ++i)
+                {
+                    const jinja2::Value item = indexer->GetItemByIndex(i);
+                    *seen += viewClassOf(item.GetIf<jinja2::GenericList>()) + std::string(";");
+                }
+                return jinja2::Value();
+            }
+            *seen += viewClassOf(list) + std::string(";");
+            return jinja2::Value();
+        },
+        { jinja2::ArgInfo{ "x" } });
+    auto module = Make("{% macro m() %}{% set d = {'a': 1} %}{% set _ = keep(d.keys()) %}{% set _ = keep(d.values()) %}{% set _ = keep(d.items()) %}"
+                       "{% set _ = keep(d.keys() - []) %}{% set _ = keep([1]) %}"
+                       "{% set _ = keep([d.keys(), d.values(), d.items(), d.keys() - [], [1]]) %}{% endmacro %}",
+                       params);
+    Call(module.exports["m"]);
+    EXPECT_EQ("dict_keys;dict_values;dict_items;set;-;dict_keys;dict_values;dict_items;set;-;", *seen);
+}

@@ -259,6 +259,15 @@ public:
     [[nodiscard]] virtual bool IsMarkupLike() const;
     //! `x.__html__()`, UTF-8; the default is \ref Str
     [[nodiscard]] virtual std::string Html() const;
+    /*!
+     * \brief What `Markup.format` makes of the object as a replacement field, as markupsafe's EscapeFormatter does
+     *
+     * Given the format spec: `x.__html_format__(spec)` when the object has it, else `x.__html__()` (a non-empty spec
+     * then fails, as markupsafe's ValueError does), escaped as `markupsafe.escape` does. The result is already
+     * escaped and taken as it is. Nullopt, the default, when the object has neither: the engine formats it as it
+     * does any other value and escapes that
+     */
+    [[nodiscard]] virtual std::optional<std::string> HtmlFormat(std::string_view spec) const;
     //! `isinstance(x, numbers.Number)`, for `is number`; false by default
     [[nodiscard]] virtual bool IsNumber() const;
     /*!
