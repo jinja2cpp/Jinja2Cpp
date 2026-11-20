@@ -271,7 +271,9 @@ private:
     }
     void StampAddedSlow(iterator pos);
     // What the render's memory budget counts for one note: a node of the table and its bucket
-    static constexpr std::uint64_t NoteBytes = sizeof(std::pair<const std::uintptr_t, std::uint64_t>) + (3 * sizeof(void*));
+    static constexpr std::uint64_t NoteNode = sizeof(std::pair<const std::uintptr_t, std::uint64_t>);
+    static constexpr std::uint64_t NoteBucket = 3 * sizeof(void*);
+    static constexpr std::uint64_t NoteBytes = NoteNode + NoteBucket;
 
     InternalDict m_items;
     // Token to first spelling, for the entries that are not stored under their own string, and the epochs; also the
