@@ -4192,7 +4192,7 @@ bool ImportedModule::HeldOnlyBy(const Group& ending, const Group& staying, const
             {
                 return;
             }
-            if (auto found = std::find_if(held.begin(), held.end(), [object](const Held& h) { return h.object == object; }); found != held.end())
+            if (auto* found = std::find_if(held.begin(), held.end(), [object](const Held& h) { return h.object == object; }); found != held.end())
             {
                 ++found->count;
                 found->stays = found->stays || stays;
