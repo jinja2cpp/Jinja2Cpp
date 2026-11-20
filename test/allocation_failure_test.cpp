@@ -810,10 +810,20 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
                                        Row{ "{% import 'child' as c with context %}", false }, Row{ "{% import 'blocks' as b with context %}", false },
                                        // Calls that fail
                                        Row{ "{% include 'lib' %}{{ 1 // 0 }}", true }, Row{ "{% include 'child' %}{{ 1 // 0 }}", true },
-                                       Row{ "{% import 'lib' as l with context %}{{ l.x() }}{{ 1 // 0 }}", true } })
+                                       Row{ "{% import 'lib' as l with context %}{{ l.x() }}{{ 1 // 0 }}", true },
+                                       // A shared module whose top level imports a helper goes with it, with and without context,
+                                       // by `import` and `from`; a helper whose source did not change stays shared (docs/tasks/0541)
+                                       Row{ "{% import 'imports' as l %}{{ l.x() }}", false }, Row{ "{% from 'imports' import x %}{{ x() }}", false },
+                                       Row{ "{% import 'imports_from' as l %}{{ l.x() }}", false },
+                                       Row{ "{% import 'imports_ctx' as l %}{{ l.x() }}", false },
+                                       Row{ "{% import 'imports_from_ctx' as l %}{{ l.x() }}", false },
+                                       Row{ "{% import 'imports_stable' as l %}{{ l.x() }}", false },
+                                       Row{ "{% import 'imports_stable_ctx' as l %}{{ l.x() }}", false },
+                                       Row{ "{% import 'imports_nested' as l %}{{ l.x() }}", false } })
     {
         auto module = MakeModule(body);
         m_fs->AddFile("base", "<{% block b %}base{% endblock %}>");
+        m_fs->AddFile("stable", "{% macro s() %}S{% endmacro %}{% set u = [5] %}");
         const auto& m = module.exports["m"];
         int serial = 0;
         const auto callMany = [&, failing = fails](int count) {
@@ -824,6 +834,14 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
                 m_fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}" + mark);
                 m_fs->AddFile("child", "{% extends 'base' %}{% block b %}child{% endblock %}" + mark);
                 m_fs->AddFile("blocks", "{% block b %}B{% endblock %}{% block c %}C{% endblock %}" + mark);
+                m_fs->AddFile("helper", "{% macro y() %}Y{% endmacro %}{% set w = [4] %}" + mark);
+                m_fs->AddFile("imports", "{% import 'helper' as h %}{% macro x() %}X{{ h.y() }}{% endmacro %}" + mark);
+                m_fs->AddFile("imports_from", "{% from 'helper' import y, w %}{% macro x() %}X{{ y() }}{{ w }}{% endmacro %}" + mark);
+                m_fs->AddFile("imports_ctx", "{% set v = [1] %}{% import 'helper' as h with context %}{% macro x() %}X{{ h.y() }}{% endmacro %}" + mark);
+                m_fs->AddFile("imports_from_ctx", "{% macro z() %}Z{% endmacro %}{% from 'helper' import y with context %}{% macro x() %}X{{ y() }}{{ z() }}{% endmacro %}" + mark);
+                m_fs->AddFile("imports_stable", "{% import 'stable' as h %}{% from 'stable' import s %}{% macro x() %}X{{ h.s() }}{{ s() }}{% endmacro %}" + mark);
+                m_fs->AddFile("imports_stable_ctx", "{% import 'stable' as h with context %}{% macro x() %}X{{ h.s() }}{% endmacro %}" + mark);
+                m_fs->AddFile("imports_nested", "{% import 'imports' as i %}{% import 'stable' as t %}{% macro x() %}X{{ i.x() }}{{ t.s() }}{% endmacro %}" + mark);
                 if (failing)
                 {
                     EXPECT_THROW(Call(m), jinja2::BadResultAccess<>);

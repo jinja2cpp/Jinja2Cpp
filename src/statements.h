@@ -706,11 +706,14 @@ public:
     // Whether the module holds handles of a render's table of templates: its blocks, or the parent
     // its template extends, which a module's slots must keep (docs/tasks/0503)
     [[nodiscard]] bool HoldsTemplateHandles() const noexcept { return !m_blocks.blocks.empty() || static_cast<bool>(m_frame.parent); }
-    // Whether only the module and the result of the load it was made from hold what it made: each value of its names
-    // is held by them and the object `import ... as` made of them alone, and its tree (SetTreeOwner) by the load, the
-    // module and its own macros alone. Then nothing else can reach the module or view its tree, and it may end
-    // with them (docs/tasks/0528). False for a module whose tree is not kept by value
-    [[nodiscard]] bool HeldOnlyByItself() const noexcept;
+    // Whether only the modules `ending` and the results of the loads they were made from hold what they made: each
+    // value of their names, of the importer's names one imported with context sees and their `import ... as` objects
+    // is held by them alone, and each of their trees (SetTreeOwner) by its load, the modules made from it and their
+    // macros alone (`all`, every module of the render). What a module of `staying` holds stays with it and may be held
+    // from anywhere, but must not be a macro of an ending module. Then nothing else can reach the ending modules or
+    // view their trees, and they may end together (docs/tasks/0528, 0541). False when one's tree is not kept by
+    // value. Throws std::bad_alloc
+    [[nodiscard]] static bool HeldOnlyBy(const std::vector<const ImportedModule*>& ending, const std::vector<const ImportedModule*>& staying, const std::vector<std::unique_ptr<ImportedModule>>& all);
 
 private:
     // Declared first, so that it goes last: the module's names and macros view the tree it keeps
