@@ -468,7 +468,11 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   the one `get_template` gives from its cache (0433), but an imported template sees the importer's
   dict: after `env.globals = {...}` Jinja2's imports of a cached template still see the old one
   (0405). Likewise the `globals` a `get_template` call gave reach that template's imports and
-  `without context` includes, which in Jinja2 see the environment's.
+  `without context` includes, which in Jinja2 see the environment's. This is deliberate (0405,
+  decided 2026-11-20): a render has one global scope, which its includes and imports share; a scope
+  of their own would convert the globals at each nested load of every render, and keep them alive
+  for the macros that outlive it. Change `env.globals` in place, not by replacing the dict, to see
+  the same in both.
 - A template binds the filters and tests when it loads and keeps them, with the `finalize`,
   `autoescape` callable and loader it was loaded with, where Jinja2 looks a filter up in
   `env.filters` at each render: a template loaded before `env.filters['f']` is replaced keeps
