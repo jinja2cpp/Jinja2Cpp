@@ -65,7 +65,7 @@ and `GenericList::GetViewClass()` in jinja2cpp/generic_list.h, so a host learns 
 to `IListItemAccessor` changes its vtable, accepted while the G1 freeze is postponed. Item 1 already matched
 (cases added). Item 5's `range.mro()` matches in a plain environment (the oracle's `range` is the builtin class);
 in the module's sandbox it is `safe_range`'s UndefinedError. Deliberate lines (tag 0545): sets changed in a loop
-over them (follow-up 0560), an entry erased and re-added on every pass, and the lazy pipelines and mappingproxy
+over them (follow-up 0561), an entry erased and re-added on every pass, and the lazy pipelines and mappingproxy
 loops that walk a snapshot.
 
 **Verifier round 1 (2026-11-20).** Public API: `IHostObject::HtmlFormat(spec)` (virtual, default nullopt), what
