@@ -25415,6 +25415,146 @@
     "type": "RuntimeError",
     "message": "dictionary changed size during iteration"
    }
+  },
+  {
+   "id": "statements.for_dict_live_readd_current_setdefault",
+   "template": "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% if k == 'a' %}{% do e.pop('a') %}{% do e.setdefault('a', 5) %}{% endif %}{{ k }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "dictionary keys changed during iteration"
+   }
+  },
+  {
+   "id": "statements.for_dict_live_readd_last_setdefault",
+   "template": "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% if k == 'b' %}{% do e.pop('b') %}{% do e.setdefault('b', 5) %}{% endif %}{{ k }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "dictionary keys changed during iteration"
+   }
+  },
+  {
+   "id": "statements.for_dict_live_readd_other_setdefault",
+   "template": "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% if k == 'a' %}{% do e.pop('b') %}{% do e.setdefault('b', 5) %}{% endif %}{{ k }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "ab"
   }
  ]
 }

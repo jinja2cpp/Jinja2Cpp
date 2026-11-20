@@ -156,6 +156,8 @@ std::vector<LimitCase> Cases()
         { "MemoryKeptLists", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set _ = ns.l.append(range(1000)|list) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         { "MemoryDroppedLists", "{% for i in range(100) %}{% set l = range(1000)|list %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         { "MemoryDictUpdate", "{% set d = {} %}{% for i in range(10000) %}{% set _ = d.update({i: i}) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
+        // docs/tasks/0553: the note of an entry added after an erase is counted and given back with the entry
+        { "MemoryDictReAdd", "{% set d = {'x': 0} %}{% for i in range(20000) %}{% set _ = d.pop('x') %}{% set _ = d.setdefault('x', i) %}{% endfor %}{{ d.x }}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "" },
         { "MemoryKeptString", "{% set ns = namespace(s='') %}{% for i in range(300) %}{% set ns.s = ns.s ~ ('x' * 1000) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "maxRenderMemory" },
         { "MemoryKeptStrings", "{% set l = [] %}{% for i in range(300) %}{% set _ = l.append('x' * 1000 ~ i) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "maxRenderMemory" },
         { "MemoryDroppedStrings", "{% for i in range(1000) %}{% set s = 'x' * 1000 ~ i %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "" },

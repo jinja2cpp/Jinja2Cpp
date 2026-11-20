@@ -611,3 +611,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0550](0550-recursive-level-failure-loses-top-names.md) | A failure through a nested level of a recursive loop loses the template's top-level names for its closures | parity | low | open |
 | [0551](0551-recursive-closure-earlier-pass-names.md) | A closure of a recursive loop reads a name its last pass did not store from the live frame below | parity | low | open |
 | [0552](0552-block-in-stored-macro-of-nested-render.md) | A block inside a macro a nested render stored renders empty once that render has ended | parity | low | open |
+| [0553](0553-dict-walk-readd-by-erase-epoch.md) | A dict walk misses a key erased and added again when the entry's address is reused | parity | high | done |
