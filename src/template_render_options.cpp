@@ -29,6 +29,7 @@ std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::RenderWithOptions(Targ
     hooks.writeEachPiece = options.writeEachPiece;
     hooks.pieceIsMarkup = options.pieceIsMarkup;
     hooks.suspension = options.suspension;
+    hooks.filterPolicies = options.filterPolicies.get();
     if (options.generationSpans)
     {
         options.generationSpans->clear();

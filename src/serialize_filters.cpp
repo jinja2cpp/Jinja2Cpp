@@ -1678,6 +1678,56 @@ std::optional<std::pair<std::string, std::string>> JsonSeparators(const Internal
     return std::make_pair(std::move(*item), std::move(*key));
 }
 
+// htmlsafe_json_dumps(value, dumps=policy): dumps(value[, indent=indent]) must be a str, whose <, >, & and ' become
+// \u escapes. `indent` is null when the filter was not given one
+InternalValue CallJsonDumps(const UserCallable& dumps, const InternalValue& value, const InternalValue* indent, RenderContext& context)
+{
+    const InternalValue callable = visitors::InputValueConvertor::ConvertUserCallable(dumps);
+    CallParams params;
+    params.posParams.push_back(value);
+    if (indent)
+    {
+        params.kwParams["indent"] = *indent;
+    }
+    const InternalValue result = GetIf<Callable>(&callable)->GetExpressionCallable()(params, context);
+    std::optional<std::string> text = GetAsSameString(std::string(), result);
+    if (!text)
+    {
+        if (auto wide = GetAsSameString(std::wstring(), result))
+        {
+            text = ConvertString<std::string>(*wide);
+        }
+    }
+    if (!text)
+    {
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(result) + "' object has no attribute 'replace'");
+    }
+    std::string escaped;
+    escaped.reserve(text->size());
+    for (const char ch : *text)
+    {
+        switch (ch)
+        {
+        case '<':
+            escaped += "\\u003c";
+            break;
+        case '>':
+            escaped += "\\u003e";
+            break;
+        case '&':
+            escaped += "\\u0026";
+            break;
+        case '\'':
+            escaped += "\\u0027";
+            break;
+        default:
+            escaped.push_back(ch);
+            break;
+        }
+    }
+    return InternalValue(std::move(escaped));
+}
+
 } // namespace
 
 InternalValue Serialize::Filter(const InternalValue& value, RenderContext& context)
@@ -1692,7 +1742,8 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     const bool isString = IsStringValue(value) || GetAsSameString(std::string(), value);
     JsonOptions options;
     // The argument is still evaluated: a failing or host-callable indent runs as in Python
-    auto indentVal = this->GetArgumentValue("indent", context);
+    bool indentGiven = false;
+    auto indentVal = this->GetArgumentValue("indent", context, indentGiven);
     options.indent = JsonIndent(isString ? InternalValue() : indentVal);
     if (m_mode == TransformersJsonMode)
     {
@@ -1707,10 +1758,27 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     }
 
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
-    // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both)
-    InternalValue resultVal = PythonJsonWriter(context, std::move(options)).Write(value);
-    // tojson output is always Markup: safe for HTML, so in prompt mode it is neutralized first (docs/tasks/0358)
+    // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both). The json.dumps
+    // policies are the defaults (docs/tasks/0435)
     auto* callback = context.GetRendererCallback();
+    const FilterPolicies& policies = callback->GetFilterPolicies();
+    InternalValue resultVal;
+    if (policies.jsonDumps.callable)
+    {
+        resultVal = CallJsonDumps(policies.jsonDumps, value, IsArgumentSet(indentVal, indentGiven) ? &indentVal : nullptr, context);
+    }
+    else
+    {
+        options.sortKeys = policies.jsonSortKeys;
+        options.ensureAscii = policies.jsonEnsureAscii;
+        options.separators = policies.jsonSeparators;
+        if (!options.indent && IsEmpty(indentVal))
+        {
+            options.indent = policies.jsonIndent;
+        }
+        resultVal = PythonJsonWriter(context, std::move(options)).Write(value);
+    }
+    // tojson output is always Markup: safe for HTML, so in prompt mode it is neutralized first (docs/tasks/0358)
     if (const auto* prompt = callback->GetPromptEscaper())
     {
         return detail::PromptEscape(resultVal, *prompt, callback);

@@ -189,6 +189,10 @@ struct IRendererCallback : IComparable
     // as the sandbox policy is: GenerationFreeze asks it where a macro or a call block runs (docs/tasks/0377)
     [[nodiscard]] detail::GenerationTracker* GetGenerationTracker() const noexcept { return m_generationTracker; }
     void SetGenerationTracker(detail::GenerationTracker* tracker) noexcept { m_generationTracker = tracker; }
+    // The filter policies urlize, truncate and tojson read: the render's own (RenderOptions::filterPolicies) or the
+    // template's settings. Asked where a filter runs, never per node
+    [[nodiscard]] const FilterPolicies& GetFilterPolicies() const { return m_filterPolicies ? *m_filterPolicies : GetSettings().filterPolicies; }
+    void SetFilterPolicies(const FilterPolicies* policies) noexcept { m_filterPolicies = policies; }
 
 protected:
     // Called once, when the template's callback is made
@@ -201,6 +205,7 @@ private:
     const detail::PromptEscaperImpl* m_promptEscaper = nullptr;
     const IEngineSandboxPolicy* m_sandboxPolicy = nullptr;
     detail::GenerationTracker* m_generationTracker = nullptr;
+    const FilterPolicies* m_filterPolicies = nullptr;
     bool m_keepsTreesByValue = false;
 };
 

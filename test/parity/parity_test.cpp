@@ -470,6 +470,71 @@ std::string ApplyExtensions(const Json& extensions, jinja2::Settings& settings)
     return {};
 }
 
+// env.policies of a case (Jinja2's spelling) onto Settings::filterPolicies and the i18n default. Returns the first
+// policy Jinja2C++ cannot express, or an empty string
+std::string ApplyPolicies(const Json& policies, jinja2::Settings& settings)
+{
+    auto& out = settings.filterPolicies;
+    for (auto it = policies.begin(); it != policies.end(); ++it)
+    {
+        const auto& key = it.key();
+        const auto& val = it.value();
+        if (key == "urlize.rel")
+        {
+            out.urlizeRel = val.is_null() ? std::string() : val.get<std::string>();
+        }
+        else if (key == "urlize.target")
+        {
+            out.urlizeTarget = val.is_null() ? std::nullopt : std::optional<std::string>(val.get<std::string>());
+        }
+        else if (key == "urlize.extra_schemes")
+        {
+            if (val.is_string())
+            {
+                // Python iterates a str: one scheme a character (ASCII here)
+                out.urlizeExtraSchemes.clear();
+                for (const char ch : val.get<std::string>())
+                {
+                    out.urlizeExtraSchemes.emplace_back(1, ch);
+                }
+            }
+            else
+            {
+                out.urlizeExtraSchemes = val.is_null() ? std::vector<std::string>() : val.get<std::vector<std::string>>();
+            }
+        }
+        else if (key == "truncate.leeway")
+        {
+            out.truncateLeeway = val.get<std::int64_t>();
+        }
+        else if (key == "ext.i18n.trimmed")
+        {
+            settings.extensions.i18nTrimmed = val.get<bool>();
+        }
+        else if (key == "json.dumps_kwargs")
+        {
+            // json.dumps' own defaults for what the dict leaves out; Jinja2's default dict is {"sort_keys": true}
+            out.jsonSortKeys = val.value("sort_keys", false);
+            out.jsonEnsureAscii = val.value("ensure_ascii", true);
+            out.jsonIndent.reset();
+            if (auto indent = val.find("indent"); indent != val.end() && !indent->is_null())
+            {
+                out.jsonIndent = indent->is_string() ? indent->get<std::string>() : std::string(static_cast<std::size_t>(indent->get<int>()), ' ');
+            }
+            out.jsonSeparators.reset();
+            if (auto separators = val.find("separators"); separators != val.end() && !separators->is_null())
+            {
+                out.jsonSeparators = std::make_pair((*separators)[0].get<std::string>(), (*separators)[1].get<std::string>());
+            }
+        }
+        else
+        {
+            return "policies " + key;
+        }
+    }
+    return {};
+}
+
 // Maps the Python Environment options of a case onto Settings. Returns the name of the
 // first option Jinja2C++ cannot express, or an empty string.
 std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
@@ -523,6 +588,13 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
         else if (key == "newstyle_gettext")
         {
             settings.extensions.i18nNewstyle = val.get<bool>();
+        }
+        else if (key == "policies")
+        {
+            if (auto unknown = ApplyPolicies(val, settings); !unknown.empty())
+            {
+                return unknown;
+            }
         }
         else if (key == "undefined")
         {

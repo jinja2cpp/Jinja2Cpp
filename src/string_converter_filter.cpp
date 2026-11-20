@@ -1574,13 +1574,13 @@ int64_t CodePointCount(const std::basic_string<CharT>& str)
     return std::count_if(str.begin(), str.end(), [](CharT ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; });
 }
 
-// truncate's leeway; isSet: FunctionBase::IsArgumentSet. Unset is the policy's 5; Python adds
+// truncate's leeway; isSet: FunctionBase::IsArgumentSet. Unset is the policy's (truncate.leeway, 5); Python adds
 // an undefined one to the length, which fails (docs/tasks/0310)
-int64_t TruncateLeeway(const InternalValue& leewayVal, bool isSet)
+int64_t TruncateLeeway(const InternalValue& leewayVal, bool isSet, RenderContext& context)
 {
     if (!isSet)
     {
-        return 5;
+        return context.GetRendererCallback()->GetFilterPolicies().truncateLeeway;
     }
     CheckUndefinedUse(leewayVal, UndefinedUse::Arithmetic);
     return NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
@@ -1805,7 +1805,7 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
         auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
         auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
         auto end = GetAsSameString(srcStr, endVal).value_or(String());
-        auto leeway = TruncateLeeway(leewayVal, FunctionBase::IsArgumentSet(leewayVal, leewayGiven));
+        auto leeway = TruncateLeeway(leewayVal, FunctionBase::IsArgumentSet(leewayVal, leewayGiven), context);
         auto endLength = CodePointCount(end);
         // Jinja2 asserts both
         if (length < endLength || leeway < 0)
@@ -1853,7 +1853,7 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
     bool leewayGiven = false;
     auto leewayVal = GetArgumentValue("leeway", context, leewayGiven);
     auto length = NumericArgument(GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
-    auto leeway = TruncateLeeway(leewayVal, IsArgumentSet(leewayVal, leewayGiven));
+    auto leeway = TruncateLeeway(leewayVal, IsArgumentSet(leewayVal, leewayGiven), context);
     int64_t endLength = 0;
     ApplyStringConverter(GetArgumentValue("end", context), [&endLength](auto endStr) -> TargetString {
         endLength = CodePointCount(std::basic_string(endStr));
@@ -1953,7 +1953,8 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
             limit = ConvertToInt(limitVal);
         }
 
-        // The rel words, plus nofollow and the default policy's noopener, sorted and unique
+        const FilterPolicies& policies = context.GetRendererCallback()->GetFilterPolicies();
+        // The rel words, plus nofollow and the policy's (urlize.rel, noopener), sorted and unique
         std::vector<String> relParts;
         std::basic_istringstream<CharT> relWords(GetAsSameString(srcStr, this->GetArgumentValue("rel", context)).value_or(String()));
         for (String word; relWords >> word;)
@@ -1964,7 +1965,11 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
         {
             relParts.push_back(AsciiString<CharT>("nofollow"));
         }
-        relParts.push_back(AsciiString<CharT>("noopener"));
+        std::basic_istringstream<CharT> policyWords(ConvertString<String>(policies.urlizeRel));
+        for (String word; policyWords >> word;)
+        {
+            relParts.push_back(word);
+        }
         std::sort(relParts.begin(), relParts.end());
         relParts.erase(std::unique(relParts.begin(), relParts.end()), relParts.end());
         String rel;
@@ -1973,7 +1978,13 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
             rel += (rel.empty() ? String() : String(1, ' ')) + part;
         }
 
-        auto target = GetAsSameString(srcStr, this->GetArgumentValue("target", context)).value_or(String());
+        auto targetVal = this->GetArgumentValue("target", context);
+        auto target = GetAsSameString(srcStr, targetVal).value_or(String());
+        // None or unset: the policy's target
+        if (IsEmpty(targetVal) && policies.urlizeTarget)
+        {
+            target = ConvertString<String>(*policies.urlizeTarget);
+        }
 
         std::vector<String> extraSchemes;
         auto schemesVal = this->GetArgumentValue("extra_schemes", context);
@@ -1984,8 +1995,7 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
         }
         // Any other iterable gives its items (a dict its keys); anything else is no iterable.
         // Each is checked as it is read, so a long iterable stops at its first bad item
-        auto addScheme = [&srcStr, &context, &extraSchemes](const InternalValue& scheme) {
-            auto str = GetAsSameString(srcStr, scheme);
+        auto addSchemeText = [&context, &extraSchemes](std::optional<String> str) {
             if (!str || !Urlizer<CharT>::IsValidScheme(*str))
             {
                 context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
@@ -1993,7 +2003,16 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
             CheckSequenceSize(extraSchemes.size() + 1, "a list");
             extraSchemes.push_back(std::move(*str));
         };
-        if (auto map = AsMap(schemesVal))
+        auto addScheme = [&srcStr, &addSchemeText](const InternalValue& scheme) { addSchemeText(GetAsSameString(srcStr, scheme)); };
+        if (IsEmpty(schemesVal))
+        {
+            // None or unset: the policy's schemes (urlize.extra_schemes), checked like the argument
+            for (const auto& scheme : policies.urlizeExtraSchemes)
+            {
+                addSchemeText(ConvertString<String>(scheme));
+            }
+        }
+        else if (auto map = AsMap(schemesVal))
         {
             for (const auto& entry : map->GetEntries())
             {

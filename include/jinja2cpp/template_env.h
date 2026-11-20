@@ -125,6 +125,9 @@ struct Settings
         //! formats the translation itself, `gettext(message) % variables` (Markup under autoescape); its `%` is not doubled
         //! when the message names no variable. Read when a template is loaded, as the other settings are
         bool i18nNewstyle = true;
+        //! The default of `{% trans %}` blocks that have no `trimmed` or `notrimmed` modifier (Jinja2 `ext.i18n.trimmed` policy):
+        //! on, the whitespace around the message's lines is trimmed as `trimmed` does. Read when a template is loaded
+        bool i18nTrimmed = false;
     };
 
     //! Enables blocks trimming the same way as it does python Jinja2 engine
@@ -254,6 +257,9 @@ struct Settings
     };
     //! Bounds on Load and Render; none but the depth limits by default
     Limits limits;
+    //! What the filters `urlize`, `truncate` and `tojson` use when their arguments do not say (Jinja2 `Environment.policies`),
+    //! and \ref RenderOptions::filterPolicies can replace for one render. Read when a filter runs
+    FilterPolicies filterPolicies;
 };
 
 //! Limits for templates a host's users write, anchored on Jinja2's `SandboxedEnvironment`: `range()` of at most

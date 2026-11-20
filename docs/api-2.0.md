@@ -384,6 +384,19 @@ in `env.globals`; the existing overload is `FollowLoad`, the 0415 behaviour (eac
 (changes the C++ meaning of the existing call, whose users set the style after installing) and module-side
 Python wrappers in `env.globals` (their `%` would bypass the engine's format caps).
 
+**Filter policies (task 0435, additive while G1 is postponed; Ruslan's standing rule that API growth is decided in
+the task thread and recorded here).** A new `jinja2::FilterPolicies` (`template.h`): `urlizeRel` ("noopener";
+empty is Jinja2's None), `urlizeTarget`, `urlizeExtraSchemes`, `truncateLeeway` (5), `jsonSortKeys`,
+`jsonEnsureAscii`, `jsonIndent`, `jsonSeparators` and `jsonDumps` (a `UserCallable`, Jinja2's
+`json.dumps_function`), with an exported `operator==`. Each is what its filter uses when the filter's own argument is
+None or not given; `Settings::filterPolicies` holds them, `RenderOptions::filterPolicies`
+(`shared_ptr<const FilterPolicies>`, null keeps the template's) replaces them for one render and what it includes,
+imports or extends, and `Settings::Extensions::i18nTrimmed` is the load-time default of `{% trans %}`. The filters
+read them when they run through `IRendererCallback::GetFilterPolicies()` (one pointer in the callback, nothing per
+node). Considered: a map of Jinja2's policy names to `Value` (the engine would validate at every use and the
+`jsonDumps` callable would hide in it) and policies fixed at load like the other settings (the Python module's
+`env.policies` may change after a load, task 0435). The transformers `tojson` variant ignores them.
+
 **Prompt escaping and token budgets (tasks 0358, 0359, decided by Ruslan 2026-11-05).** A new,
 always installed header `jinja2cpp/prompt.h` (core, included by `template_env.h`, not behind
 `JINJA2CPP_WITH_CHAT_TEMPLATES`, whose switch must not change the core ABI) adds:
