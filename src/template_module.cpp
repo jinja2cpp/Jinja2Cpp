@@ -31,6 +31,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -599,9 +600,17 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         }
     }
 
+    // The poll of a run in the module: the host's (RenderOptions::poll), or the thread's without one
+    [[nodiscard]] detail::HostPoll Poll() const { return poll ? &poll : detail::t_hostPoll; }
+
     [[nodiscard]] RenderLimitsScope MakeLimitsScope() const
     {
         const auto& settings = *impl->m_settings;
+        // A poll of the module's own counts the steps to it, also where the template's limits count none
+        if (poll && !HasRenderLimits(settings.settings.limits))
+        {
+            return RenderLimitsScope(&PollOnlyLimits(), settings.bigIntBackend);
+        }
         return RenderLimitsScope(settings.hasRenderLimits ? &settings.settings.limits : nullptr, settings.bigIntBackend);
     }
 
@@ -613,7 +622,16 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         // later renders, which may change a value in place (GlobalsSnapshot). The params and
         // globals are converted by value, so that an exported view (of a host's map, say)
         // owns what it views and outlives the module
-        if (auto* env = impl->m_env)
+        if (hostGlobals)
+        {
+            // The host's own (RenderOptions::globals), in place of the environment's
+            globals.source = hostGlobals;
+            for (const auto& [name, value] : *globals.source)
+            {
+                globals.values[name] = OwnedArgument(value);
+            }
+        }
+        else if (auto* env = impl->m_env)
         {
             auto& envImpl = *detail::TemplateEnvAccess::GetImpl(*env);
             {
@@ -703,6 +721,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // Then the module's context as the call found it, which a failed call would leave
             // with its scopes pushed
             const HomeCall::Restore restore(module->Context());
+            // The host's poll of the module, before the limits, which start counting the steps to it
+            const HostPollScope pollScope(Poll());
             // Before the limits, which keep a pointer to it
             std::basic_string<CharT> output;
             const auto limitsScope = MakeLimitsScope();
@@ -806,6 +826,10 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     }
 
     std::shared_ptr<const Impl> impl;
+    // The host's poll of the module's render and of the calls of its exports (RenderOptions::poll), or empty
+    std::function<void()> poll;
+    // The host's globals in place of the environment's (RenderOptions::globals), or null
+    std::shared_ptr<const ValuesMap> hostGlobals;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
@@ -890,7 +914,7 @@ ValuesMap MacroAttributes(const UserCallable& callable)
 }
 
 template<typename CharT>
-nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl<CharT>::MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params)
+nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl<CharT>::MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params, const RenderOptions* options)
 {
     if (!self->m_renderer)
     {
@@ -903,9 +927,16 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     }
 
     auto state = std::make_shared<TemplateModuleState<CharT>>(self);
+    if (options)
+    {
+        state->poll = options->poll;
+        state->hostGlobals = options->globals;
+    }
     BasicTemplateModule<CharT> result;
     try
     {
+        // Before the limits, which start counting the steps to it
+        const HostPollScope pollScope(state->Poll());
         // In the try: a param nested too deep fails as a render does
         for (const auto& [name, value] : params)
         {
@@ -977,9 +1008,11 @@ template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadRepla
 template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring&& source, std::string&& name);
 
 template nonstd::expected<BasicTemplateModule<char>, BasicErrorInfo<char>> TemplateImpl<char>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
-                                                                                                          const ValuesMap& params);
+                                                                                                          const ValuesMap& params,
+                                                                                                          const RenderOptions* options);
 template nonstd::expected<BasicTemplateModule<wchar_t>, BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
-                                                                                                                   const ValuesMap& params);
+                                                                                                                   const ValuesMap& params,
+                                                                                                                   const RenderOptions* options);
 
 } // namespace v2
 } // namespace jinja2

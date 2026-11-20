@@ -1088,6 +1088,28 @@ public:
         names.erase(std::remove_if(names.begin(), names.end(), [this](const std::string& name) { return !FindValue(name); }), names.end());
         return names;
     }
+    // Python Jinja2's Context of a call made from here (docs/tasks/0416) splits what it sees in two. Its `vars` are
+    // the names the running template's top level binds (`set`, `import`, macros): those of its top scope
+    // (TopLevelDepth) and its frame views, not the loop variables, `with` names and macro locals of the
+    // scopes above it. Its `parent` holds what the template was given: the scopes below (an including template's),
+    // the params, the external scope, the globals and the built-ins. Neither has `loop` or a name bound at entry only
+    [[nodiscard]] const InternalValue* FindTopLevelName(const std::string& name) const
+    {
+        return FindInPart(name, true);
+    }
+    [[nodiscard]] const InternalValue* FindParentName(const std::string& name) const
+    {
+        if (const auto* value = FindInPart(name, false))
+        {
+            return value;
+        }
+        return name == "loop" ? nullptr : FindInOuterLevels(name);
+    }
+    // The names FindTopLevelName finds, in alphabetical order
+    [[nodiscard]] std::vector<std::string> CollectTopLevelNames() const { return CollectPartNames(true); }
+    // The names FindParentName finds, in alphabetical order
+    [[nodiscard]] std::vector<std::string> CollectParentNames() const { return CollectPartNames(false); }
+
     // The innermost value of `name` among the scopes, the external scope and the globals for which `accepts`
     // is true: a lookup that passes over the values it refuses (the `loop` of an including loop)
     template<typename Accepts>
@@ -1559,6 +1581,117 @@ private:
             map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
         }
         return nullptr;
+    }
+
+    // The depth of the scope the running template's top level binds its names in: the last of those its frame starts
+    // with (TemplateFrame::baseDepth counts them)
+    [[nodiscard]] size_t TopLevelDepth() const
+    {
+        const size_t base = m_templateFrame ? m_templateFrame->baseDepth : 0;
+        return base == 0 ? 0 : base - 1;
+    }
+    // Whether the scope at `depth` is in the part of Python's Context FindTopLevelName (`topLevel`) or FindParentName reads
+    [[nodiscard]] static bool InPart(size_t depth, size_t top, bool topLevel) { return topLevel ? depth == top : depth < top; }
+    // The innermost value of `name` among the scopes of a part of Python's Context (FindTopLevelName)
+    [[nodiscard]] const InternalValue* FindInPart(const std::string& name, bool topLevel) const
+    {
+        if (name == "loop")
+        {
+            return nullptr;
+        }
+        const InternalValue* result = nullptr;
+        const auto hashed = ToHashedName(name);
+        const size_t top = TopLevelDepth();
+        VisitScopes(
+            *this,
+            [&](const InternalValueMap* scope, size_t depth) {
+                if (!InPart(depth, top, topLevel))
+                {
+                    return false;
+                }
+                const auto* p = FindIn(*scope, hashed);
+                if (!p || IsEntryBinding(p->second, hashed.hash))
+                {
+                    return false;
+                }
+                result = &p->second;
+                return true;
+            },
+            [&](const FrameView& view, size_t depth) {
+                if (!InPart(depth, top, topLevel))
+                {
+                    return false;
+                }
+                const auto idx = FindInView(view, hashed);
+                if (idx == view.names.size())
+                {
+                    return false;
+                }
+                result = &static_cast<const InternalValue&>(view.slots[idx]);
+                return true;
+            });
+        return result;
+    }
+    // Adds the names of the params, the external, global and built-in scopes (FindInOuterLevels)
+    void AddOuterLevelNames(std::vector<std::string>& names) const
+    {
+        if (m_params)
+        {
+            for (const auto& param : *m_params)
+            {
+                names.emplace_back(param.name);
+            }
+        }
+        for (const auto* map : { m_externalScope, m_globalScope, m_builtinScope })
+        {
+            if (!map)
+            {
+                continue;
+            }
+            for (const auto& entry : *map)
+            {
+                names.emplace_back(entry.first);
+            }
+        }
+    }
+    // The names a part of Python's Context holds (CollectTopLevelNames), sorted, each once
+    [[nodiscard]] std::vector<std::string> CollectPartNames(bool topLevel) const
+    {
+        std::vector<std::string> names;
+        const size_t top = TopLevelDepth();
+        VisitScopes(
+            *this,
+            [&](const InternalValueMap* scope, size_t depth) {
+                if (InPart(depth, top, topLevel))
+                {
+                    for (const auto& entry : *scope)
+                    {
+                        names.emplace_back(entry.first);
+                    }
+                }
+                return false;
+            },
+            [&](const FrameView& view, size_t depth) {
+                if (InPart(depth, top, topLevel))
+                {
+                    for (size_t idx = 0; idx != view.names.size(); ++idx)
+                    {
+                        names.emplace_back(view.nodes.Text(view.names[idx].name));
+                    }
+                }
+                return false;
+            });
+        if (!topLevel)
+        {
+            AddOuterLevelNames(names);
+        }
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+        // What a lookup of the part finds: a bound slot, not a name bound at entry only, never `loop`
+        names.erase(std::remove_if(names.begin(), names.end(),
+                                   [this, topLevel](const std::string& name) { return !(topLevel ? FindTopLevelName(name) : FindParentName(name)); }),
+                    names.end());
+        return names;
     }
 
     template<typename Key>

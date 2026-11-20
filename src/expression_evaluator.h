@@ -507,6 +507,12 @@ public:
     InternalValue EvaluateReceiver(RenderContext& values, bool forMutation);
     // The whole expression, for a mutating method called on it
     InternalValue EvaluateMutable(RenderContext& values);
+    // For the Load's fold check, which evaluates a subscript of a candidate as a step after it (FoldCheckPasses,
+    // docs/tasks/0546): the value subscripted, whether every index folds in this render, and the indices applied
+    // to an evaluated value
+    [[nodiscard]] NodeRef<Expression> GetValue() const { return m_value; }
+    [[nodiscard]] bool IndicesFoldAt(RenderContext& values) const;
+    [[nodiscard]] InternalValue EvaluateWithValue(InternalValue value, RenderContext& values) const;
 
 protected:
     struct Index
@@ -831,6 +837,11 @@ public:
     // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
     std::uint8_t PrepareFold(const NodeArena& nodes) override;
     [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
+    // For the Load's fold check, which evaluates a test of a candidate as a step after it (FoldCheckPasses,
+    // docs/tasks/0546): the value tested, whether the test and its arguments fold, and the test of an evaluated value
+    [[nodiscard]] NodeRef<Expression> GetValue() const { return m_value; }
+    [[nodiscard]] bool TestFolds() const { return m_foldable; }
+    [[nodiscard]] InternalValue EvaluateWith(const InternalValue& value, RenderContext& context) const;
 
 private:
     NodeRef<Expression> m_value;
@@ -899,6 +910,7 @@ public:
     // For the Load's fold check (FoldCheckPasses), on a node whose PrepareFold ran: the left operand, whether it
     // folds at all, and whether each operand folds in this render (IsFoldableAt)
     [[nodiscard]] NodeRef<Expression> GetLeftExpr() const { return m_leftExpr; }
+    [[nodiscard]] NodeRef<Expression> GetRightExpr() const { return m_rightExpr; }
     [[nodiscard]] bool LeftFolds() const { return m_leftFold != 0; }
     [[nodiscard]] bool LeftFoldsAt(RenderContext& values) const;
     [[nodiscard]] bool RightFoldsAt(RenderContext& values) const;

@@ -20,6 +20,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -1701,6 +1702,131 @@ TEST(CallSiteTest, ContextKeysListVisibleNames)
     EXPECT_TRUE(std::adjacent_find(keys.begin(), keys.end()) == keys.end());
     EXPECT_EQ(keys.size(), probe->size);
     EXPECT_EQ(0, std::count(keys.begin(), keys.end(), "nothing_here"));
+}
+
+// ContextView: Python Jinja2's Context.vars and Context.parent of a call (docs/tasks/0416)
+TEST(CallSiteTest, ContextViewsSplitTopLevelNamesFromParams)
+{
+    std::vector<std::string> seen;
+    TemplateEnv env;
+    env.AddGlobal("site_global", Value(1));
+    env.AddGlobal("probe", UserCallable(
+                               [&seen](const UserCallableParams& params) {
+                                   const auto vars = ContextView(params.context, ContextNames::TopLevel);
+                                   const auto parent = ContextView(params.context, ContextNames::Parent);
+                                   std::string line;
+                                   for (const auto& name : vars.GetIf<GenericMap>()->GetKeys())
+                                   {
+                                       line += name + ",";
+                                   }
+                                   line += "|";
+                                   for (const char* name : { "top", "i", "w", "arg", "inner", "param", "site_global", "range", "loop" })
+                                   {
+                                       const bool inVars = vars.GetIf<GenericMap>()->Find(name).has_value();
+                                       const bool inParent = parent.GetIf<GenericMap>()->Find(name).has_value();
+                                       line += std::string(name) + (inVars ? "V" : "") + (inParent ? "P" : "") + ",";
+                                   }
+                                   const auto parentKeys = parent.GetIf<GenericMap>()->GetKeys();
+                                   line += std::count(parentKeys.begin(), parentKeys.end(), "param") == 1 ? "listed" : "unlisted";
+                                   seen.push_back(std::move(line));
+                                   return Value();
+                               },
+                               { ArgInfo(ArgInfo::Context) }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set top = 1 %}{{ probe() }}{% for i in [1] %}{{ probe() }}{% endfor %}{% with w = 2 %}{{ probe() }}{% endwith %}"
+                         "{% macro m(arg) %}{% set inner = 2 %}{{ probe() }}{% endmacro %}{{ m(3) }}")
+                    .has_value());
+    const auto result = tpl.RenderAsString({ { "param", 5 } });
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    ASSERT_EQ(4u, seen.size());
+    // `i`, `w`, `arg` and `inner` are in neither view where the template binds them; elsewhere a lookup finds nothing
+    EXPECT_EQ("top,|topV,i,w,arg,inner,paramP,site_globalP,rangeP,loop,listed", seen[0]);
+    EXPECT_EQ(seen[0], seen[1]);
+    EXPECT_EQ(seen[0], seen[2]);
+    EXPECT_EQ("m,top,|topV,i,w,arg,inner,paramP,site_globalP,rangeP,loop,listed", seen[3]);
+
+    // Not a call's context: no view
+    EXPECT_TRUE(ContextView(Value(ValuesMap{}), ContextNames::TopLevel).IsNone());
+    EXPECT_TRUE(ContextView(Value(1), ContextNames::Parent).IsNone());
+}
+
+TEST(CallSiteTest, ContextViewOfAWideTemplate)
+{
+    std::string seen;
+    TemplateEnv env;
+    env.AddGlobal("probe", UserCallable(
+                               [&seen](const UserCallableParams& params) {
+                                   for (const auto& name : ContextView(params.context, ContextNames::TopLevel).GetIf<GenericMap>()->GetKeys())
+                                   {
+                                       seen += name + ",";
+                                   }
+                                   return Value();
+                               },
+                               { ArgInfo(ArgInfo::Context) }));
+    TemplateW tpl(&env);
+    ASSERT_TRUE(tpl.Load(L"{% set t = 1 %}{% for i in [1] %}{% set u = 2 %}{{ probe() }}{% endfor %}").has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("t,", seen);
+}
+
+TEST(CallSiteTest, ContextViewExpiresWithTheCall)
+{
+    Value kept;
+    TemplateEnv env;
+    env.AddGlobal("probe", UserCallable(
+                               [&kept](const UserCallableParams& params) {
+                                   kept = ContextView(params.context, ContextNames::TopLevel);
+                                   return Value();
+                               },
+                               { ArgInfo(ArgInfo::Context) }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set top = 1 %}{{ probe() }}{{ probe() }}").has_value());
+    ASSERT_TRUE(tpl.RenderAsString({}).has_value());
+    ASSERT_TRUE(kept.GetIf<GenericMap>());
+    try
+    {
+        (void)kept.GetIf<GenericMap>()->Find("top");
+        FAIL() << "the view outlived its call";
+    }
+    catch (const ErrorInfo& error)
+    {
+        EXPECT_EQ(ErrorCode::TemplateExpired, error.GetCode());
+    }
+}
+
+// DescribeLentCallable: how Python Jinja2 prints a template callable lent to a host's call (docs/tasks/0439)
+TEST(CallSiteTest, LentCallablesDescribeThemselvesAsPython)
+{
+    std::string seen;
+    Value kept;
+    TemplateEnv env;
+    env.AddGlobal("describe", UserCallable(
+                                  [&seen, &kept](const UserCallableParams& params) {
+                                      const Value fn = params["fn"];
+                                      const auto* callable = fn.GetIf<UserCallable>();
+                                      const auto info = callable ? DescribeLentCallable(*callable) : std::nullopt;
+                                      seen += info ? info->repr + " " + info->typeName + ";" : std::string("none;");
+                                      kept = fn;
+                                      return Value();
+                                  },
+                                  { ArgInfo{ "fn" } }));
+    env.AddGlobal("host", UserCallable([](const UserCallableParams&) { return Value(); }, {}));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% macro m() %}{% endmacro %}{{ describe(range) }}{{ describe(dict) }}{{ describe(namespace) }}{{ describe(m) }}"
+                         "{{ describe(caller) }}{% for x in [1] %}{{ describe(loop.cycle) }}{% endfor %}{{ describe(host) }}{{ describe(1) }}")
+                    .has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("<class 'range'> type;<class 'dict'> type;<class 'jinja2.utils.Namespace'> type;<Macro 'm'> Macro;none;"
+              "<bound method LoopContext.cycle of <LoopContext 1/1>> method;none;none;",
+              seen);
+    // Once the call returned, the callable it was lent is not described
+    seen.clear();
+    ASSERT_TRUE(tpl.Load("{{ describe(range) }}").has_value());
+    ASSERT_TRUE(tpl.RenderAsString({}).has_value());
+    ASSERT_TRUE(kept.GetIf<UserCallable>());
+    EXPECT_FALSE(DescribeLentCallable(*kept.GetIf<UserCallable>()));
 }
 
 TEST(CallSiteTest, TemplateNameFromEnvironmentAndInline)

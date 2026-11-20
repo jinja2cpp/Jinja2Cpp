@@ -191,7 +191,8 @@ engines on a Release build of the module.
 - The sandbox: `jinja2cpp.sandbox` with `SandboxedEnvironment`, `ImmutableSandboxedEnvironment`,
   `SecurityError`, `is_internal_attribute`, `modifies_known_mutable`, `unsafe`, `safe_range`,
   `MAX_RANGE` and the `UNSAFE_*` sets, ported from Jinja2 3.1.6 (see "Sandbox" below).
-- Ctrl-C (KeyboardInterrupt) stops a long render. The GIL is held for the whole render.
+- Ctrl-C (KeyboardInterrupt) stops a long render, `Template.module` and a call of a module's macro
+  (0440). The GIL is held for the whole render.
 
 ## The supported subset
 
@@ -462,8 +463,6 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `str.encode`, `int.to_bytes` and `int.from_bytes` (the engine has no `bytes` type), and
   `float.fromhex`. Calling one raises `TemplateRuntimeError`, for values from Python as for
   literals (0403).
-- `urlencode` reads any mapping as a dict; Jinja2 does so only for a `dict` and iterates
-  another `Mapping`, which gives its keys (0404).
 - A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, and so does
   the one `get_template` gives from its cache (0433), but an imported template sees the importer's
   dict: after `env.globals = {...}` Jinja2's imports of a cached template still see the old one
@@ -517,11 +516,17 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - Tracebacks name the classes `jinja2cpp.exceptions.*`, where Jinja2's say `jinja2.exceptions.*`
   (0432). They show the template's file and line as a frame, as Jinja2's do: the line of the call
   for an error a callable raised, and the line of a syntax error.
-- The `Context` a `pass_context` callable gets sees every variable of the call site, the loop
-  variables, `{% with %}` names and macro locals included, where Jinja2's holds only the
-  arguments, the globals and the template's top-level names; its `vars` and `parent` both hold
-  all of them (0416). `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and
-  `exported_vars` (empty) are not there.
+- The `Context` a `pass_context` callable gets holds, as Jinja2's, the template's top-level names in
+  `vars` and its arguments and globals in `parent` (and in `keys()`, `items()`, `get_all()`), with no
+  loop variable, `{% with %}` name or macro local (0416). A lookup (`get`, `resolve`, `ctx[name]`)
+  still finds the names of the loops, `with` blocks and macros around the call, where Jinja2's finds
+  only those a `{% set %}` in a loop or block body stored, and Jinja2 hands a call in such a body,
+  and in a `scoped` block, a derived context (`vars` empty, the outer names in `parent`) (0558).
+  `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and `exported_vars` (empty) are not
+  there.
+- A template callable a Python callable gets (`range`, a macro, `loop.cycle`) prints as Jinja2's object
+  does (0439), but its `type()` is the module's `TemplateValue` and `f(range) is range` is False: Jinja2
+  passes Python's own `range`, `dict` and `jinja2.utils` classes (0559).
 - Sandbox (0412, 0413, 0414): `intercepted_binops` and `intercepted_unops` raise
   `UnsupportedError` (Jinja2's `test_binary_operator_intercepting` and
   `test_unary_operator_intercepting` are `xfail`). A public name of the engine's own values

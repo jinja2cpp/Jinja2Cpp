@@ -471,7 +471,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0401](0401-callable-and-generator-leftovers.md) | Callables, generators and ranges: leftovers of 0387 and 0368 | parity | low | done |
 | [0402](0402-json-identity-across-module-calls.md) | JSON values across the calls of a template module | parity | low | open |
 | [0403](0403-python-methods-on-native-values.md) | Python methods of int, float and str the engine does not implement | parity | low | done |
-| [0404](0404-urlencode-non-dict-mapping.md) | urlencode of a Python Mapping that is not a dict | parity | low | open |
+| [0404](0404-urlencode-non-dict-mapping.md) | urlencode of a Python Mapping that is not a dict | parity | low | done |
 | [0405](0405-python-globals-replaced-under-cache.md) | Templates cached before env.globals is replaced see the new dict | parity | low | done |
 | [0406](0406-python-environment-keep-bounded.md) | Bound the callables an Environment keeps alive | robustness | low | done |
 | [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | done |
@@ -483,7 +483,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0413](0413-strict-undefined-sort-unique-key.md) | `sort` and `unique` with `attribute=` do not fail on a StrictUndefined key | parity | low | done |
 | [0414](0414-python-sandbox-policy-on-engine-values.md) | Sandbox policy on the engine's own values | api | low | open |
 | [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | done |
-| [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | open |
+| [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | done |
 | [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | done |
 | [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | done |
 | [0419](0419-print-statement.md) | `{% print expr %}` is a parse error in the engine | parity | low | done |
@@ -506,8 +506,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | done |
 | [0437](0437-python-gil-released-render.md) | Render with the GIL released when the data is JSON-like (0248 plan D5, phase 3) | perf | low | open |
 | [0438](0438-sandbox-arms-cold-without-policy.md) | Sandbox checks cost nothing when no policy is installed | perf | low | open |
-| [0439](0439-python-lent-engine-callable-name.md) | Python module: an engine callable lent to Python prints without its name | parity | low | open |
-| [0440](0440-python-module-call-poll.md) | Python module: Ctrl-C does not stop `Template.module` or a call of a module's macro | parity | low | open |
+| [0439](0439-python-lent-engine-callable-name.md) | Python module: an engine callable lent to Python prints without its name | parity | low | done |
+| [0440](0440-python-module-call-poll.md) | Python module: Ctrl-C does not stop `Template.module` or a call of a module's macro | parity | low | done |
 | [0441](0441-host-sequence-own-iteration.md) | A host sequence with its own iteration is iterated by index | api | medium | done |
 | [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
 | [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | done |
@@ -607,8 +607,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0543](0543-big-int-binary-form-for-huge-values.md) | Keep a binary form for big integers past the decimal string limit | robustness | low | open |
 | [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | done |
 | [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |
-| [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | open |
+| [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | done |
 | [0550](0550-recursive-level-failure-loses-top-names.md) | A failure through a nested level of a recursive loop loses the template's top-level names for its closures | parity | low | open |
 | [0551](0551-recursive-closure-earlier-pass-names.md) | A closure of a recursive loop reads a name its last pass did not store from the live frame below | parity | low | open |
 | [0552](0552-block-in-stored-macro-of-nested-render.md) | A block inside a macro a nested render stored renders empty once that render has ended | parity | low | open |
 | [0553](0553-dict-walk-readd-by-erase-epoch.md) | A dict walk misses a key erased and added again when the entry's address is reused | parity | high | done |
+| [0554](0554-fold-check-argument-steps.md) | Tuple-of-slices fold check: candidates inside arguments and literal items | parity | low | open |
+| [0555](0555-strict-fold-errors-outside-tuple-slices.md) | Strict undefined fold errors outside tuple-of-slices templates | parity | low | open |
+| [0556](0556-strict-output-fold-error.md) | Strict output whose fold fails with an error that is no UndefinedError | parity | low | open |
+| [0558](0558-python-derived-context-in-loop-bodies.md) | `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context | parity | low | open |
+| [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | open |

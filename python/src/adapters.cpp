@@ -561,6 +561,11 @@ bool PyHost::IsMapping() const
     return m_mapping != 0;
 }
 
+bool PyHost::IsDict() const
+{
+    return m_kind == Kind::Dict || PyDict_Check(m_object);
+}
+
 bool PyHost::IsSequence() const
 {
     return m_kind == Kind::List || m_kind == Kind::Tuple || PyList_Check(m_object) || PyTuple_Check(m_object);

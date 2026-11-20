@@ -476,7 +476,10 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     state.sandbox = SandboxOf(m_environment);
     auto result = [&] {
         const RenderScope scope(state);
-        return m_template.MakeModule(values);
+        // Polled as a render is, and so are the calls of its macros, which keep the poll: Ctrl-C stops them
+        jinja2::RenderOptions options;
+        options.poll = RenderPoll();
+        return m_template.MakeModule(values, options);
     }();
     RaiseAbort(state);
     if (!result)

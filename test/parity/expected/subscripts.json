@@ -4960,6 +4960,516 @@
    "output": "y|n|7"
   },
   {
+   "id": "subscripts.tuple_of_slices_strict_impossible_operands",
+   "template": "{% if false and (none or (not (1, 2)[:, :])) %}a{% endif %}b|{% if false and (-([1, 2]) or ([1][:, :] + 1)) %}a{% endif %}b|{% if false and ((false) ~ ([1][:, :]|float)) %}a{% endif %}b|{% if false and ((-([]|max) ~ 1) or [1][:, :]) %}a{% endif %}b|{% if false and (1 and ([1][:, :]|abs)) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b|b|b|b|b"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_nested_concat_undefined",
+   "template": "{% if false and (([]|max ~ 1) or [1][:, :]) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "No aggregated item, sequence was empty."
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_nested_conditional_undefined",
+   "template": "{% if false and ((1 if []|max else 2) or [1][:, :]) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "No aggregated item, sequence was empty."
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_nested_or_value_undefined",
+   "template": "{% if false and ((0 or []|max) or [1][:, :]) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "No aggregated item, sequence was empty."
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_nested_and_value_concat",
+   "template": "{% if false and ((1 and []|max) ~ [1][:, :]) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "No aggregated item, sequence was empty."
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_nested_or_left_undefined",
+   "template": "{% if false and (([1][:, :] or 1) or 2) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_nested_and_right_undefined",
+   "template": "{% if false and (0 or ([1][:, :] and 1)) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_nested_concat_leading",
+   "template": "{% if false and (1 ~ ([1][:, :] ~ 1)) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "list object has no element (slice(None, None, None), slice(None, None, None))"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_subscript_steps",
+   "template": "{% set q = ((((([1][:, :] is undefined)|string)[0]|lower)[0]) is string) is true %}{{ q }}|{{ ((([1][:, :] is undefined)|string)[1:]) }}|{{ (([1][:, :] is undefined) is sameas true) is true }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "True|rue|True"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_subscript_step_missing_item",
+   "template": "{% if false and ((([1][:, :] is undefined)|string)[9] or 1) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "str object has no element 9"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_subscript_step_missing_attr",
+   "template": "{% if false and ((([1][:, :] is undefined)|string).x ~ 1) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "'str object' has no attribute 'x'"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_subscript_step_impossible",
+   "template": "{% if false and (((([1][:, :] is undefined)|string)[9]|abs) or 1) %}a{% endif %}b|{% if false and ((([1][:, :] is undefined) is divisibleby(0)) or 1) %}a{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b|b"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_strict_output_fold_error_unrendered",
+   "template": "{% if false %}{{ ([1][:, :] is undefined)|length }}{% endif %}b",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_subscript_steps",
+   "template": "{{ ((([1][:, :] is undefined)|string)[0]) ~ x }}|{{ ((([1][:, :])|default('ab'))[1]) is string }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|True"
+  },
+  {
    "id": "subscripts.tuple_of_slices_dropped_filter_argument",
    "template": "{{ x|first([1][:, :]) }}",
    "context": {

@@ -186,6 +186,24 @@ CASES = [
     ("tuple_of_slices_strict_unfolded_operands_pass", "{% if false and (x ~ [1][:, :]) %}a{% endif %}b|{% if false and (x if 1 else [1][:, :]) %}a{% endif %}b|{% if false and (x if [1][:, :] is defined else 2) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_conditional_unfolded_test", "{% if false and (x if [1][:, :]) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
     ("tuple_of_slices_strict_operator_chain", "{% if [1][:, :] is undefined or a or b or c %}y{% endif %}|{% if not not not ([1][:, :] is defined) %}n{% endif %}|{% set q = ([1][:, :] is undefined) + 1 + 2 + 3 %}{{ q }}", {"env": {"undefined": "strict"}}),
+    # an operand's own failure is Impossible to an `and`, `or` or `~`; only bool() or str() of a strict undefined
+    # value, its own or a nested `and`, `or`, `~` or conditional's, fails the compile (0546)
+    ("tuple_of_slices_strict_impossible_operands", "{% if false and (none or (not (1, 2)[:, :])) %}a{% endif %}b|{% if false and (-([1, 2]) or ([1][:, :] + 1)) %}a{% endif %}b|{% if false and ((false) ~ ([1][:, :]|float)) %}a{% endif %}b|{% if false and ((-([]|max) ~ 1) or [1][:, :]) %}a{% endif %}b|{% if false and (1 and ([1][:, :]|abs)) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_nested_concat_undefined", "{% if false and (([]|max ~ 1) or [1][:, :]) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_nested_conditional_undefined", "{% if false and ((1 if []|max else 2) or [1][:, :]) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_nested_or_value_undefined", "{% if false and ((0 or []|max) or [1][:, :]) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_nested_and_value_concat", "{% if false and ((1 and []|max) ~ [1][:, :]) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_nested_or_left_undefined", "{% if false and (([1][:, :] or 1) or 2) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_nested_and_right_undefined", "{% if false and (0 or ([1][:, :] and 1)) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_nested_concat_leading", "{% if false and (1 ~ ([1][:, :] ~ 1)) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    # subscripts and tests of a step: their operand is the step before (0546)
+    ("tuple_of_slices_strict_subscript_steps", "{% set q = ((((([1][:, :] is undefined)|string)[0]|lower)[0]) is string) is true %}{{ q }}|{{ ((([1][:, :] is undefined)|string)[1:]) }}|{{ (([1][:, :] is undefined) is sameas true) is true }}", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_subscript_step_missing_item", "{% if false and ((([1][:, :] is undefined)|string)[9] or 1) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_subscript_step_missing_attr", "{% if false and ((([1][:, :] is undefined)|string).x ~ 1) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_subscript_step_impossible", "{% if false and (((([1][:, :] is undefined)|string)[9]|abs) or 1) %}a{% endif %}b|{% if false and ((([1][:, :] is undefined) is divisibleby(0)) or 1) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    # an output's own fold catches every error (visit_Output); only a strict undefined it prints fails the compile (0556)
+    ("tuple_of_slices_strict_output_fold_error_unrendered", "{% if false %}{{ ([1][:, :] is undefined)|length }}{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_subscript_steps", "{{ ((([1][:, :] is undefined)|string)[0]) ~ x }}|{{ ((([1][:, :])|default('ab'))[1]) is string }}"),
     # a filter drops an argument it does not take; the argument's fold is still checked (0497)
     ("tuple_of_slices_dropped_filter_argument", "{{ x|first([1][:, :]) }}"),
     ("tuple_of_slices_dropped_filter_argument_folds", "{{ x|first([1][:, :]|sort) }}"),

@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/965
 priority: low
 area: parity
 depends: [0357]
@@ -23,3 +24,11 @@ the G1 freeze.
 
 **Done when.** A test interrupts a long loop in a module's macro from Python (as
 `python/tests` does for a render) and gets `KeyboardInterrupt` during the call.
+
+**Resolution (batch 11 D).** Additive public API (the G1 freeze is postponed, so additions merge freely):
+`Template::MakeModule(params, const RenderOptions&)` takes `globals` and `poll`. The module keeps a copy of the poll
+and installs it for the render of its top level and for each call of its exports (`TemplateModuleState::Poll`); a
+poll with no limits of the template's counts steps through `PollOnlyLimits`, as a render does. The Python module
+passes `RenderPoll()`, so `KeyboardInterrupt` stops `Template.module`, `make_module` and a long call of a module's
+macro (`python/tests/test_lifetime.py`); `RenderOptionsTest.Module*` in `test/template_env_test.cpp` covers the C++
+side, the globals included.

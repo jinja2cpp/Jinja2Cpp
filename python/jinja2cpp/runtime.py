@@ -162,13 +162,19 @@ def _make_eval_context(environment: t.Any, autoescape: bool) -> EvalContext:
     return ctx
 
 
+# The parts of the render a context handle looks a name up in (ContextHandle::Part): Context.vars, Context.parent
+_VARS = 1
+_PARENT = 2
+
+
 class Context:
     """A read-only view of the variables a template sees where a pass_context callable is called.
 
     It is lent for the call: using it after the call returned raises TemplateRuntimeError.
-    Unlike Jinja2's Context, ``vars`` and ``parent`` both hold every name the call site sees (the
-    engine does not tell a template's top-level names from its render arguments and globals), and
-    it sees the loop variables and macro locals Jinja2 hides from it.
+    As Jinja2's, ``vars`` holds the names the template's top level binds and ``parent`` the render
+    arguments and globals; a loop variable, a ``with`` name or a macro's local is in neither. A lookup
+    (``get``, ``resolve``, ``ctx[name]``) also finds the names of the loops, ``with`` blocks and macros
+    around the call, where Jinja2's finds only those a ``set`` in a loop or block body stored.
     """
 
     def __init__(
@@ -188,6 +194,8 @@ class Context:
     def resolve_or_missing(self, key: str) -> t.Any:
         if not isinstance(key, str):
             return missing
+        # Every name the call site sees: Jinja2's loop and block bodies hand a call the names a `set` there stored, which
+        # the engine does not tell from a loop's targets (task 0558)
         found, value = self._handle.lookup(key)
         return value if found else missing
 
@@ -217,26 +225,30 @@ class Context:
         return obj(*args, **kwargs)
 
     def get_all(self) -> t.Dict[str, t.Any]:
-        names = self._handle.names()
+        return {**self.parent, **self.vars}
+
+    @property
+    def parent(self) -> t.Dict[str, t.Any]:
+        names = self._handle.names(_PARENT)
         names.extend(self.environment.globals)
         if self._template_globals:
             names.extend(self._template_globals)
-        names.extend(("cycler", "dict", "joiner", "lipsum", "namespace", "range"))
         result = {}
         for key in names:
             if isinstance(key, str) and key not in result:
-                value = self.resolve_or_missing(key)
-                if value is not missing:
+                found, value = self._handle.lookup(key, _PARENT)
+                if found:
                     result[key] = value
         return result
 
     @property
-    def parent(self) -> t.Dict[str, t.Any]:
-        return self.get_all()
-
-    @property
     def vars(self) -> t.Dict[str, t.Any]:
-        return self.get_all()
+        result = {}
+        for key in self._handle.names(_VARS):
+            found, value = self._handle.lookup(key, _VARS)
+            if found:
+                result[key] = value
+        return result
 
     @property
     def exported_vars(self) -> t.Set[str]:

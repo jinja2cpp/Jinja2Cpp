@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/965
 priority: low
 area: parity
 depends: [0357]
@@ -26,3 +27,10 @@ needs a decision before the G1 freeze.
 
 **Done when.** The probe prints as in Jinja2 and a row in `python/tests/test_context.py`
 checks it.
+
+**Resolution (batch 11 D).** The public way to recognise a lent callable: `jinja2::DescribeLentCallable(const
+UserCallable&)` (template.h) returns the repr the engine prints for it (`<class 'range'>`, `<Macro 'm'>`,
+`<bound method LoopContext.cycle of <LoopContext 1/2>>`) and Python's type name, while the call it was lent to runs
+on this thread, and nullopt otherwise. The module's `TemplateValue` uses them for `repr()`, `str()` and its error
+messages. The probe prints as in Jinja2 (`test_a_lent_engine_callable_prints_as_jinja2s`). Mapping the class globals
+to Python's own objects, for `type(x)` and `x is range`, is 0559: it would lose the round trip a lent callable keeps.
