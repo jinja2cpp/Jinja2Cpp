@@ -231,10 +231,11 @@ class SandboxedEnvironment(Environment):
             return
         self._check_native_hooks()
 
-    def _check_native_hooks(self) -> None:
+    def _check_native_hooks(self) -> bool:
         """Refuses what the engine would ignore and Jinja2 would run: the environment's operator interception
         and its call, getattr and getitem. Run at each entry into the code of a template of this engine
-        (a render, a module, a macro of one), whatever the environment now routes to."""
+        (a render, a module, a macro of one), whatever the environment now routes to. Gives
+        :meth:`_sandbox_judges_public_names`, which the engine's sandbox policy reads for that entry."""
         if self.intercepted_binops or self.intercepted_unops:
             raise UnsupportedError(
                 "jinja2cpp does not support intercepted_binops and intercepted_unops of the sandbox yet (docs/python.md)"
@@ -248,6 +249,7 @@ class SandboxedEnvironment(Environment):
                     f"jinja2cpp does not support an overridden {name}() of the sandbox yet; override is_safe_attribute or "
                     "is_safe_callable (docs/python.md)"
                 )
+        return self._sandbox_judges_public_names()
 
     def from_string(self, source: t.Any, globals: t.Optional[t.Mapping[str, t.Any]] = None, template_class: t.Any = None) -> t.Any:
         self._check_interception()

@@ -1,6 +1,7 @@
 #include "convert.h"
 
 #include "adapters.h"
+#include "environment.h"
 #include "errors.h"
 
 #include <jinja2cpp/big_int.h>
@@ -694,13 +695,19 @@ std::shared_ptr<CallLease> LeaseScope::Current()
     return scope->m_lease;
 }
 
-void CheckNativeSandboxHooks(PyObject* sandbox)
+bool CheckNativeSandboxHooks(PyObject* sandbox)
 {
     const auto checked = nb::steal(PyObject_CallMethod(sandbox, "_check_native_hooks", nullptr));
     if (!checked)
     {
         throw nb::python_error();
     }
+    const int truth = PyObject_IsTrue(checked.ptr());
+    if (truth < 0)
+    {
+        throw nb::python_error();
+    }
+    return truth != 0;
 }
 
 TemplateValue::TemplateValue(jinja2::Value value)
@@ -765,11 +772,11 @@ namespace
 
 nb::object TemplateValue::Call(nb::args args, nb::kwargs kwargs) const
 {
-    if (const auto* render = CurrentRender(); render && render->sandbox)
+    if (auto* render = CurrentRender(); render && render->sandbox)
     {
         // A macro or caller a Python callable got runs template code the environment's hooks may have been
         // overridden for since the template loaded
-        CheckNativeSandboxHooks(render->sandbox);
+        render->sandboxAllNames = nb::cast<PyEnvironment&>(nb::handle(render->sandbox)).Enter().sandboxAllNames;
     }
     const auto& value = Value();
     const auto* callable = value.GetIf<jinja2::UserCallable>();

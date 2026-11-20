@@ -240,7 +240,7 @@ public:
         }
         auto& env = nb::cast<PyEnvironment&>(m_environment);
         env.CheckAlive();
-        env.CheckSandboxHooks();
+        const auto entry = env.Enter();
         // Jinja2's Macro.__call__: an EvalContext as the first argument is not an argument of the macro, and its
         // autoescape decides whether the result is Markup
         int autoescape = -1;
@@ -276,6 +276,7 @@ public:
         state.environment = m_environment.ptr();
         state.templateGlobals = m_templateGlobals.ptr();
         state.sandbox = SandboxOf(m_environment);
+        state.sandboxAllNames = entry.sandboxAllNames;
         const RenderScope scope(state);
         try
         {
@@ -453,7 +454,7 @@ PyEnvironment& PyTemplate::LiveEnvironment() const
 nb::tuple PyTemplate::MakeModule(nb::handle params) const
 {
     auto& env = LiveEnvironment();
-    env.CheckSandboxHooks();
+    const auto entry = env.Enter();
     if (!PyDict_Check(params.ptr()))
     {
         RaiseTypeError("make_module takes a dict of variables");
@@ -474,6 +475,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     state.environment = m_environment.ptr();
     state.templateGlobals = m_globals.ptr();
     state.sandbox = SandboxOf(m_environment);
+    state.sandboxAllNames = entry.sandboxAllNames;
     auto result = [&] {
         const RenderScope scope(state);
         return m_template.MakeModule(values);

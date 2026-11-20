@@ -766,8 +766,7 @@ void PyEnvironment::Rebuild()
     m_sandboxed = sandboxed;
     if (sandboxed)
     {
-        m_sandboxPublicNames = SandboxJudgesPublicNames(nb::find(this));
-        settings.sandboxPolicy = MakePythonSandboxPolicy(nb::find(this), m_sandboxPublicNames);
+        settings.sandboxPolicy = MakePythonSandboxPolicy(nb::find(this));
     }
     m_env->SetSettings(settings);
     if (m_chatTemplates)
@@ -930,13 +929,14 @@ void PyEnvironment::SetGettextGlobals(nb::handle callables)
     }
 }
 
-void PyEnvironment::CheckSandboxHooks() const
+PyEnvironment::EntryState PyEnvironment::Enter()
 {
-    if (!m_sandboxed)
+    EntryState state;
+    if (m_sandboxed)
     {
-        return;
+        state.sandboxAllNames = CheckNativeSandboxHooks(nb::find(this).ptr());
     }
-    CheckNativeSandboxHooks(nb::find(this).ptr());
+    return state;
 }
 
 PyEnvironment::Engine PyEnvironment::Prepared()
@@ -947,18 +947,6 @@ PyEnvironment::Engine PyEnvironment::Prepared()
         Rebuild();
     }
     SyncJoinPath();
-    if (m_sandboxed)
-    {
-        // is_safe_attribute may have been replaced since the last load, on the class or the instance
-        const auto self = nb::find(this);
-        if (const bool judges = SandboxJudgesPublicNames(self); judges != m_sandboxPublicNames)
-        {
-            m_sandboxPublicNames = judges;
-            // A template keeps the policy it was loaded with; the next loads take this one
-            auto policy = MakePythonSandboxPolicy(self, judges);
-            m_env->ModifySettings([&policy](jinja2::Settings& settings) { settings.sandboxPolicy = std::move(policy); });
-        }
-    }
     // A template binds the filters and tests when it loads, as in Jinja2
     auto filters = Entries(m_filters, "filters");
     auto tests = Entries(m_tests, "tests");
@@ -1229,7 +1217,7 @@ void PyTemplate::RenderWith(Target& target, const nb::args& args, const nb::kwar
 {
     ++g_renders;
     auto& env = LiveEnvironment();
-    env.CheckSandboxHooks();
+    const auto entry = env.Enter();
     // dict(*args, **kwargs), as Jinja2's render
     jinja2::ValuesMap params;
     jinja2::RenderOptions options;
@@ -1257,6 +1245,7 @@ void PyTemplate::RenderWith(Target& target, const nb::args& args, const nb::kwar
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
     InitRenderState(state, m_environment);
+    state.sandboxAllNames = entry.sandboxAllNames;
     state.templateGlobals = m_globals.ptr();
     state.maxSequenceSize = env.MaxSequenceSize();
     // The globals: the environment's, then the template's over them

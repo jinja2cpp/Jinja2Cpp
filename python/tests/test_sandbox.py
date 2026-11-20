@@ -971,23 +971,74 @@ def test_public_names_of_loop_are_not_asked_by_the_default_sandbox():
     assert env.from_string("{% set ns = namespace(a=1) %}{{ ns.a }}").render() == "1"
 
 
+def _called():
+    return "CALLED"
+
+
+def _deny(*args, **kwargs):
+    raise SecurityError("no")
+
+
+ENTRY_POINTS = {
+    "render": lambda t: t.render(),
+    "generate": lambda t: list(t.generate()),
+    "stream": lambda t: t.stream().dump(__import__("io").StringIO()),
+    "make_module": lambda t: t.make_module(),
+    "module": lambda t: t.module,
+}
+
+
+OUTPUT_ENTRY_POINTS = {
+    "render": lambda t: t.render(),
+    "generate": lambda t: "".join(t.generate()),
+    "stream": lambda t: t.stream().dump(__import__("io").StringIO()) or "",
+    "make_module": lambda t: str(t.make_module()),
+    "module": lambda t: str(t.module),
+}
+
+
+@pytest.mark.parametrize("entry", list(OUTPUT_ENTRY_POINTS))
+@pytest.mark.parametrize("loaded_before", [False, True], ids=["load_after", "load_before"])
 @pytest.mark.parametrize("patch_instance", [False, True])
-def test_is_safe_attribute_replaced_after_the_first_load_is_seen_by_the_next_load(patch_instance):
+def test_is_safe_attribute_replaced_after_the_first_load_is_seen_by_the_next_entry(patch_instance, loaded_before, entry):
     class Env(SandboxedEnvironment):
         pass
 
     env = Env()
     source = "{% for i in [1] %}{{ loop.index }}{% endfor %}"
-    assert env.from_string(source).render() == "1"
-
-    def deny_public(obj, attr, value):
-        return attr.startswith("_") is False and False
+    before = env.from_string(source)
+    assert OUTPUT_ENTRY_POINTS["render"](before) == "1"
 
     if patch_instance:
-        env.is_safe_attribute = deny_public
+        env.is_safe_attribute = lambda obj, attr, value: False
     else:
         Env.is_safe_attribute = lambda self, obj, attr, value: False
-    assert env.from_string(source).render() == ""
+    template = before if loaded_before else env.from_string(source)
+    assert OUTPUT_ENTRY_POINTS[entry](template) == ""
+
+
+def test_an_include_loaded_during_the_render_is_asked_the_stricter_question():
+    class Env(SandboxedEnvironment):
+        pass
+
+    env = Env()
+    env.loader = jinja2.DictLoader({"inc": "{% for i in [1] %}{{ loop.index }}{% endfor %}", "main": "{% include 'inc' %}"})
+    main = env.get_template("main")
+    assert main.render() == "1"
+    Env.is_safe_attribute = lambda self, obj, attr, value: False
+    # `inc` is loaded by this render, after the replacement
+    assert env.get_template("main").render() == ""
+    assert main.render() == ""
+    oracle = type("OracleEnv", (j2sandbox.SandboxedEnvironment,), {"is_safe_attribute": lambda self, obj, attr, value: False})(loader=env.loader)
+    assert oracle.get_template("main").render() == ""
+
+
+def test_a_macro_a_python_callable_got_asks_the_stricter_question():
+    env = SandboxedEnvironment()
+    template = env.from_string("{% macro m() %}{% for i in [1] %}{{ loop.index }}{% endfor %}{% endmacro %}{{ call(m) }}")
+    assert template.render(call=lambda f: f()) == "1"
+    env.is_safe_attribute = lambda obj, attr, value: False
+    assert template.render(call=lambda f: f()) == ""
 
 
 ATTR_ITEM_SOURCES = [
@@ -1175,23 +1226,6 @@ def test_attribute_filters_ask_is_safe_attribute_about_loop_namespace_and_macro(
     ours = type("Deny", (SandboxedEnvironment,), {"is_safe_attribute": deny})(undefined=jinja2cpp.StrictUndefined if strict else jinja2cpp.Undefined)
     oracle = type("DenyJ2", (j2sandbox.SandboxedEnvironment,), {"is_safe_attribute": deny})(undefined=jinja2.StrictUndefined if strict else jinja2.Undefined)
     assert _outcome_of(ours, source) == _outcome_of(oracle, source), source
-
-
-def _called():
-    return "CALLED"
-
-
-def _deny(*args, **kwargs):
-    raise SecurityError("no")
-
-
-ENTRY_POINTS = {
-    "render": lambda t: t.render(),
-    "generate": lambda t: list(t.generate()),
-    "stream": lambda t: t.stream().dump(__import__("io").StringIO()),
-    "make_module": lambda t: t.make_module(),
-    "module": lambda t: t.module,
-}
 
 
 @pytest.mark.parametrize("entry", list(ENTRY_POINTS))

@@ -767,9 +767,8 @@ bool IsCallableStandIn(const jinja2::Value& obj)
 class PySandboxPolicy final : public jinja2::ISandboxPolicy
 {
 public:
-    PySandboxPolicy(PyObject* environment, bool allNames)
+    explicit PySandboxPolicy(PyObject* environment)
         : m_environment(environment)
-        , m_allNames(allNames)
     {
     }
 
@@ -780,7 +779,7 @@ public:
         // refuses private names and the methods of lists and dicts that change them (the engine does the latter)
         // `mro` is asked too: Jinja2 refuses it of a class, which only the stand-in of a class object shows
         const bool isPrivate = !name.empty() && name[0] == '_';
-        if (!isPrivate && !m_allNames && name != "mro")
+        if (!isPrivate && name != "mro" && !JudgesPublicNames())
         {
             return std::nullopt;
         }
@@ -838,8 +837,18 @@ public:
     }
 
 private:
+    // What the entry into the render found, when this environment is the render's sandbox; else (an engine value of
+    // another environment's render, a call outside a render) Python's answer now: refusing more is the safe error
+    [[nodiscard]] bool JudgesPublicNames() const
+    {
+        if (const auto* render = CurrentRender(); render && render->sandbox == m_environment)
+        {
+            return render->sandboxAllNames;
+        }
+        return SandboxJudgesPublicNames(nb::handle(m_environment));
+    }
+
     PyObject* m_environment;
-    bool m_allNames;
 };
 } // namespace
 
@@ -853,9 +862,9 @@ bool SandboxJudgesPublicNames(nb::handle environment)
     return PyObject_IsTrue(all.ptr()) != 0;
 }
 
-std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames)
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment)
 {
-    return std::make_shared<PySandboxPolicy>(environment.ptr(), allNames);
+    return std::make_shared<PySandboxPolicy>(environment.ptr());
 }
 
 namespace

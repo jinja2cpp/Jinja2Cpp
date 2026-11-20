@@ -96,10 +96,17 @@ public:
     // A list of what the engine environment templates load from now borrows: a template keeps it, so the callables
     // it was compiled with live while it does, and the environment lets go of one replaced since (docs/tasks/0406)
     [[nodiscard]] const nb::object& BoundObjects() const noexcept { return m_bound; }
-    // A SandboxedEnvironment: whether its hooks (call, getattr, getitem, intercepted operators) are the engine's
-    // are checked again, as at a load, before a template renders or makes a module (an override set after the
-    // load must not be ignored); nothing for another environment
-    void CheckSandboxHooks() const;
+    // What an entry into the code of a template of this engine (a render, a module, a macro of one, a macro a Python
+    // callable got) learns of the environment as it is now
+    struct EntryState
+    {
+        // Whether the sandbox's is_safe_attribute judges the engine's public names too (RenderState::sandboxAllNames)
+        bool sandboxAllNames = false;
+    };
+    // Run at each entry: a SandboxedEnvironment's hooks (call, getattr, getitem, intercepted operators) are checked
+    // again, as at a load (an override set after the load must not be ignored), and whether its is_safe_attribute is
+    // Jinja2's is read, for the sandbox policy of every template the entry runs
+    EntryState Enter();
     [[nodiscard]] const nb::object& Globals() const noexcept { return m_globals; }
     // The globals the engine's environment has of its own (ConfigureForChatTemplates' raise_exception
     // and strftime_now), which a render adds below env.globals; null when there are none
@@ -147,9 +154,8 @@ private:
     std::shared_ptr<jinja2::TemplateEnv> m_env;
     // The engine environments before m_env that templates still use (RetireEngine)
     std::vector<Retired> m_retired;
-    // A SandboxedEnvironment, and whether its is_safe_attribute judges the engine's public names (read at each load)
+    // A SandboxedEnvironment
     bool m_sandboxed = false;
-    bool m_sandboxPublicNames = false;
     jinja2::Settings m_settings;
     nb::object m_globals;
     nb::object m_filters;
