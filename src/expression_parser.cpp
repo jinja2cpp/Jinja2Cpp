@@ -187,7 +187,6 @@ bool FoldCatchesFailure(const NodeArena& nodes, NodeRef<Expression> node)
     case NodeKind::LoopAttrExpr:
     case NodeKind::FilteredExpr:
     case NodeKind::SliceExpr:
-        return true;
     // `and`, `or` and `~` let out only the UndefinedError of bool() or str(), which the Load's evaluation of them
     // decides (FoldEvaluator::LetsUndefinedOut, docs/tasks/0546)
     case NodeKind::BinaryExpr:
@@ -2341,57 +2340,11 @@ private:
         switch (nodes[expr].GetKind())
         {
         case NodeKind::BinaryExpr:
-        {
-            const auto& binary = nodes.Get<BinaryExpression>(expr);
-            if (!binary.IsLogical())
-            {
-                return LetsUndefinedOut(binary.GetLeftExpr()) || LetsUndefinedOut(binary.GetRightExpr());
-            }
-            if (LetsUndefinedOut(binary.GetLeftExpr()))
-            {
-                return true;
-            }
-            const auto& left = OperandSummary(binary.GetLeftExpr());
-            if (left.failed || left.strictUndefined || !left.truth)
-            {
-                return !left.failed && left.strictUndefined;
-            }
-            // `a or b` is b when a is false: b is not tested
-            return *left.truth != binary.IsOr() && LetsUndefinedOut(binary.GetRightExpr());
-        }
+            return BinaryLetsUndefinedOut(nodes.Get<BinaryExpression>(expr));
         case NodeKind::ConcatExpr:
-            for (const auto operand : nodes[nodes.Get<ConcatExpression>(expr).GetOperands()])
-            {
-                if (LetsUndefinedOut(operand))
-                {
-                    return true;
-                }
-                const auto& value = OperandSummary(operand);
-                if (value.failed || value.strictUndefined)
-                {
-                    return !value.failed;
-                }
-            }
-            return false;
+            return ConcatLetsUndefinedOut(nodes.Get<ConcatExpression>(expr));
         case NodeKind::FullExpr:
-        {
-            const auto& full = nodes.Get<FullExpressionEvaluator>(expr);
-            if (!full.GetTester())
-            {
-                return LetsUndefinedOut(full.GetExpression());
-            }
-            const auto& conditional = nodes[full.GetTester()];
-            if (LetsUndefinedOut(conditional.GetTestExpr()))
-            {
-                return true;
-            }
-            const auto& test = OperandSummary(conditional.GetTestExpr());
-            if (test.failed || test.strictUndefined || !test.truth)
-            {
-                return !test.failed && test.strictUndefined;
-            }
-            return LetsUndefinedOut(*test.truth ? full.GetExpression() : conditional.GetAltValue());
-        }
+            return FullLetsUndefinedOut(nodes.Get<FullExpressionEvaluator>(expr));
         case NodeKind::UnaryExpr:
             return LetsUndefinedOut(nodes.Get<UnaryExpression>(expr).GetOperand());
         case NodeKind::IsExpr:
@@ -2403,6 +2356,61 @@ private:
         default:
             return false;
         }
+    }
+
+    // Whether bool() of the operand, which as_const asks first, fails on a strict undefined; its truth otherwise,
+    // or nothing where the operand fails (Impossible) or its bool() fails otherwise
+    std::optional<bool> TestedTruth(NodeRef<Expression> operand, bool& letsOut)
+    {
+        letsOut = LetsUndefinedOut(operand);
+        if (letsOut)
+        {
+            return std::nullopt;
+        }
+        const auto& value = OperandSummary(operand);
+        letsOut = !value.failed && value.strictUndefined;
+        return value.failed || letsOut ? std::nullopt : value.truth;
+    }
+
+    bool BinaryLetsUndefinedOut(const BinaryExpression& binary)
+    {
+        if (!binary.IsLogical())
+        {
+            return LetsUndefinedOut(binary.GetLeftExpr()) || LetsUndefinedOut(binary.GetRightExpr());
+        }
+        bool letsOut = false;
+        const auto truth = TestedTruth(binary.GetLeftExpr(), letsOut);
+        // `a or b` is b when a is false: b is not tested
+        return letsOut || (truth && *truth != binary.IsOr() && LetsUndefinedOut(binary.GetRightExpr()));
+    }
+
+    bool ConcatLetsUndefinedOut(const ConcatExpression& concat)
+    {
+        for (const auto operand : m_context.Nodes()[concat.GetOperands()])
+        {
+            if (LetsUndefinedOut(operand))
+            {
+                return true;
+            }
+            const auto& value = OperandSummary(operand);
+            if (value.failed || value.strictUndefined)
+            {
+                return !value.failed;
+            }
+        }
+        return false;
+    }
+
+    bool FullLetsUndefinedOut(const FullExpressionEvaluator& full)
+    {
+        if (!full.GetTester())
+        {
+            return LetsUndefinedOut(full.GetExpression());
+        }
+        const auto& conditional = m_context.Nodes()[full.GetTester()];
+        bool letsOut = false;
+        const auto truth = TestedTruth(conditional.GetTestExpr(), letsOut);
+        return letsOut || (truth && LetsUndefinedOut(*truth ? full.GetExpression() : conditional.GetAltValue()));
     }
 
     // What an operand evaluates to: its candidate's step when it is one, else its own evaluation, memoized

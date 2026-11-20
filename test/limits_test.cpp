@@ -404,8 +404,8 @@ TEST_F(LimitsEnvTest, StrictSubscriptAndTestStepsFoldInLinearSteps)
     std::string tests = subscripts;
     for (int level = 0; level != 150; ++level)
     {
-        subscripts = "((" + subscripts + ")|string)[0]";
-        tests = "(" + tests + " is true)";
+        subscripts.insert(0, "((").append(")|string)[0]");
+        tests.insert(0, "(").append(" is true)");
     }
     for (const auto& [source, expected] : std::vector<std::pair<std::string, std::string>>{ { "{% set q = " + subscripts + " %}{{ q }}", "T" }, { "{% set q = " + tests + " %}{{ q }}", "True" } })
     {
