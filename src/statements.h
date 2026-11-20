@@ -10,6 +10,7 @@
 #include "template_slots.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "small_vector.h"
 #include "span.h"
 
 #include <algorithm>
@@ -706,13 +707,31 @@ public:
     // Whether the module holds handles of a render's table of templates: its blocks, or the parent
     // its template extends, which a module's slots must keep (docs/tasks/0503)
     [[nodiscard]] bool HoldsTemplateHandles() const noexcept { return !m_blocks.blocks.empty() || static_cast<bool>(m_frame.parent); }
-    // Whether only the module and the result of the load it was made from hold what it made: each value of its names
-    // is held by them and the object `import ... as` made of them alone, and its tree (SetTreeOwner) by the load, the
-    // module and its own macros alone. Then nothing else can reach the module or view its tree, and it may end
-    // with them (docs/tasks/0528). False for a module whose tree is not kept by value
-    [[nodiscard]] bool HeldOnlyByItself() const noexcept;
+    // Modules that end or stay together (HeldOnlyBy): a group is small, and found at the end of every call
+    using Group = SmallVector<const ImportedModule*, 8>;
+    // Each tree of a group with the number of loads that hold it
+    using TreeLoads = SmallVector<std::pair<const void*, long>, 4>;
+    // Whether only the modules `ending` hold what they made: each value of their names, of the importer's names one
+    // imported with context sees and their `import ... as` objects is held by them alone. What a module of `staying`
+    // holds stays with it and may be held from anywhere, but must not be a macro of an ending module. With
+    // TreesHeldOnlyBy, nothing else can reach the ending modules or view their trees, and they may end together
+    // (docs/tasks/0528, 0541). False when one's tree is not kept by value. Throws std::bad_alloc
+    [[nodiscard]] static bool HeldOnlyBy(const Group& ending, const Group& staying);
+    // Whether each tree of `loads` is held only by its loads, the modules of `all` (every module of the render) made
+    // from it and their macros. Throws std::bad_alloc
+    [[nodiscard]] static bool TreesHeldOnlyBy(const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all);
+    // The tree SetTreeOwner keeps alive; null when none
+    [[nodiscard]] const void* Tree() const noexcept { return m_treeOwner.get(); }
 
 private:
+    // Calls `note` with each value whose object the module holds: its `import ... as` object, its names (twice when the
+    // object exports one) and the importer's names it sees (HeldOnlyBy)
+    template<typename Note>
+    void ForEachHeldValue(const Note& note) const;
+    // Whether only its `loads` loads, the modules of `all` made from it and their macros hold the tree `tree`. Throws
+    // std::bad_alloc
+    [[nodiscard]] static bool TreeHeldOnlyByModules(const void* tree, long loads, const std::vector<std::unique_ptr<ImportedModule>>& all);
+
     // Declared first, so that it goes last: the module's names and macros view the tree it keeps
     std::shared_ptr<const void> m_treeOwner;
     // The importer's names, the external scope of the module's context
