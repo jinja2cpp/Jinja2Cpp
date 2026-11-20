@@ -822,6 +822,10 @@ public:
         UpdateCurrentScope();
     }
 
+    // Binds in `scope` each of `names` it does not have, to the value the scopes below it give the name, or to undefined
+    // (docs/tasks/0551). Defined in expression_evaluator.cpp, out of the translation unit of the statements: the inline
+    // lookup there shifts how the compiler inlines a macro call (Render/macros +0.5%). Throws std::bad_alloc
+    void BindFromBelow(ScopeRef& scope, Span<const SlotName> names) const;
     // The value of the name `val` (a std::string or a HashedName) in the innermost scope that
     // has it; none when no scope does
     template<typename Key>
@@ -2278,6 +2282,10 @@ struct ClosureCapture
     // of the scope, and those of the frames above it that ended (docs/tasks/0375)
     // Inline: most closures read a few names, and a capture that never escapes allocates nothing more
     SmallVector<std::size_t, 8> reads;
+    // The `self` of the template whose top level is the frame, once it has ended with closures that something outside
+    // holds (TemplateRenderer::KeepEndedSelf): a block in one of its macros renders from its blocks (docs/tasks/0552).
+    // Its blocks keep no capture, so it does not keep this one
+    InternalValue endedSelf;
 
     // Adds the names of `hashes`, sorted and unique; NameResolver::AllNames among them reads all
     void AddReads(Span<const std::size_t> hashes);
@@ -2515,6 +2523,14 @@ struct HomeCallSaved
     LoopControl loopControl = LoopControl::None;
     AutoescapeModes autoescape;
 };
+
+// For a call of a closure that sees the copy of an ended template's names (HomeCall::EnterCaptured), before the scope
+// of that copy: a frame of that template's blocks in `saved.callFrame`, made the frame of `context`, when `capture` or
+// a frame below it kept its `self` (ClosureCapture::endedSelf), so that a block in the closure's body renders from them
+// as in its template (docs/tasks/0552). Its top level is a scope of its own, of the copy of the template's top-level
+// names only, linked below `link`: an unscoped block sees those, not the names of the frames around the closure
+// (docs/tasks/0560). Defined in statements.cpp. Throws std::bad_alloc
+void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* capture, HomeCallSaved& saved, size_t link);
 
 // Runs a closure's body on its home context (ClosureSite::Resolve) for the duration of one
 // call: switches the lookup cache epoch, the loop control, the template frame and the
@@ -2837,18 +2853,20 @@ private:
         saved.bodyEpoch = context.m_epoch;
         if (home.kept != ClosureHome::Kept::None)
         {
-            EnterCaptured(context, home);
+            EnterCaptured(context, home, saved);
         }
     }
     // The names a closure kept of its ended frames (ClosureHome::captured), in a scope of
     // their own on `context`, linked below `link`: the body's scope links to that scope,
     // which Leave removes
-    JINJA2CPP_NOINLINE_INLINE void EnterCaptured(RenderContext& context, const ClosureHome& home)
+    JINJA2CPP_NOINLINE_INLINE void EnterCaptured(RenderContext& context, const ClosureHome& home, HomeCallSaved& saved)
     {
         auto kept = m_site.Kept(home);
         if (!kept.frames.empty())
         {
-            context.EnterCapturedScope(kept, home.link, m_site.Capture());
+            const auto capture = m_site.Capture();
+            EnterEndedTemplateFrame(context, capture.get(), saved, home.link);
+            context.EnterCapturedScope(kept, home.link, capture);
             m_link = context.GetScopesCount();
         }
     }

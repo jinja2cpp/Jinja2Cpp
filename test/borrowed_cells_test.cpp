@@ -1693,6 +1693,16 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
         { "{{ inner() }}{{ g[-1].b() }}", "{% block b %}blk{% endblock %}{% set _ = g.append(self) %}", "blk" },
         // A module imported with context keeps the importer's names it reads (0533)
         { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'cl' %}{% import 'mx.j2' as m with context %}{% set _ = g.append(m.tm) %}", "[clcl]" },
+        // A block inside the stored macro renders once the nested render's blocks stack has ended (docs/tasks/0552)
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "X" },
+        { "{% block b %}OUT{% endblock %}{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "OUTX" },
+        { "{{ inner() }}{{ g[-1](1) }}", "{% set x = 'X' %}{% macro m(a) %}{% block b scoped %}{{ x }}{{ a }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "X1" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% block c %}C{{ x }}{% endblock %}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "XCX" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set self = 5 %}{% set _ = g.append(m) %}", "X" },
+        // An unscoped block sees the template's top level, not the frames around the stored macro (docs/tasks/0560)
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro o() %}{% set y = 'Y' %}{% macro m() %}{% block b %}[{{ x }}{{ y }}]{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% endmacro %}{{ o() }}", "[X]" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% block a %}{% set x = 'X' %}{% macro m() %}{% block b %}[{{ x }}]{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% endblock %}", "[]" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% extends 'par.j2' %}{% block b %}{% set x = 'X' %}{% macro m() %}{% block c %}[{{ x }}]{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% endblock %}", "[]" },
     };
     for (const auto& c : cases)
     {
@@ -1933,6 +1943,10 @@ TEST(BorrowedCellsSingle, NestedRenderThatFailsKeepsItsClosures)
         { "{% for i in [1] %}{% include 'incloop.j2' %}{% endfor %}", "False" },
         // A module imported with context keeps the importer's names it reads (0533)
         { "{% set x = 'cl' %}{% import 'm.j2' as m with context %}{% set _ = g.append(m.tm) %}{{ 1 // 0 }}", "[clcl]" },
+        // A failure through a level loop(...) started keeps the names below the loop (docs/tasks/0550)
+        { "{% set v = 'V' %}{% for a in [[1], 2] recursive %}{% if a is iterable %}{{ loop(a) }}{% else %}{% macro m() %}[{{ v }}]{% endmacro %}"
+          "{% set _ = g.append(m) %}{{ 1 // 0 }}{% endif %}{% endfor %}",
+          "[V]" },
     };
     for (const auto& c : cases)
     {

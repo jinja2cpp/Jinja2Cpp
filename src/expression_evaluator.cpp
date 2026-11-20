@@ -14,6 +14,7 @@
 #include "python_format.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "slot_frame.h"
 #include "small_vector.h"
 #include "span.h"
 #include "template_dict.h"
@@ -171,6 +172,21 @@ LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
         }
     }
     return FindByName(values);
+}
+
+void RenderContext::BindFromBelow(ScopeRef& scope, Span<const SlotName> names) const
+{
+    for (const auto& slotName : names)
+    {
+        const HashedName name{ Nodes().Text(slotName.name), slotName.hash };
+        if (scope.Map().find(name) != scope.Map().end())
+        {
+            continue;
+        }
+        const auto found = FindValue(name);
+        InternalValue value = found ? InternalValue(*found) : MakeUndefined(*this, std::string(name.name));
+        scope.ForName(name) = std::move(value);
+    }
 }
 
 JINJA2CPP_NOINLINE LookupResult ValueRefExpression::FindByName(RenderContext& values) const
