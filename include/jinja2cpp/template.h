@@ -322,6 +322,61 @@ using TemplateModuleW = BasicTemplateModule<wchar_t>;
 JINJA2CPP_EXPORT ValuesMap MacroAttributes(const UserCallable& callable);
 
 /*!
+ * \brief How Python Jinja2 prints a template callable lent to a host's call (\ref DescribeLentCallable)
+ */
+struct LentCallableInfo
+{
+    //! Python's repr: `<class 'range'>`, `<Macro 'name'>`, `<function generate_lorem_ipsum at 0x...>`,
+    //! `<bound method LoopContext.cycle of <LoopContext 1/2>>`
+    std::string repr;
+    //! The name of its Python type: `type` for a class among the globals (`range`, `dict`, `cycler`, `joiner`,
+    //! `namespace`), `Macro`, `function`, `method` or `builtin_function_or_method`
+    std::string typeName;
+};
+
+/*!
+ * \brief Describes a template callable the engine lends to a host's call, as Python Jinja2 prints it
+ *
+ * A user callable gets the template's callables as \ref UserCallable values that call back into the render: an
+ * argument such as `range` or a macro, or a value read through its context. While that call runs, and on its thread,
+ * this tells what the callable is, as a host that mirrors Jinja2's objects needs: `{{ f(range) }}` with `f` printing
+ * its argument prints `<class 'range'>` in Jinja2.
+ *
+ * @param callable A callable a host's call was given
+ * @return The description; std::nullopt for any other callable (a host's own, a module's export) and once the call
+ *         it was lent to has returned
+ */
+JINJA2CPP_EXPORT std::optional<LentCallableInfo> DescribeLentCallable(const UserCallable& callable);
+
+/*!
+ * \brief Which names of a host call's context a view of it shows (\ref ContextView), as Python Jinja2's `Context`
+ * splits them
+ */
+enum class ContextNames
+{
+    //! `Context.vars`: the names the template's top level binds where the call is made (`set`, `import`, macros), but
+    //! not a loop's variables, the names of a `with` block or a macro's arguments and locals
+    TopLevel,
+    //! `Context.parent`: the render's params, the globals and the built-ins (`range`, `dict`, ...)
+    Parent,
+};
+
+/*!
+ * \brief A view of the context a user callable gets (\ref UserCallableParams::context) that shows some of its names
+ *
+ * The context shows every name the template sees where it calls the callable, a loop variable included. Python Jinja2's
+ * `Context` holds the template's top-level names and its params and globals only, apart: a host that mirrors it (a
+ * `pass_context` callable) reads the two views. A name in both is the top level's where the template reads it. The view
+ * reads the render as the context does, lends its callables as it does, and expires with it: once the call returns, a
+ * read fails with ErrorCode::TemplateExpired. No name is `loop`.
+ *
+ * @param context The context of a call (UserCallableParams::context)
+ * @param names   Which names the view shows
+ * @return The view, a GenericMap; an empty (none) Value when `context` is not a call's context
+ */
+JINJA2CPP_EXPORT Value ContextView(const Value& context, ContextNames names);
+
+/*!
  * \brief Template object which is used to render templates
  *
  * The main class for rendering templates, instantiated for `char` (\ref Template) and `wchar_t`

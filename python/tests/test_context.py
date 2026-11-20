@@ -47,8 +47,7 @@ def test_context_variables():
 
 
 def test_a_global_function_read_through_the_context_is_callable():
-    # The engine's own `range` reaches Python as a callable lent for the call; it prints by no name of its own,
-    # unlike Python's builtin (task 0439)
+    # The engine's own `range` reaches Python as a callable lent for the call
     @jinja2cpp.pass_context
     def call(ctx):
         return str(list(ctx.get("range")(3)))
@@ -56,6 +55,71 @@ def test_a_global_function_read_through_the_context_is_callable():
     env = jinja2cpp.Environment()
     env.globals["call"] = call
     assert env.from_string("{{ call() }}").render() == "[0, 1, 2]"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ f(range) }}",
+        "{{ f(dict) }}",
+        "{{ f(cycler) }}",
+        "{{ f(joiner) }}",
+        "{{ f(namespace) }}",
+        "{% macro m() %}{% endmacro %}{{ f(m) }}",
+        "{% for x in [1, 2] %}{{ f(loop.cycle) }}{% endfor %}",
+    ],
+)
+@pytest.mark.parametrize("show", [repr, str], ids=["repr", "str"])
+def test_a_lent_engine_callable_prints_as_jinja2s(source, show):
+    # A callable of the template lent to a Python callable prints as the object Jinja2 passes (task 0439)
+    both(make_env, source, f=show)
+
+
+def test_lipsum_lent_to_python_prints_as_a_function():
+    out = jinja2cpp.Template("{{ f(lipsum) }}").render(f=repr)
+    assert out.startswith("<function generate_lorem_ipsum at 0x"), out
+
+
+def make_split_env(module):
+    @module.pass_context
+    def split(ctx):
+        names = ("a", "c", "i", "w", "x", "y", "z", "lib", "m")
+        return (
+            f"vars={sorted(k for k in ctx.vars if k != 'split')} "
+            f"parent={sorted(k for k in ctx.parent if k in names)} "
+            f"keys={sorted(k for k in ctx.keys() if k in names)}"
+        )
+
+    env = module.Environment(
+        loader=module.DictLoader({"lib": "{% set z = 1 %}{% macro q() %}{% endmacro %}", "inc": "{% set c = 1 %}{{ split() }}", "bare": "{{ split() }}"})
+    )
+    env.globals["split"] = split
+    return env
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{% set a = 1 %}{{ split() }}",
+        "{% set a = 1 %}{% for i in [1] %}{{ split() }}{% endfor %}",
+        "{% set a = 1 %}{% for i in [1] %}{{ split() }}{% set y = 2 %}{% endfor %}",
+        "{% set a = 1 %}{% if true %}{% set y = 2 %}{{ split() }}{% endif %}",
+        "{% set a = 1 %}{% with x = 3 %}{% set y = 2 %}{{ split() }}{% endwith %}",
+        "{% set a = 1 %}{% block b %}{{ split() }}{% endblock %}",
+        "{% macro m(x) %}{% set y = 1 %}{{ split() }}{% endmacro %}{% set a = 1 %}{{ m(5) }}",
+        "{% for i in [1] %}{% macro m() %}{{ split() }}{% endmacro %}{{ m() }}{% endfor %}",
+        "{{ split() }}{% set a = 1 %}",
+        "{% import 'lib' as lib %}{% from 'lib' import z %}{{ split() }}",
+        "{% set a = 1 %}{% include 'inc' %}",
+        "{% set a = 1 %}{% include 'bare' %}",
+        "{% set a = 1 %}{% for i in [1] %}{% include 'inc' %}{% endfor %}",
+        "{% set w = 'shadow' %}{{ split() }}",
+    ],
+)
+def test_context_splits_top_level_names_from_arguments(source):
+    # Context.vars holds the template's top-level names, Context.parent its arguments and globals, and a loop variable,
+    # a with name or a macro's local is in neither (task 0416). A lookup of one of those finds it, unlike Jinja2's (0554)
+    both(make_split_env, source, w=2)
 
 
 def test_context_in_included_and_imported_templates():

@@ -37,12 +37,22 @@ class ContextHandle
 public:
     explicit ContextHandle(std::shared_ptr<CallLease> lease);
 
-    // The value of `name` the template sees at the call, or None with `found` false
-    nb::object Lookup(const std::string& name, bool& found) const;
-    // The names the template's scopes and render arguments hold at the call
-    nb::list Names() const;
+    // Which names a lookup sees: all those the template sees at the call, or those of Jinja2's Context.vars (the
+    // template's top level) or Context.parent (the render arguments and globals), jinja2::ContextView
+    enum class Part
+    {
+        All,
+        Vars,
+        Parent,
+    };
+    // The value of `name` the template sees at the call among `part`, or None with `found` false
+    nb::object Lookup(const std::string& name, Part part, bool& found) const;
+    // The names of `part` at the call
+    nb::list Names(Part part) const;
 
 private:
+    // The context, or a view of it, for `part`
+    [[nodiscard]] jinja2::Value View(Part part) const;
     // The template's context (UserCallableParams::context), or TemplateRuntimeError after the call
     const jinja2::GenericMap& Live() const;
 

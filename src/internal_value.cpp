@@ -6169,6 +6169,24 @@ const InternalValue* LentOriginal(const Value& value, const RenderContext& conte
     return &lent->callable;
 }
 
+} // namespace
+
+namespace host_call
+{
+const InternalValue* LentCallableOf(const UserCallable& callable) noexcept
+{
+    const auto* lent = callable.callable.target<LentCallable>();
+    // The thread first: another thread must not read isActive
+    if (!lent || lent->lease->thread != std::this_thread::get_id() || !lent->lease->isActive)
+    {
+        return nullptr;
+    }
+    return &lent->callable;
+}
+} // namespace host_call
+
+namespace
+{
 const InternalValue* HostCallScope::Original(const Value& value, const RenderContext& context) const
 {
     const void* accessor = nullptr;
