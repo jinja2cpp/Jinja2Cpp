@@ -462,8 +462,6 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `str.encode`, `int.to_bytes` and `int.from_bytes` (the engine has no `bytes` type), and
   `float.fromhex`. Calling one raises `TemplateRuntimeError`, for values from Python as for
   literals (0403).
-- `urlencode` reads any mapping as a dict; Jinja2 does so only for a `dict` and iterates
-  another `Mapping`, which gives its keys (0404).
 - A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, and so does
   the one `get_template` gives from its cache (0433), but an imported template sees the importer's
   dict: after `env.globals = {...}` Jinja2's imports of a cached template still see the old one

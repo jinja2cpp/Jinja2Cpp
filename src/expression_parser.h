@@ -41,8 +41,9 @@ struct FoldCandidate
     bool output = false;
     // With StrictUndefined, whether its failing evaluation fails the Load: Jinja2's as_const of
     // an arithmetic operator, a comparison, `not`, a subscript, a filter or a test turns the
-    // failure into Impossible, so it only does not fold; that of `and`, `or`, `~`, a conditional
-    // and an output lets the UndefinedError out (docs/tasks/0484)
+    // failure into Impossible, so it only does not fold; that of an output lets the UndefinedError
+    // out (docs/tasks/0484). An `and`, `or`, `~` or conditional lets out only that of its own bool()
+    // or str(), which FoldEvaluator decides (docs/tasks/0527, 0546)
     bool failsLoad = true;
     // With StrictUndefined, not an output's: the operands before the first that does not fold of an `and`, `or`
     // (its left one) or `~`, or a conditional's test. Jinja2's as_const evaluates them in turn, and the strict

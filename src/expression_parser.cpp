@@ -188,8 +188,11 @@ bool FoldCatchesFailure(const NodeArena& nodes, NodeRef<Expression> node)
     case NodeKind::FilteredExpr:
     case NodeKind::SliceExpr:
         return true;
+    // `and`, `or` and `~` let out only the UndefinedError of bool() or str(), which the Load's evaluation of them
+    // decides (FoldEvaluator::LetsUndefinedOut, docs/tasks/0546)
     case NodeKind::BinaryExpr:
-        return !nodes.Get<BinaryExpression>(node).IsLogical();
+    case NodeKind::ConcatExpr:
+        return true;
     case NodeKind::FullExpr:
         return static_cast<bool>(nodes.Get<FullExpressionEvaluator>(node).GetTester());
     default:
@@ -2009,11 +2012,37 @@ std::optional<bool> FoldedTruth(const FoldValue& value)
     }
 }
 
+// What the check reads of a value once the value itself is gone (FoldEvaluator::Release)
+struct FoldSummary
+{
+    bool failed = false;
+    bool undefined = false;
+    bool strictUndefined = false;
+    bool safeRepr = false;
+    // bool() of it; nothing when that fails
+    std::optional<bool> truth;
+};
+
+FoldSummary Summarize(const FoldValue& value, bool withRepr)
+{
+    FoldSummary summary;
+    summary.failed = value.failed;
+    if (!value.failed)
+    {
+        summary.undefined = value.value.IsUndefined();
+        summary.strictUndefined = IsStrictUndefined(value.value);
+        summary.truth = FoldedTruth(value);
+        summary.safeRepr = withRepr && HasSafeRepr(value.value);
+    }
+    return summary;
+}
+
 // Evaluates the fold candidates of one check (FoldCheckPasses). A candidate whose operand is a candidate too is
 // a step after it: a filter chain's `x|a`, `x|a|b`, ..., an operator chain's `x or a`, `(x or a) or b`, ..., and
-// `not x`, `not not x`. A step's value and whether it folds come from those of the step before it, kept from
-// that step, so a chain of N filters or operators runs N of them, not N^2/2, and a host filter runs once
-// (docs/tasks/0527, 0536)
+// `not x`, `not not x`, a subscript `(x)[0]` and a test `(x) is y`. A step's value and whether it folds come from
+// those of the step before it, kept from that step, so a chain of N filters, operators, subscripts or tests runs
+// N of them, not N^2/2, and a host filter runs once (docs/tasks/0527, 0536, 0546). A kept value is dropped once
+// every step after it has read it and its own candidate is done, so a chain holds about two values at a time
 class FoldEvaluator
 {
 public:
@@ -2026,6 +2055,49 @@ public:
     }
 
     FoldOutcome Of(std::size_t index)
+    {
+        const auto outcome = OutcomeOf(index);
+        Done(index);
+        return outcome;
+    }
+
+    // A candidate inside one that folds, which needs no outcome of its own
+    void Skip(std::size_t index) { Done(index); }
+
+private:
+    enum class StepKind : std::uint8_t
+    {
+        None,
+        Filter,
+        Binary,
+        Unary,
+        Subscript,
+        Test
+    };
+    struct Step
+    {
+        // The candidate that is this step's operand (a filter step's chain without its last filter), if any
+        std::size_t previous = NoStep;
+        StepKind kind = StepKind::None;
+        // Whether value is this step's, evaluated
+        bool known = false;
+        // Whether folds is this step's (FoldsAt)
+        bool foldsKnown = false;
+        bool folds = false;
+        // Whether its candidate is done (Of or Skip), and whether its read of the previous step is
+        bool done = false;
+        bool readDone = false;
+        // Whether summary is the value's, and whether value was dropped, leaving it
+        bool summarized = false;
+        bool released = false;
+        // The steps after it that have not read its value yet
+        std::uint32_t readers = 0;
+        FoldValue value;
+        FoldSummary summary;
+    };
+    static constexpr std::size_t NoStep = static_cast<std::size_t>(-1);
+
+    FoldOutcome OutcomeOf(std::size_t index)
     {
         const auto& candidate = m_check.candidates[index];
         const auto& nodes = m_context.Nodes();
@@ -2046,50 +2118,32 @@ public:
         {
             return FoldOutcome::DoesNotFold;
         }
-        const auto& result = ValueOf(index);
+        const auto& result = SummaryOf(index);
         if (result.failed)
         {
+            // An `and`, `or` or `~` lets out only the UndefinedError of its own bool() or str(), or of such an
+            // operand's; the failure of any other operand is Impossible to it (docs/tasks/0546)
+            if (m_check.strictUndefined && !candidate.output && LetsUndefinedOut(candidate.node))
+            {
+                return FoldOutcome::FailsLoad;
+            }
             return FoldOutcome::Fails;
         }
         // An output folds into str(value), which fails for a strict undefined
         if (candidate.output)
         {
-            return m_check.strictUndefined && result.value.IsUndefined() ? FoldOutcome::Fails : FoldOutcome::Folds;
+            return m_check.strictUndefined && result.undefined ? FoldOutcome::Fails : FoldOutcome::Folds;
         }
-        return HasSafeRepr(result.value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+        return result.safeRepr ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
     }
-
-private:
-    enum class StepKind : std::uint8_t
-    {
-        None,
-        Filter,
-        Binary,
-        Unary
-    };
-    struct Step
-    {
-        // The candidate that is this step's operand (a filter step's chain without its last filter), if any
-        std::size_t previous = NoStep;
-        StepKind kind = StepKind::None;
-        // Whether value is this step's, evaluated
-        bool known = false;
-        // Whether folds is this step's (FoldsAt)
-        bool foldsKnown = false;
-        bool folds = false;
-        FoldValue value;
-    };
-    static constexpr std::size_t NoStep = static_cast<std::size_t>(-1);
 
     void LinkSteps()
     {
         // A step is recorded after the one before it, as its parse ends
         const auto& nodes = m_context.Nodes();
         std::vector<std::pair<const void*, std::size_t>> chains;
-        // The latest candidate of each node: an output and its non-output duplicate have the same value
-        std::unordered_map<const void*, std::size_t> candidateOf;
-        const auto link = [this, &nodes, &candidateOf](std::size_t index, NodeRef<Expression> operand, StepKind kind) {
-            if (const auto found = candidateOf.find(&nodes[operand]); found != candidateOf.end())
+        const auto link = [this, &nodes](std::size_t index, NodeRef<Expression> operand, StepKind kind) {
+            if (const auto found = m_candidateOf.find(&nodes[operand]); found != m_candidateOf.end())
             {
                 m_steps[index].previous = found->second;
                 m_steps[index].kind = kind;
@@ -2113,6 +2167,11 @@ private:
                         m_steps[index].kind = StepKind::Filter;
                     }
                 }
+                else
+                {
+                    // The chain's first filter: a step after its operand's candidate, `(x)|f`
+                    link(index, step.GetOperand(), StepKind::Filter);
+                }
                 chains.emplace_back(&nodes[step.GetFilter()], index);
                 break;
             }
@@ -2122,10 +2181,22 @@ private:
             case NodeKind::UnaryExpr:
                 link(index, nodes.Get<UnaryExpression>(node).GetOperand(), StepKind::Unary);
                 break;
+            // Not a LoopAttrExpression, whose value is the name `loop`, which never folds
+            case NodeKind::SubscriptExpr:
+                link(index, nodes.Get<SubscriptExpression>(node).GetValue(), StepKind::Subscript);
+                break;
+            case NodeKind::IsExpr:
+                link(index, nodes.Get<IsExpression>(node).GetValue(), StepKind::Test);
+                break;
             default:
                 break;
             }
-            candidateOf[&nodes[node]] = index;
+            if (const auto previous = m_steps[index].previous; previous != NoStep)
+            {
+                ++m_steps[previous].readers;
+            }
+            // The latest candidate of each node: an output and its non-output duplicate have the same value
+            m_candidateOf[&nodes[node]] = index;
         }
     }
 
@@ -2168,6 +2239,10 @@ private:
         case StepKind::Unary:
             // The operand of both is the operand of the step before
             return previousFolds;
+        case StepKind::Subscript:
+            return previousFolds && nodes.Get<SubscriptExpression>(node).IndicesFoldAt(m_context);
+        case StepKind::Test:
+            return previousFolds && nodes.Get<IsExpression>(node).TestFolds();
         case StepKind::Binary:
         {
             // BinaryExpression::IsFoldableAt, with the left operand's fold and truth from its step
@@ -2178,7 +2253,7 @@ private:
             }
             if (binary.IsLogical())
             {
-                const auto truth = FoldedTruth(ValueOf(previous));
+                const auto truth = SummaryOf(previous).truth;
                 if (!truth)
                 {
                     return false;
@@ -2205,14 +2280,13 @@ private:
             if (m_steps[index].kind == StepKind::Binary)
             {
                 const auto previous = m_steps[index].previous;
-                return FoldsAt(previous) && !ValueOf(previous).failed && IsStrictUndefined(ValueOf(previous).value);
+                return FoldsAt(previous) && SummaryOf(previous).strictUndefined;
             }
             if (!nodes[binary].LeftFoldsAt(m_context))
             {
                 return false;
             }
-            const auto& left = Evaluated(nodes[binary].GetLeftExpr());
-            return !left.failed && IsStrictUndefined(left.value);
+            return OperandSummary(nodes[binary].GetLeftExpr()).strictUndefined;
         }
         if (const auto concat = nodes.As<ConcatExpression>(candidate.node))
         {
@@ -2223,13 +2297,13 @@ private:
                 {
                     return false;
                 }
-                const auto& operand = Evaluated(operands[idx]);
+                const auto& operand = OperandSummary(operands[idx]);
                 // A failure of its own is the Impossible that stops the join
                 if (operand.failed)
                 {
                     return false;
                 }
-                if (IsStrictUndefined(operand.value))
+                if (operand.strictUndefined)
                 {
                     return true;
                 }
@@ -2238,19 +2312,134 @@ private:
         return false;
     }
 
-    // The value of an operand that is no candidate of its own
-    const FoldValue& Evaluated(NodeRef<Expression> expr)
+    // With StrictUndefined, of a node Jinja2's as_const evaluates (one that folds, or an operand it reaches):
+    // whether the UndefinedError of bool() or str() of a strict undefined leaves its as_const. Only `and`, `or`,
+    // `~` and a conditional let it out, where their own operand is such a value or lets it out; any other node's
+    // as_const turns it into Impossible, but the optimizer folds the operands first, so one of them that lets
+    // it out fails the compile all the same. Memoized: a failing step's operand is the step before it
+    bool LetsUndefinedOut(NodeRef<Expression> expr)
     {
-        m_operand = TryFoldValue([this, expr] { return m_context.Nodes()[expr].Evaluate(m_context); });
-        return m_operand;
+        if (!expr)
+        {
+            return false;
+        }
+        const auto& nodes = m_context.Nodes();
+        const void* key = &nodes[expr];
+        if (const auto found = m_letsOut.find(key); found != m_letsOut.end())
+        {
+            return found->second;
+        }
+        CheckStack();
+        const bool result = ComputeLetsUndefinedOut(expr);
+        m_letsOut[key] = result;
+        return result;
     }
 
-    // The candidate's value, a step's from the step before it
-    const FoldValue& ValueOf(std::size_t index)
+    bool ComputeLetsUndefinedOut(NodeRef<Expression> expr)
+    {
+        const auto& nodes = m_context.Nodes();
+        switch (nodes[expr].GetKind())
+        {
+        case NodeKind::BinaryExpr:
+        {
+            const auto& binary = nodes.Get<BinaryExpression>(expr);
+            if (!binary.IsLogical())
+            {
+                return LetsUndefinedOut(binary.GetLeftExpr()) || LetsUndefinedOut(binary.GetRightExpr());
+            }
+            if (LetsUndefinedOut(binary.GetLeftExpr()))
+            {
+                return true;
+            }
+            const auto& left = OperandSummary(binary.GetLeftExpr());
+            if (left.failed || left.strictUndefined || !left.truth)
+            {
+                return !left.failed && left.strictUndefined;
+            }
+            // `a or b` is b when a is false: b is not tested
+            return *left.truth != binary.IsOr() && LetsUndefinedOut(binary.GetRightExpr());
+        }
+        case NodeKind::ConcatExpr:
+            for (const auto operand : nodes[nodes.Get<ConcatExpression>(expr).GetOperands()])
+            {
+                if (LetsUndefinedOut(operand))
+                {
+                    return true;
+                }
+                const auto& value = OperandSummary(operand);
+                if (value.failed || value.strictUndefined)
+                {
+                    return !value.failed;
+                }
+            }
+            return false;
+        case NodeKind::FullExpr:
+        {
+            const auto& full = nodes.Get<FullExpressionEvaluator>(expr);
+            if (!full.GetTester())
+            {
+                return LetsUndefinedOut(full.GetExpression());
+            }
+            const auto& conditional = nodes[full.GetTester()];
+            if (LetsUndefinedOut(conditional.GetTestExpr()))
+            {
+                return true;
+            }
+            const auto& test = OperandSummary(conditional.GetTestExpr());
+            if (test.failed || test.strictUndefined || !test.truth)
+            {
+                return !test.failed && test.strictUndefined;
+            }
+            return LetsUndefinedOut(*test.truth ? full.GetExpression() : conditional.GetAltValue());
+        }
+        case NodeKind::UnaryExpr:
+            return LetsUndefinedOut(nodes.Get<UnaryExpression>(expr).GetOperand());
+        case NodeKind::IsExpr:
+            return LetsUndefinedOut(nodes.Get<IsExpression>(expr).GetValue());
+        case NodeKind::FilteredExpr:
+            return LetsUndefinedOut(nodes.Get<FilteredExpression>(expr).GetOperand());
+        case NodeKind::SubscriptExpr:
+            return LetsUndefinedOut(nodes.Get<SubscriptExpression>(expr).GetValue());
+        default:
+            return false;
+        }
+    }
+
+    // What an operand evaluates to: its candidate's step when it is one, else its own evaluation, memoized
+    const FoldSummary& OperandSummary(NodeRef<Expression> expr)
+    {
+        const auto& nodes = m_context.Nodes();
+        const void* key = &nodes[expr];
+        if (const auto found = m_candidateOf.find(key); found != m_candidateOf.end())
+        {
+            return SummaryOf(found->second);
+        }
+        if (const auto found = m_operands.find(key); found != m_operands.end())
+        {
+            return found->second;
+        }
+        const auto value = TryFoldValue([this, &nodes, expr] { return nodes[expr].Evaluate(m_context); });
+        return m_operands.emplace(key, Summarize(value, false)).first->second;
+    }
+
+    // The candidate's value, evaluated; a step's from the step before it
+    const FoldSummary& SummaryOf(std::size_t index)
+    {
+        Compute(index);
+        auto& step = m_steps[index];
+        if (!step.summarized)
+        {
+            step.summary = Summarize(step.value, !m_check.candidates[index].output);
+            step.summarized = true;
+        }
+        return step.summary;
+    }
+
+    void Compute(std::size_t index)
     {
         if (m_steps[index].known)
         {
-            return m_steps[index].value;
+            return;
         }
         // The steps down to one whose value is known, or the chain's first, evaluated whole
         std::vector<std::size_t> pending{ index };
@@ -2258,26 +2447,64 @@ private:
         {
             pending.push_back(m_steps[pending.back()].previous);
         }
-        const auto& nodes = m_context.Nodes();
-        const auto first = pending.back();
-        pending.pop_back();
-        if (const auto previous = m_steps[first].previous; previous != NoStep)
-        {
-            m_steps[first].value = NextStep(m_steps[previous].value, first);
-        }
-        else
-        {
-            m_steps[first].value = TryFoldValue([this, &nodes, first] { return nodes[m_check.candidates[first].node].Evaluate(m_context); });
-        }
-        m_steps[first].known = true;
         while (!pending.empty())
         {
             const auto step = pending.back();
             pending.pop_back();
-            m_steps[step].value = NextStep(m_steps[m_steps[step].previous].value, step);
+            const auto previous = m_steps[step].previous;
+            if (previous != NoStep && !m_steps[previous].released)
+            {
+                m_steps[step].value = NextStep(m_steps[previous].value, step);
+            }
+            else
+            {
+                // The first of the chain, or one whose operand's value is gone (only a candidate already done reads
+                // no value: a safety net)
+                m_steps[step].value = TryFoldValue([this, step] { return m_context.Nodes()[m_check.candidates[step].node].Evaluate(m_context); });
+            }
             m_steps[step].known = true;
+            ReadDone(step);
         }
-        return m_steps[index].value;
+    }
+
+    // The step has read the value of the one before it, or never will
+    void ReadDone(std::size_t index)
+    {
+        auto& step = m_steps[index];
+        if (step.readDone)
+        {
+            return;
+        }
+        step.readDone = true;
+        if (step.previous != NoStep)
+        {
+            --m_steps[step.previous].readers;
+            Release(step.previous);
+        }
+    }
+
+    void Done(std::size_t index)
+    {
+        m_steps[index].done = true;
+        ReadDone(index);
+        Release(index);
+    }
+
+    // Drops the step's value once nothing reads it: its summary is what is left of it
+    void Release(std::size_t index)
+    {
+        auto& step = m_steps[index];
+        if (step.readers != 0 || !step.known || step.released)
+        {
+            return;
+        }
+        if (!step.summarized)
+        {
+            step.summary = Summarize(step.value, !step.done && !m_check.candidates[index].output);
+            step.summarized = true;
+        }
+        step.value = FoldValue();
+        step.released = true;
     }
 
     FoldValue NextStep(const FoldValue& previous, std::size_t index)
@@ -2299,6 +2526,10 @@ private:
             return TryFoldValue([this, &nodes, node, &previous] { return nodes.Get<BinaryExpression>(node).EvaluateWithLeft(previous.value, m_context); });
         case StepKind::Unary:
             return TryFoldValue([&nodes, node, &previous] { return nodes.Get<UnaryExpression>(node).EvaluateWith(previous.value); });
+        case StepKind::Subscript:
+            return TryFoldValue([this, &nodes, node, &previous] { return nodes.Get<SubscriptExpression>(node).EvaluateWithValue(previous.value, m_context); });
+        case StepKind::Test:
+            return TryFoldValue([this, &nodes, node, &previous] { return nodes.Get<IsExpression>(node).EvaluateWith(previous.value, m_context); });
         case StepKind::None:
             break;
         }
@@ -2348,8 +2579,11 @@ private:
     const FoldCheck& m_check;
     RenderContext& m_context;
     std::vector<Step> m_steps;
-    // Evaluated's value
-    FoldValue m_operand;
+    // The latest candidate of each node
+    std::unordered_map<const void*, std::size_t> m_candidateOf;
+    // LetsUndefinedOut's answers, and the summaries of the operands it evaluated that are no candidates
+    std::unordered_map<const void*, bool> m_letsOut;
+    std::unordered_map<const void*, FoldSummary> m_operands;
 };
 } // namespace
 
@@ -2373,6 +2607,7 @@ bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
         // docs/tasks/0484)
         if (candidate.from >= (check.strictUndefined ? outputFoldedFrom : foldedFrom))
         {
+            evaluator.Skip(index);
             continue;
         }
         outcomes[index] = evaluator.Of(index);

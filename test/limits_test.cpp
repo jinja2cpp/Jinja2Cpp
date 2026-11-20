@@ -391,6 +391,59 @@ TEST_F(LimitsEnvTest, StrictOperatorChainFoldsInLinearSteps)
     }
 }
 
+TEST_F(LimitsEnvTest, StrictSubscriptAndTestStepsFoldInLinearSteps)
+{
+    // docs/tasks/0546: a subscript, a test or a chain's first filter whose operand is a candidate is a step after
+    // it, so N levels of `((x)|string)[0]` or `(x is true)` around a tuple-of-slices subscript evaluate O(N) nodes
+    Settings settings;
+    settings.undefinedPolicy = UndefinedPolicy::Strict;
+    settings.limits.maxExpressionDepth = 1000;
+    settings.limits.maxRenderSteps = 5000;
+    m_env.SetSettings(settings);
+    std::string subscripts = "([1][:, :] is undefined)";
+    std::string tests = subscripts;
+    for (int level = 0; level != 150; ++level)
+    {
+        subscripts = "((" + subscripts + ")|string)[0]";
+        tests = "(" + tests + " is true)";
+    }
+    for (const auto& [source, expected] : std::vector<std::pair<std::string, std::string>>{ { "{% set q = " + subscripts + " %}{{ q }}", "T" }, { "{% set q = " + tests + " %}{{ q }}", "True" } })
+    {
+        Template tpl(&m_env);
+        auto loaded = tpl.Load(source);
+        ASSERT_TRUE(loaded.has_value()) << source.substr(0, 40) << ": " << ErrorToString(loaded.error());
+        EXPECT_EQ(expected, tpl.RenderAsString({}).value());
+
+        TemplateW wide(&m_env);
+        ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end())).has_value());
+        EXPECT_EQ(std::wstring(expected.begin(), expected.end()), wide.RenderAsString({}).value());
+    }
+}
+
+TEST_F(LimitsEnvTest, StrictFoldStepsDropTheValuesTheyPassed)
+{
+    // docs/tasks/0546: a step's value is dropped once the step after it has read it, so a chain of large values
+    // holds about two of them at Load, not one per step
+    Settings settings;
+    settings.undefinedPolicy = UndefinedPolicy::Strict;
+    settings.limits.maxRenderMemory = std::uint64_t{ 4 } << 20;
+    m_env.SetSettings(settings);
+    std::string source = "{% set q = [1][:, :]|default('x')";
+    for (int step = 0; step != 100; ++step)
+    {
+        source += "|center(" + std::to_string(200000 + step) + ")";
+    }
+    source += " %}{{ q|length }}";
+    Template tpl(&m_env);
+    auto loaded = tpl.Load(source);
+    ASSERT_TRUE(loaded.has_value()) << ErrorToString(loaded.error());
+    EXPECT_EQ("200099", tpl.RenderAsString({}).value());
+
+    TemplateW wide(&m_env);
+    ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end())).has_value());
+    EXPECT_EQ(L"200099", wide.RenderAsString({}).value());
+}
+
 TEST_F(LimitsEnvTest, ReprOfSharedItems)
 {
     Settings settings;

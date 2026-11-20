@@ -37,3 +37,28 @@ constant is worth a per-template table.
 
 **Done when.** A strict nesting of N subscript levels around a tuple-of-slices subscript evaluates O(N) nodes
 at Load (a LimitsEnvTest step-limit test), and the kept values are freed as the chain passes them.
+
+**Result (parity batch 11 B).** FoldEvaluator links a subscript (`SubscriptExpression`, not `loop.x`), a test
+(`IsExpression`) and a chain's first filter whose operand is a candidate as a step after it, as 0536 links
+operators: `SubscriptExpression::EvaluateWithValue`, `IsExpression::EvaluateWith` and `EvaluateLast` on the kept
+value, and their fold from the step before (`IndicesFoldAt`, `TestFolds`). 150 levels of `((x)|string)[0]` or
+`(x is true)` around a tuple-of-slices subscript load in under 5000 steps
+(`LimitsEnvTest.StrictSubscriptAndTestStepsFoldInLinearSteps`; master needs N^2/2). Each step counts the steps
+that read it; once they have and its own candidate is done (or skipped inside a fold), its value is dropped and
+a summary (failed, undefined, strict undefined, truth, safe repr) answers for it, so a chain holds about two
+values (`LimitsEnvTest.StrictFoldStepsDropTheValuesTheyPassed`: 100 `|center(200000+i)` steps in 4 MiB of
+maxRenderMemory). An `and`, `or` or `~` candidate whose evaluation fails no longer fails the Load as such: it
+does when `FoldEvaluator::LetsUndefinedOut` finds the UndefinedError Jinja2 lets out, bool() or str() of a
+strict undefined operand of an `and`, `or`, `~` or conditional on the path its as_const evaluates (through
+unary operators, subscripts, tests and filter operands too, as the optimizer folds them first); any other
+failure is Impossible (corpus `subscripts.tuple_of_slices_strict_impossible_operands` and the `_nested_*` cases).
+
+Per-render constant: measured with the Python module (RelWithDebInfo), 100 outputs of `[1][:, :] is undefined`
+render in 45 µs against 10 µs for `[1] is undefined` and 1.6 µs for `true`: about 0.35 µs per tuple-of-slices
+evaluation. Such subscripts exist only because Jinja2's fold makes invalid Python compile, so no real template
+renders many of them; a per-template constant table is not worth its storage and the Load work. Not done.
+
+Left: candidates inside a filter's or call's argument and items of a list, tuple or dict literal are no steps
+(`1|default(...)` and `[[...]]` nesting is still N^2/2 at Load, bounded by maxExpressionDepth): 0554. A strict
+undefined from another source than a tuple-of-slices subscript fails Jinja2's compile in an `and`, `or`, `~` or
+conditional, also where it never renders; the engine checks folds only around such subscripts: 0555.

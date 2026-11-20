@@ -195,3 +195,49 @@ def test_template_globals_is_one_mapping_that_renders_read():
         assert "x" not in env.globals, module.__name__
         env.globals["e"] = "F"
         assert tpl.render() == "1F", module.__name__
+
+
+def test_urlencode_takes_items_only_of_a_dict():
+    # Jinja2's do_urlencode reads a dict (a subclass too) as its items and iterates any other Mapping, whose keys
+    # are then the pairs to unpack (docs/tasks/0404)
+    import collections
+    import collections.abc
+    import types
+
+    class Pairs(collections.abc.Mapping):
+        def __init__(self, data):
+            self._data = data
+
+        def __getitem__(self, key):
+            return self._data[key]
+
+        def __iter__(self):
+            return iter(self._data)
+
+        def __len__(self):
+            return len(self._data)
+
+    class SubDict(dict):
+        pass
+
+    sources = ["{{ m|urlencode }}", "{% for k in m %}{{ k }}{% endfor %} {{ m|urlencode }}"]
+    for value in (
+        types.MappingProxyType({"ab": 1, "cd": 2}),
+        types.MappingProxyType({"a": 1}),
+        types.MappingProxyType({"abc": 1}),
+        types.MappingProxyType({}),
+        Pairs({"xy": 1, ("k", "v"): 2}),
+        Pairs({1: 2}),
+        SubDict({"a b": 1, "c": "d&"}),
+        collections.OrderedDict([("a", 1), ("b", 2)]),
+        collections.defaultdict(int, {"a": 1}),
+        {"a": 1, "b": "x y"},
+    ):
+        for source in sources:
+            results = []
+            for module in (jinja2cpp, jinja2):
+                try:
+                    results.append(module.Environment().from_string(source).render(m=value))
+                except Exception as error:  # noqa: BLE001 - compared by class name
+                    results.append(type(error).__name__)
+            assert results[0] == results[1], f"{source!r} {value!r}: jinja2cpp {results[0]!r}, Jinja2 {results[1]!r}"

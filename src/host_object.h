@@ -105,6 +105,9 @@ public:
     // Iterate gives, each value GetItem of its key (HostObjectAccessor::GetEntries). Every other
     // operation still asks the object, as above
     [[nodiscard]] virtual bool IsMapping() const { return false; }
+    // isinstance(x, dict), of a mapping: Jinja2's urlencode takes only a dict's items and iterates
+    // any other mapping, which gives its keys (docs/tasks/0404)
+    [[nodiscard]] virtual bool IsDict() const { return IsMapping(); }
     // isinstance(x, (list, tuple)): the engine reads the object as a list of its own (the items
     // of SequenceItems, host::AsSequence) where Python's list or tuple has an operation the object's
     // own methods do not give the template: + * < <= > >= (and sort, min, max through them),

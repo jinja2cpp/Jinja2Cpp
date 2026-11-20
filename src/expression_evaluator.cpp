@@ -418,10 +418,11 @@ std::uint8_t SubscriptExpression::PrepareFold(const NodeArena& nodes)
 
 bool SubscriptExpression::IsFoldableAt(RenderContext& values) const
 {
-    if (FoldWalkTooDeep() || !OperandFoldsAt(values, m_value))
-    {
-        return false;
-    }
+    return !FoldWalkTooDeep() && OperandFoldsAt(values, m_value) && IndicesFoldAt(values);
+}
+
+bool SubscriptExpression::IndicesFoldAt(RenderContext& values) const
+{
     return std::all_of(m_subscriptExprs.begin(), m_subscriptExprs.end(), [&values](const Index& idx) { return idx.isAttr || OperandFoldsAt(values, idx.expr); });
 }
 
@@ -550,6 +551,11 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
 }
 
 // One returned object, so that it is constructed in the caller's storage
+InternalValue SubscriptExpression::EvaluateWithValue(InternalValue value, RenderContext& values) const
+{
+    return EvaluateIndices(std::move(value), 0, m_subscriptExprs.size(), values, false);
+}
+
 InternalValue SubscriptExpression::ApplyFirstIndex(const InternalValue& root, RenderContext& values) const
 {
     InternalValue cur = ApplyIndex(root, m_subscriptExprs[0], values);
@@ -1675,6 +1681,11 @@ InternalValue IsExpression::Evaluate(RenderContext& context)
         }
     }
     return nodes[m_tester].Test(nodes[m_value].Evaluate(context), context);
+}
+
+InternalValue IsExpression::EvaluateWith(const InternalValue& value, RenderContext& context) const
+{
+    return context.Nodes()[m_tester].Test(value, context);
 }
 
 bool IfExpression::IsFoldable(const NodeArena& nodes, NodeRef<Expression> value) const

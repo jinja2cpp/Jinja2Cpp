@@ -177,5 +177,10 @@ CASES = [
     ("strict_list_remove", "{{ [nope, 1].remove(1) }}", STRICT),
     ("default_is_lt", "{{ nope is lt(1) }}"),
     ("default_is_ge_argument", "{{ 1 is ge(nope) }}"),
+    # Jinja2's optimizer folds every constant node when it compiles: bool() or str() of a strict undefined in an
+    # `and`, `or`, `~` or conditional fails the compile, in code that never renders too (0555)
+    ("strict_fold_concat_unrendered", "{% if false %}{{ 1.5 ~ ([]|max) }}{% endif %}b", STRICT),
+    ("strict_fold_conditional_test_unrendered", "{% if false %}{{ 1 if []|max else 2 }}{% endif %}b", STRICT),
+    ("strict_fold_short_circuited_operand", "{{ 1 or ([]|max ~ 1) }}", STRICT),
     ("default_tests_compare", "{{ nope in [] }}|{{ nope is sameas nope }}|{{ [nope, 1] | select('equalto', 1) | list }}|{{ nope is eq(1) }}|{{ [nope, 1].count(1) }}|{{ [nope, 1].index(1) }}|{{ nope is iterable }}|{{ nope in {'a': 1}.keys() }}"),
 ]
