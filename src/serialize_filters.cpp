@@ -1833,8 +1833,12 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     const bool isString = IsStringValue(value) || GetAsSameString(std::string(), value);
     JsonOptions options;
     // The argument is still evaluated: a failing or host-callable indent runs as in Python
+    // Whether it was passed matters to a policy's dumps function only, so the lookup that tells is made for that
+    auto* callback = context.GetRendererCallback();
+    const FilterPolicies& policies = callback->GetFilterPolicies();
+    const bool dumpsCalled = m_mode != TransformersJsonMode && policies.jsonDumps.callable;
     bool indentGiven = false;
-    auto indentVal = this->GetArgumentValue("indent", context, indentGiven);
+    auto indentVal = dumpsCalled ? this->GetArgumentValue("indent", context, indentGiven) : this->GetArgumentValue("indent", context);
     options.indent = JsonIndent(isString ? InternalValue() : indentVal);
     if (m_mode == TransformersJsonMode)
     {
@@ -1851,10 +1855,8 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
     // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both). The json.dumps
     // policies are the defaults (docs/tasks/0435)
-    auto* callback = context.GetRendererCallback();
-    const FilterPolicies& policies = callback->GetFilterPolicies();
     InternalValue resultVal;
-    if (policies.jsonDumps.callable)
+    if (dumpsCalled)
     {
         resultVal = CallJsonDumps(policies.jsonDumps, value, IsArgumentSet(indentVal, indentGiven) ? &indentVal : nullptr, context);
     }

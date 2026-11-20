@@ -471,6 +471,9 @@ struct LoopState : ValueObject
         }
     }
 
+    // Out of line: the exception_ptr it releases gives the hot Recycle a stack protector's frame
+    JINJA2CPP_NOINLINE_INLINE void ForgetKeptFailure() { keptFailure = nullptr; }
+
     // Readies a finished loop's state for the next loop entered on this thread
     // (docs/tasks/0133): lets go of everything the loop held, keeping the enumerator
     // only when the next loop can rebind it
@@ -490,7 +493,10 @@ struct LoopState : ValueObject
         }
         listSize.reset();
         sizeOfList.reset();
-        keptFailure = nullptr;
+        if (keptFailure)
+        {
+            ForgetKeptFailure();
+        }
         index0 = 0;
         isLast = false;
         isAdvancing = false;

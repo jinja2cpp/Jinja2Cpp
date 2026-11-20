@@ -4025,10 +4025,37 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
 
 bool IsMutatingName(std::string_view name)
 {
-    const auto* listMethod = FindIn(ListMethods, name);
-    const auto* dictMethod = FindIn(DictMethods, name);
-    const auto* setMethod = FindIn(SetMethods, name);
-    return (listMethod != nullptr && listMethod->isMutating) || (dictMethod != nullptr && dictMethod->isMutating) || (setMethod != nullptr && setMethod->isMutating);
+    // Asked at each method call: the names that change a list, a dict or a set, in short lists by length, so most
+    // names (items, get, upper, ...) are ruled out by their length or a compare or two
+    static constexpr std::size_t maxLength = 32;
+    static const auto names = [] {
+        std::array<std::vector<std::string_view>, maxLength + 1> result;
+        auto add = [&result](const auto& table) {
+            for (const auto& method : table)
+            {
+                if (method.isMutating && method.name.size() <= maxLength)
+                {
+                    result[method.name.size()].push_back(method.name);
+                }
+            }
+        };
+        add(ListMethods);
+        add(DictMethods);
+        add(SetMethods);
+        return result;
+    }();
+    if (name.size() > maxLength)
+    {
+        return false;
+    }
+    for (const auto candidate : names[name.size()])
+    {
+        if (candidate == name)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void NoteContainerStore(const InternalValue& container, const InternalValue& item)
