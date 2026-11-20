@@ -169,7 +169,8 @@ locations), 0255 (engine runtime errors).
   `std::errc::no_such_file_or_directory`.
 - New codes, appended: 15 `UserCallableException` (anything thrown out of a `UserCallable`,
   filter, test, finalize or gettext callable), 16 `IntegerOutOfRange` (a `BigInt` reaching a
-  template before 0270; int64 overflow in template arithmetic), 17 `TemplateRuntimeError` (the template's own
+  template before 0270; int64 overflow in template arithmetic; a number outside a callable's integer
+  parameter, 0544), 17 `TemplateRuntimeError` (the template's own
   operation failed: Python's `TypeError`, `ValueError`, ...), 18 `ResourceLimitExceeded`
   (`extraParams[1]` names the limit), 19 `TemplateExpired` (a macro of a `Template::MakeModule`
   module called after its template was loaded again; 0284. A Load no longer raises it since 0321:

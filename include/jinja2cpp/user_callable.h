@@ -508,7 +508,7 @@ struct TypedParamUnwrapper
     };
     // Kept only for an integer parameter, to name it in an error: other parameters pay nothing
     std::conditional_t<IsRangeCheckedParam<ValueType>, const ArgInfo*, NoInfo> info;
-    TypedParamUnwrapper(TypedParam<T>& p, const ArgInfo& argInfo)
+    TypedParamUnwrapper(TypedParam<T>& p, [[maybe_unused]] const ArgInfo& argInfo)
         : param(&p)
     {
         if constexpr (IsRangeCheckedParam<ValueType>)
