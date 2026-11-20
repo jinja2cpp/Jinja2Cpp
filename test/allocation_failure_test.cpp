@@ -819,11 +819,29 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
                                        Row{ "{% import 'imports_from_ctx' as l %}{{ l.x() }}", false },
                                        Row{ "{% import 'imports_stable' as l %}{{ l.x() }}", false },
                                        Row{ "{% import 'imports_stable_ctx' as l %}{{ l.x() }}", false },
-                                       Row{ "{% import 'imports_nested' as l %}{{ l.x() }}", false } })
+                                       Row{ "{% import 'imports_nested' as l %}{{ l.x() }}", false },
+                                       // Two replaced modules sharing a replaced helper, a diamond, a stable module imported with
+                                       // context, a `from` of a chain and the helper imported by the call too
+                                       Row{ "{% import 'ia' as a %}{% import 'ib' as b %}{{ a.x() }}{{ b.x() }}", false },
+                                       Row{ "{% import 'id' as d %}{{ d.x() }}", false }, Row{ "{% import 'ie' as e %}{{ e.x() }}", false },
+                                       Row{ "{% import 'if' as f %}{{ f.x() }}", false },
+                                       Row{ "{% import 'ia' as a %}{% import 'helper' as hh %}{{ a.x() }}{{ hh.y() }}", false },
+                                       // More names than a fixed table of them held (0528 stopped at 64)
+                                       Row{ "{% import 'imports_many' as l %}{{ l.x() }}", false } })
     {
         auto module = MakeModule(body);
         m_fs->AddFile("base", "<{% block b %}base{% endblock %}>");
         m_fs->AddFile("stable", "{% macro s() %}S{% endmacro %}{% set u = [5] %}");
+        std::string many = "{% import 'helper' as h %}{% macro x() %}X{{ h.y() }}{% endmacro %}";
+        for (int i = 0; i != 100; ++i)
+        {
+            const auto index = std::to_string(i);
+            many += "{% set v";
+            many += index;
+            many += " = [";
+            many += index;
+            many += "] %}";
+        }
         const auto& m = module.exports["m"];
         int serial = 0;
         const auto callMany = [&, failing = fails](int count) {
@@ -842,6 +860,13 @@ TEST_F(ModuleCallTest, EveryUseChangingSourceStaysFlat)
                 m_fs->AddFile("imports_stable", "{% import 'stable' as h %}{% from 'stable' import s %}{% macro x() %}X{{ h.s() }}{{ s() }}{% endmacro %}" + mark);
                 m_fs->AddFile("imports_stable_ctx", "{% import 'stable' as h with context %}{% macro x() %}X{{ h.s() }}{% endmacro %}" + mark);
                 m_fs->AddFile("imports_nested", "{% import 'imports' as i %}{% import 'stable' as t %}{% macro x() %}X{{ i.x() }}{{ t.s() }}{% endmacro %}" + mark);
+                m_fs->AddFile("ia", "{% import 'helper' as h %}{% macro x() %}A{{ h.y() }}{% endmacro %}" + mark);
+                m_fs->AddFile("ib", "{% import 'helper' as h %}{% macro x() %}B{{ h.y() }}{% endmacro %}" + mark);
+                m_fs->AddFile("ic", "{% import 'ib' as bb %}{% import 'helper' as h %}{% macro x() %}C{{ bb.x() }}{{ h.y() }}{% endmacro %}" + mark);
+                m_fs->AddFile("id", "{% import 'ib' as bb %}{% import 'ic' as cc %}{% macro x() %}D{{ bb.x() }}{{ cc.x() }}{% endmacro %}" + mark);
+                m_fs->AddFile("ie", "{% import 'stable' as s with context %}{% import 'helper' as h %}{% macro x() %}E{{ s.s() }}{{ h.y() }}{% endmacro %}" + mark);
+                m_fs->AddFile("if", "{% from 'ic' import x as cx %}{% from 'stable' import s %}{% macro x() %}F{{ cx() }}{{ s() }}{% endmacro %}" + mark);
+                m_fs->AddFile("imports_many", many + mark);
                 if (failing)
                 {
                     EXPECT_THROW(Call(m), jinja2::BadResultAccess<>);
@@ -902,6 +927,80 @@ TEST_F(ModuleCallTest, EveryUseStoredSelfLetGoOfStaysFlat)
         const long before = g_live.load(std::memory_order_relaxed);
         callMany(1000);
         EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << store;
+    }
+}
+
+// A call that fails at any allocation while replaced modules end with what they imported (docs/tasks/0541) leaves the
+// module working: the groups that did not end go with a later call
+TEST_F(ModuleCallTest, ReplacedGroupsEndUnderInjection)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    m_env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+    m_env.GetSettings().cacheSize = 0;
+    m_tpl = Template(&m_env);
+    struct Row
+    {
+        const char* body;
+        const char* expected;
+    };
+    for (const auto& [body, expected] :
+         { Row{ "{% import 'imports' as l %}{{ l.x() }}", "XY" }, Row{ "{% from 'imports_from' import x %}{{ x() }}", "XY[4]" },
+           Row{ "{% import 'imports_ctx' as l %}{{ l.x() }}", "XY" }, Row{ "{% import 'imports_stable' as l %}{{ l.x() }}", "XSS" },
+           Row{ "{% import 'imports_nested' as l %}{{ l.x() }}", "XXYS" },
+           Row{ "{% import 'imports' as l %}{% import 'imports_stable' as k %}{{ l.x() }}{{ k.x() }}", "XYXSS" },
+           Row{ "{% import 'imports_nested' as l %}{% import 'imports_stable' as k %}{% from 'helper' import y %}{{ l.x() }}{{ k.x() }}{{ y() }}", "XXYSXSSY" } })
+    {
+        auto module = MakeModule(body);
+        m_fs->AddFile("stable", "{% macro s() %}S{% endmacro %}{% set u = [5] %}");
+        const auto& m = module.exports["m"];
+        int serial = 0;
+        const auto addFiles = [&] {
+            std::string mark = "{# ";
+            mark += std::to_string(1000000 + ++serial);
+            mark += " #}";
+            m_fs->AddFile("helper", "{% macro y() %}Y{% endmacro %}{% set w = [4] %}" + mark);
+            m_fs->AddFile("imports", "{% import 'helper' as h %}{% macro x() %}X{{ h.y() }}{% endmacro %}" + mark);
+            m_fs->AddFile("imports_from", "{% from 'helper' import y, w %}{% macro x() %}X{{ y() }}{{ w }}{% endmacro %}" + mark);
+            m_fs->AddFile("imports_ctx", "{% set v = [1] %}{% import 'helper' as h with context %}{% macro x() %}X{{ h.y() }}{% endmacro %}" + mark);
+            m_fs->AddFile("imports_stable", "{% import 'stable' as h %}{% from 'stable' import s %}{% macro x() %}X{{ h.s() }}{{ s() }}{% endmacro %}" + mark);
+            m_fs->AddFile("imports_nested", "{% import 'imports' as i %}{% import 'stable' as t %}{% macro x() %}X{{ i.x() }}{{ t.s() }}{% endmacro %}" + mark);
+        };
+        addFiles();
+        ASSERT_EQ(expected, Call(m));
+        long n = 0;
+        for (; n != maxAllocations; ++n)
+        {
+            addFiles();
+            bool fired = false;
+            bool threw = false;
+            std::string result;
+            OnFreshThread([&] {
+                const Injection injection(n);
+                try
+                {
+                    result = Call(m);
+                }
+                catch (const std::bad_alloc&)
+                {
+                    threw = true;
+                }
+                fired = Injection::Fired();
+            });
+            if (!threw)
+            {
+                ASSERT_EQ(expected, result) << body << " allocation " << n;
+            }
+            for (int k = 0; k != 2; ++k)
+            {
+                addFiles();
+                ASSERT_EQ(expected, Call(m)) << body << " allocation " << n;
+            }
+            if (!fired)
+            {
+                break;
+            }
+        }
+        EXPECT_LT(n, maxAllocations);
     }
 }
 

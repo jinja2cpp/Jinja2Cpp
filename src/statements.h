@@ -10,6 +10,7 @@
 #include "template_slots.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "small_vector.h"
 #include "span.h"
 
 #include <algorithm>
@@ -713,15 +714,22 @@ public:
     // from anywhere, but must not be a macro of an ending module. Then nothing else can reach the ending modules or
     // view their trees, and they may end together (docs/tasks/0528, 0541). False when one's tree is not kept by
     // value. Throws std::bad_alloc
-    [[nodiscard]] static bool HeldOnlyBy(const std::vector<const ImportedModule*>& ending, const std::vector<const ImportedModule*>& staying, const std::vector<std::unique_ptr<ImportedModule>>& all);
+    // Modules that end or stay together (HeldOnlyBy): a group is small, and found at the end of every call
+    using Group = SmallVector<const ImportedModule*, 8>;
+    // Each tree of a group with the number of loads that hold it
+    using TreeLoads = SmallVector<std::pair<const void*, long>, 4>;
+    [[nodiscard]] static bool HeldOnlyBy(const Group& ending, const Group& staying, const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all);
+    // The tree SetTreeOwner keeps alive; null when none
+    [[nodiscard]] const void* Tree() const noexcept { return m_treeOwner.get(); }
 
 private:
     // Calls `note` with each value whose object the module holds: its `import ... as` object, its names (twice when the
     // object exports one) and the importer's names it sees (HeldOnlyBy)
     template<typename Note>
     void ForEachHeldValue(const Note& note) const;
-    // Whether only its load, the modules of `all` made from it and their macros hold the tree `tree`. Throws std::bad_alloc
-    [[nodiscard]] static bool TreeHeldOnlyByModules(const void* tree, const std::vector<std::unique_ptr<ImportedModule>>& all);
+    // Whether only its `loads` loads, the modules of `all` made from it and their macros hold the tree `tree`. Throws
+    // std::bad_alloc
+    [[nodiscard]] static bool TreeHeldOnlyByModules(const void* tree, long loads, const std::vector<std::unique_ptr<ImportedModule>>& all);
 
     // Declared first, so that it goes last: the module's names and macros view the tree it keeps
     std::shared_ptr<const void> m_treeOwner;

@@ -436,10 +436,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
                     try
                     {
                         std::for_each(pending.begin() + static_cast<std::ptrdiff_t>(mark), pending.end(), [this](const ImportedModule* imported) {
-                            const typename Impl::RendererCallback::ModuleImports::value_type edge{ lastShared, imported };
-                            if (imported && std::find(imports.begin(), imports.end(), edge) == imports.end())
+                            if (imported)
                             {
-                                imports.push_back(edge);
+                                imports.Add(lastShared, imported);
                             }
                         });
                     }
@@ -484,7 +483,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         {
             return std::any_of(kept.begin(), kept.end(), [candidate](const KeptModule& entry) { return entry.module == candidate; });
         }
-        // Forgets `module`, which ends or which no module imports any more (EndReplacedSharedModules)
+        // Forgets `gone`, which ends or which no module imports any more (EndReplacedSharedModules). Erasing from
+        // `kept` moves the tokens EnterSharedModule gave: it runs only once the outermost call returned, when no top level
+        // that took one renders (a top level with no call running is MakeModule's own, before any export exists)
         void Forget(const ImportedModule* gone) noexcept
         {
             kept.erase(std::remove_if(kept.begin(), kept.end(), [gone](const KeptModule& entry) { return entry.module == gone; }), kept.end());

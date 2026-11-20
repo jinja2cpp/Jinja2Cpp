@@ -4133,14 +4133,14 @@ void ImportedModule::ForEachHeldValue(const Note& note) const
     }
 }
 
-bool ImportedModule::TreeHeldOnlyByModules(const void* tree, const std::vector<std::unique_ptr<ImportedModule>>& all)
+bool ImportedModule::TreeHeldOnlyByModules(const void* tree, long loads, const std::vector<std::unique_ptr<ImportedModule>>& all)
 {
-    // Its load holds it, and each module made from it and each body of a macro of those modules, however many boxes
+    // Its loads hold it, and each module made from it and each body of a macro of those modules, however many boxes
     // share the body. A closure a call made in the tree and stored (a nested macro, a caller, a recursive loop) holds
     // it too, and so it stays
-    long holders = 1;
+    long holders = loads;
     const std::shared_ptr<const void>* owner = nullptr;
-    std::vector<const void*> bodies;
+    SmallVector<const void*, 8> bodies;
     const auto noteBody = [tree, &bodies](const InternalValue& value) {
         const void* body = nullptr;
         if (MacroStatement::TreeOwnerOf(value, body) == tree && std::find(bodies.begin(), bodies.end(), body) == bodies.end())
@@ -4172,7 +4172,7 @@ bool ImportedModule::TreeHeldOnlyByModules(const void* tree, const std::vector<s
     return owner->use_count() == holders + static_cast<long>(bodies.size()); // use_count: read on the thread that runs the module's calls, which holds its lock
 }
 
-bool ImportedModule::HeldOnlyBy(const std::vector<const ImportedModule*>& ending, const std::vector<const ImportedModule*>& staying, const std::vector<std::unique_ptr<ImportedModule>>& all)
+bool ImportedModule::HeldOnlyBy(const Group& ending, const Group& staying, const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all)
 {
     // The objects of the modules' values, each with the holders it has among the ending modules
     struct Held
@@ -4184,7 +4184,7 @@ bool ImportedModule::HeldOnlyBy(const std::vector<const ImportedModule*>& ending
         // A staying module holds it
         bool stays;
     };
-    std::vector<Held> held;
+    SmallVector<Held, 16> held;
     const auto noter = [&held](bool stays) {
         return [&held, stays](const InternalValue& value) {
             const auto* object = detail::InternalValueAccess::Object(value);
@@ -4206,7 +4206,7 @@ bool ImportedModule::HeldOnlyBy(const std::vector<const ImportedModule*>& ending
     {
         module->ForEachHeldValue(noter(true));
     }
-    std::vector<const void*> trees;
+    SmallVector<const void*, 4> trees;
     for (const auto* module : ending)
     {
         if (!module->m_treeOwner)
@@ -4223,7 +4223,7 @@ bool ImportedModule::HeldOnlyBy(const std::vector<const ImportedModule*>& ending
     // What stays may be held from anywhere, but not with a macro that runs in a module about to end
     // use_count: as in TreeHeldOnlyByModules
     const bool objectsHeld = std::all_of(held.begin(), held.end(), [&isEndingTree](const Held& h) { return h.stays ? !isEndingTree(h.tree) : h.object->use_count() == h.count; });
-    return objectsHeld && std::all_of(trees.begin(), trees.end(), [&all](const void* tree) { return TreeHeldOnlyByModules(tree, all); });
+    return objectsHeld && std::all_of(loads.begin(), loads.end(), [&all](const auto& entry) { return TreeHeldOnlyByModules(entry.first, entry.second, all); });
 }
 
 namespace
