@@ -592,15 +592,15 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0528](0528-plain-import-shared-module-per-change.md) | A module that plain-imports a changing template keeps a shared module per source change | robustness | low | done |
 | [0529](0529-stored-self-let-go-stays-counted.md) | A `self` or `super()` stored in a module and let go of keeps the module's slot trees | robustness | low | done |
 | [0530](0530-render-memory-callable-and-context-storage.md) | The render memory budget leaves out a macro's function storage and a module context's vectors | robustness | low | done |
-| [0531](0531-failed-nested-render-inner-frame-closures.md) | A closure defined in a frame that a failing nested render went out of reads its names as ended | parity | low | open |
+| [0531](0531-failed-nested-render-inner-frame-closures.md) | A closure defined in a frame that a failing nested render went out of reads its names as ended | parity | low | done |
 | [0532](0532-copy-nested-render-params-lazily.md) | Copy the params of a nested render when a value of them is stored, not on every render | perf | low | open |
-| [0533](0533-nested-with-context-module-closure-importer-names.md) | A macro of a module imported with context by a nested render loses the importer's names once that render ends | parity | low | open |
+| [0533](0533-nested-with-context-module-closure-importer-names.md) | A macro of a module imported with context by a nested render loses the importer's names once that render ends | parity | low | done |
 | [0534](0534-fuzz-oldstyle-i18n.md) | Fuzz the oldstyle gettext parser path | robustness | low | done |
 | [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | done |
 | [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | done |
-| [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | open |
+| [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | done |
 | [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | done |
-| [0539](0539-nested-trees-held-by-kept-closures-and-loops.md) | Kept closures and a dropped recursive loop still hold nested trees after 0521 | robustness | low | open |
+| [0539](0539-nested-trees-held-by-kept-closures-and-loops.md) | Kept closures and a dropped recursive loop still hold nested trees after 0521 | robustness | low | done |
 | [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | done |
 | [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
@@ -608,3 +608,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | open |
 | [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |
 | [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | open |
+| [0550](0550-recursive-level-failure-loses-top-names.md) | A failure through a nested level of a recursive loop loses the template's top-level names for its closures | parity | low | open |
+| [0551](0551-recursive-closure-earlier-pass-names.md) | A closure of a recursive loop reads a name its last pass did not store from the live frame below | parity | low | open |
+| [0552](0552-block-in-stored-macro-of-nested-render.md) | A block inside a macro a nested render stored renders empty once that render has ended | parity | low | open |
