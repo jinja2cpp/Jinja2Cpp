@@ -173,6 +173,21 @@ LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
     return FindByName(values);
 }
 
+void RenderContext::BindFromBelow(ScopeRef& scope, Span<const SlotName> names)
+{
+    for (const auto& slotName : names)
+    {
+        const HashedName name{ Nodes().Text(slotName.name), slotName.hash };
+        if (scope.Map().find(name) != scope.Map().end())
+        {
+            continue;
+        }
+        const auto found = FindValue(name);
+        InternalValue value = found ? InternalValue(*found) : MakeUndefined(*this, std::string(name.name));
+        scope.ForName(name) = std::move(value);
+    }
+}
+
 JINJA2CPP_NOINLINE LookupResult ValueRefExpression::FindByName(RenderContext& values) const
 {
     return values.FindValueCached(values.Nodes().KeyOf(m_valueName), m_cacheSlot, [this, &values] { return GetHashedName(values.Nodes()); });

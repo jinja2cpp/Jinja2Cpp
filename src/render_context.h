@@ -822,6 +822,10 @@ public:
         UpdateCurrentScope();
     }
 
+    // Binds in `scope` each of `names` it does not have, to the value the scopes below it give the name, or to undefined
+    // (docs/tasks/0551). Defined in expression_evaluator.cpp, out of the translation unit of the statements: the inline
+    // lookup there shifts how the compiler inlines a macro call (Render/macros +0.5%). Throws std::bad_alloc
+    void BindFromBelow(ScopeRef& scope, Span<const SlotName> names);
     // The value of the name `val` (a std::string or a HashedName) in the innermost scope that
     // has it; none when no scope does
     template<typename Key>
@@ -2714,13 +2718,13 @@ private:
         saved.bodyEpoch = context.m_epoch;
         if (home.kept != ClosureHome::Kept::None)
         {
-            EnterCaptured(context, home);
+            EnterCaptured(context, home, saved);
         }
     }
     // The names a closure kept of its ended frames (ClosureHome::captured), in a scope of
     // their own on `context`, linked below `link`: the body's scope links to that scope,
     // which Leave removes
-    JINJA2CPP_NOINLINE_INLINE void EnterCaptured(RenderContext& context, const ClosureHome& home)
+    JINJA2CPP_NOINLINE_INLINE void EnterCaptured(RenderContext& context, const ClosureHome& home, HomeCallSaved& saved)
     {
         auto kept = m_site.Kept(home);
         if (!kept.frames.empty())
@@ -2728,7 +2732,7 @@ private:
             const auto capture = m_site.Capture();
             context.EnterCapturedScope(kept, home.link, capture);
             m_link = context.GetScopesCount();
-            EnterEndedTemplateFrame(context, capture.get(), *m_saved, m_link);
+            EnterEndedTemplateFrame(context, capture.get(), saved, m_link);
         }
     }
     JINJA2CPP_NOINLINE_INLINE static void Leave(RenderContext& context, const HomeCallSaved& saved) // NOLINT(bugprone-exception-escape): leaving scopes and dropping views free memory only
