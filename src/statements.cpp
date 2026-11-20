@@ -2560,17 +2560,19 @@ void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* captu
     {
         return;
     }
-    const auto& block = *GetIf<Callable>(&items->begin()->second)->GetStatementCallable().target<SelfBlockCall>();
+    // Callables, as SelfBlocksOfValue checked
+    const auto* block = GetIf<Callable>(&items->begin()->second)->GetStatementCallable().target<SelfBlockCall>();
     // The template is still running (a `self` kept past a frame of it that ended): its frame is in place
-    if (block.owner->live)
+    if (!block || block->owner->live)
     {
         return;
     }
-    auto* outer = context.GetTemplateFrame();
+    // A frame Enter made for the call is replaced: the new one is entered from the frame that one was (verifier)
+    auto* outer = saved.callFrame ? saved.callFrame->outer : context.GetTemplateFrame();
     auto& frame = saved.callFrame.emplace();
-    frame.blocks = &block.owner->ended;
+    frame.blocks = &block->owner->ended;
     frame.baseDepth = baseDepth;
-    frame.name = block.templateName;
+    frame.name = block->templateName;
     frame.outer = outer;
     frame.self = capture->endedSelf;
     context.SetTemplateFrame(&frame);
