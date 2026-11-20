@@ -14,6 +14,7 @@
 #include "python_format.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "slot_frame.h"
 #include "small_vector.h"
 #include "span.h"
 #include "template_dict.h"
@@ -173,7 +174,7 @@ LookupResult ValueRefExpression::EvaluateRef(RenderContext& values)
     return FindByName(values);
 }
 
-void RenderContext::BindFromBelow(ScopeRef& scope, Span<const SlotName> names)
+void RenderContext::BindFromBelow(ScopeRef& scope, Span<const SlotName> names) const
 {
     for (const auto& slotName : names)
     {

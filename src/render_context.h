@@ -825,7 +825,7 @@ public:
     // Binds in `scope` each of `names` it does not have, to the value the scopes below it give the name, or to undefined
     // (docs/tasks/0551). Defined in expression_evaluator.cpp, out of the translation unit of the statements: the inline
     // lookup there shifts how the compiler inlines a macro call (Render/macros +0.5%). Throws std::bad_alloc
-    void BindFromBelow(ScopeRef& scope, Span<const SlotName> names);
+    void BindFromBelow(ScopeRef& scope, Span<const SlotName> names) const;
     // The value of the name `val` (a std::string or a HashedName) in the innermost scope that
     // has it; none when no scope does
     template<typename Key>
