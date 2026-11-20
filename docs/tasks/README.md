@@ -472,7 +472,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0402](0402-json-identity-across-module-calls.md) | JSON values across the calls of a template module | parity | low | open |
 | [0403](0403-python-methods-on-native-values.md) | Python methods of int, float and str the engine does not implement | parity | low | done |
 | [0404](0404-urlencode-non-dict-mapping.md) | urlencode of a Python Mapping that is not a dict | parity | low | open |
-| [0405](0405-python-globals-replaced-under-cache.md) | Templates cached before env.globals is replaced see the new dict | parity | low | open |
+| [0405](0405-python-globals-replaced-under-cache.md) | Templates cached before env.globals is replaced see the new dict | parity | low | done |
 | [0406](0406-python-environment-keep-bounded.md) | Bound the callables an Environment keeps alive | robustness | low | done |
 | [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | done |
 | [0408](0408-bench-gate-driver-capabilities.md) | Detect the base bench driver's features by a capability marker | ci | low | open |
@@ -604,6 +604,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | done |
 | [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
+| [0543](0543-big-int-binary-form-for-huge-values.md) | Keep a binary form for big integers past the decimal string limit | robustness | low | open |
 | [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | open |
 | [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |
 | [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | open |
