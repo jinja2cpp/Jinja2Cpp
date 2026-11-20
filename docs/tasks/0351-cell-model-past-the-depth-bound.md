@@ -57,9 +57,9 @@ constants, and the weekly job runs the exhaustive and simulation kinds.
   bounds of `module-0332`, `module-generic` and `render` did not finish in 30 minutes and stay
   depth-bounded only.
 - `--simulate SECONDS --depth N --seed S`: TLC's random simulation with the guard off, pass
-  runs by default. Measured on mutants: it finds F1, the loop and sort counterexamples and four
-  others in seconds, and misses the two hand-off mutants (`render-links-unowned`,
-  `module-links-unowned`) even with 300 s, so it complements the exhaustive runs and does not
+  runs by default. Measured on mutants: it finds 14 of 16 mutants tried (F1, the loop and sort
+  counterexamples among them) within 78 s, and misses the two hand-off mutants
+  (`render-links-unowned`, `module-links-unowned`) even with 300 s, so it complements the exhaustive runs and does not
   replace them.
 - The weekly job has two more shards, `exhaustive` and `simulate` (each pass run 15 minutes,
   40 states); the `rest` shard keeps the depth-bounded pass, mutant and finding runs.

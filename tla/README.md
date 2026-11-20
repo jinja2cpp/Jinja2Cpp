@@ -385,13 +385,14 @@ behaviours of more.
 15 minutes each, 40 states) runs TLC's random simulation: it samples whole behaviours of up to
 `N` states with the level guard off, in the full scopes of the pass runs. It is not a proof:
 a pass means no violation in the sample. The seed is printed, and `--seed` repeats it with one
-worker. Its power, measured on mutants (120 s each, depth 40):
+worker. A run's own level bound is lifted too; only `--set MaxLevel=N` keeps one. Its power,
+measured on mutants (120 s each, depth 40):
 
 | Mutant | Found by simulation |
 |---|---|
-| `f1-nested-export`, `no-sort-refetch`, `no-call-pin-nested`, `call-id-wrap-no-pin`, `no-freeze`, `no-read-only-export` | yes, in 0 to 4 s |
+| `f1-nested-export`, `no-sort-refetch`, `no-call-pin`, `no-call-pin-nested`, `call-id-wrap-no-pin`, `no-freeze`, `no-read-only-export`, `global-items-listed`, `no-global-outer-cell`, `non-atomic-link`, `partial-pin`, `epoch-wrap`, `no-generic-owner` | yes, in 0 to 4 s |
 | `no-enum-refetch` (the deep loop counterexample, about 14 steps) | yes, in 78 s |
-| `render-links-unowned`, `module-links-unowned` (a hand-off on the other thread at one point of the call) | no, also at depth 16 and 24 with 300 s |
+| `render-links-unowned`, `module-links-unowned` (a hand-off on the other thread at one point of the call) | no, also at depth 16 with 300 s |
 
 So simulation finds deep defects that most interleavings reach, and misses ones that need one
 narrow interleaving; those are what the exhaustive and depth-bounded runs are for.
