@@ -870,8 +870,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     }
     else
     {
-        const bool keepsLastPass = !m_names.NamesResetAtEnd(info.frame, m_nodes).empty();
-        renderer.SetRecursiveBody(m_nodes, keepsLastPass, renderer.HasFilter() ? Span<const std::size_t>() : m_names.EndReads(info.useMark));
+        renderer.SetRecursiveBody(m_nodes, m_names.NamesResetAtEnd(info.frame, m_nodes), renderer.HasFilter() ? Span<const std::size_t>() : m_names.EndReads(info.useMark));
     }
     renderer.SetBodyReadsLoop(renderer.IsRecursive() || bodyEndReads != info.marks.loopReads);
     // An included template reads the loop it is included from only outside its own loops' bodies

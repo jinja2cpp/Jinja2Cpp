@@ -1533,8 +1533,13 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement,
             home.PushFrameView({}, homeCall.Link());
         }
         // Jinja2's loop(...) returns Markup by the setting the loop is compiled under, the
-        // runtime one in volatile code
-        InternalValue result(RenderToString(home.GetRendererCallback(), [&](OutStream& stream) { statement->RenderLoop(var, stream, home, level + 1, &site); }));
+        // runtime one in volatile code. A level that fails closes over the scopes it sees below the loop, through the
+        // link, as a macro's body does (docs/tasks/0550)
+        const size_t levelScopes = home.GetScopesCount();
+        const size_t link = isLinked ? homeCall.Link() : ScopeView::NoLink;
+        InternalValue result(RenderToString(home.GetRendererCallback(), [&](OutStream& stream) {
+            RenderFailingFrame(home, home, [&] { statement->RenderLoop(var, stream, home, level + 1, &site); }, [levelScopes, link] { return FrameEnd::Call(levelScopes, link); });
+        }));
         result.SetMarkup(home.IsOutputAutoescape());
         if (isLinked)
         {
@@ -1570,9 +1575,23 @@ namespace
 {
 // The end of a recursive loop whose body defines closures: they keep the names its last pass left, as Jinja2's body
 // function does (docs/tasks/0537). Out of line: few loops are recursive
-JINJA2CPP_NOINLINE void CaptureLastPass(RenderContext& values, ScopeRef& bodyScope, InternalValueMap& lastPass, size_t endScopes)
+JINJA2CPP_NOINLINE void CaptureLastPass(RenderContext& values, ScopeRef& bodyScope, InternalValueMap& lastPass, size_t endScopes, Span<const SlotName> stores)
 {
     bodyScope.RestoreFrom(lastPass);
+    // A name an earlier pass stored and the last one did not: Jinja2's body function resolved it at the start of the
+    // pass, as the frame below had it then, which the body cannot have changed since; undefined when it had none
+    // (docs/tasks/0551)
+    for (const auto& store : stores)
+    {
+        const HashedName name{ values.Nodes().Text(store.name), store.hash };
+        if (bodyScope.Map().find(name) != bodyScope.Map().end())
+        {
+            continue;
+        }
+        const auto found = values.FindValue(name);
+        InternalValue value = found ? InternalValue(*found) : MakeUndefined(values, std::string(name.name));
+        bodyScope.ForName(name) = std::move(value);
+    }
     values.CaptureClosures(FrameEnd::Stopped(endScopes));
     bodyScope.Clear();
 }
@@ -1592,17 +1611,28 @@ JINJA2CPP_NOINLINE std::shared_ptr<ClosureCapture> CaptureRecursiveSite(ClosureS
 }
 } // namespace
 
-void ForStatement::SetRecursiveBody(NodeArena& nodes, bool keepsLastPass, Span<const std::size_t> reads)
+void ForStatement::SetRecursiveBody(NodeArena& nodes, ArenaSpan<SlotName> stores, Span<const std::size_t> reads)
 {
-    m_keepsLastPass = keepsLastPass;
+    m_keepsLastPass = !stores.empty();
+    const auto stored = nodes[stores];
     SmallVector<SlotName, 8> names;
-    names.reserve(reads.size());
+    names.reserve(reads.size() + stored.size());
     for (const auto hash : reads)
     {
         names.push_back(SlotName{ ArenaText(), hash });
     }
+    names.insert(names.end(), stored.begin(), stored.end());
     m_resetsAtEnd = nodes.MakeSpan(Span<const SlotName>(names.data(), names.size()));
 }
+
+namespace
+{
+// The reads SetRecursiveBody put first in `names`, without a name, and the stores after them
+std::size_t RecursiveReadsCount(Span<const SlotName> names)
+{
+    return static_cast<std::size_t>(std::find_if(names.begin(), names.end(), [](const SlotName& name) { return !name.name.empty(); }) - names.begin());
+}
+} // namespace
 
 void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
 {
@@ -1647,7 +1677,8 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             // frames around it, so that a chain of them through a name nothing reads does not hold each tree (0539)
             if (state->recursiveSite.OutlivesItsFrames(values))
             {
-                state->recursiveCapture = CaptureRecursiveSite(state->recursiveSite, values, values.Nodes()[m_resetsAtEnd], static_cast<bool>(m_ifExpr));
+                const auto names = values.Nodes()[m_resetsAtEnd];
+                state->recursiveCapture = CaptureRecursiveSite(state->recursiveSite, values, names.subspan(0, RecursiveReadsCount(names)), static_cast<bool>(m_ifExpr));
             }
         }
         state->recursiveAutoescape = values.IsStaticAutoescape();
@@ -1757,7 +1788,8 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     JINJA2CPP_ASSERT(values.GetScopesCount() - 1 == endScopes);
     if (keepsLastPass)
     {
-        CaptureLastPass(values, bodyScope, state->lastPassScope, endScopes);
+        const auto names = values.Nodes()[m_resetsAtEnd];
+        CaptureLastPass(values, bodyScope, state->lastPassScope, endScopes, names.subspan(RecursiveReadsCount(names)));
     }
     else
     {
