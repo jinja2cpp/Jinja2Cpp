@@ -4048,14 +4048,8 @@ bool IsMutatingName(std::string_view name)
     {
         return false;
     }
-    for (const auto candidate : names[name.size()])
-    {
-        if (candidate == name)
-        {
-            return true;
-        }
-    }
-    return false;
+    const auto& sameLength = names[name.size()];
+    return std::find(sameLength.begin(), sameLength.end(), name) != sameLength.end();
 }
 
 void NoteContainerStore(const InternalValue& container, const InternalValue& item)
