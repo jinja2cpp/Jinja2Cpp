@@ -1951,7 +1951,7 @@ private:
                 (stays[i] ? staying : ending).push_back(group[i]);
             }
             if (stays[0] || std::any_of(ending.begin(), ending.end(), [](const ImportedModule* module) { return module->HoldsTemplateHandles(); })
-                || !ImportedModule::HeldOnlyBy(ending, staying, LoadsOf(ending), m_loaded->modules))
+                || !ImportedModule::HeldOnlyBy(ending, staying) || !ImportedModule::TreesHeldOnlyBy(LoadsOf(ending), m_loaded->modules))
             {
                 return false;
             }
@@ -1980,10 +1980,11 @@ private:
                     continue;
                 }
                 const auto holds = [tree](const LoadTemplateResult& result) { return TemplateOf(result) == tree; };
-                long count = std::count_if(loaded.replaced.begin(), loaded.replaced.end(), holds);
+                // `latest` is `first` or one of `replaced`
+                auto count = static_cast<long>(std::count_if(loaded.replaced.begin(), loaded.replaced.end(), holds));
                 for (const auto& [name, entry] : loaded.byName)
                 {
-                    count += (holds(entry.first) ? 1 : 0) + (entry.latest != &entry.first && holds(*entry.latest) ? 1 : 0);
+                    count += holds(entry.first) ? 1 : 0;
                 }
                 loads.emplace_back(tree, count);
             }

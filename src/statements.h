@@ -707,18 +707,19 @@ public:
     // Whether the module holds handles of a render's table of templates: its blocks, or the parent
     // its template extends, which a module's slots must keep (docs/tasks/0503)
     [[nodiscard]] bool HoldsTemplateHandles() const noexcept { return !m_blocks.blocks.empty() || static_cast<bool>(m_frame.parent); }
-    // Whether only the modules `ending` and the results of the loads they were made from hold what they made: each
-    // value of their names, of the importer's names one imported with context sees and their `import ... as` objects
-    // is held by them alone, and each of their trees (SetTreeOwner) by its load, the modules made from it and their
-    // macros alone (`all`, every module of the render). What a module of `staying` holds stays with it and may be held
-    // from anywhere, but must not be a macro of an ending module. Then nothing else can reach the ending modules or
-    // view their trees, and they may end together (docs/tasks/0528, 0541). False when one's tree is not kept by
-    // value. Throws std::bad_alloc
     // Modules that end or stay together (HeldOnlyBy): a group is small, and found at the end of every call
     using Group = SmallVector<const ImportedModule*, 8>;
     // Each tree of a group with the number of loads that hold it
     using TreeLoads = SmallVector<std::pair<const void*, long>, 4>;
-    [[nodiscard]] static bool HeldOnlyBy(const Group& ending, const Group& staying, const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all);
+    // Whether only the modules `ending` hold what they made: each value of their names, of the importer's names one
+    // imported with context sees and their `import ... as` objects is held by them alone. What a module of `staying`
+    // holds stays with it and may be held from anywhere, but must not be a macro of an ending module. With
+    // TreesHeldOnlyBy, nothing else can reach the ending modules or view their trees, and they may end together
+    // (docs/tasks/0528, 0541). False when one's tree is not kept by value. Throws std::bad_alloc
+    [[nodiscard]] static bool HeldOnlyBy(const Group& ending, const Group& staying);
+    // Whether each tree of `loads` is held only by its loads, the modules of `all` (every module of the render) made
+    // from it and their macros. Throws std::bad_alloc
+    [[nodiscard]] static bool TreesHeldOnlyBy(const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all);
     // The tree SetTreeOwner keeps alive; null when none
     [[nodiscard]] const void* Tree() const noexcept { return m_treeOwner.get(); }
 

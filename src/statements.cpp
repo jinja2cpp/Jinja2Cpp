@@ -4172,7 +4172,7 @@ bool ImportedModule::TreeHeldOnlyByModules(const void* tree, long loads, const s
     return owner->use_count() == holders + static_cast<long>(bodies.size()); // use_count: read on the thread that runs the module's calls, which holds its lock
 }
 
-bool ImportedModule::HeldOnlyBy(const Group& ending, const Group& staying, const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all)
+bool ImportedModule::HeldOnlyBy(const Group& ending, const Group& staying)
 {
     // The objects of the modules' values, each with the holders it has among the ending modules
     struct Held
@@ -4222,8 +4222,12 @@ bool ImportedModule::HeldOnlyBy(const Group& ending, const Group& staying, const
     const auto isEndingTree = [&trees](const void* tree) { return tree && std::find(trees.begin(), trees.end(), tree) != trees.end(); };
     // What stays may be held from anywhere, but not with a macro that runs in a module about to end
     // use_count: as in TreeHeldOnlyByModules
-    const bool objectsHeld = std::all_of(held.begin(), held.end(), [&isEndingTree](const Held& h) { return h.stays ? !isEndingTree(h.tree) : h.object->use_count() == h.count; });
-    return objectsHeld && std::all_of(loads.begin(), loads.end(), [&all](const auto& entry) { return TreeHeldOnlyByModules(entry.first, entry.second, all); });
+    return std::all_of(held.begin(), held.end(), [&isEndingTree](const Held& h) { return h.stays ? !isEndingTree(h.tree) : h.object->use_count() == h.count; });
+}
+
+bool ImportedModule::TreesHeldOnlyBy(const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all)
+{
+    return std::all_of(loads.begin(), loads.end(), [&all](const auto& entry) { return TreeHeldOnlyByModules(entry.first, entry.second, all); });
 }
 
 namespace

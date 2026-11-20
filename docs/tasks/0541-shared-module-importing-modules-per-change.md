@@ -31,8 +31,9 @@ transitively. A member whose load is still the latest of its name, or that a mod
 shared with what it imported; the rest end together when `ImportedModule::HeldOnlyBy` finds every object of theirs
 (names, the importer's names a module imported with context sees, the `import ... as` objects) held only among them,
 or held by a staying member and not a macro of an ending one, and each of their trees held only by the loads that still hold it (a call whose
-group check failed to allocate lets PruneReplaced drop a replaced one), the modules made from it and their macros. The edges are indexed by importer, with a count of importers per module, so that a
-call's check costs about what 0528's did when many replaced modules stay held. Ending forgets the modules in `kept`, and a staying module that nothing imports any
+group check failed to allocate lets PruneReplaced drop a replaced one), the modules made from it and their macros. The edges are indexed by importer, with a count of importers per module, and the loads are
+counted only for a group whose objects passed, so that a call's check costs about what 0528's did when many replaced
+modules stay held. Ending forgets the modules in `kept`, and a staying module that nothing imports any
 more becomes a candidate of its own. Rows in `ModuleCallTest.EveryUseChangingSourceStaysFlat` (import and from,
 with and without context, a helper that changes or stays, nested imports, two modules sharing a helper, a diamond,
 100 names), `ModuleCallTest.ReplacedGroupsEndUnderInjection` and
