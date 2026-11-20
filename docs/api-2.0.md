@@ -493,13 +493,14 @@ section 2.1 (0250).
   Load and Render (narrow and wide, with the i18n extension), GetMetadata, module calls and
   the JSON views (narrow), both failing one allocation and failing every one from it on
   (memory stays spent), with a leak check after each test under ASan ([0256](tasks/0256-survive-allocation-failure.md)).
-  Known limit: with the nlohmann JSON binding, a document the library owns (`Reflect` of an
-  rvalue `nlohmann::json`, a `std::shared_ptr` to one) (and the copy `Reflect` makes of a non-const lvalue) is destroyed by the last `Value` that
-  reads it, or by the unwinding of a copy that ran out of memory, and `nlohmann::json`'s destructor allocates (v3.12 flattens a non-empty array or
-  object into a `std::vector`) in a `noexcept` path: OOM there terminates the process. A
-  document the host keeps and reflects by const reference (`Reflect(std::as_const(doc))`), or
-  copies with `ToValue`, is not affected
-  (0279). Also known, when memory stays spent: the reference cycles of a failed render leak
+  A JSON document the view owns (`Reflect` of an rvalue, of a `std::shared_ptr` it holds the last
+  reference to, or the copy it makes of a non-const lvalue) is emptied by the binding's optional
+  `JsonTraits::Release`, which does not allocate, before it is destroyed: the nlohmann binding
+  implements it, since `nlohmann::json`'s `noexcept` destructor allocates (v3.12 flattens a
+  non-empty container into a `std::vector`), and builds the lvalue copy with `JsonTraits::Copy`
+  so that a partial copy is emptied the same way
+  ([0487](tasks/0487-nlohmann-allocation-free-release.md), formerly a known limit, 0279).
+  Also known, when memory stays spent: the reference cycles of a failed render leak
   (0486), and a failed `list.sort()` on a module's list handed to the host may leave the list
   empty (0485).
 - **Caller-owned output** ([0257](tasks/0257-render-to-string-and-sink.md)):
