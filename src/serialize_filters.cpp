@@ -233,6 +233,22 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 Write(out, Print(val, m_context));
                 return;
             }
+            if (const auto kind = list->GetIteratorKind(); IsSetKind(kind) || kind == IteratorKind::DictValues)
+            {
+                // pprint has no layout for a dict view: its repr stays on one line. A set breaks as a list does, in braces and
+                // sorted (_pprint_set, docs/tasks/0545)
+                if (kind != IteratorKind::Set)
+                {
+                    Write(out, Print(val, m_context));
+                    return;
+                }
+                std::vector<InternalValue> sorted(list->begin(), list->end());
+                StableSortValues(sorted.begin(), sorted.end(), [](const InternalValue& left, const InternalValue& right) { return SafeKeyLess(left, right); });
+                out += '{';
+                FormatItems(out, sorted, indent, allowance + 1, level + 1);
+                out += '}';
+                return;
+            }
             const bool isTuple = list->IsTuple();
             // A host's iteration may not know its size: its len() does
             const auto size = hostItems ? GetHostObject(val)->Len() : list->GetSize();

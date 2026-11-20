@@ -5165,6 +5165,2126 @@
    "env": {},
    "templates": {},
    "output": "b'\\x00\\x05'"
+  },
+  {
+   "id": "methods.set_union",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ s.union([3]) }}|{{ s.union() }}|{{ s.union([3], (4, 5), {6: 0}) }}|{{ s.union('ab') | length }}|{{ s.union(s) }}|{{ s.union([2.0, True, 7]) }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "{1, 2, 3}|{1, 2}|{1, 2, 3, 4, 5, 6}|4|{1, 2}|{1, 2, 7}|{1, 2}"
+  },
+  {
+   "id": "methods.set_union_views",
+   "template": "{% set s = {1: 0}.keys() - [] %}{{ s.union({2: 0}.keys()) }}|{{ s.union({2: 0}.values()) | sort }}|{{ s.union(range(3)) | sort }}|{{ s.union({'a': 5}.items()) | length }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "{1, 2}|[0, 1]|[0, 1, 2]|2"
+  },
+  {
+   "id": "methods.set_intersection",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{{ s.intersection([2, 3, 4]) }}|{{ s.intersection() }}|{{ s.intersection([1, 2], [2, 3]) }}|{{ s.intersection([]) }}|{{ s.intersection([2.0]) }}|{{ s.intersection({2.0: 0}) }}|{{ s.intersection({2.0: 0, 5: 0, 6: 0, 7: 0}.keys()) }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "{2, 3}|{1, 2, 3}|{2}|set()|{2.0}|{2.0}|{2.0}|{1, 2, 3}"
+  },
+  {
+   "id": "methods.set_difference",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{{ s.difference([2]) }}|{{ s.difference() }}|{{ s.difference([1], [3]) }}|{{ s.difference([1, 2, 3, 4]) }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "{1, 3}|{1, 2, 3}|{2}|set()|{1, 2, 3}"
+  },
+  {
+   "id": "methods.set_symmetric_difference",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ s.symmetric_difference([2, 3]) | sort }}|{{ s.symmetric_difference([]) }}|{{ s.symmetric_difference([1, 2]) }}|{{ s.symmetric_difference({7: 0}) | sort }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1, 3]|{1, 2}|set()|[1, 2, 7]"
+  },
+  {
+   "id": "methods.set_issubset_issuperset",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ s.issubset([1, 2, 3]) }}|{{ s.issubset([1]) }}|{{ s.issubset(s) }}|{{ s.issuperset([1]) }}|{{ s.issuperset([1, 3]) }}|{{ s.issuperset([]) }}|{{ (s - s).issubset([]) }}|{{ s.issubset({1: 0, 2: 0}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|False|True|True|False|True|True|True"
+  },
+  {
+   "id": "methods.set_copy",
+   "template": "{% set s = {1: 0}.keys() - [] %}{% set t = s.copy() %}{% do t.add(2) %}{{ s }}|{{ t }}|{{ t.__class__ }}|{{ s is sameas t }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{1}|{1, 2}|<class 'set'>|False"
+  },
+  {
+   "id": "methods.set_methods_return_set",
+   "template": "{% set s = {1: 0}.keys() - [] %}{{ s.union([2]).__class__ }}|{{ s.intersection([1]).__class__ }}|{{ s.difference([]).__class__ }}|{{ s.symmetric_difference([]).__class__ }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "<class 'set'>|<class 'set'>|<class 'set'>|<class 'set'>"
+  },
+  {
+   "id": "methods.set_add",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ s.add(3) }}|{{ s }}|{{ s.add(2) }}|{{ s.add(2.0) }}|{{ s.add(True) }}|{{ s | length }}|{{ s.add((4, 5)) }}|{{ (4, 5) in s }}|{{ s | length }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|{1, 2, 3}|None|None|None|3|None|True|4"
+  },
+  {
+   "id": "methods.set_add_strings",
+   "template": "{% set s = d.keys() - [] %}{% do s.add('c') %}{% do s.add('a') %}{{ s | sort }}|{{ 'c' in s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "['a', 'b', 'c']|True"
+  },
+  {
+   "id": "methods.set_remove",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{{ s.remove(2) }}|{{ s }}|{{ s.remove(3.0) }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|{1, 3}|None|{1}"
+  },
+  {
+   "id": "methods.set_remove_missing",
+   "template": "{% set s = {1: 0}.keys() - [] %}{{ s.remove(9) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "9"
+   }
+  },
+  {
+   "id": "methods.set_discard",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{{ s.discard(2) }}|{{ s }}|{{ s.discard(9) }}|{{ s.discard(True) }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|{1, 3}|None|None|{3}"
+  },
+  {
+   "id": "methods.set_pop",
+   "template": "{% set s = {7: 0}.keys() - [] %}{{ s.pop() }}|{{ s }}|{{ s | length }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "7|set()|0"
+  },
+  {
+   "id": "methods.set_pop_empty",
+   "template": "{{ ({}.keys() - []).pop() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'pop from an empty set'"
+   }
+  },
+  {
+   "id": "methods.set_pop_all",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% set got = [] %}{% for i in range(3) %}{% do got.append(s.pop()) %}{% endfor %}{{ got | sort }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 2, 3]|set()"
+  },
+  {
+   "id": "methods.set_clear",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ s.clear() }}|{{ s }}|{{ s | length }}|{{ s.clear() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|set()|0|None"
+  },
+  {
+   "id": "methods.set_update",
+   "template": "{% set s = {1: 0}.keys() - [] %}{{ s.update([2], (3,), {4: 0}) }}|{{ s }}|{{ s.update() }}|{{ s.update('ab') }}|{{ s | length }}|{{ s.update(s) }}|{{ s | length }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|{1, 2, 3, 4}|None|None|6|None|6"
+  },
+  {
+   "id": "methods.set_intersection_update",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{{ s.intersection_update([2, 3, 4]) }}|{{ s }}|{{ s.intersection_update([3], [3, 9]) }}|{{ s }}|{{ s.intersection_update() }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|{2, 3}|None|{3}|None|{3}"
+  },
+  {
+   "id": "methods.set_difference_update",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{{ s.difference_update([2]) }}|{{ s }}|{{ s.difference_update() }}|{{ s.difference_update([1], [9]) }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|{1, 3}|None|None|{3}"
+  },
+  {
+   "id": "methods.set_symmetric_difference_update",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ s.symmetric_difference_update([2, 3]) }}|{{ s | sort }}|{{ s.symmetric_difference_update(s) }}|{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|[1, 3]|None|set()"
+  },
+  {
+   "id": "methods.set_alias_mutation",
+   "template": "{% set s = {1: 0}.keys() - [] %}{% set t = s %}{% do t.add(2) %}{{ s }}|{{ s is sameas t }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{1, 2}|True"
+  },
+  {
+   "id": "methods.set_mutate_in_macro",
+   "template": "{% macro put(acc) %}{% do acc.add(5) %}{% endmacro %}{% set s = {1: 0}.keys() - [] %}{{ put(s) }}{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{1, 5}"
+  },
+  {
+   "id": "methods.set_bound_method",
+   "template": "{% set s = {1: 0}.keys() - [] %}{% set f = s.add %}{{ f(2) }}{{ s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None{1, 2}"
+  },
+  {
+   "id": "methods.set_methods_in_expressions",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ (s.union([3]) - [1]) }}|{{ s.union([3]) == {1: 0, 2: 0, 3: 0}.keys() }}|{{ s.union([3]) | length }}|{{ 3 in s.union([3]) }}|{{ s.union([3]).isdisjoint([9]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for -: 'set' and 'list'"
+   }
+  },
+  {
+   "id": "methods.set_items_set",
+   "template": "{% set s = {'a': 1}.items() - [] %}{{ s.union([('b', 2)]) | sort }}|{{ s.issubset([('a', 1), 3]) }}|{{ s.intersection([('a', 1)]) }}|{{ s.difference([('a', 1)]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "[('a', 1), ('b', 2)]|True|{('a', 1)}|set()"
+  },
+  {
+   "id": "methods.set_tuple_items",
+   "template": "{% set s = {(1, 2): 0}.keys() - [] %}{% do s.add((1, 2)) %}{% do s.add((2, 1)) %}{{ s | sort }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[(1, 2), (2, 1)]"
+  },
+  {
+   "id": "methods.set_union_arity_kw",
+   "template": "{{ ({1: 0}.keys() - []).union(a=[1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "union() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "methods.set_symmetric_difference_no_args",
+   "template": "{{ ({1: 0}.keys() - []).symmetric_difference() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.symmetric_difference() takes exactly one argument (0 given)"
+   }
+  },
+  {
+   "id": "methods.set_symmetric_difference_two_args",
+   "template": "{{ ({1: 0}.keys() - []).symmetric_difference([1], [2]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.symmetric_difference() takes exactly one argument (2 given)"
+   }
+  },
+  {
+   "id": "methods.set_issubset_no_args",
+   "template": "{{ ({1: 0}.keys() - []).issubset() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.issubset() takes exactly one argument (0 given)"
+   }
+  },
+  {
+   "id": "methods.set_issuperset_two_args",
+   "template": "{{ ({1: 0}.keys() - []).issuperset([1], [2]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.issuperset() takes exactly one argument (2 given)"
+   }
+  },
+  {
+   "id": "methods.set_copy_args",
+   "template": "{{ ({1: 0}.keys() - []).copy(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.copy() takes no arguments (1 given)"
+   }
+  },
+  {
+   "id": "methods.set_add_no_args",
+   "template": "{{ ({1: 0}.keys() - []).add() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.add() takes exactly one argument (0 given)"
+   }
+  },
+  {
+   "id": "methods.set_add_two_args",
+   "template": "{{ ({1: 0}.keys() - []).add(1, 2) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.add() takes exactly one argument (2 given)"
+   }
+  },
+  {
+   "id": "methods.set_remove_no_args",
+   "template": "{{ ({1: 0}.keys() - []).remove() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.remove() takes exactly one argument (0 given)"
+   }
+  },
+  {
+   "id": "methods.set_discard_no_args",
+   "template": "{{ ({1: 0}.keys() - []).discard() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.discard() takes exactly one argument (0 given)"
+   }
+  },
+  {
+   "id": "methods.set_pop_args",
+   "template": "{{ ({1: 0}.keys() - []).pop(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.pop() takes no arguments (1 given)"
+   }
+  },
+  {
+   "id": "methods.set_clear_args",
+   "template": "{{ ({1: 0}.keys() - []).clear(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "set.clear() takes no arguments (1 given)"
+   }
+  },
+  {
+   "id": "methods.set_update_kw",
+   "template": "{{ ({1: 0}.keys() - []).update(a=[1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "update() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "methods.set_union_int",
+   "template": "{{ ({1: 0}.keys() - []).union(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_union_second_int",
+   "template": "{{ ({1: 0}.keys() - []).union([1], 5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_intersection_int",
+   "template": "{{ ({1: 0}.keys() - []).intersection(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_difference_int",
+   "template": "{{ ({1: 0}.keys() - []).difference(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_symmetric_difference_int",
+   "template": "{{ ({1: 0}.keys() - []).symmetric_difference(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_issubset_int",
+   "template": "{{ ({1: 0}.keys() - []).issubset(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_issuperset_int",
+   "template": "{{ ({1: 0}.keys() - []).issuperset(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_update_int",
+   "template": "{{ ({1: 0}.keys() - []).update(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_intersection_update_int",
+   "template": "{{ ({1: 0}.keys() - []).intersection_update(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_difference_update_int",
+   "template": "{{ ({1: 0}.keys() - []).difference_update(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_symmetric_difference_update_int",
+   "template": "{{ ({1: 0}.keys() - []).symmetric_difference_update(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_union_none",
+   "template": "{{ ({1: 0}.keys() - []).union(none) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not iterable"
+   }
+  },
+  {
+   "id": "methods.set_union_undefined",
+   "template": "{{ ({1: 0}.keys() - []).union(nope) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "{1}"
+  },
+  {
+   "id": "methods.set_union_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).union([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_intersection_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).intersection([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_difference_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).difference([{}]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'dict'"
+   }
+  },
+  {
+   "id": "methods.set_symmetric_difference_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).symmetric_difference([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_issubset_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).issubset([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_issuperset_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).issuperset([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_add_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).add([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_add_dict",
+   "template": "{{ ({1: 0}.keys() - []).add({}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'dict'"
+   }
+  },
+  {
+   "id": "methods.set_add_set",
+   "template": "{% set s = {1: 0}.keys() - [] %}{{ s.add(s) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'set'"
+   }
+  },
+  {
+   "id": "methods.set_remove_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).remove([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_discard_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).discard([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_update_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).update([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_intersection_update_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).intersection_update([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_difference_update_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).difference_update([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.set_symmetric_difference_update_unhashable",
+   "template": "{{ ({1: 0}.keys() - []).symmetric_difference_update([[1]]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.dict_keys_has_no_set_methods",
+   "template": "{{ d.keys().union([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict_keys object' has no attribute 'union'"
+   }
+  },
+  {
+   "id": "methods.dict_keys_has_no_copy",
+   "template": "{{ d.keys().copy() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict_keys object' has no attribute 'copy'"
+   }
+  },
+  {
+   "id": "methods.dict_items_has_no_intersection",
+   "template": "{{ d.items().intersection([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict_items object' has no attribute 'intersection'"
+   }
+  },
+  {
+   "id": "methods.dict_keys_has_no_issubset",
+   "template": "{{ d.keys().issubset([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict_keys object' has no attribute 'issubset'"
+   }
+  },
+  {
+   "id": "methods.dict_keys_has_no_add",
+   "template": "{{ d.keys().add(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict_keys object' has no attribute 'add'"
+   }
+  },
+  {
+   "id": "methods.dict_values_has_no_union",
+   "template": "{{ d.values().union([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict_values object' has no attribute 'union'"
+   }
+  },
+  {
+   "id": "methods.set_attribute_is_bound_method",
+   "template": "{{ (d.keys() - []).add is defined }}|{{ (d.keys() - []).nope is defined }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|False"
+  },
+  {
+   "id": "methods.set_unknown_method",
+   "template": "{{ (d.keys() - []).append(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'set object' has no attribute 'append'"
+   }
+  },
+  {
+   "id": "methods.set_sort_method",
+   "template": "{{ (d.keys() - []).sort() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'set object' has no attribute 'sort'"
+   }
+  },
+  {
+   "id": "methods.set_pprint_sorted",
+   "template": "{% set s = {} %}{% for i in range(30, 0, -1) %}{% do s.update({i * 100: 1}) %}{% endfor %}{{ (s.keys() - []) | pprint }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{100,\n 200,\n 300,\n 400,\n 500,\n 600,\n 700,\n 800,\n 900,\n 1000,\n 1100,\n 1200,\n 1300,\n 1400,\n 1500,\n 1600,\n 1700,\n 1800,\n 1900,\n 2000,\n 2100,\n 2200,\n 2300,\n 2400,\n 2500,\n 2600,\n 2700,\n 2800,\n 2900,\n 3000}"
+  },
+  {
+   "id": "methods.set_pprint_sorted_strings",
+   "template": "{% set s = {} %}{% for i in range(30, 0, -1) %}{% do s.update({'key' ~ i: 1}) %}{% endfor %}{{ (s.keys() - []) | pprint }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'key1',\n 'key10',\n 'key11',\n 'key12',\n 'key13',\n 'key14',\n 'key15',\n 'key16',\n 'key17',\n 'key18',\n 'key19',\n 'key2',\n 'key20',\n 'key21',\n 'key22',\n 'key23',\n 'key24',\n 'key25',\n 'key26',\n 'key27',\n 'key28',\n 'key29',\n 'key3',\n 'key30',\n 'key4',\n 'key5',\n 'key6',\n 'key7',\n 'key8',\n 'key9'}"
+  },
+  {
+   "id": "methods.set_pprint_sorted_tuples",
+   "template": "{% set s = {} %}{% for i in range(12, 0, -1) %}{% do s.update({i * 1000: 1}) %}{% endfor %}{{ (s.items() - []) | pprint }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{(1000, 1),\n (2000, 1),\n (3000, 1),\n (4000, 1),\n (5000, 1),\n (6000, 1),\n (7000, 1),\n (8000, 1),\n (9000, 1),\n (10000, 1),\n (11000, 1),\n (12000, 1)}"
+  },
+  {
+   "id": "methods.set_pprint_nested",
+   "template": "{% set s = {} %}{% for i in range(30, 0, -1) %}{% do s.update({i * 100: 1}) %}{% endfor %}{{ [s.keys() - []] | pprint }}|{{ {'k': s.keys() - []} | pprint }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[{100,\n  200,\n  300,\n  400,\n  500,\n  600,\n  700,\n  800,\n  900,\n  1000,\n  1100,\n  1200,\n  1300,\n  1400,\n  1500,\n  1600,\n  1700,\n  1800,\n  1900,\n  2000,\n  2100,\n  2200,\n  2300,\n  2400,\n  2500,\n  2600,\n  2700,\n  2800,\n  2900,\n  3000}]|{'k': {100,\n       200,\n       300,\n       400,\n       500,\n       600,\n       700,\n       800,\n       900,\n       1000,\n       1100,\n       1200,\n       1300,\n       1400,\n       1500,\n       1600,\n       1700,\n       1800,\n       1900,\n       2000,\n       2100,\n       2200,\n       2300,\n       2400,\n       2500,\n       2600,\n       2700,\n       2800,\n       2900,\n       3000}}"
+  },
+  {
+   "id": "methods.set_pprint_short",
+   "template": "{{ ({1: 0, 2: 0, 3: 0}.keys() - []) | pprint }}|{{ ({}.keys() - []) | pprint }}|{{ ({1: 0}.keys() - []) | pprint }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "{1, 2, 3}|set()|{1}"
+  },
+  {
+   "id": "methods.set_pprint_after_union",
+   "template": "{% set s = {1000: 0}.keys() - [] %}{{ s.union(range(2000, 2030)) | pprint }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "{1000,\n 2000,\n 2001,\n 2002,\n 2003,\n 2004,\n 2005,\n 2006,\n 2007,\n 2008,\n 2009,\n 2010,\n 2011,\n 2012,\n 2013,\n 2014,\n 2015,\n 2016,\n 2017,\n 2018,\n 2019,\n 2020,\n 2021,\n 2022,\n 2023,\n 2024,\n 2025,\n 2026,\n 2027,\n 2028,\n 2029}"
+  },
+  {
+   "id": "methods.dict_keys_pprint_wide",
+   "template": "{% set s = {} %}{% for i in range(40, 0, -1) %}{% do s.update({i: 1}) %}{% endfor %}{{ s.keys() | pprint }}|{{ s.items() | pprint }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "dict_keys([40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1])|dict_items([(40, 1), (39, 1), (38, 1), (37, 1), (36, 1), (35, 1), (34, 1), (33, 1), (32, 1), (31, 1), (30, 1), (29, 1), (28, 1), (27, 1), (26, 1), (25, 1), (24, 1), (23, 1), (22, 1), (21, 1), (20, 1), (19, 1), (18, 1), (17, 1), (16, 1), (15, 1), (14, 1), (13, 1), (12, 1), (11, 1), (10, 1), (9, 1), (8, 1), (7, 1), (6, 1), (5, 1), (4, 1), (3, 1), (2, 1), (1, 1)])"
+  },
+  {
+   "id": "methods.dict_values_pprint_wide",
+   "template": "{% set s = {} %}{% for i in range(40, 0, -1) %}{% do s.update({i: 1}) %}{% endfor %}{{ s.values() | pprint }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "dict_values([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])"
+  },
+  {
+   "id": "methods.set_add_during_loop",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{% for x in s %}{% do s.add(3) %}{{ x }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "Set changed size during iteration"
+   }
+  },
+  {
+   "id": "methods.set_add_existing_during_loop",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{% for x in s %}{% do s.add(x) %}{{ x }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "methods.set_remove_during_loop",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% for x in s %}{% do s.discard(3) %}{{ x }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "Set changed size during iteration"
+   }
   }
  ]
 }

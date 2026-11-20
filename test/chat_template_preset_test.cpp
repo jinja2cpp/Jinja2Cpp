@@ -150,6 +150,10 @@ INSTANTIATE_TEST_SUITE_P(Preset, ChatTemplatePresetTest, ::testing::Values(
     ChatCase{ "{% set l = [1] %}{{ l.append(2) }}", "error: access to attribute 'append' of 'list' object is unsafe." },
     ChatCase{ "{% set d = {} %}{{ d.update({'a': 1}) }}", "error: access to attribute 'update' of 'dict' object is unsafe." },
     ChatCase{ "{% set f = messages.pop %}{{ f() }}", "error: access to attribute 'pop' of 'list' object is unsafe." },
+    // A set's methods that change it are unsafe too; those that make another set are not (docs/tasks/0545)
+    ChatCase{ "{% set s = {1: 0}.keys() - [] %}{{ s.add(2) }}", "error: access to attribute 'add' of 'set' object is unsafe." },
+    ChatCase{ "{% set s = {1: 0}.keys() - [] %}{{ s.intersection_update([1]) }}", "error: access to attribute 'intersection_update' of 'set' object is unsafe." },
+    ChatCase{ "{% set s = {1: 0}.keys() - [] %}{{ s.union([2]) }}{{ s.issubset([1]) }}{{ s.copy() }}", "{1, 2}True{1}" },
     ChatCase{ "{{ messages[0].get('role') }}{{ messages|length }}", "user1" },
     ChatCase{ "{{ range(100001)|length }}", "error: " },
     ChatCase{ "{{ range(100000)|length }}", "100000" },
