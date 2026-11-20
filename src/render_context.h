@@ -2391,11 +2391,13 @@ struct HomeCallSaved
     AutoescapeModes autoescape;
 };
 
-// For a call of a closure that sees the copy of an ended template's names (HomeCall::EnterCaptured): a frame of that
-// template's blocks in `saved.callFrame`, made the frame of `context`, when `capture` or a frame below it kept its
-// `self` (ClosureCapture::endedSelf), so that a block in the closure's body renders from them as in its template
-// (docs/tasks/0552). Defined in statements.cpp. Throws std::bad_alloc
-void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* capture, HomeCallSaved& saved, size_t baseDepth);
+// For a call of a closure that sees the copy of an ended template's names (HomeCall::EnterCaptured), before the scope
+// of that copy: a frame of that template's blocks in `saved.callFrame`, made the frame of `context`, when `capture` or
+// a frame below it kept its `self` (ClosureCapture::endedSelf), so that a block in the closure's body renders from them
+// as in its template (docs/tasks/0552). Its top level is a scope of its own, of the copy of the template's top-level
+// names only, linked below `link`: an unscoped block sees those, not the names of the frames around the closure
+// (docs/tasks/0560). Defined in statements.cpp. Throws std::bad_alloc
+void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* capture, HomeCallSaved& saved, size_t link);
 
 // Runs a closure's body on its home context (ClosureSite::Resolve) for the duration of one
 // call: switches the lookup cache epoch, the loop control, the template frame and the
@@ -2730,9 +2732,9 @@ private:
         if (!kept.frames.empty())
         {
             const auto capture = m_site.Capture();
+            EnterEndedTemplateFrame(context, capture.get(), saved, home.link);
             context.EnterCapturedScope(kept, home.link, capture);
             m_link = context.GetScopesCount();
-            EnterEndedTemplateFrame(context, capture.get(), saved, m_link);
         }
     }
     JINJA2CPP_NOINLINE_INLINE static void Leave(RenderContext& context, const HomeCallSaved& saved) // NOLINT(bugprone-exception-escape): leaving scopes and dropping views free memory only

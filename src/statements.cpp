@@ -2545,7 +2545,7 @@ namespace
 const InternalValueMap* SelfBlocksOfValue(const InternalValue& value);
 } // namespace
 
-void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* capture, HomeCallSaved& saved, size_t baseDepth)
+void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* capture, HomeCallSaved& saved, size_t link)
 {
     while (capture && IsEmpty(capture->endedSelf))
     {
@@ -2567,11 +2567,27 @@ void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* captu
     {
         return;
     }
+    // The copy of the template's top level, which the capture holding `self` keeps (CaptureClosures)
+    auto topLevel = capture->names.lock();
+    if (!topLevel)
+    {
+        return;
+    }
+    {
+        auto scope = context.EnterScope();
+        ClosureKept kept;
+        kept.frames.push_back(std::move(topLevel));
+        CopyCaptured(scope, kept);
+    }
+    if (link < context.GetScopesCount() - 1)
+    {
+        context.PushFrameView({}, link);
+    }
     // A frame Enter made for the call is replaced: the new one is entered from the frame that one was (verifier)
     auto* outer = saved.callFrame ? saved.callFrame->outer : context.GetTemplateFrame();
     auto& frame = saved.callFrame.emplace();
     frame.blocks = &block->owner->ended;
-    frame.baseDepth = baseDepth;
+    frame.baseDepth = context.GetScopesCount();
     frame.name = block->templateName;
     frame.outer = outer;
     frame.self = capture->endedSelf;

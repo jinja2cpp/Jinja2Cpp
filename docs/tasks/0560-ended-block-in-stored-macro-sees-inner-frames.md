@@ -4,36 +4,23 @@ pr:
 priority: low
 area: parity
 depends: [0552]
-touches: [src/statements.cpp#EnterEndedTemplateFrame]
+touches: [src/statements.cpp#TemplateRenderer::RenderBody]
 shares: [test/borrowed_cells_test.cpp]
 ---
-# A block in a macro stored past its render sees the names of the frames around the macro
+# A block in a macro stored by a nested render that failed renders nothing
 
-**Problem.** Found by the verifier of 0552. Since 0552 a block inside a macro that a nested render stored renders once
-that render has ended, from the template's ended blocks. Jinja2's block function sees only the template's top-level
-context; ours sees the copy of every frame the macro kept, so names of a macro or a block around the stored macro show
-through. With the outer `{{ inner() }}{{ g[-1]() }}` (BorrowedCellsSingle.NestedRenderValueOutlivesItsTemplate):
-
-| nested template | Jinja2 3.1.6 | Jinja2C++ |
-|---|---|---|
-| `{% set x='X' %}{% macro o() %}{% set y='Y' %}{% macro m() %}{% block b %}[{{x}}{{y}}]{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% endmacro %}{{ o() }}` | `[X]` | `[XY]` |
-| `{% block a %}{% set x='X' %}{% macro m() %}{% block b %}[{{x}}]{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% endblock %}` | `[]` | `[X]` |
-
-The same under `{% extends %}` with the child overriding `a` gives `[]` against `[X]`. Before 0552 these printed
-nothing, as every block in a stored macro did. Rendered without storing the macro, both match Python.
-
-A second gap, found by the security review of #967: when the nested render fails after it stored the macro (the
-host swallowing the error), the block renders nothing. `TemplateRenderer::KeepEndedSelf` runs on the success path of
-`RenderBody` only, so the capture never gets `endedSelf`. With autoescape on, the inner template
+**Problem.** Found by the security review of #967 (0552). Since 0552 a block inside a macro that a nested render stored
+renders from the template's ended blocks once that render has ended. When the nested render fails after it stored the
+macro (the host swallowing the error), the block renders nothing: `TemplateRenderer::KeepEndedSelf` runs on the
+success path of `RenderBody` only, so the capture never gets `endedSelf`. With autoescape on, the inner template
 `{% set x = "X<" %}{% for a in [[1],2] recursive %}{% if a is iterable %}{{ loop(a) }}{% else %}{% macro m() %}{% block b %}{{ x }}{% endblock %}[{{ x }}{{ a }}]{% endmacro %}{% set _ = g.append(m) %}{{ 1 // 0 }}{% endif %}{% endfor %}`
-and the outer `{{ inner() }}{{ g[0]() }}` print `X&lt;[X&lt;1]` in Jinja2 3.1.6 and `[X&lt;1]` here
-(BorrowedCellsSingle.NestedRenderThatFailsKeepsItsClosures). Memory-safe.
+and the outer `{{ inner() }}{{ g[0]() }}` print `X&lt;[X&lt;1]` in Jinja2 3.1.6 and `[X&lt;1]` here. Memory-safe.
 
-**Proposal.** Give the ended frame of EnterEndedTemplateFrame a base depth that hides the macro's kept frames above the
-template's top level: an unscoped block then sees the copy of the top level only (the capture that holds `endedSelf`,
-not the inner captures chained above it).
+(The other gap first filed here, a block in such a macro seeing the names of the frames around the macro, was fixed in
+#967 after Codex review: the ended frame's top level is a scope of the template's top-level copy only.)
 
-For the failure, keep the ended `self` on the failure path too (where ClosesOverOnFailure closes over the top level).
+**Proposal.** Keep the ended `self` on the failure path too, where ClosesOverOnFailure closes over the template's top
+level (`KeepEndedSelf` needs the scopes the failure left above the base to be ended first).
 
-**Done when.** Rows with the templates above print Python's output in `NestedRenderValueOutlivesItsTemplate`, narrow
-and wide, ASan clean.
+**Done when.** A `BorrowedCellsSingle.NestedRenderThatFailsKeepsItsClosures` row with the templates above prints
+Python's output, narrow and wide, ASan clean.

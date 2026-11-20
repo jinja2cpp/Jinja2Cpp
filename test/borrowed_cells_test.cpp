@@ -1699,6 +1699,10 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
         { "{{ inner() }}{{ g[-1](1) }}", "{% set x = 'X' %}{% macro m(a) %}{% block b scoped %}{{ x }}{{ a }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "X1" },
         { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% block c %}C{{ x }}{% endblock %}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "XCX" },
         { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set self = 5 %}{% set _ = g.append(m) %}", "X" },
+        // An unscoped block sees the template's top level, not the frames around the stored macro (docs/tasks/0560)
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro o() %}{% set y = 'Y' %}{% macro m() %}{% block b %}[{{ x }}{{ y }}]{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% endmacro %}{{ o() }}", "[X]" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% block a %}{% set x = 'X' %}{% macro m() %}{% block b %}[{{ x }}]{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% endblock %}", "[]" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% extends 'par.j2' %}{% block b %}{% set x = 'X' %}{% macro m() %}{% block c %}[{{ x }}]{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% endblock %}", "[]" },
     };
     for (const auto& c : cases)
     {
