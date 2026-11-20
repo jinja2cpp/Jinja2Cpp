@@ -320,7 +320,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0246](0246-public-comparison-report.md) | A user-facing benchmark and feature-parity comparison with rival engines | docs | high | open |
 | [0247](0247-rival-benchmark-coverage.md) | Cover the rival engines' own benchmark cases, then close the gaps | perf | high | open |
 | [0248](0248-python-drop-in-replacement.md) | Jinja2C++ as a drop-in replacement for Python Jinja2 in common cases | api | medium | open |
-| [0249](0249-implicit-conversion-sanitizer.md) | Run the sanitizer CI with `-fsanitize=implicit-conversion` | robustness | medium | open |
+| [0249](0249-implicit-conversion-sanitizer.md) | Run the sanitizer CI with `-fsanitize=implicit-conversion` | robustness | medium | done |
 | [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | done |
 | [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | done |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | done |
@@ -595,7 +595,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0531](0531-failed-nested-render-inner-frame-closures.md) | A closure defined in a frame that a failing nested render went out of reads its names as ended | parity | low | open |
 | [0532](0532-copy-nested-render-params-lazily.md) | Copy the params of a nested render when a value of them is stored, not on every render | perf | low | open |
 | [0533](0533-nested-with-context-module-closure-importer-names.md) | A macro of a module imported with context by a nested render loses the importer's names once that render ends | parity | low | open |
-| [0534](0534-fuzz-oldstyle-i18n.md) | Fuzz the oldstyle gettext parser path | robustness | low | open |
+| [0534](0534-fuzz-oldstyle-i18n.md) | Fuzz the oldstyle gettext parser path | robustness | low | done |
 | [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | done |
 | [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | done |
 | [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | open |
@@ -604,5 +604,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | done |
 | [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
+| [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | open |
 | [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |
 | [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | open |
