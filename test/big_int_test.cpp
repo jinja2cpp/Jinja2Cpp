@@ -664,6 +664,63 @@ TEST(BigIntTest, FromDigitsAndToDigitsRoundTrip)
     EXPECT_EQ(huge, BigInt::FromDigits(huge.ToDigits(10), 10, true));
 }
 
+// Task 0287: conversions split the number and multiply (Karatsuba) past a few dozen limbs. Every
+// size from one limb to past the splitting thresholds converts both ways and agrees with Python
+TEST(BigIntTest, RadixConversionsAgreeAtEverySize)
+{
+    uint32_t state = 12345;
+    const auto next = [&state]() {
+        state = (state * 1103515245U) + 12345U;
+        return state >> 16;
+    };
+    for (const size_t size : std::vector<size_t>{ 1, 7, 8, 9, 47, 48, 49, 96, 97, 300, 385, 1000, 3000, 12000 })
+    {
+        std::string hex;
+        for (size_t i = 0; i != size; ++i)
+        {
+            hex.push_back("0123456789abcdef"[next() % 16]);
+        }
+        hex[0] = 'c';
+        const auto value = BigInt::FromDigits(hex, 16, false);
+        // Back from the decimal form, which the two directions compute in different radixes
+        EXPECT_EQ(hex, BigInt::FromDigits(value.ToString(), 10, false).ToDigits(16)) << size;
+        for (const int base : { 2, 3, 7, 32, 36 })
+        {
+            EXPECT_EQ(value, BigInt::FromDigits(value.ToDigits(base), base, false)) << size << " base " << base;
+        }
+        // Base 2 from base 16 digit by digit
+        std::string binary;
+        for (const char c : hex)
+        {
+            const int digit = c <= '9' ? c - '0' : c - 'a' + 10;
+            for (int bit = 3; bit >= 0; --bit)
+            {
+                binary.push_back(((digit >> bit) & 1) != 0 ? '1' : '0');
+            }
+        }
+        EXPECT_EQ(binary, value.ToDigits(2)) << size;
+    }
+
+    // Python: str(int('0123456789abcdef' * 1250, 16)), 24081 digits
+    const auto pattern = BigInt::FromDigits([] {
+        std::string digits;
+        for (int i = 0; i != 1250; ++i)
+        {
+            digits += "0123456789abcdef";
+        }
+        return digits;
+    }(),
+                                            16, false);
+    const auto& decimal = pattern.ToString();
+    ASSERT_EQ(24081u, decimal.size());
+    EXPECT_EQ("1115502634713506683283205363772616989488", decimal.substr(0, 40));
+    EXPECT_EQ("1766335204961454869936206472544267259375", decimal.substr(decimal.size() - 40));
+    // Python: int('2' * 3000, 3) % 10**30
+    const auto ternary = BigInt::FromDigits(std::string(3000, '2'), 3, false).ToString();
+    EXPECT_EQ("483881594201769798453765660000", ternary.substr(ternary.size() - 30));
+    EXPECT_EQ(std::string(3000, '2'), BigInt::FromDigits(ternary, 10, false).ToDigits(3));
+}
+
 TEST(BigIntTest, FromDigitsIsCaseInsensitiveAndDropsLeadingZeros)
 {
     EXPECT_EQ(BigInt::FromDigits("DeadBEEF", 16, false), BigInt::FromDigits("deadbeef", 16, false));
@@ -697,4 +754,35 @@ TEST(BigIntTest, FromDigitsAndToDigitsRejectBadInput)
     EXPECT_THROW(BigInt::FromDigits(std::string(315653, '9'), 10, false), std::length_error);
     EXPECT_THROW(static_cast<void>(BigInt(5).ToDigits(1)), std::invalid_argument);
     EXPECT_THROW(static_cast<void>(BigInt(5).ToDigits(37)), std::invalid_argument);
+}
+
+// Task 0287: a power-of-two literal at the bit cap converts in well under a second in Release
+// (it took seconds when every conversion was quadratic), and the exact width of one past the cap
+// is known before converting. The numbers are Python's
+TEST(BigIntTemplate, RadixLiteralsAtTheBitCap)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% set x = 0x" + std::string(262144, 'f') + " %}{% set h = '{:x}'.format(-x) %}{{ x.bit_length() }}|{{ h[:4] }}|{{ h|length }}"));
+    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("1048576|-fff|262145", result.value());
+
+    const auto loadError = [](const std::string& source) {
+        Template other;
+        const auto loaded = other.Load(source);
+        return loaded ? ErrorCode::Unspecified : loaded.error().GetCode();
+    };
+    // 1 + 3 * 349525 = 1048576 bits fit; a leading 2 is one bit more
+    EXPECT_EQ(ErrorCode::Unspecified, loadError("{{ 0o1" + std::string(349525, '0') + " }}"));
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loadError("{{ 0o2" + std::string(349525, '0') + " }}"));
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loadError("{{ 0x1" + std::string(262144, '0') + " }}"));
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loadError("{{ 0b1" + std::string(1048576, '0') + " }}"));
+
+    // The int filter takes the same path from data
+    TemplateW wide;
+    ASSERT_TRUE(wide.Load(L"{{ (s|int(base=16)).bit_length() }}"));
+    EXPECT_EQ(L"4096", wide.RenderAsString({ { "s", std::string(1024, 'F') } }).value());
+    const auto over = wide.RenderAsString({ { "s", "1" + std::string(262144, '0') } });
+    ASSERT_FALSE(over.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, over.error().GetCode());
 }
