@@ -1764,3 +1764,138 @@ TEST(CallSiteTest, DefaultWithoutContextArgument)
     EXPECT_EQ("", probe->templateName);
     EXPECT_FALSE(probe->autoescape);
 }
+
+// A number outside an integer parameter's range fails the call rather than wrap (docs/tasks/0544)
+struct RangeOverloads
+{
+    int64_t operator()(int x) const { return x; }
+    std::string operator()(const std::string& s) const { return s; }
+};
+
+TEST(UserCallableRangeTest, NarrowIntegerParameters)
+{
+    const ValuesMap params{
+        { "i", MakeCallable([](int x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "u", MakeCallable([](unsigned x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "c", MakeCallable([](char x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "sc", MakeCallable([](signed char x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "uc", MakeCallable([](unsigned char x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "i16", MakeCallable([](int16_t x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "u16", MakeCallable([](uint16_t x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "i64", MakeCallable([](int64_t x) { return x; }, ArgInfo{ "x" }) },
+        { "u64", MakeCallable([](uint64_t x) { return std::to_string(x); }, ArgInfo{ "x" }) },
+        { "wc", MakeCallable([](wchar_t x) { return static_cast<int64_t>(x); }, ArgInfo{ "x" }) },
+        { "c16", MakeCallable([](char16_t x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "c32", MakeCallable([](char32_t x) { return int64_t{ x }; }, ArgInfo{ "x" }) },
+        { "b", MakeCallable([](bool x) { return x; }, ArgInfo{ "x" }) },
+        { "d", MakeCallable([](double x) { return x; }, ArgInfo{ "x" }) },
+        // ArgInfoT describes a generic lambda's parameter; an overload set goes through the joint visit
+        { "gen", MakeCallable([](auto x) { return int64_t{ x }; }, ArgInfoT<int>{ "x" }) },
+        { "ovl", MakeCallable(RangeOverloads{}, ArgInfo{ "x" }) },
+    };
+    struct Row
+    {
+        std::string tpl;
+        std::string expected; // empty: fails with IntegerOutOfRange
+    };
+    const std::vector<Row> rows{
+        // The task's examples
+        { "{{ i(2**40 + 5) }}", "" },
+        { "{{ u(-1) }}", "" },
+        { "{{ c(300) }}", "" },
+        { "{{ i(3.9) }}", "3" },
+        // The ends of each range pass, one step past fails
+        { "{{ i(2147483647) }} {{ i(-2147483648) }} {{ i(none) }} {{ i() }}", "2147483647 -2147483648 0 0" },
+        { "{{ i(2147483648) }}", "" },
+        { "{{ i(-2147483649) }}", "" },
+        { "{{ u(4294967295) }} {{ u(0) }}", "4294967295 0" },
+        { "{{ u(4294967296) }}", "" },
+        { "{{ c(65) }} {{ c(0) }}", "65 0" },
+        { "{{ sc(-128) }} {{ sc(127) }}", "-128 127" },
+        { "{{ sc(128) }}", "" },
+        { "{{ sc(-129) }}", "" },
+        { "{{ uc(255) }} {{ uc(0) }}", "255 0" },
+        { "{{ uc(256) }}", "" },
+        { "{{ uc(-1) }}", "" },
+        { "{{ i16(-32768) }} {{ i16(32767) }}", "-32768 32767" },
+        { "{{ i16(32768) }}", "" },
+        { "{{ u16(65535) }}", "65535" },
+        { "{{ u16(65536) }}", "" },
+        { "{{ i64(9223372036854775807) }} {{ i64(-9223372036854775807 - 1) }}", "9223372036854775807 -9223372036854775808" },
+        { "{{ u64(9223372036854775807) }} {{ u64(0) }}", "9223372036854775807 0" },
+        { "{{ u64(-1) }}", "" },
+        { "{{ wc(65) }} {{ c16(65535) }} {{ c32(1114111) }}", "65 65535 1114111" },
+        { "{{ c16(65536) }}", "" },
+        { "{{ c16(-1) }}", "" },
+        { "{{ c32(-1) }}", "" },
+        { "{{ c32(4294967296) }}", "" },
+        // bool and double parameters take any number as before
+        { "{{ b(2**40) }} {{ b(0) }} {{ d(2**40) }}", "True False 1099511627776.0" },
+        // A float in range truncates toward zero; NaN, infinities and floats past the range fail
+        { "{{ i(-3.9) }} {{ u(-0.5) }} {{ u(4294967295.9) }} {{ sc(-128.9) }} {{ sc(127.9) }}", "-3 0 4294967295 -128 127" },
+        { "{{ i(1e300) }}", "" },
+        { "{{ i(-2147483649.0) }}", "" },
+        { "{{ u(-1.0) }}", "" },
+        { "{{ u(4294967296.0) }}", "" },
+        { "{{ i('nan'|float) }}", "" },
+        { "{{ i('inf'|float) }}", "" },
+        { "{{ i64(-9223372036854775808.0) }}", "-9223372036854775808" },
+        { "{{ i64(9223372036854775808.0) }}", "" },
+        { "{{ i64(-1e19) }}", "" },
+        { "{{ u64(18446744073709549568.0) }}", "18446744073709549568" },
+        { "{{ u64(18446744073709551616.0) }}", "" },
+        // Described generic lambda and overload set
+        { "{{ gen(7) }} {{ ovl(7) }} {{ ovl('s') }}", "7 7 s" },
+        { "{{ gen(2**40) }}", "" },
+        { "{{ ovl(2**40) }}", "" },
+    };
+    for (const auto& row : rows)
+    {
+        SCOPED_TRACE(row.tpl);
+        Template narrow;
+        ASSERT_TRUE(narrow.Load(row.tpl).has_value());
+        TemplateW wide;
+        ASSERT_TRUE(wide.Load(ConvertString<std::wstring>(row.tpl)).has_value());
+        const auto narrowResult = narrow.RenderAsString(params);
+        const auto wideResult = wide.RenderAsString(params);
+        if (row.expected.empty())
+        {
+            ASSERT_FALSE(narrowResult.has_value());
+            EXPECT_EQ(ErrorCode::IntegerOutOfRange, narrowResult.error().GetCode());
+            ASSERT_FALSE(wideResult.has_value());
+            EXPECT_EQ(ErrorCode::IntegerOutOfRange, wideResult.error().GetCode());
+        }
+        else
+        {
+            ASSERT_TRUE(narrowResult.has_value()) << narrowResult.error();
+            EXPECT_EQ(row.expected, narrowResult.value());
+            ASSERT_TRUE(wideResult.has_value());
+            EXPECT_EQ(ConvertString<std::wstring>(row.expected), wideResult.value());
+        }
+    }
+}
+
+TEST(UserCallableRangeTest, ErrorNamesTheParameter)
+{
+    const ValuesMap params{
+        { "f", MakeCallable([](int count) { return int64_t{ count }; }, ArgInfo{ "count" }) },
+        { "ovl", MakeCallable(RangeOverloads{}, ArgInfo{ "x" }) },
+    };
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ f(2**40 + 5) }}").has_value());
+    auto result = tpl.RenderAsString(params);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("callable argument 'count' = 1099511627781 is out of range for its 32-bit signed integer parameter",
+              result.error().GetExtraParams().at(0).AsString());
+    ASSERT_TRUE(tpl.Load("{{ f(1e300) }}").has_value());
+    result = tpl.RenderAsString(params);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("callable argument 'count' = 1e+300 is out of range for its 32-bit signed integer parameter",
+              result.error().GetExtraParams().at(0).AsString());
+    // Through the joint visit the parameter has no name
+    ASSERT_TRUE(tpl.Load("{{ ovl(-(2**40)) }}").has_value());
+    result = tpl.RenderAsString(params);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("callable argument -1099511627776 is out of range for its 32-bit signed integer parameter",
+              result.error().GetExtraParams().at(0).AsString());
+}
