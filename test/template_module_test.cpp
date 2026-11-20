@@ -836,8 +836,17 @@ TEST_F(TemplateModuleChangingSourceTest, StoredMacroOfAnImportingModuleSeesItsHe
             for (int i = 1; i != 5; ++i)
             {
                 const auto n = std::to_string(i);
-                AddFile("helper", "{% set hv = 'H" + std::string(helperChanges ? n : "0") + "' %}{% macro y() %}{{ hv }}{% endmacro %}");
-                AddFile("lib", std::string(importer) + "{% set v = 'V" + n + "' %}{% macro x() %}{{ v }}" + uses + "{% endmacro %}");
+                std::string helper = "{% set hv = 'H";
+                helper += helperChanges ? n : "0";
+                helper += "' %}{% macro y() %}{{ hv }}{% endmacro %}";
+                AddFile("helper", helper);
+                std::string lib = importer;
+                lib += "{% set v = 'V";
+                lib += n;
+                lib += "' %}{% macro x() %}{{ v }}";
+                lib += uses;
+                lib += "{% endmacro %}";
+                AddFile("lib", lib);
                 try
                 {
                     results.push_back(Call(module.exports["m"]).AsString());

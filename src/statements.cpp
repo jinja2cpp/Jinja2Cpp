@@ -4165,8 +4165,11 @@ bool ImportedModule::TreeHeldOnlyByModules(const void* tree, const std::vector<s
             noteBody(value);
         }
     }
-    // use_count: read on the thread that runs the module's calls, which holds its lock
-    return owner && owner->use_count() == holders + static_cast<long>(bodies.size());
+    if (!owner)
+    {
+        return false;
+    }
+    return owner->use_count() == holders + static_cast<long>(bodies.size()); // use_count: read on the thread that runs the module's calls, which holds its lock
 }
 
 bool ImportedModule::HeldOnlyBy(const std::vector<const ImportedModule*>& ending, const std::vector<const ImportedModule*>& staying, const std::vector<std::unique_ptr<ImportedModule>>& all)
