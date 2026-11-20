@@ -48,11 +48,15 @@ namespace filters
 {
 // A host's mappingproxy (a Python module's `dict.keys().mapping`): a mapping to the engine, but a proxy to pprint and
 // tojson, as for the engine's own (docs/tasks/0545)
-static bool IsHostMappingProxy(const MapRef& map)
+namespace
+{
+bool IsHostMappingProxy(const MapRef& map)
 {
     const auto* host = map.GetHostObject();
     return host != nullptr && std::strcmp(host->TypeName(), "mappingproxy") == 0;
 }
+} // namespace
+
 
 struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
@@ -1812,7 +1816,7 @@ InternalValue CallJsonDumps(const UserCallable& dumps, const InternalValue& valu
             break;
         }
     }
-    return InternalValue(std::move(escaped));
+    return InternalValue(escaped);
 }
 
 } // namespace

@@ -3899,7 +3899,8 @@ std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context,
     if (const auto list = AsList(obj))
     {
         const auto* fields = list->GetFieldNames();
-        const bool isData = fields ? std::find(fields->begin(), fields->end(), name) != fields->end() : list->GetRangeInfo() != nullptr && (name == "start" || name == "stop" || name == "step");
+        const bool isRangeField = name == "start" || name == "stop" || name == "step";
+        const bool isData = fields ? std::find(fields->begin(), fields->end(), name) != fields->end() : isRangeField && list->IsRange();
         return isData ? SandboxedNativeAttribute(context, obj, name) : std::nullopt;
     }
     return std::nullopt;

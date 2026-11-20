@@ -1495,11 +1495,11 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         {
             // A host mapping (a Python dict or mappingproxy) is indexed at a random position below its len(), as the
             // engine's own dict is: that key's value, or a KeyError (docs/tasks/0545)
-            if (host->IsMapping() && host->Len().value_or(0) != 0)
+            if (const size_t length = host->Len().value_or(0); host->IsMapping() && length != 0)
             {
                 std::random_device rd;
                 std::mt19937 gen(rd());
-                std::uniform_int_distribution<size_t> dis(0, *host->Len() - 1);
+                std::uniform_int_distribution<size_t> dis(0, length - 1);
                 const InternalValue index(static_cast<int64_t>(dis(gen)));
                 if (auto found = host->GetItem(index))
                 {
