@@ -1734,6 +1734,7 @@ struct FailingNestedEnv
         fs->AddFile("base.j2", "{% block a %}{% endblock %}");
         fs->AddFile("inc.j2", "{% set z = 'Z' %}{% macro n() %}{{ z }}{% endmacro %}{% set _ = g.append(n) %}{{ 1 // 0 }}");
         fs->AddFile("m.j2", "{% set t = x %}{% macro tm() %}[{{ t }}{{ x }}]{% endmacro %}");
+        fs->AddFile("incloop.j2", "{% macro n() %}{{ loop is defined }}{% endmacro %}{% set _ = g.append(n) %}{{ 1 // 0 }}");
         env.AddFilesystemHandler(std::string(), fs);
         env.GetSettings().cacheSize = 0;
         env.AddGlobal("g", ValuesList{});
@@ -1928,6 +1929,8 @@ TEST(BorrowedCellsSingle, NestedRenderThatFailsKeepsItsClosures)
         { "{% extends 'base.j2' %}{% block a %}{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{{ 1 // 0 }}{% endblock %}",
           "cl" },
         { "{% include 'inc.j2' %}", "Z" },
+        // The loop the include does not see stays hidden from its closures (Codex review of #954)
+        { "{% for i in [1] %}{% include 'incloop.j2' %}{% endfor %}", "False" },
         // A module imported with context keeps the importer's names it reads (0533)
         { "{% set x = 'cl' %}{% import 'm.j2' as m with context %}{% set _ = g.append(m.tm) %}{{ 1 // 0 }}", "[clcl]" },
     };
@@ -1956,6 +1959,24 @@ struct CountingMapAccessor : IMapItemAccessor
     [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "n" }; }
 };
 } // namespace
+
+TEST(BorrowedCellsSingle, IncludedClosureDoesNotSeeTheHiddenLoop)
+{
+    // A macro the included template stores reads `loop` as the include saw it: undefined, unless the including
+    // body names `loop` (Codex review of #954). The expectations are Python's
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("t", "{% macro f() %}{{ loop is defined }}{% endmacro %}{% set ns.f = f %}");
+    TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), fs);
+    const std::string cases[][2] = {
+        { "{% set ns = namespace(f=none) %}{% for x in [1] %}{% include 't' %}{% endfor %}{{ ns.f() }}", "False" },
+        { "{% set ns = namespace(f=none) %}{% for x in [1] %}{{ loop.index }}{% include 't' %}{% endfor %}{{ ns.f() }}", "1True" },
+    };
+    for (const auto& c : cases)
+    {
+        EXPECT_EQ(c[1], Render(c[0], {}, &env)) << c[0];
+    }
+}
 
 TEST(BorrowedCellsSingle, NestedGenericRenderAsksTheHostOnce)
 {

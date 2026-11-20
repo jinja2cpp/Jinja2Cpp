@@ -3527,7 +3527,7 @@ void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopH
 
 // Renders `tpl` for `include` in `innerContext`, made from `values`: the names it sets stay its own
 template<typename CharT>
-JINJA2CPP_ALWAYS_INLINE void RenderIncludedIn(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values, RenderContext& innerContext)
+JINJA2CPP_ALWAYS_INLINE void RenderIncludedIn(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values, RenderContext& innerContext, LoopHiding& hidden)
 {
     if (withContext)
     {
@@ -3539,8 +3539,6 @@ JINJA2CPP_ALWAYS_INLINE void RenderIncludedIn(const TemplateImpl<CharT>& tpl, bo
         // takes the loop's targets, not its LoopContext); a `loop` set outside it is
         if (tpl.MayReadLoop())
         {
-            // Declared after the context: the loop is put back once the included template has rendered
-            LoopHiding hidden;
             HideIncludingLoop(values, innerContext, hidden);
             innerContext.SetNodes(tpl.Nodes());
             innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
@@ -3560,10 +3558,12 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
     RenderContext innerContext = values.Clone(withContext);
     // Its macros and `self` kept past the include see what it saw (0323)
     innerContext.SetEndsBeforeRender();
+    // Declared after the context: the loop is put back once the closures of the include took what it saw
+    LoopHiding hidden;
     bool failed = false;
     try
     {
-        RenderIncludedIn(tpl, withContext, os, values, innerContext);
+        RenderIncludedIn(tpl, withContext, os, values, innerContext, hidden);
     }
     catch (...)
     {
