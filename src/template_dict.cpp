@@ -32,6 +32,12 @@ inline namespace v2
 {
 namespace
 {
+// An entry's address as a number: what the side table notes an entry under. It is never used to reach the entry
+std::uintptr_t EntryId(const InternalDict::value_type& entry) noexcept
+{
+    return reinterpret_cast<std::uintptr_t>(&entry); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+}
+
 // The kind byte after the mark. Built from char constants, never from string literals: a
 // token holds NUL bytes, and "\xFFf" would read as the single character \xFFF
 constexpr char KindInt = 'n';
@@ -541,8 +547,14 @@ TemplateDict::TemplateDict(InternalDict&& items)
 
 TemplateDict::TemplateDict(const TemplateDict& other)
     : m_items(other.m_items)
-    , m_keys(other.m_keys ? std::make_unique<KeyTable>(*other.m_keys) : std::unique_ptr<KeyTable>())
 {
+    // A copy is a new dict: its entries are new, its epoch 0
+    if (other.HasKeyValues())
+    {
+        auto table = std::make_unique<SideTable>();
+        table->keys = other.m_keys->keys;
+        m_keys = std::move(table);
+    }
     ChargeEntries();
 }
 
@@ -562,10 +574,14 @@ TemplateDict& TemplateDict::operator=(TemplateDict&& other) noexcept(std::is_not
     {
         // Moved out first: where the move may throw (MSVC), the entries stay counted while they live
         auto items = std::move(other.m_items);
+        // The entries taken are not the ones a walk of either dict stopped at: both move to a later epoch (0553)
+        const auto epoch = std::max(m_keys.Epoch(), other.m_keys.Epoch()) + 1;
         auto keys = std::move(other.m_keys);
         ReleaseEntries();
         m_items.swap(items);
         m_keys.swap(keys);
+        m_keys.SetEpoch(epoch);
+        other.m_keys.SetEpoch(epoch);
     }
     return *this;
 }
@@ -657,18 +673,27 @@ TemplateDict::iterator TemplateDict::Set(const InternalValue& key, InternalValue
     try
     {
         auto [pos, inserted] = m_items.insert_or_assign(std::move(*token), std::move(value));
-        if (inserted && IsSpelledToken(pos->first))
+        if (inserted)
         {
+            const bool spelled = IsSpelledToken(pos->first);
             try
             {
-                if (!m_keys)
+                if (spelled)
                 {
-                    m_keys.Assign(std::make_unique<KeyTable>());
+                    if (!m_keys)
+                    {
+                        m_keys.Assign(std::make_unique<SideTable>());
+                    }
+                    m_keys->keys.emplace(pos->first, key);
                 }
-                m_keys->emplace(pos->first, key);
+                StampAdded(pos);
             }
             catch (...)
             {
+                if (spelled && m_keys)
+                {
+                    m_keys->keys.erase(pos->first);
+                }
                 m_items.erase(pos);
                 throw;
             }
@@ -708,7 +733,20 @@ TemplateDict::iterator TemplateDict::SetString(std::string name, InternalValue v
     }
     try
     {
-        return m_items.insert_or_assign(std::move(name), std::move(value)).first;
+        auto [pos, inserted] = m_items.insert_or_assign(std::move(name), std::move(value));
+        if (inserted)
+        {
+            try
+            {
+                StampAdded(pos);
+            }
+            catch (...)
+            {
+                m_items.erase(pos);
+                throw;
+            }
+        }
+        return pos;
     }
     catch (...)
     {
@@ -738,10 +776,16 @@ TemplateDict::iterator TemplateDict::Erase(const_iterator pos)
     {
         ReleaseRenderMemory(EntryBytes(pos->first));
     }
-    if (m_keys && IsSpelledToken(pos->first))
+    if (m_keys)
     {
-        m_keys->erase(pos->first);
+        if (IsSpelledToken(pos->first))
+        {
+            m_keys->keys.erase(pos->first);
+        }
+        m_keys->born.erase(EntryId(*pos));
     }
+    // Its address may be taken by an entry added later (docs/tasks/0553)
+    m_keys.SetEpoch(m_keys.Epoch() + 1);
     return m_items.erase(pos);
 }
 
@@ -749,7 +793,35 @@ void TemplateDict::Clear()
 {
     ReleaseEntries();
     m_items.clear();
+    const auto epoch = m_keys.Epoch() + 1;
     m_keys.Reset();
+    m_keys.SetEpoch(epoch);
+}
+
+std::uint64_t TemplateDict::AddedEpoch(const_iterator pos) const noexcept
+{
+    if (m_keys)
+    {
+        if (const auto at = m_keys->born.find(EntryId(*pos)); at != m_keys->born.end())
+        {
+            return at->second;
+        }
+    }
+    return 0;
+}
+
+void TemplateDict::StampAdded(iterator pos)
+{
+    const auto epoch = m_keys.Epoch();
+    if (epoch == 0)
+    {
+        return;
+    }
+    if (!m_keys)
+    {
+        m_keys.Assign(std::make_unique<SideTable>());
+    }
+    m_keys->born.insert_or_assign(EntryId(*pos), epoch);
 }
 
 InternalValue TemplateDict::KeyOf(const std::string& stored) const
@@ -760,7 +832,7 @@ InternalValue TemplateDict::KeyOf(const std::string& stored) const
     }
     if (m_keys)
     {
-        if (auto spelling = m_keys->find(stored); spelling != m_keys->end())
+        if (auto spelling = m_keys->keys.find(stored); spelling != m_keys->keys.end())
         {
             return spelling->second;
         }

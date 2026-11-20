@@ -399,6 +399,61 @@ TEST(TemplateDictTest, StringKeysStartingWithTheMarkAreEscaped)
     EXPECT_EQ(ValueKind::Int, dict.KeyOf(std::next(dict.begin())->first).Kind());
 }
 
+// docs/tasks/0553: a walk tells the entry it stopped at from one added again under its key by the erase epoch, as an
+// entry's address can be reused by the allocator
+TEST(TemplateDictTest, EraseEpochMarksEntriesAddedAgain)
+{
+    TemplateDict dict;
+    dict.SetString("a", InternalValue(int64_t{ 1 }));
+    dict.Set(InternalValue(int64_t{ 2 }), InternalValue(int64_t{ 2 }));
+    EXPECT_EQ(0U, dict.EraseEpoch());
+    EXPECT_EQ(0U, dict.AddedEpoch(dict.FindString("a")));
+
+    // A walk stops at "a"; another entry goes and a new one comes: "a" is the entry it was
+    const auto seen = dict.EraseEpoch();
+    dict.Erase(dict.Find(InternalValue(int64_t{ 2 })));
+    dict.SetString("c", InternalValue(int64_t{ 3 }));
+    EXPECT_GT(dict.EraseEpoch(), seen);
+    EXPECT_LE(dict.AddedEpoch(dict.FindString("a")), seen);
+    EXPECT_GT(dict.AddedEpoch(dict.FindString("c")), seen);
+
+    // "a" goes and comes back, through either way of adding: it is a new entry, wherever it lives
+    const auto before = dict.EraseEpoch();
+    dict.Erase(dict.FindString("a"));
+    dict.SetString("a", InternalValue(int64_t{ 1 }));
+    EXPECT_GT(dict.AddedEpoch(dict.FindString("a")), before);
+    const auto keyed = dict.EraseEpoch();
+    dict.Erase(dict.FindString("a"));
+    dict.TryEmplace(InternalValue(std::string("a")), InternalValue(int64_t{ 1 }));
+    EXPECT_GT(dict.AddedEpoch(dict.FindString("a")), keyed);
+    // A key that is not a string keeps its spelling beside the note
+    const auto tuple = InternalValue(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(int64_t{ 1 }) }).MarkAsTuple());
+    dict.Set(tuple, InternalValue(int64_t{ 4 }));
+    EXPECT_GT(dict.AddedEpoch(dict.Find(tuple)), keyed);
+    EXPECT_TRUE(dict.HasKeyValues());
+    EXPECT_EQ(ValueKind::List, dict.KeyOf(dict.Find(tuple)->first).Kind());
+
+    // Clear and assignment move on without allocating; what is added after is new
+    const auto cleared = dict.EraseEpoch();
+    dict.Clear();
+    EXPECT_GT(dict.EraseEpoch(), cleared);
+    EXPECT_FALSE(dict.HasKeyValues());
+    dict.SetString("a", InternalValue(int64_t{ 1 }));
+    EXPECT_GT(dict.AddedEpoch(dict.FindString("a")), cleared);
+
+    const auto assigned = dict.EraseEpoch();
+    TemplateDict other;
+    other.SetString("a", InternalValue(int64_t{ 9 }));
+    dict = std::move(other);
+    EXPECT_GT(dict.EraseEpoch(), assigned);
+    EXPECT_EQ(9, ConvertToInt(dict.FindString("a")->second));
+
+    // A copy is a new dict
+    const TemplateDict copy(dict);
+    EXPECT_EQ(0U, copy.EraseEpoch());
+    EXPECT_EQ(0U, copy.AddedEpoch(copy.FindString("a")));
+}
+
 // docs/tasks/0455: names given to the dict, such as `**` keyword arguments, may start with the mark too
 TEST(TemplateDictTest, NamesStartingWithTheMarkAreEscapedOnConstruction)
 {

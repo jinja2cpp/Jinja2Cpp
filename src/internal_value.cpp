@@ -3496,7 +3496,8 @@ public:
         }
         const auto& entries = dict->Items();
         const auto at = entries.find(m_token);
-        if (at == entries.end() || NodeId(*at) != m_node)
+        // The address alone cannot tell: an entry erased and added again can take the address it had (docs/tasks/0553)
+        if (at == entries.end() || NodeId(*at) != m_node || (dict->EraseEpoch() != m_epoch && dict->AddedEpoch(at) > m_epoch))
         {
             throw TemplateRuntimeError("dictionary keys changed during iteration");
         }
@@ -3566,6 +3567,7 @@ private:
         }
         m_token = at->first;
         m_node = NodeId(*at);
+        m_epoch = dict.EraseEpoch();
         m_current = m_view->Item(dict.KeyOf(at->first), at->second);
         return true;
     }
@@ -3573,9 +3575,11 @@ private:
     const DictView* m_view;
     // A host mapping's items, read when the walk started
     InternalValueList m_items;
-    // The entry of a template's dict the walk stopped at: its token, its address and its item
+    // The entry of a template's dict the walk stopped at: its token, its address, the dict's erase epoch then
+    // (docs/tasks/0553) and its item
     std::string m_token;
     std::uintptr_t m_node = 0;
+    std::uint64_t m_epoch = 0;
     InternalValue m_current;
     size_t m_startSize = 0;
     // The number of entries given before the current one

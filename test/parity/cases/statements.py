@@ -691,4 +691,8 @@ CASES = [
     ('for_dict_live_nested', "{% set e = {'a': 1} %}{% for k in e %}{% for j in e %}{{ k }}{{ j }}{% endfor %}{% endfor %}", DO),
     ('for_dict_live_namespace', '{% set ns = namespace(a=1) %}{% for k in ns %}{{ k }}{% endfor %}', DO),
     ('for_dict_live_clear', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% do e.clear() %}{{ k }}{% endfor %}", DO),
+    # docs/tasks/0553: setdefault adds the entry again with no other allocation in between, so its address is the one freed
+    ('for_dict_live_readd_current_setdefault', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% if k == 'a' %}{% do e.pop('a') %}{% do e.setdefault('a', 5) %}{% endif %}{{ k }}{% endfor %}", DO),
+    ('for_dict_live_readd_last_setdefault', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% if k == 'b' %}{% do e.pop('b') %}{% do e.setdefault('b', 5) %}{% endif %}{{ k }}{% endfor %}", DO),
+    ('for_dict_live_readd_other_setdefault', "{% set e = {'a': 1, 'b': 2} %}{% for k in e %}{% if k == 'a' %}{% do e.pop('b') %}{% do e.setdefault('b', 5) %}{% endif %}{{ k }}{% endfor %}", DO),
 ]
