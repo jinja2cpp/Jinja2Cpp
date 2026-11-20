@@ -605,7 +605,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
 | [0543](0543-big-int-binary-form-for-huge-values.md) | Keep a binary form for big integers past the decimal string limit | robustness | low | open |
-| [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | open |
+| [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | done |
 | [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |
 | [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | open |
 | [0550](0550-recursive-level-failure-loses-top-names.md) | A failure through a nested level of a recursive loop loses the template's top-level names for its closures | parity | low | open |
