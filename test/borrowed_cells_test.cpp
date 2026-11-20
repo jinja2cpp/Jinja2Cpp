@@ -1631,6 +1631,7 @@ std::string RenderWithDestroyedNested(const std::string& outer, const std::strin
     fs->AddFile("modB.j2", "{% macro m2() %}deep{% endmacro %}");
     fs->AddFile("mod.j2", "{% from 'modB.j2' import m2 %}{% macro f() %}f:{{ m2() }}{% endmacro %}");
     fs->AddFile("par.j2", "{% block b %}PB{% endblock %}");
+    fs->AddFile("mx.j2", "{% set t = x %}{% macro tm() %}[{{ t }}{{ x }}]{% endmacro %}");
     env.AddFilesystemHandler(std::string(), fs);
     // Nothing caches lib.j2: only the nested render holds it
     env.GetSettings().cacheSize = 0;
@@ -1690,6 +1691,8 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
         { "{{ inner() }}{{ g[-1]() }}", "{% import 'mod.j2' as mod %}{% set _ = g.append(mod.f) %}", "f:deep" },
         { "{{ inner() }}{{ g[-1]() }}", "{% extends 'par.j2' %}{% block b %}{% set _ = g.append(super) %}CB{% endblock %}", "PB" },
         { "{{ inner() }}{{ g[-1].b() }}", "{% block b %}blk{% endblock %}{% set _ = g.append(self) %}", "blk" },
+        // A module imported with context keeps the importer's names it reads (0533)
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'cl' %}{% import 'mx.j2' as m with context %}{% set _ = g.append(m.tm) %}", "[clcl]" },
     };
     for (const auto& c : cases)
     {
@@ -1728,6 +1731,10 @@ struct FailingNestedEnv
         fs->AddFile("libfail.j2",
                     "{% set q = 'M' %}{% macro mk() %}{{ q }}{% endmacro %}{% set _ = g.append(mk) %}"
                     "{% for i in [1] %}{% set q = 'M2' %}{{ 1 // 0 }}{% endfor %}");
+        fs->AddFile("base.j2", "{% block a %}{% endblock %}");
+        fs->AddFile("inc.j2", "{% set z = 'Z' %}{% macro n() %}{{ z }}{% endmacro %}{% set _ = g.append(n) %}{{ 1 // 0 }}");
+        fs->AddFile("m.j2", "{% set t = x %}{% macro tm() %}[{{ t }}{{ x }}]{% endmacro %}");
+        fs->AddFile("incloop.j2", "{% macro n() %}{{ loop is defined }}{% endmacro %}{% set _ = g.append(n) %}{{ 1 // 0 }}");
         env.AddFilesystemHandler(std::string(), fs);
         env.GetSettings().cacheSize = 0;
         env.AddGlobal("g", ValuesList{});
@@ -1913,9 +1920,20 @@ TEST(BorrowedCellsSingle, NestedRenderThatFailsKeepsItsClosures)
         // A module that fails while it is imported: its top level sees its own names, not those of the loop it left
         { "{% import 'libstop.j2' as l %}", "M" },
         { "{% import 'libfail.j2' as l %}", "M" },
+        // A closure defined in a frame the failure went out of (a macro call, a loop, a `with`, a block, an included
+        // template) keeps that frame's names (0531)
+        { "{% macro o(n) %}{% macro i() %}{{ n }}{% endmacro %}{% set _ = g.append(i) %}{{ 1 // 0 }}{% endmacro %}{{ o('on') }}", "on" },
+        { "{% for v in ['lv'] %}{% macro i() %}{{ v }}{% endmacro %}{% set _ = g.append(i) %}{{ 1 // 0 }}{% endfor %}", "lv" },
+        { "{% with w = 'wv' %}{% macro i() %}{{ w }}{% endmacro %}{% set _ = g.append(i) %}{{ 1 // 0 }}{% endwith %}", "wv" },
+        { "{% for i in [1] %}{% set x = 'cl' %}{% macro m() %}{{ i }}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{{ 1 // 0 }}{% endfor %}", "1cl" },
+        { "{% extends 'base.j2' %}{% block a %}{% set x = 'cl' %}{% macro m() %}{{ x }}{% endmacro %}{% set _ = g.append(m) %}{{ 1 // 0 }}{% endblock %}",
+          "cl" },
+        { "{% include 'inc.j2' %}", "Z" },
+        // The loop the include does not see stays hidden from its closures (Codex review of #954)
+        { "{% for i in [1] %}{% include 'incloop.j2' %}{% endfor %}", "False" },
+        // A module imported with context keeps the importer's names it reads (0533)
+        { "{% set x = 'cl' %}{% import 'm.j2' as m with context %}{% set _ = g.append(m.tm) %}{{ 1 // 0 }}", "[clcl]" },
     };
-    // A closure defined in a frame the failure went out of (a macro call, a loop, a `with`) reads that frame's names
-    // as ended, where Python prints them: docs/tasks/0531
     for (const auto& c : cases)
     {
         FailingNestedEnv<Template> nested(c[0]);
@@ -1941,6 +1959,24 @@ struct CountingMapAccessor : IMapItemAccessor
     [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "n" }; }
 };
 } // namespace
+
+TEST(BorrowedCellsSingle, IncludedClosureDoesNotSeeTheHiddenLoop)
+{
+    // A macro the included template stores reads `loop` as the include saw it: undefined, unless the including
+    // body names `loop` (Codex review of #954). The expectations are Python's
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("t", "{% macro f() %}{{ loop is defined }}{% endmacro %}{% set ns.f = f %}");
+    TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), fs);
+    const std::string cases[][2] = {
+        { "{% set ns = namespace(f=none) %}{% for x in [1] %}{% include 't' %}{% endfor %}{{ ns.f() }}", "False" },
+        { "{% set ns = namespace(f=none) %}{% for x in [1] %}{{ loop.index }}{% include 't' %}{% endfor %}{{ ns.f() }}", "1True" },
+    };
+    for (const auto& c : cases)
+    {
+        EXPECT_EQ(c[1], Render(c[0], {}, &env)) << c[0];
+    }
+}
 
 TEST(BorrowedCellsSingle, NestedGenericRenderAsksTheHostOnce)
 {
