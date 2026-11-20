@@ -458,6 +458,10 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `{{ {'a': 1}|tojson }}`) follows a policy changed after the load, where Jinja2 folds it to its value when it compiles the
   template; the engine does not fold. Only the current `json.dumps_function` is kept: a template loaded under an earlier one
   keeps it for as long as the template lives, and a replaced one is released with the last template that used it.
+- The policies and the `dumps` function are read from Python into the engine at each entry: `render`, `generate`, `module`
+  and a macro handed to Python. A change that Python code makes during a render (a callable that edits `env.policies`, a
+  `dumps` function that replaces itself, a macro called back from Python in a plain `Environment`) applies from the next
+  entry, where Jinja2 applies it at the next filter call.
 - Template errors that Jinja2 raises as Python's own exceptions (`ZeroDivisionError`,
   `TypeError` from an operator) are `TemplateRuntimeError` with the same message, except where the engine
   names the class: `%` formatting (also of `format` and newstyle `gettext`) raises `ValueError`,

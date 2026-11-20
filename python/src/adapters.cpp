@@ -723,6 +723,22 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
 {
     if (const auto* list = obj.GetIf<jinja2::GenericList>())
     {
+        // A set and a dict view the template made are Python's own types for the policy (convert.cpp ViewToPython):
+        // an empty one of the type, so that `add` of a set or `isdisjoint` of a view is asked about, not read unasked
+        if (const char* viewClass = list->GetViewClass())
+        {
+            const std::string_view view(viewClass);
+            if (view == "set")
+            {
+                return Steal(PySet_New(nullptr));
+            }
+            if (view == "dict_keys" || view == "dict_values" || view == "dict_items")
+            {
+                const auto source = Steal(PyDict_New());
+                const std::string method(view.substr(5));
+                return Steal(PyObject_CallMethod(source.ptr(), method.c_str(), nullptr));
+            }
+        }
         return list->IsTuple() ? Steal(PyTuple_New(0)) : Steal(PyList_New(0));
     }
     if (obj.GetIf<jinja2::ValuesList>())

@@ -1560,3 +1560,35 @@ def test_a_custom_is_safe_attribute_is_given_the_value_of_the_attribute(source):
         env.from_string(source).render()
         values[name] = seen
     assert values["ours"] == values["oracle"]
+
+
+SET_METHODS = ["add", "update", "union", "intersection", "difference", "discard", "remove", "pop", "clear", "issubset", "isdisjoint", "copy"]
+VIEW_METHODS = ["isdisjoint", "mapping"]
+
+
+def _asked_by(base, source, **context):
+    seen = []
+
+    class Judge(base):
+        def is_safe_attribute(self, obj, attr, value):
+            seen.append((type(obj).__name__, attr))
+            return not (isinstance(obj, (set, type({}.keys()), type({}.values()), type({}.items()))) and attr in SET_METHODS + VIEW_METHODS)
+
+    return seen, _outcome_of(Judge(), source, **context)
+
+
+@pytest.mark.parametrize("method", SET_METHODS)
+@pytest.mark.parametrize("form", ["{{ st.%s }}", "{{ st|attr('%s') }}", "{{ st['%s'] }}"])
+def test_is_safe_attribute_is_asked_about_the_methods_of_a_set(method, form):
+    source = "{% set st = d.keys() - [] %}" + form % method
+    context = {"d": {"a": 1, "b": 2}}
+    assert _asked_by(SandboxedEnvironment, source, **context) == _asked_by(j2sandbox.SandboxedEnvironment, source, **context)
+
+
+@pytest.mark.parametrize("view", ["keys", "values", "items"])
+@pytest.mark.parametrize("method", VIEW_METHODS)
+@pytest.mark.parametrize("form", ["{{ v.%s }}", "{{ v|attr('%s') }}", "{{ v['%s'] }}"])
+def test_is_safe_attribute_is_asked_about_the_attributes_of_a_dict_view(view, method, form):
+    source = "{% set v = d." + view + "() %}" + form % method
+    context = {"d": {"a": 1, "b": 2}}
+    assert _asked_by(SandboxedEnvironment, source, **context) == _asked_by(j2sandbox.SandboxedEnvironment, source, **context)
