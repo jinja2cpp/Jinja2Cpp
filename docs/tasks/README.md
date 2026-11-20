@@ -483,7 +483,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0413](0413-strict-undefined-sort-unique-key.md) | `sort` and `unique` with `attribute=` do not fail on a StrictUndefined key | parity | low | done |
 | [0414](0414-python-sandbox-policy-on-engine-values.md) | Sandbox policy on the engine's own values | api | low | open |
 | [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | done |
-| [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | open |
+| [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | done |
 | [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | done |
 | [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | done |
 | [0419](0419-print-statement.md) | `{% print expr %}` is a parse error in the engine | parity | low | done |
@@ -506,8 +506,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | done |
 | [0437](0437-python-gil-released-render.md) | Render with the GIL released when the data is JSON-like (0248 plan D5, phase 3) | perf | low | open |
 | [0438](0438-sandbox-arms-cold-without-policy.md) | Sandbox checks cost nothing when no policy is installed | perf | low | open |
-| [0439](0439-python-lent-engine-callable-name.md) | Python module: an engine callable lent to Python prints without its name | parity | low | open |
-| [0440](0440-python-module-call-poll.md) | Python module: Ctrl-C does not stop `Template.module` or a call of a module's macro | parity | low | open |
+| [0439](0439-python-lent-engine-callable-name.md) | Python module: an engine callable lent to Python prints without its name | parity | low | done |
+| [0440](0440-python-module-call-poll.md) | Python module: Ctrl-C does not stop `Template.module` or a call of a module's macro | parity | low | done |
 | [0441](0441-host-sequence-own-iteration.md) | A host sequence with its own iteration is iterated by index | api | medium | done |
 | [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
 | [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | done |
@@ -612,3 +612,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0551](0551-recursive-closure-earlier-pass-names.md) | A closure of a recursive loop reads a name its last pass did not store from the live frame below | parity | low | open |
 | [0552](0552-block-in-stored-macro-of-nested-render.md) | A block inside a macro a nested render stored renders empty once that render has ended | parity | low | open |
 | [0553](0553-dict-walk-readd-by-erase-epoch.md) | A dict walk misses a key erased and added again when the entry's address is reused | parity | high | done |
+| [0558](0558-python-derived-context-in-loop-bodies.md) | `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context | parity | low | open |
+| [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | open |
