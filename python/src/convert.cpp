@@ -11,6 +11,7 @@
 #include <jinja2cpp/host_object.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
@@ -851,8 +852,14 @@ std::string TemplateValue::TypeName() const
         }
         return "dict";
     }
-    if (m_value.GetIf<jinja2::UserCallable>())
+    if (const auto* callable = m_value.GetIf<jinja2::UserCallable>())
     {
+        // A callable of the template lent to the call: Python's type of it, as Jinja2 passes its own object
+        // (docs/tasks/0439)
+        if (auto info = jinja2::DescribeLentCallable(*callable))
+        {
+            return std::move(info->typeName);
+        }
         return "Macro";
     }
     return "object";
@@ -864,6 +871,14 @@ std::string TemplateValue::Str() const
     if (const auto* map = m_alive ? m_value.GetIf<jinja2::GenericMap>() : nullptr; map && map->GetObjectClass())
     {
         return Repr();
+    }
+    // A function's or a class's str() is its repr
+    if (const auto* callable = m_alive ? m_value.GetIf<jinja2::UserCallable>() : nullptr)
+    {
+        if (auto info = jinja2::DescribeLentCallable(*callable))
+        {
+            return std::move(info->repr);
+        }
     }
     return TextOf(Value());
 }
@@ -878,8 +893,13 @@ std::string TemplateValue::Repr() const
     {
         return map->GetAccessor()->AsHostObject()->Repr();
     }
-    if (m_value.GetIf<jinja2::UserCallable>())
+    if (const auto* callable = m_value.GetIf<jinja2::UserCallable>())
     {
+        // range prints as <class 'range'>, a macro as <Macro 'name'> (docs/tasks/0439)
+        if (auto info = jinja2::DescribeLentCallable(*callable))
+        {
+            return std::move(info->repr);
+        }
         return "<Macro>";
     }
     if (const auto* map = m_value.GetIf<jinja2::GenericMap>(); map && std::string_view(map->GetObjectClass() ? map->GetObjectClass() : "") == "LoopContext")

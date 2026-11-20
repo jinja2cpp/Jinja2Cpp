@@ -37,6 +37,9 @@ ContextMap MakeContextMap(RenderContext& context, void* scope, LendFn lend);
 // thread, which uses it again only if the host kept no copy
 void EndContextMap(const IMapItemAccessor* handle, Value& context) noexcept;
 
+// The template callable `callable` lends to a host's call that is still running on this thread (LentCallable), or
+// null: another callable, or one lent to a call that returned. Defined in internal_value.cpp, where LentCallable is
+const InternalValue* LentCallableOf(const UserCallable& callable) noexcept;
 // Called in a catch handler: rethrows the current exception as the host sees it, the public ErrorInfo for the
 // engine's errors (a located RenderFailure keeps its code) and a host's own exception as it is
 [[noreturn]] void RethrowAsPublicError();

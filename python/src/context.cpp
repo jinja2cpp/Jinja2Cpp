@@ -5,6 +5,8 @@
 
 #include <nanobind/stl/string.h>
 
+#include <jinja2cpp/template.h>
+
 #include <string>
 #include <utility>
 
@@ -86,6 +88,15 @@ nb::object MakeEvalContext(const CallLease& lease)
     }
     return RuntimeFunction("_make_eval_context")(nb::borrow(state->environment), lease.autoescape);
 }
+
+ContextHandle::Part PartOf(int part)
+{
+    if (part < 0 || part > 2)
+    {
+        RaiseTypeError("a context part is 0, 1 or 2");
+    }
+    return static_cast<ContextHandle::Part>(part);
+}
 } // namespace
 
 PassArg PassArgOf(PyObject* callable)
@@ -148,9 +159,21 @@ const jinja2::GenericMap& ContextHandle::Live() const
     return *context;
 }
 
-nb::object ContextHandle::Lookup(const std::string& name, bool& found) const
+jinja2::Value ContextHandle::View(Part part) const
 {
-    const auto value = Live().Find(name);
+    const auto& context = Live();
+    if (part == Part::All)
+    {
+        return jinja2::Value(context);
+    }
+    return jinja2::ContextView(jinja2::Value(context), part == Part::Vars ? jinja2::ContextNames::TopLevel : jinja2::ContextNames::Parent);
+}
+
+nb::object ContextHandle::Lookup(const std::string& name, Part part, bool& found) const
+{
+    const auto view = View(part);
+    const auto* map = view.GetIf<jinja2::GenericMap>();
+    const auto value = map ? map->Find(name) : std::nullopt;
     found = static_cast<bool>(value);
     if (!found)
     {
@@ -159,12 +182,16 @@ nb::object ContextHandle::Lookup(const std::string& name, bool& found) const
     return ToPython(*value);
 }
 
-nb::list ContextHandle::Names() const
+nb::list ContextHandle::Names(Part part) const
 {
     nb::list result;
-    for (const auto& name : Live().GetKeys())
+    const auto view = View(part);
+    if (const auto* map = view.GetIf<jinja2::GenericMap>())
     {
-        result.append(MakeStr(name));
+        for (const auto& name : map->GetKeys())
+        {
+            result.append(MakeStr(name));
+        }
     }
     return result;
 }
@@ -172,12 +199,16 @@ nb::list ContextHandle::Names() const
 void BindContext(nb::module_& module)
 {
     nb::class_<ContextHandle>(module, "_ContextHandle")
-        .def("lookup",
-             [](const ContextHandle& self, const std::string& name) {
-                 bool found = false;
-                 auto value = self.Lookup(name, found);
-                 return nb::make_tuple(found, std::move(value));
-             })
-        .def("names", &ContextHandle::Names);
+        // part: 0 every name the template sees, 1 Context.vars, 2 Context.parent (ContextHandle::Part)
+        .def(
+            "lookup",
+            [](const ContextHandle& self, const std::string& name, int part) {
+                bool found = false;
+                auto value = self.Lookup(name, PartOf(part), found);
+                return nb::make_tuple(found, std::move(value));
+            },
+            nb::arg("name"), nb::arg("part") = 0)
+        .def(
+            "names", [](const ContextHandle& self, int part) { return self.Names(PartOf(part)); }, nb::arg("part") = 0);
 }
 } // namespace jinja2cpp_py

@@ -238,6 +238,37 @@ def test_keyboard_interrupt_stops_a_long_render():
     assert tpl.environment.from_string("{{ 1 }}").render() == "1"
 
 
+def _interrupt_after(seconds, run):
+    old = signal.signal(signal.SIGALRM, signal.default_int_handler)
+    try:
+        signal.setitimer(signal.ITIMER_REAL, seconds)
+        with pytest.raises(KeyboardInterrupt):
+            run()
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def test_keyboard_interrupt_stops_a_long_template_module():
+    # Template.module renders the top level as a render does, polled for signals (docs/tasks/0440)
+    if threading.current_thread() is not threading.main_thread():
+        pytest.skip("signals reach the main thread only")
+    tpl = jinja2cpp.Template("{% for i in range(100000) %}{% for j in range(100000) %}{{ j }}{% endfor %}{% endfor %}")
+    _interrupt_after(0.2, lambda: tpl.module)
+    _interrupt_after(0.2, lambda: tpl.make_module({"x": 1}))
+
+
+def test_keyboard_interrupt_stops_a_long_call_of_a_module_macro():
+    # A call of a module's macro keeps the module's poll: Ctrl-C stops it during the call (docs/tasks/0440)
+    if threading.current_thread() is not threading.main_thread():
+        pytest.skip("signals reach the main thread only")
+    tpl = jinja2cpp.Template("{% macro m(n) %}{% for i in range(n) %}{% for j in range(n) %}{{ j }}{% endfor %}{% endfor %}{% endmacro %}")
+    module = tpl.module
+    _interrupt_after(0.2, lambda: module.m(100000))
+    # The module goes on working afterwards
+    assert str(module.m(2)) == "0101"
+
+
 def test_render_from_threads():
     tpl = jinja2cpp.Template("{% for x in l %}{{ x }}{% endfor %}{{ d.k }}")
     results = []
