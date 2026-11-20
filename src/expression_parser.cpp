@@ -2017,12 +2017,14 @@ struct FoldSummary
     bool failed = false;
     bool undefined = false;
     bool strictUndefined = false;
+    // Whether safeRepr was computed: only for a candidate's own outcome, as HasSafeRepr may walk a large value
+    bool reprKnown = false;
     bool safeRepr = false;
     // bool() of it; nothing when that fails
     std::optional<bool> truth;
 };
 
-FoldSummary Summarize(const FoldValue& value, bool withRepr)
+FoldSummary Summarize(const FoldValue& value)
 {
     FoldSummary summary;
     summary.failed = value.failed;
@@ -2031,7 +2033,6 @@ FoldSummary Summarize(const FoldValue& value, bool withRepr)
         summary.undefined = value.value.IsUndefined();
         summary.strictUndefined = IsStrictUndefined(value.value);
         summary.truth = FoldedTruth(value);
-        summary.safeRepr = withRepr && HasSafeRepr(value.value);
     }
     return summary;
 }
@@ -2133,7 +2134,21 @@ private:
         {
             return m_check.strictUndefined && result.undefined ? FoldOutcome::Fails : FoldOutcome::Folds;
         }
-        return result.safeRepr ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+        return SafeReprOf(index) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+    }
+
+    // Whether the candidate's value has a safe repr; asked only for its own outcome, so that a step a fold around
+    // it skips is never walked (a released container is kept for this, Release)
+    bool SafeReprOf(std::size_t index)
+    {
+        auto& step = m_steps[index];
+        auto& summary = step.summary;
+        if (!summary.reprKnown)
+        {
+            summary.safeRepr = !summary.failed && !step.released && HasSafeRepr(step.value.value);
+            summary.reprKnown = true;
+        }
+        return summary.safeRepr;
     }
 
     void LinkSteps()
@@ -2427,7 +2442,7 @@ private:
             return found->second;
         }
         const auto value = TryFoldValue([this, &nodes, expr] { return nodes[expr].Evaluate(m_context); });
-        return m_operands.emplace(key, Summarize(value, false)).first->second;
+        return m_operands.emplace(key, Summarize(value)).first->second;
     }
 
     // The candidate's value, evaluated; a step's from the step before it
@@ -2437,7 +2452,7 @@ private:
         auto& step = m_steps[index];
         if (!step.summarized)
         {
-            step.summary = Summarize(step.value, !m_check.candidates[index].output);
+            step.summary = Summarize(step.value);
             step.summarized = true;
         }
         return step.summary;
@@ -2506,10 +2521,23 @@ private:
         {
             return;
         }
+        // A list or dict whose candidate may still need its repr stays until the candidate is done: walking it now
+        // would cost a step a fold around it skips (a scalar's repr costs nothing)
+        const bool needsRepr = !step.done && !m_check.candidates[index].output;
+        const auto kind = step.value.value.Kind();
+        if (needsRepr && !step.value.failed && (kind == ValueKind::List || kind == ValueKind::Map))
+        {
+            return;
+        }
         if (!step.summarized)
         {
-            step.summary = Summarize(step.value, !step.done && !m_check.candidates[index].output);
+            step.summary = Summarize(step.value);
             step.summarized = true;
+        }
+        if (needsRepr && !step.summary.reprKnown)
+        {
+            step.summary.safeRepr = !step.value.failed && HasSafeRepr(step.value.value);
+            step.summary.reprKnown = true;
         }
         step.value = FoldValue();
         step.released = true;

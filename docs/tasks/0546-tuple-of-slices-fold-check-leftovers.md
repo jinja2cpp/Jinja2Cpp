@@ -46,7 +46,8 @@ value, and their fold from the step before (`IndicesFoldAt`, `TestFolds`). 150 l
 (`LimitsEnvTest.StrictSubscriptAndTestStepsFoldInLinearSteps`; master needs N^2/2). Each step counts the steps
 that read it; once they have and its own candidate is done (or skipped inside a fold), its value is dropped and
 a summary (failed, undefined, strict undefined, truth, safe repr) answers for it, so a chain holds about two
-values (`LimitsEnvTest.StrictFoldStepsDropTheValuesTheyPassed`: 100 `|center(200000+i)` steps in 4 MiB of
+values (a list or dict step stays until its own candidate is done, so that its repr is walked only for its own
+outcome, never for a step a fold around it skips; Codex on #963) (`LimitsEnvTest.StrictFoldStepsDropTheValuesTheyPassed`: 100 `|center(200000+i)` steps in 4 MiB of
 maxRenderMemory). An `and`, `or` or `~` candidate whose evaluation fails no longer fails the Load as such: it
 does when `FoldEvaluator::LetsUndefinedOut` finds the UndefinedError Jinja2 lets out, bool() or str() of a
 strict undefined operand of an `and`, `or`, `~` or conditional on the path its as_const evaluates (through
