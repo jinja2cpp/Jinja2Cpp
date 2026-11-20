@@ -72,8 +72,10 @@ public:
     // OrderedMap's moves allocate on MSVC (see ordered_map.h), so these are noexcept only where its are. The entries
     // move with their count against the render's memory budget: OrderedMap's moves leave the map moved from empty
     TemplateDict(TemplateDict&& other) noexcept(std::is_nothrow_move_constructible_v<InternalDict>) = default;
-    TemplateDict& operator=(const TemplateDict& other);
-    TemplateDict& operator=(TemplateDict&& other) noexcept(std::is_nothrow_move_assignable_v<InternalDict>);
+    // No assignment: entries a dict took over would carry no epoch, and a walk of the dict could take one of them for
+    // the entry it stopped at (docs/tasks/0553). A dict is made, changed through its methods and freed
+    TemplateDict& operator=(const TemplateDict& other) = delete;
+    TemplateDict& operator=(TemplateDict&& other) = delete;
     ~TemplateDict() { ReleaseEntries(); }
 
     // The entries under their tokens: for the count and the values. Read the keys through KeyOf
@@ -88,7 +90,7 @@ public:
     [[nodiscard]] bool HasKeyValues() const { return m_keys && !m_keys->keys.empty(); }
 
     // How a walk tells an entry it stopped at from one added again under the same key (docs/tasks/0553): the erase
-    // epoch counts every Erase, Clear and assignment, and an entry added while it is past 0 is noted with it. An
+    // epoch counts every Erase and Clear, and an entry added while it is past 0 is noted with it. An
     // address a walk kept can be the address of an entry added since (the allocator reuses it); the entry is the same
     // one only if it was not added after the epoch the walk saw
     [[nodiscard]] std::uint64_t EraseEpoch() const noexcept { return m_keys.Epoch(); }
@@ -151,7 +153,7 @@ private:
     // Owns the side table, as std::unique_ptr<SideTable> does, and keeps the dict's "counted" flag in the low bit of
     // the pointer, so that the flag costs no byte (docs/tasks/0483): set when the dict's entries were all counted
     // against a render's memory budget, and only then does it give them back. Without a table the other bits hold the
-    // erase epoch, so that erasing, clearing and assigning count without allocating (docs/tasks/0553)
+    // erase epoch, so that erasing and clearing count without allocating (docs/tasks/0553)
     class SideHolder
     {
     public:
@@ -260,7 +262,16 @@ private:
 
     // Notes that the entry was added at the current epoch, when it is past 0 (docs/tasks/0553). Throws when the
     // note cannot be allocated: the caller takes the entry out again
-    void StampAdded(iterator pos);
+    void StampAdded(iterator pos)
+    {
+        if (m_keys.Epoch() != 0)
+        {
+            StampAddedSlow(pos);
+        }
+    }
+    void StampAddedSlow(iterator pos);
+    // What the render's memory budget counts for one note: a node of the table and its bucket
+    static constexpr std::uint64_t NoteBytes = sizeof(std::pair<const std::uintptr_t, std::uint64_t>) + (3 * sizeof(void*));
 
     InternalDict m_items;
     // Token to first spelling, for the entries that are not stored under their own string, and the epochs; also the

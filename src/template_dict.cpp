@@ -558,34 +558,6 @@ TemplateDict::TemplateDict(const TemplateDict& other)
     ChargeEntries();
 }
 
-TemplateDict& TemplateDict::operator=(const TemplateDict& other)
-{
-    if (this != &other)
-    {
-        TemplateDict copy(other);
-        *this = std::move(copy);
-    }
-    return *this;
-}
-
-TemplateDict& TemplateDict::operator=(TemplateDict&& other) noexcept(std::is_nothrow_move_assignable_v<InternalDict>)
-{
-    if (this != &other)
-    {
-        // Moved out first: where the move may throw (MSVC), the entries stay counted while they live
-        auto items = std::move(other.m_items);
-        // The entries taken are not the ones a walk of either dict stopped at: both move to a later epoch (0553)
-        const auto epoch = std::max(m_keys.Epoch(), other.m_keys.Epoch()) + 1;
-        auto keys = std::move(other.m_keys);
-        ReleaseEntries();
-        m_items.swap(items);
-        m_keys.swap(keys);
-        m_keys.SetEpoch(epoch);
-        other.m_keys.SetEpoch(epoch);
-    }
-    return *this;
-}
-
 std::uint64_t TemplateDict::EntryBytes(const std::string& stored) noexcept
 {
     // The entry and about two words of the index for it; a key past the short-string buffer has its own block, and
@@ -616,6 +588,10 @@ void TemplateDict::ReleaseEntriesSlow() const noexcept
     for (const auto& item : m_items)
     {
         bytes += EntryBytes(item.first);
+    }
+    if (m_keys)
+    {
+        bytes += m_keys->born.size() * NoteBytes;
     }
     ReleaseRenderMemory(bytes);
 }
@@ -782,7 +758,10 @@ TemplateDict::iterator TemplateDict::Erase(const_iterator pos)
         {
             m_keys->keys.erase(pos->first);
         }
-        m_keys->born.erase(EntryId(*pos));
+        if (m_keys->born.erase(EntryId(*pos)) != 0 && m_keys.Counted() && RenderMemoryCounted())
+        {
+            ReleaseRenderMemory(NoteBytes);
+        }
     }
     // Its address may be taken by an entry added later (docs/tasks/0553)
     m_keys.SetEpoch(m_keys.Epoch() + 1);
@@ -810,18 +789,31 @@ std::uint64_t TemplateDict::AddedEpoch(const_iterator pos) const noexcept
     return 0;
 }
 
-void TemplateDict::StampAdded(iterator pos)
+void TemplateDict::StampAddedSlow(iterator pos)
 {
     const auto epoch = m_keys.Epoch();
-    if (epoch == 0)
-    {
-        return;
-    }
     if (!m_keys)
     {
         m_keys.Assign(std::make_unique<SideTable>());
     }
-    m_keys->born.insert_or_assign(EntryId(*pos), epoch);
+    // Counted as the entry is: while the dict's entries all are (docs/tasks/0483), and given back with it
+    const bool counted = m_keys.Counted() && RenderMemoryCounted();
+    if (counted)
+    {
+        ChargeRenderMemory(NoteBytes);
+    }
+    try
+    {
+        m_keys->born.insert_or_assign(EntryId(*pos), epoch);
+    }
+    catch (...)
+    {
+        if (counted)
+        {
+            ReleaseRenderMemory(NoteBytes);
+        }
+        throw;
+    }
 }
 
 InternalValue TemplateDict::KeyOf(const std::string& stored) const

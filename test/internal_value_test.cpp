@@ -433,7 +433,7 @@ TEST(TemplateDictTest, EraseEpochMarksEntriesAddedAgain)
     EXPECT_TRUE(dict.HasKeyValues());
     EXPECT_EQ(ValueKind::List, dict.KeyOf(dict.Find(tuple)->first).Kind());
 
-    // Clear and assignment move on without allocating; what is added after is new
+    // Clear moves on without allocating; what is added after is new
     const auto cleared = dict.EraseEpoch();
     dict.Clear();
     EXPECT_GT(dict.EraseEpoch(), cleared);
@@ -441,14 +441,8 @@ TEST(TemplateDictTest, EraseEpochMarksEntriesAddedAgain)
     dict.SetString("a", InternalValue(int64_t{ 1 }));
     EXPECT_GT(dict.AddedEpoch(dict.FindString("a")), cleared);
 
-    const auto assigned = dict.EraseEpoch();
-    TemplateDict other;
-    other.SetString("a", InternalValue(int64_t{ 9 }));
-    dict = std::move(other);
-    EXPECT_GT(dict.EraseEpoch(), assigned);
-    EXPECT_EQ(9, ConvertToInt(dict.FindString("a")->second));
-
-    // A copy is a new dict
+    // A copy is a new dict; a dict cannot be assigned to, as the entries it took would carry no epoch
+    static_assert(!std::is_copy_assignable_v<TemplateDict> && !std::is_move_assignable_v<TemplateDict>);
     const TemplateDict copy(dict);
     EXPECT_EQ(0U, copy.EraseEpoch());
     EXPECT_EQ(0U, copy.AddedEpoch(copy.FindString("a")));
