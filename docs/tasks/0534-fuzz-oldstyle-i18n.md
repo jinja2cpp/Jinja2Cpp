@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0415, 0509]
@@ -18,3 +18,12 @@ that maps to today's newstyle default), and add a seed with an oldstyle `{% tran
 
 **Done when.** A fuzz run reaches the oldstyle trans parser (coverage report or a seed under fuzz/), and the
 replay job passes.
+
+**Result.** The untrusted and host targets use all eight bits of their settings byte, so the choice went to the
+spare bits of the two targets that have them (fuzz_common.h `gettext_bits`, `ApplyGettextBits`): the loader
+target's second byte above `confined` (oldstyle, then a `GettextStyle` install of null translations) and the
+allocation-failure target's ignored wide bit (oldstyle with a `FollowLoad` install). Zero is today's newstyle
+default, which every earlier seed has there. make_corpus.py `--prefix loader|alloc_failure` writes hash-picked
+bits and an oldstyle copy of every seed that uses gettext; fuzz/regressions/loader-oldstyle-trans.j2 and
+alloc-failure-oldstyle-trans.j2 reach `ParseEndTrans` with `i18nNewstyle` off (checked under gdb), and the
+replay of fuzz/regressions passes.

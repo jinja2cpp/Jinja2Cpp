@@ -190,10 +190,12 @@ private:
     static std::uint8_t NextGeneration()
     {
         thread_local auto next = static_cast<std::uint8_t>(std::hash<std::thread::id>()(std::this_thread::get_id()));
-        // 0 is never one, so that a default handle resolves nowhere
-        if (++next == 0)
+        // 0 is never one, so that a default handle resolves nowhere. The counter wraps on purpose, written as an
+        // explicit cast: `++` on a uint8_t converts the promoted int back implicitly (docs/tasks/0249)
+        next = static_cast<std::uint8_t>(next + 1);
+        if (next == 0)
         {
-            ++next;
+            next = 1;
         }
         return next;
     }
