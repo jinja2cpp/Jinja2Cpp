@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -71,8 +72,10 @@ public:
     // OrderedMap's moves allocate on MSVC (see ordered_map.h), so these are noexcept only where its are. The entries
     // move with their count against the render's memory budget: OrderedMap's moves leave the map moved from empty
     TemplateDict(TemplateDict&& other) noexcept(std::is_nothrow_move_constructible_v<InternalDict>) = default;
-    TemplateDict& operator=(const TemplateDict& other);
-    TemplateDict& operator=(TemplateDict&& other) noexcept(std::is_nothrow_move_assignable_v<InternalDict>);
+    // No assignment: entries a dict took over would carry no epoch, and a walk of the dict could take one of them for
+    // the entry it stopped at (docs/tasks/0553). A dict is made, changed through its methods and freed
+    TemplateDict& operator=(const TemplateDict& other) = delete;
+    TemplateDict& operator=(TemplateDict&& other) = delete;
     ~TemplateDict() { ReleaseEntries(); }
 
     // The entries under their tokens: for the count and the values. Read the keys through KeyOf
@@ -84,7 +87,15 @@ public:
     [[nodiscard]] const_iterator begin() const { return m_items.begin(); }
     [[nodiscard]] const_iterator end() const { return m_items.end(); }
     // Whether some key is not a string, which the public (string keyed) view has to spell
-    [[nodiscard]] bool HasKeyValues() const { return m_keys && !m_keys->empty(); }
+    [[nodiscard]] bool HasKeyValues() const { return m_keys && !m_keys->keys.empty(); }
+
+    // How a walk tells an entry it stopped at from one added again under the same key (docs/tasks/0553): the erase
+    // epoch counts every Erase and Clear, and an entry added while it is past 0 is noted with it. An
+    // address a walk kept can be the address of an entry added since (the allocator reuses it); the entry is the same
+    // one only if it was not added after the epoch the walk saw
+    [[nodiscard]] std::uint64_t EraseEpoch() const noexcept { return m_keys.Epoch(); }
+    // The epoch at which the entry was added: 0 for an entry added before the first erase
+    [[nodiscard]] std::uint64_t AddedEpoch(const_iterator pos) const noexcept;
 
     // A string key; end() when absent
     [[nodiscard]] const_iterator FindString(const std::string& name) const;
@@ -113,7 +124,7 @@ public:
     {
         if (m_keys)
         {
-            for (const auto& entry : *m_keys)
+            for (const auto& entry : m_keys->keys)
             {
                 fn(entry.second);
             }
@@ -128,24 +139,36 @@ public:
 private:
     using KeyTable = std::unordered_map<std::string, InternalValue>;
 
-    // Owns the table of first spellings, as std::unique_ptr<KeyTable> does, and keeps the dict's "counted" flag in the
-    // low bit of the pointer, so that the flag costs no byte (docs/tasks/0483): set when the dict's entries were all
-    // counted against a render's memory budget, and only then does it give them back
-    class KeyTableHolder
+    // What a dict keeps beside its entries, allocated only when needed: the first spellings of the keys that are not
+    // strings, the dict's erase epoch, and the epoch at which each entry added after an erase was added
+    // (docs/tasks/0553)
+    struct SideTable
+    {
+        KeyTable keys;
+        std::uint64_t epoch = 0;
+        // Entry address (a number, never used to reach the entry) to the epoch at which it was added
+        std::unordered_map<std::uintptr_t, std::uint64_t> born;
+    };
+
+    // Owns the side table, as std::unique_ptr<SideTable> does, and keeps the dict's "counted" flag in the low bit of
+    // the pointer, so that the flag costs no byte (docs/tasks/0483): set when the dict's entries were all counted
+    // against a render's memory budget, and only then does it give them back. Without a table the other bits hold the
+    // erase epoch, so that erasing and clearing count without allocating (docs/tasks/0553)
+    class SideHolder
     {
     public:
-        KeyTableHolder() noexcept = default;
-        KeyTableHolder(std::unique_ptr<KeyTable> table) noexcept        // NOLINT(google-explicit-constructor): as a unique_ptr
+        SideHolder() noexcept = default;
+        SideHolder(std::unique_ptr<SideTable> table) noexcept           // NOLINT(google-explicit-constructor): as a unique_ptr
             : m_bits(reinterpret_cast<std::uintptr_t>(table.release())) // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
         {
         }
-        KeyTableHolder(const KeyTableHolder&) = delete;
-        KeyTableHolder& operator=(const KeyTableHolder&) = delete;
-        KeyTableHolder(KeyTableHolder&& other) noexcept
+        SideHolder(const SideHolder&) = delete;
+        SideHolder& operator=(const SideHolder&) = delete;
+        SideHolder(SideHolder&& other) noexcept
             : m_bits(std::exchange(other.m_bits, 0))
         {
         }
-        KeyTableHolder& operator=(KeyTableHolder&& other) noexcept
+        SideHolder& operator=(SideHolder&& other) noexcept
         {
             if (this != &other)
             {
@@ -154,20 +177,25 @@ private:
             }
             return *this;
         }
-        ~KeyTableHolder() { Destroy(); }
+        ~SideHolder() { Destroy(); }
 
-        void swap(KeyTableHolder& other) noexcept { std::swap(m_bits, other.m_bits); }
-        [[nodiscard]] KeyTable* get() const noexcept { return reinterpret_cast<KeyTable*>(m_bits & ~CountedBit); } // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,performance-no-int-to-ptr)
-        explicit operator bool() const noexcept { return get() != nullptr; }
-        KeyTable& operator*() const noexcept { return *get(); }
-        KeyTable* operator->() const noexcept { return get(); }
-        // Takes a table in place of the current one, keeping the flag
-        void Assign(std::unique_ptr<KeyTable> table) noexcept
+        void swap(SideHolder& other) noexcept { std::swap(m_bits, other.m_bits); }
+        [[nodiscard]] SideTable* get() const noexcept
         {
-            Destroy();
-            m_bits = (m_bits & CountedBit) | reinterpret_cast<std::uintptr_t>(table.release()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+            return (m_bits & InlineBit) != 0 ? nullptr : reinterpret_cast<SideTable*>(m_bits & ~CountedBit); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,performance-no-int-to-ptr)
         }
-        // Drops the table and the flag
+        explicit operator bool() const noexcept { return get() != nullptr; }
+        SideTable& operator*() const noexcept { return *get(); }
+        SideTable* operator->() const noexcept { return get(); }
+        // Takes a table in place of the current one, keeping the flag and the epoch
+        void Assign(std::unique_ptr<SideTable> table) noexcept
+        {
+            table->epoch = Epoch();
+            const auto counted = Counted();
+            Destroy();
+            m_bits = reinterpret_cast<std::uintptr_t>(table.release()) | (counted ? CountedBit : 0); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        }
+        // Drops the table, the flag and the epoch
         void Reset() noexcept
         {
             Destroy();
@@ -175,10 +203,34 @@ private:
         }
         [[nodiscard]] bool Counted() const noexcept { return (m_bits & CountedBit) != 0; }
         void SetCounted(bool counted) noexcept { m_bits = counted ? (m_bits | CountedBit) : (m_bits & ~CountedBit); }
+        [[nodiscard]] std::uint64_t Epoch() const noexcept
+        {
+            if (const auto* table = get())
+            {
+                return table->epoch;
+            }
+            return static_cast<std::uint64_t>(m_bits >> EpochShift);
+        }
+        void SetEpoch(std::uint64_t epoch) noexcept
+        {
+            if (auto* table = get())
+            {
+                table->epoch = epoch;
+            }
+            else
+            {
+                // An epoch past what the bits hold (2^62 erases on 64 bits, 2^30 on 32) stays at the largest one
+                constexpr std::uint64_t maxInline = std::numeric_limits<std::uintptr_t>::max() >> EpochShift;
+                const auto value = static_cast<std::uintptr_t>(epoch < maxInline ? epoch : maxInline);
+                m_bits = (value << EpochShift) | (value != 0 ? InlineBit : 0) | (m_bits & CountedBit);
+            }
+        }
 
     private:
         static constexpr std::uintptr_t CountedBit = 1;
-        static_assert(alignof(KeyTable) >= 2, "the low bit of a table's address is free");
+        static constexpr std::uintptr_t InlineBit = 2;
+        static constexpr unsigned EpochShift = 2;
+        static_assert(alignof(SideTable) >= 4, "the two low bits of a table's address are free");
         void Destroy() const noexcept { delete get(); } // NOLINT(cppcoreguidelines-owning-memory)
 
         std::uintptr_t m_bits = 0;
@@ -208,10 +260,25 @@ private:
     }
     void ReleaseEntriesSlow() const noexcept;
 
+    // Notes that the entry was added at the current epoch, when it is past 0 (docs/tasks/0553). Throws when the
+    // note cannot be allocated: the caller takes the entry out again
+    void StampAdded(iterator pos)
+    {
+        if (m_keys.Epoch() != 0)
+        {
+            StampAddedSlow(pos);
+        }
+    }
+    void StampAddedSlow(iterator pos);
+    // What the render's memory budget counts for one note: a node of the table and its bucket
+    static constexpr std::uint64_t NoteNode = sizeof(std::pair<const std::uintptr_t, std::uint64_t>);
+    static constexpr std::uint64_t NoteBucket = 3 * sizeof(void*);
+    static constexpr std::uint64_t NoteBytes = NoteNode + NoteBucket;
+
     InternalDict m_items;
-    // Token to first spelling, for the entries that are not stored under their own string; also the dict's counted
-    // flag (docs/tasks/0483), which a move takes along with the entries
-    KeyTableHolder m_keys;
+    // Token to first spelling, for the entries that are not stored under their own string, and the epochs; also the
+    // dict's counted flag (docs/tasks/0483), which a move takes along with the entries
+    SideHolder m_keys;
 };
 // The flag adds no member: the dict is its entries and one pointer, as before docs/tasks/0483
 namespace detail
