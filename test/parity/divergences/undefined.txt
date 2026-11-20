@@ -1,3 +1,6 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the undefined area (cases/undefined.py).
 # Format and kinds: test/parity/README.md.
 
+undefined.strict_fold_concat_unrendered accepts 0555 Jinja2's optimizer folds the `~` when it compiles and str() of the strict undefined fails the compile; the engine's fold check runs only around a tuple-of-slices subscript, so the unrendered branch loads
+undefined.strict_fold_conditional_test_unrendered accepts 0555 Jinja2's optimizer folds the conditional when it compiles and bool() of the strict undefined test fails the compile; the engine's fold check runs only around a tuple-of-slices subscript, so the unrendered branch loads
+undefined.strict_fold_unfolded_operand_conditional accepts 0555 Jinja2's optimizer folds the conditional inside the right operand of a short-circuiting `or` and bool() of its strict undefined test fails the compile; the engine's fold check follows only the operands the `or` evaluates

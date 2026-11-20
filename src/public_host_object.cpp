@@ -219,6 +219,11 @@ bool IHostObject::IsMapping() const
     return false;
 }
 
+bool IHostObject::IsDict() const
+{
+    return IsMapping();
+}
+
 bool IHostObject::IsSequence() const
 {
     return false;
@@ -473,6 +478,7 @@ public:
     [[nodiscard]] std::optional<size_t> Hash() const override { return m_object->Hash(); }
     [[nodiscard]] const void* Identity() const override { return m_object->Identity(); }
     [[nodiscard]] bool IsMapping() const override { return m_object->IsMapping(); }
+    [[nodiscard]] bool IsDict() const override { return m_object->IsDict(); }
     [[nodiscard]] bool IsSequence() const override { return m_object->IsSequence(); }
     [[nodiscard]] bool IsTuple() const override { return m_object->IsTuple(); }
     [[nodiscard]] bool IsMarkupLike() const override { return m_object->IsMarkupLike(); }

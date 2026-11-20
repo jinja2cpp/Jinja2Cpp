@@ -1663,9 +1663,10 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     }
     const auto objectMap = AsMap(baseVal);
     // An iterable object (a host object with __iter__, Jinja2's LoopContext, which gives the
-    // rest of its loop as (item, loop) pairs: docs/tasks/0382) gives its items; a host mapping (a Python dict) is a dict to it
+    // rest of its loop as (item, loop) pairs: docs/tasks/0382) gives its items; a host dict is a dict to it,
+    // and any other host mapping is iterated, which gives its keys (docs/tasks/0404)
     const auto* hostObject = objectMap ? objectMap->GetHostObject() : nullptr;
-    const bool objectIterates = objectMap && objectMap->Iterates() && (hostObject == nullptr || !hostObject->IsMapping());
+    const bool objectIterates = objectMap && objectMap->Iterates() && (hostObject == nullptr || !hostObject->IsDict());
     if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List) || (objectMap && objectMap->GetObjectClass() && !objectIterates))
     {
         return InternalValue(UrlQuote(asText(baseVal), false));
@@ -1692,7 +1693,7 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
         const auto pair = ConvertToList(item, isPair, false);
         if (!isPair)
         {
-            throw TemplateRuntimeError(std::string("cannot unpack non-iterable ") + Apply<visitors::PythonTypeNameGetter>(item) + " object");
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, std::string("cannot unpack non-iterable ") + Apply<visitors::PythonTypeNameGetter>(item) + " object");
         }
         // Unpacking reads a third value at most, as Python's does
         std::array<InternalValue, 2> parts;
@@ -1708,11 +1709,11 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
         });
         if (count > parts.size())
         {
-            throw TemplateRuntimeError("too many values to unpack (expected 2)");
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::ValueError, "too many values to unpack (expected 2)");
         }
         if (count < parts.size())
         {
-            throw TemplateRuntimeError("not enough values to unpack (expected 2, got " + std::to_string(count) + ")");
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::ValueError, "not enough values to unpack (expected 2, got " + std::to_string(count) + ")");
         }
         appendPair(parts[0], parts[1]);
     }

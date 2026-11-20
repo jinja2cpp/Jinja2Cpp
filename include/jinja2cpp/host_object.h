@@ -135,6 +135,7 @@ private:
  * - `int`: \ref ToInt, then (when it gives nullopt) \ref ToFloat truncated, then the default; `float`: \ref ToFloat, then the default
  * - `is mapping`, `dictsort`, `items`, `tojson`, `xmlattr`: a \ref IsMapping object is read as a map whose keys
  *   \ref Iterate gives and whose values \ref GetItem gives
+ * - `urlencode`: a \ref IsDict object is read as its items, any other one iterated
  * - `+ * < <= > >=`, `str % x`, tojson arrays: a \ref IsSequence object is read as the list \ref Iterate gives,
  *   printed as a tuple when \ref IsTuple
  *
@@ -242,6 +243,13 @@ public:
     [[nodiscard]] virtual const void* Identity() const;
     //! `isinstance(x, collections.abc.Mapping)`
     [[nodiscard]] virtual bool IsMapping() const;
+    /*!
+     * \brief `isinstance(x, dict)`, for a \ref IsMapping object
+     *
+     * Where Jinja2 takes only a `dict` as a mapping and iterates any other one (`urlencode`, which gives the keys of
+     * a `Mapping` that is no `dict` as the pairs to unpack). The default is \ref IsMapping: a host mapping reads as a dict
+     */
+    [[nodiscard]] virtual bool IsDict() const;
     //! `isinstance(x, (list, tuple))`
     [[nodiscard]] virtual bool IsSequence() const;
     /*!

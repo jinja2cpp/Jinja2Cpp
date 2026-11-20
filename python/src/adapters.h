@@ -64,6 +64,7 @@ public:
     [[nodiscard]] std::optional<size_t> Hash() const override;
     [[nodiscard]] const void* Identity() const override { return m_object; }
     [[nodiscard]] bool IsMapping() const override;
+    [[nodiscard]] bool IsDict() const override;
     [[nodiscard]] bool IsSequence() const override;
     [[nodiscard]] bool IteratesByIndex() const override;
     [[nodiscard]] bool IsTuple() const override;

@@ -2560,6 +2560,78 @@
    }
   },
   {
+   "id": "undefined.strict_fold_concat_unrendered",
+   "template": "{% if false %}{{ 1.5 ~ ([]|max) }}{% endif %}b",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "No aggregated item, sequence was empty."
+   }
+  },
+  {
+   "id": "undefined.strict_fold_conditional_test_unrendered",
+   "template": "{% if false %}{{ 1 if []|max else 2 }}{% endif %}b",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "No aggregated item, sequence was empty."
+   }
+  },
+  {
+   "id": "undefined.strict_fold_unfolded_operand_conditional",
+   "template": "{% if false and (([1][:, :] is undefined) or ((\"ab\" if []|max else \"ab\") ~ d)) %}a{% endif %}b",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "No aggregated item, sequence was empty."
+   }
+  },
+  {
+   "id": "undefined.strict_fold_short_circuited_operand",
+   "template": "{{ 1 or ([]|max ~ 1) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "1"
+  },
+  {
    "id": "undefined.default_tests_compare",
    "template": "{{ nope in [] }}|{{ nope is sameas nope }}|{{ [nope, 1] | select('equalto', 1) | list }}|{{ nope is eq(1) }}|{{ [nope, 1].count(1) }}|{{ [nope, 1].index(1) }}|{{ nope is iterable }}|{{ nope in {'a': 1}.keys() }}",
    "context": {
