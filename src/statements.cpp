@@ -2553,6 +2553,42 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
 }
 } // namespace
 
+namespace
+{
+const InternalValueMap* SelfBlocksOfValue(const InternalValue& value);
+} // namespace
+
+void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* capture, HomeCallSaved& saved, size_t baseDepth)
+{
+    while (capture && IsEmpty(capture->endedSelf))
+    {
+        capture = capture->outer.get();
+    }
+    if (!capture)
+    {
+        return;
+    }
+    const auto* items = SelfBlocksOfValue(capture->endedSelf);
+    if (!items)
+    {
+        return;
+    }
+    const auto& block = *GetIf<Callable>(&items->begin()->second)->GetStatementCallable().target<SelfBlockCall>();
+    // The template is still running (a `self` kept past a frame of it that ended): its frame is in place
+    if (block.owner->live)
+    {
+        return;
+    }
+    auto* outer = context.GetTemplateFrame();
+    auto& frame = saved.callFrame.emplace();
+    frame.blocks = &block.owner->ended;
+    frame.baseDepth = baseDepth;
+    frame.name = block.templateName;
+    frame.outer = outer;
+    frame.self = capture->endedSelf;
+    context.SetTemplateFrame(&frame);
+}
+
 LookupResult RenderContext::FindSelf(const std::string& name)
 {
     auto* frame = m_templateFrame;
@@ -2909,6 +2945,11 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
         // Read as `self` in the scopes over the caller's top level (FindSelf), unless set there
         if (endedSelf)
         {
+            // Also where the template's blocks are found for its closures, whatever `self` names (0552)
+            for (const auto& capture : ending)
+            {
+                capture->endedSelf = *endedSelf;
+            }
             names->emplace("self", std::move(*endedSelf));
         }
     }

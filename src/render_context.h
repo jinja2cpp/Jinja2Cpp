@@ -2145,6 +2145,10 @@ struct ClosureCapture
     // of the scope, and those of the frames above it that ended (docs/tasks/0375)
     // Inline: most closures read a few names, and a capture that never escapes allocates nothing more
     SmallVector<std::size_t, 8> reads;
+    // The `self` of the template whose top level is the frame, once it has ended with closures that something outside
+    // holds (TemplateRenderer::KeepEndedSelf): a block in one of its macros renders from its blocks (docs/tasks/0552).
+    // Its blocks keep no capture, so it does not keep this one
+    InternalValue endedSelf;
 
     // Adds the names of `hashes`, sorted and unique; NameResolver::AllNames among them reads all
     void AddReads(Span<const std::size_t> hashes);
@@ -2382,6 +2386,12 @@ struct HomeCallSaved
     LoopControl loopControl = LoopControl::None;
     AutoescapeModes autoescape;
 };
+
+// For a call of a closure that sees the copy of an ended template's names (HomeCall::EnterCaptured): a frame of that
+// template's blocks in `saved.callFrame`, made the frame of `context`, when `capture` or a frame below it kept its
+// `self` (ClosureCapture::endedSelf), so that a block in the closure's body renders from them as in its template
+// (docs/tasks/0552). Defined in statements.cpp. Throws std::bad_alloc
+void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* capture, HomeCallSaved& saved, size_t baseDepth);
 
 // Runs a closure's body on its home context (ClosureSite::Resolve) for the duration of one
 // call: switches the lookup cache epoch, the loop control, the template frame and the
@@ -2715,8 +2725,10 @@ private:
         auto kept = m_site.Kept(home);
         if (!kept.frames.empty())
         {
-            context.EnterCapturedScope(kept, home.link, m_site.Capture());
+            const auto capture = m_site.Capture();
+            context.EnterCapturedScope(kept, home.link, capture);
             m_link = context.GetScopesCount();
+            EnterEndedTemplateFrame(context, capture.get(), *m_saved, m_link);
         }
     }
     JINJA2CPP_NOINLINE_INLINE static void Leave(RenderContext& context, const HomeCallSaved& saved) // NOLINT(bugprone-exception-escape): leaving scopes and dropping views free memory only

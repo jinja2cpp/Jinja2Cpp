@@ -1695,6 +1695,10 @@ TEST(BorrowedCellsSingle, NestedRenderValueOutlivesItsTemplate)
         { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'cl' %}{% import 'mx.j2' as m with context %}{% set _ = g.append(m.tm) %}", "[clcl]" },
         // A block inside the stored macro renders once the nested render's blocks stack has ended (docs/tasks/0552)
         { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "X" },
+        { "{% block b %}OUT{% endblock %}{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "OUTX" },
+        { "{{ inner() }}{{ g[-1](1) }}", "{% set x = 'X' %}{% macro m(a) %}{% block b scoped %}{{ x }}{{ a }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "X1" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% block c %}C{{ x }}{% endblock %}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}", "XCX" },
+        { "{{ inner() }}{{ g[-1]() }}", "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set self = 5 %}{% set _ = g.append(m) %}", "X" },
     };
     for (const auto& c : cases)
     {
