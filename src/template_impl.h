@@ -597,8 +597,7 @@ public:
 
     // Template::MakeModule: renders the template, which `self` owns, as a module for the host, with the host's
     // globals and poll of `options` when it is not null (template_module.cpp)
-    static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params,
-                                                                                          const RenderOptions* options = nullptr);
+    static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params, const RenderOptions* options = nullptr);
 
     // What a render takes besides its params (Template::RenderTo with RenderOptions, docs/tasks/0357 B3)
     struct RenderHooks
