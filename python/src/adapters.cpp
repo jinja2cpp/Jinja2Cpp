@@ -814,13 +814,13 @@ public:
         {
             owned = nb::steal(value);
         }
-        const auto checked = Steal(PyObject_CallMethod(m_environment, "_sandbox_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
-        auto result = ToEngine(checked);
-        if (jinja2::UndefinedOf(result))
+        // None: the engine reads the attribute itself; else (replacement,), what unsafe_undefined gave, an Undefined or not
+        const auto checked = Steal(PyObject_CallMethod(m_environment, "_sandbox_native_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
+        if (checked.is_none())
         {
-            return result;
+            return std::nullopt;
         }
-        return std::nullopt;
+        return ToEngine(nb::borrow(PyTuple_GetItem(checked.ptr(), 0)));
     }
 
     [[nodiscard]] std::optional<jinja2::Value> Format(const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params) const override

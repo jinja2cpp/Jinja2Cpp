@@ -342,6 +342,13 @@ class SandboxedEnvironment(Environment):
             return value
         return self.unsafe_undefined(obj, attribute)
 
+    def _sandbox_native_attribute(self, obj: t.Any, attribute: str, value: t.Any) -> t.Optional[t.Tuple[t.Any]]:
+        """The same checkpoint for an attribute of one of the engine's own values (`obj` stands for it): ``None`` when the
+        engine reads the attribute itself, else ``(replacement,)``: what ``unsafe_undefined`` gave, whatever it is."""
+        if self.wrap_str_format(value) is not None or self.is_safe_attribute(obj, attribute, value):
+            return None
+        return (self.unsafe_undefined(obj, attribute),)
+
     def _sandbox_judges_public_names(self) -> bool:
         """Whether the engine asks `is_safe_attribute` about the public names of its own values too: only when
         the method is not Jinja2's, whose answer for them the engine gives itself (docs/python.md)."""

@@ -542,7 +542,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   does (a subclass that calls `super()` is refused too); override `is_safe_attribute` or
   `is_safe_callable`. A subclass whose `is_safe_attribute` is not Jinja2's is also asked about the
   public names of `loop`, `cycler`, a namespace and a macro (with `None` as the value, as the engine
-  builds none for the question); that is read again at each render, module or macro call, so a method replaced
+  builds none for the question; the object is an empty one of its type for the engine's lists and dicts, 0425); that is read again at each render, module or macro call, so a method replaced
   on the class or the instance counts for the templates loaded before it too. The groupby tuple's `grouper` and `list` are not asked (0425).
   `str.format`, `format_map` and `Markup.format` go through Jinja2's `SandboxedFormatter`; a field's
   width or precision, and the text the fields write together, are checked against the render's
