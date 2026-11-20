@@ -548,7 +548,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0484](0484-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds the Load check still decides differently from Jinja2 | parity | low | done |
 | [0485](0485-list-sort-restore-needs-memory.md) | A failed list.sort() loses the list's items when memory stays spent | robustness | low | done |
 | [0486](0486-cycle-walk-needs-memory.md) | Reference cycles leak when memory stays spent at the end of a render | robustness | low | done |
-| [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | open |
+| [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | done |
 | [0488](0488-upstream-reports-and-recipes.md) | Report our fixes upstream and update the package recipes | release | low | open |
 | [0489](0489-dict-views-type.md) | `d.items()`, `d.keys()` and `d.values()` are lists, not dict views | parity | low | done |
 | [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | done |
