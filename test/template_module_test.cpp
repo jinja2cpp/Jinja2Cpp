@@ -824,8 +824,11 @@ TEST_F(TemplateModuleChangingSourceTest, StoredMacroOfAnImportingModuleSeesItsHe
     {
         const std::string uses = std::string(importer).find("from") != std::string::npos ? "{{ y() }}" : "{{ h.y() }}";
         const std::string call = std::string(store) == "l" ? "ns.f.x()" : "ns.f()";
-        const std::string source = "{% set ns = namespace(f=none, n=0) %}{% macro m() %}[{% if ns.f %}{{ " + call + " }}{% endif %}]{% import 'lib' as l %}{% if ns.n == 0 %}{% set ns.f = "
-                                   + store + " %}{% endif %}{% set ns.n = ns.n + 1 %}{{ l.x() }}{% endmacro %}";
+        std::string source = "{% set ns = namespace(f=none, n=0) %}{% macro m() %}[{% if ns.f %}{{ ";
+        source += call;
+        source += " }}{% endif %}]{% import 'lib' as l %}{% if ns.n == 0 %}{% set ns.f = ";
+        source += store;
+        source += " %}{% endif %}{% set ns.n = ns.n + 1 %}{{ l.x() }}{% endmacro %}";
         auto module = Make(source);
         for (const bool helperChanges : { true, false })
         {

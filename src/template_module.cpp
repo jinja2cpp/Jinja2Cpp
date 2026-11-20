@@ -485,11 +485,11 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             return std::any_of(kept.begin(), kept.end(), [candidate](const KeptModule& entry) { return entry.module == candidate; });
         }
         // Forgets `module`, which ends or which no module imports any more (EndReplacedSharedModules)
-        void Forget(const ImportedModule* module) noexcept
+        void Forget(const ImportedModule* gone) noexcept
         {
-            kept.erase(std::remove_if(kept.begin(), kept.end(), [module](const KeptModule& entry) { return entry.module == module; }), kept.end());
+            kept.erase(std::remove_if(kept.begin(), kept.end(), [gone](const KeptModule& entry) { return entry.module == gone; }), kept.end());
             // Cleared in place: the marks of the top levels rendering index it
-            std::replace(pending.begin(), pending.end(), module, static_cast<const ImportedModule*>(nullptr));
+            std::replace(pending.begin(), pending.end(), gone, static_cast<const ImportedModule*>(nullptr));
         }
 
         // The host's calls running, nested when a host callable calls the module again
@@ -549,10 +549,10 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             if (m_succeeded && m_callback.calls == 0 && m_callback.HasReplaced())
             {
                 // The shared modules of replaced templates first, so that their trees go in the same pass (0528)
-                auto& callback = m_callback;
-                callback.EndReplacedSharedModules(
-                    callback.imports, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); },
-                    [&callback](const ImportedModule* module) { callback.Forget(module); });
+                auto& ending = m_callback;
+                ending.EndReplacedSharedModules(
+                    ending.imports, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); },
+                    [&ending](const ImportedModule* gone) { ending.Forget(gone); });
                 m_callback.PruneReplaced(m_holdsHandles);
             }
         }

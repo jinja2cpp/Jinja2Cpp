@@ -716,6 +716,13 @@ public:
     [[nodiscard]] static bool HeldOnlyBy(const std::vector<const ImportedModule*>& ending, const std::vector<const ImportedModule*>& staying, const std::vector<std::unique_ptr<ImportedModule>>& all);
 
 private:
+    // Calls `note` with each value whose object the module holds: its `import ... as` object, its names (twice when the
+    // object exports one) and the importer's names it sees (HeldOnlyBy)
+    template<typename Note>
+    void ForEachHeldValue(const Note& note) const;
+    // Whether only its load, the modules of `all` made from it and their macros hold the tree `tree`. Throws std::bad_alloc
+    [[nodiscard]] static bool TreeHeldOnlyByModules(const void* tree, const std::vector<std::unique_ptr<ImportedModule>>& all);
+
     // Declared first, so that it goes last: the module's names and macros view the tree it keeps
     std::shared_ptr<const void> m_treeOwner;
     // The importer's names, the external scope of the module's context
