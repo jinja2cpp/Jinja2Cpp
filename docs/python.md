@@ -491,6 +491,13 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   list, dict, Markup or callable) stays itself in the module (attributes and methods are Python's), but a list or dict read off it and exported with `{% set %}` arrives as `{}`, and `dictsort` entries as `{key, value}` dicts. The params of a module are
   copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
   globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`) (0411).
+- A dict view (`keys()`, `values()`, `items()`) or a set (`d.keys() - []`) of the engine reaches a Python callable as a real
+  `dict_keys`, `dict_values`, `dict_items` or `set`, a snapshot of its items at the call (a set of items Python cannot hash
+  stays a list); its `.mapping` is then a snapshot dict, whose values are `None` for `dict_keys` and the item positions for
+  `dict_values`. A host dict's own views have the engine's set operators (`-` on either side, `<`, `<=`, `>`, `>=` with another
+  view) over the items they give at that moment, and their `.mapping` is Python's mappingproxy, which `pprint` prints as
+  `mappingproxy({...})` and `tojson` refuses. `d | random` of a host dict indexes it as `random.choice` does (`KeyError: 0`
+  unless it has the key 0) (0545).
 - `env.parse` is a full load: it also reports what the compile reports (an unknown filter or test
   raises `TemplateAssertionError`), and returns an opaque object that only `jinja2cpp.meta`
   takes, not Jinja2's node tree. `find_referenced_templates` gives the names of the tags in
@@ -543,7 +550,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `is_safe_callable`. A subclass whose `is_safe_attribute` is not Jinja2's is also asked about the
   public names of `loop`, `cycler`, a namespace and a macro (with `None` as the value, as the engine
   builds none for the question; the object is an empty one of its type for the engine's lists and dicts, 0425); that is read again at each render, module or macro call, so a method replaced
-  on the class or the instance counts for the templates loaded before it too. The groupby tuple's `grouper` and `list` are not asked (0425).
+  on the class or the instance counts for the templates loaded before it too. The groupby tuple's `grouper` and `list` and a range's `start`, `stop` and `step` are asked as Jinja2 asks them (`_GroupTuple`, `range`), with `None` as the value (0425).
   `str.format`, `format_map` and `Markup.format` go through Jinja2's `SandboxedFormatter`; a field's
   width or precision, and the text the fields write together, are checked against the render's
   sequence cap (64 MiB or `Limits.max_sequence_size`) before Python builds the string, and fail with

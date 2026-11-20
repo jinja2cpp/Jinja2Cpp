@@ -577,6 +577,13 @@ def test_mro_of_a_class_is_refused_as_jinja2_does(source):
         assert ours[0] == "exception" and ours[1] == "SecurityError", source
 
 
+def test_mro_of_the_sandbox_range_is_undefined_as_jinja2s_function_is():
+    # the sandbox's range is safe_range, a function with no mro: the call is an UndefinedError, not a SecurityError
+    ours, theirs = _both("{{ range.mro() }}", {})
+    assert ours == theirs
+    assert ours[0] == "exception" and ours[1] == "UndefinedError"
+
+
 def test_range_is_capped_like_safe_range():
     from jinja2cpp.sandbox import MAX_RANGE
     from jinja2cpp.sandbox import safe_range
@@ -1502,16 +1509,32 @@ def test_a_custom_is_safe_attribute_is_asked_the_same_questions(source):
     assert ours[0][0] == oracle[0][0]
 
 
-@pytest.mark.xfail(strict=True, reason="0425: the named tuple of groupby reads grouper and list inside the engine, without the sandbox policy")
 @pytest.mark.parametrize(
     "source",
     [
         "{% for g in [(1, 2)]|groupby(0) %}{{ g.grouper }}{{ g.list }}{% endfor %}",
         "{% for g in [(1, 2)]|groupby(0) %}{{ g|attr('grouper') }}{% endfor %}",
+        "{% for g in [(1, 2)]|groupby(0) %}{{ g['list'] }}{% endfor %}",
+        "{% for g in [(1, 2)]|groupby(0) %}{{ g.nope }}{% endfor %}",
+        "{{ [(1, 2)]|groupby(0)|map(attribute='grouper')|list }}",
+        "{{ range(3).start }}|{{ range(3).stop }}|{{ range(3).step }}",
+        "{{ range(3)['stop'] }}",
+        "{{ range(3)|attr('step') }}",
+        "{{ range(3).nope }}",
     ],
 )
-def test_the_groupby_tuple_fields_are_asked_of_a_custom_is_safe_attribute(source):
+def test_the_groupby_tuple_and_range_fields_are_asked_of_a_custom_is_safe_attribute(source):
+    # Jinja2 asks ('_GroupTuple', 'grouper') and ('range', 'start'); a name the object does not have is not asked
     assert _asked(SandboxedEnvironment, source) == _asked(j2sandbox.SandboxedEnvironment, source)
+
+
+@pytest.mark.parametrize("name", ["grouper", "list", "start", "stop", "step"])
+def test_a_custom_is_safe_attribute_can_refuse_the_groupby_tuple_and_range_fields(name):
+    refuse = {"is_safe_attribute": lambda self, obj, attr, value: attr != name}
+    ours = type("Refusing", (SandboxedEnvironment,), refuse)()
+    oracle = type("RefusingJ2", (j2sandbox.SandboxedEnvironment,), refuse)()
+    source = "{% for g in [(1, 2)]|groupby(0) %}[{{ g.grouper }}][{{ g.list }}]{% endfor %}[{{ range(3).start }}{{ range(3).stop }}{{ range(3).step }}]"
+    assert _outcome_of(ours, source) == _outcome_of(oracle, source)
 
 
 @pytest.mark.xfail(strict=True, reason="0425: the engine builds no value for the engine's own loop, cycler, namespace and macro, and gives a stand-in for its containers")

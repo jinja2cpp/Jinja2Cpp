@@ -2335,3 +2335,17 @@ TEST(PublicHostObjectTest, FastReadOfWideUnsignedIsNotWrapped)
     const ValuesMap params{ { "w", MakeHostValue<WideInts>() } };
     EXPECT_EQ("18446744073709551615 True 42 4294967295 -128", Render("{{ w.u64max }} {{ w.u64max > 0 }} {{ w.u64small }} {{ w.u32max }} {{ w.i8min }}", params));
 }
+
+TEST(PublicHostObjectTest, DictViewsAndSetsOfTheEngineAreNamedToTheHost)
+{
+    // IListItemAccessor::GetViewClass: the Python type of the engine's own views, which a host may give its own type (0545)
+    std::string seen;
+    const ValuesMap params{ { "probe", Probe([&seen](const UserCallableParams& p) {
+                                  const auto* list = p["x"].GetIf<GenericList>();
+                                  const char* viewClass = list ? list->GetViewClass() : nullptr;
+                                  seen += (viewClass ? viewClass : "-") + std::string(";");
+                                  return Value();
+                              }) } };
+    Render("{% set d = {'a': 1} %}{{ probe(d.keys()) }}{{ probe(d.values()) }}{{ probe(d.items()) }}{{ probe(d.keys() - []) }}{{ probe([1]) }}{{ probe((1, 2)) }}", params);
+    EXPECT_EQ("dict_keys;dict_values;dict_items;set;-;-;", seen);
+}

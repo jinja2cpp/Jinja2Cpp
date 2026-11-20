@@ -188,6 +188,9 @@ ListAdapter Reversed(const IEngineHostObject& host);
 // A list or tuple (IsSequence) as a list of the engine, marked as a tuple for a tuple; nullopt
 // for every other object
 std::optional<ListAdapter> AsSequence(const IEngineHostObject& host);
+// A host's dict_keys or dict_items as the engine's view of that kind, a snapshot of the items Iterate gives, which has the
+// set operations of the engine's own view (`-`, ordering); nullopt for every other object (docs/tasks/0545)
+std::optional<ListAdapter> AsSetView(const IEngineHostObject& host);
 // x == other by Python's rules: left.__eq__, then right.__eq__, then identity. Null hosts
 // stand for operands that are no host objects
 bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue);

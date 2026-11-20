@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -253,6 +254,36 @@ std::optional<ListAdapter> AsSequence(const IEngineHostObject& host)
         items->MarkAsTuple();
     }
     return items;
+}
+
+std::optional<ListAdapter> AsSetView(const IEngineHostObject& host)
+{
+    const std::string_view type = host.TypeName();
+    if (type != "dict_keys" && type != "dict_items")
+    {
+        return std::nullopt;
+    }
+    auto items = host.Iterate();
+    if (!items)
+    {
+        return std::nullopt;
+    }
+    auto values = items->ToValueList();
+    if (type == "dict_items")
+    {
+        // The pairs of the engine's own dict_items, which compare with a template's tuple and an engine view's items
+        for (auto& value : values)
+        {
+            const auto* pair = GetHostObject(value);
+            auto parts = pair && pair->IsTuple() ? pair->Iterate() : std::nullopt;
+            if (parts && parts->GetSize() == 2)
+            {
+                auto both = parts->ToValueList();
+                value = InternalValue(KeyValuePair{ std::move(both[0]), std::move(both[1]) });
+            }
+        }
+    }
+    return ListAdapter::CreateIterator(std::move(values), type == "dict_keys" ? IteratorKind::DictKeys : IteratorKind::DictItems);
 }
 
 bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue)

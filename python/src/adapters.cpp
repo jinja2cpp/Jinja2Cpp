@@ -685,7 +685,9 @@ namespace
 nb::object StubClass(const char* name)
 {
     // A class of that name, for an object of the engine that has no Python class: loop, a macro, a cycler
-    return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type)));
+    // `function` is a builtin type to object_type_repr ('function object'); the others take the module of the caller
+    const bool builtin = std::string_view(name) == "function";
+    return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), builtin ? "s(O){s:s}" : "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type), "__module__", "builtins"));
 }
 
 nb::object Stub(const char* name)
@@ -711,6 +713,18 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
     {
         if (const char* objectClass = map->GetObjectClass())
         {
+            // A range and a groupby group have attributes of their own, which the policy judges by name: a real range, and
+            // an object of Jinja2's _GroupTuple class (whose value is None: the engine builds none for the question)
+            if (std::string_view(objectClass) == "range")
+            {
+                return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyRange_Type), "i", 0));
+            }
+            if (std::string_view(objectClass) == "_GroupTuple")
+            {
+                const auto members = Steal(Py_BuildValue("{s:O,s:O}", "grouper", Py_None, "list", Py_None));
+                const auto type = Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O)O", "_GroupTuple", reinterpret_cast<PyObject*>(&PyTuple_Type), members.ptr()));
+                return Steal(PyObject_CallNoArgs(type.ptr()));
+            }
             synthetic = true;
             if (std::string_view(objectClass) == "type")
             {

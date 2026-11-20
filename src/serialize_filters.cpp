@@ -20,6 +20,7 @@
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
@@ -45,6 +46,14 @@ inline namespace v2
 {
 namespace filters
 {
+// A host's mappingproxy (a Python module's `dict.keys().mapping`): a mapping to the engine, but a proxy to pprint and
+// tojson, as for the engine's own (docs/tasks/0545)
+static bool IsHostMappingProxy(const MapRef& map)
+{
+    const auto* host = map.GetHostObject();
+    return host != nullptr && std::strcmp(host->TypeName(), "mappingproxy") == 0;
+}
+
 struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
     using BaseVisitor::operator();
@@ -242,7 +251,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         CheckStack();
         const char* typeName = nullptr;
         const void* identity = fresh ? nullptr : ContainerIdentity(val, typeName);
-        if (identity && std::find(m_stack.begin(), m_stack.end(), identity) != m_stack.end())
+        if (identity != nullptr && std::find(m_stack.begin(), m_stack.end(), identity) != m_stack.end())
         {
             Write(out, fmt::format("<Recursion on {} with id={}>", typeName, reinterpret_cast<std::uintptr_t>(identity)));
             return;
@@ -280,55 +289,11 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         std::optional<ListAdapter> hostItems;
         if (auto list = ListOf(val, hostItems))
         {
-            if (list->GetRangeInfo())
-            {
-                Write(out, Print(val, m_context));
-                return;
-            }
-            if (const auto kind = list->GetIteratorKind(); IsViewKind(kind))
-            {
-                // pprint has no layout for a dict view: its repr stays on one line. A set breaks as a list does, in braces and
-                // sorted (_pprint_set, docs/tasks/0545)
-                if (kind != IteratorKind::Set)
-                {
-                    Write(out, Print(val, m_context));
-                    return;
-                }
-                std::vector<InternalValue> sorted(list->begin(), list->end());
-                StableSortValues(sorted.begin(), sorted.end(), [](const InternalValue& left, const InternalValue& right) { return SafeKeyLess(left, right); });
-                out += '{';
-                FormatItems(out, sorted, indent, allowance + 1, level + 1);
-                out += '}';
-                return;
-            }
-            const bool isTuple = list->IsTuple();
-            // A host's iteration may not know its size: its len() does
-            const auto size = hostItems ? GetHostObject(val)->Len() : list->GetSize();
-            std::string_view end = isTuple ? (size == 1 ? ",)" : ")") : "]";
-            out += isTuple ? '(' : '[';
-            FormatItems(out, *list, indent, allowance + static_cast<int64_t>(end.size()), level + 1);
-            out += end;
+            FormatListTo(out, val, *list, hostItems.has_value(), indent, allowance, level);
         }
         else if (auto map = AsMap(val))
         {
-            if (map->GetObjectClass())
-            {
-                Write(out, Print(val, m_context));
-                return;
-            }
-            // pprint's _pprint_mappingproxy (docs/tasks/0523)
-            if (const auto* proxied = map->GetProxiedMapping())
-            {
-                out += "mappingproxy(";
-                FormatTo(out, *proxied, indent + 13, allowance + 1, level, true);
-                out += ')';
-                return;
-            }
-            auto entries = map->GetEntries();
-            SortEntriesByKey(entries);
-            out += '{';
-            FormatDictItems(out, entries, indent, allowance + 1, level + 1);
-            out += '}';
+            FormatMapTo(out, val, *map, indent, allowance, level);
         }
         else if (const auto* pair = GetIf<KeyValuePair>(&val))
         {
@@ -351,6 +316,72 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
     }
 
+    // A list, tuple, dict view or set of `val` too wide for a line; `isHost`: the list is a host's, whose len() is asked
+    void FormatListTo(std::string& out, const InternalValue& val, const ListRef& list, bool isHost, int64_t indent, int64_t allowance, int level) const
+    {
+        if (list.GetRangeInfo())
+        {
+            Write(out, Print(val, m_context));
+            return;
+        }
+        if (const auto kind = list.GetIteratorKind(); IsViewKind(kind))
+        {
+            // pprint has no layout for a dict view: its repr stays on one line. A set breaks as a list does, in braces and
+            // sorted (_pprint_set, docs/tasks/0545)
+            if (kind != IteratorKind::Set)
+            {
+                Write(out, Print(val, m_context));
+                return;
+            }
+            std::vector<InternalValue> sorted(list.begin(), list.end());
+            StableSortValues(sorted.begin(), sorted.end(), [](const InternalValue& left, const InternalValue& right) { return SafeKeyLess(left, right); });
+            out += '{';
+            FormatItems(out, sorted, indent, allowance + 1, level + 1);
+            out += '}';
+            return;
+        }
+        const bool isTuple = list.IsTuple();
+        // A host's iteration may not know its size: its len() does
+        const auto size = isHost ? GetHostObject(val)->Len() : list.GetSize();
+        std::string_view end = isTuple ? (size == 1 ? ",)" : ")") : "]";
+        out += isTuple ? '(' : '[';
+        FormatItems(out, list, indent, allowance + static_cast<int64_t>(end.size()), level + 1);
+        out += end;
+    }
+
+    // A dict, a mappingproxy or an object of `val` too wide for a line
+    void FormatMapTo(std::string& out, const InternalValue& val, const MapRef& map, int64_t indent, int64_t allowance, int level) const
+    {
+        if (map.GetObjectClass())
+        {
+            Write(out, Print(val, m_context));
+            return;
+        }
+        // A host's mappingproxy breaks as the engine's own does, over its entries
+        if (IsHostMappingProxy(map))
+        {
+            auto entries = map.GetEntries();
+            SortEntriesByKey(entries);
+            out += "mappingproxy({";
+            FormatDictItems(out, entries, indent + 13, allowance + 2, level + 1);
+            out += "})";
+            return;
+        }
+        // pprint's _pprint_mappingproxy (docs/tasks/0523)
+        if (const auto* proxied = map.GetProxiedMapping())
+        {
+            out += "mappingproxy(";
+            FormatTo(out, *proxied, indent + 13, allowance + 1, level, true);
+            out += ')';
+            return;
+        }
+        auto entries = map.GetEntries();
+        SortEntriesByKey(entries);
+        out += '{';
+        FormatDictItems(out, entries, indent, allowance + 1, level + 1);
+        out += '}';
+    }
+
     // The width of the one-line repr of val, or more than limit once it is known to exceed it:
     // every level of a nested value asks, so it must not print the whole value each time
     [[nodiscard]] int64_t ReprWidthAtMost(const InternalValue& val, int64_t limit) const
@@ -368,7 +399,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             return ItemsWidthAtMost(*list, limit);
         }
         // A mappingproxy is measured by its repr, as pprint's _safe_repr takes it (docs/tasks/0538)
-        if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping())
+        if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping() && !IsHostMappingProxy(*map))
         {
             return EntriesWidthAtMost(map->GetEntries(), limit);
         }
@@ -676,7 +707,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
         // mappingproxy({...}) (docs/tasks/0523): pprint's _safe_repr takes its repr, in the dict's order, and a
         // reference cycle through it prints {...} (docs/tasks/0538)
-        if (map.GetProxiedMapping())
+        if (map.GetProxiedMapping() || IsHostMappingProxy(map))
         {
             visitors::ValueRenderer<char>(str, true)(map);
             return str;
@@ -1158,7 +1189,7 @@ private:
                 throw TemplateRuntimeError("Object of type "s + objectClass + " is not JSON serializable");
             }
             // Nor is a mappingproxy a dict to it (docs/tasks/0523)
-            if (map->GetProxiedMapping())
+            if (map->GetProxiedMapping() || IsHostMappingProxy(*map))
             {
                 throw TemplateRuntimeError("Object of type mappingproxy is not JSON serializable");
             }

@@ -21,8 +21,6 @@ case except where noted:
 - An `unsafe_undefined` override that returns something other than an `Undefined` renders `''` for
   the engine's values. A custom `is_safe_attribute` receives an empty stand-in for the engine's
   containers and `None` as the value for loop, cycler, namespace and macro attributes.
-- The groupby tuple's `grouper` and `list` are not asked of a custom `is_safe_attribute`
-  (`ListAdapter::MarkAsNamedTuple`).
 - `loop.update()` and `loop.popitem()` succeed; Jinja2 gives `UndefinedError`.
 
 **Proposal.** Fix each in its own place (the list above is ordered by how likely a template meets it);

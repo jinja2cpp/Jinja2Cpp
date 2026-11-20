@@ -43,6 +43,10 @@ template that works in Jinja2 from working here (Jinja2 3.1.6):
    `('a'|safe).__class__`) renders where Python raises `decoding str is not supported`. `(1).__class__.mro.__name__` is
    empty (Python `mro`). An `int()`/`float()` error quotes the whole text, as Python does; a cap would be kinder to logs.
 
+**Done so far** (the Python module): item 2 (engine views and sets reach Python as their types, snapshots; a host dict's
+views have the engine's set operators; a host mappingproxy prints and refuses `tojson` as Python's), the host dict in
+item 4 (`d | random`), and the sandbox `range.mro()` of item 5.
+
 **Proposal.** 1: the indent filter reports a non-string the way Python's `+=` does. 2: a host view type in the module
 (python/src) that hands Python a real view or set of the engine's items, and the engine's set operators for a host
 view, read through its items. 4: the random filter of a dict as of its mappingproxy; the wide pprint path takes the

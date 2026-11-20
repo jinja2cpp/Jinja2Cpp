@@ -701,3 +701,84 @@ def test_numbers_of_an_object_that_raises():
         for module in (jinja2cpp, jinja2):
             with pytest.raises(RuntimeError, match="no "):
                 module.Environment().from_string(source).render(x=Raises())
+
+
+# A dict view or set of the engine reaches a Python callable as that Python type, a snapshot of its items (0545)
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("{{ f({'a': 1, 'b': 2}.keys()) }}", "dict_keys|dict_keys(['a', 'b'])|['a', 'b']"),
+        ("{{ f({'a': 1, 'b': 2}.values()) }}", "dict_values|dict_values([1, 2])|[1, 2]"),
+        ("{{ f({'a': 1, 'b': 2}.items()) }}", "dict_items|dict_items([('a', 1), ('b', 2)])|[('a', 1), ('b', 2)]"),
+        ("{{ f({'a': 1, 'b': 2}.keys() - ['a']) }}", "set|{'b'}|['b']"),
+        ("{{ f({'a': 1}.keys() - []) }}", "set|{'a'}|['a']"),
+    ],
+)
+def test_an_engine_view_or_set_reaches_python_as_its_type(source, expected):
+    def f(view):
+        return f"{type(view).__name__}|{view!r}|{sorted(view, key=repr)!r}"
+
+    env = jinja2cpp.Environment()
+    env.globals["f"] = f
+    assert env.from_string(source).render() == expected
+
+
+def _outcome_in(env, source, context=None):
+    try:
+        return ("ok", env.from_string(source).render(**(context or {})))
+    except Exception as error:  # noqa: BLE001
+        return ("error",)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ keep({'a': 1}.keys()) | pprint }}",
+        "{{ keep({'a': 1}.items()) | pprint }}",
+        "{{ keep({'a': 1}.values()) | pprint }}",
+        "{{ (keep({'a': 1}.keys()) - ['x']) | pprint }}",
+        "{{ keep({'a': 1}.keys()) | tojson }}",
+        "{{ keep({'a': 1}.keys()) - ['a'] }}",
+        "{{ ['a', 'b'] - keep({'a': 1}.keys()) }}",
+    ],
+)
+def test_an_engine_view_given_back_by_python_is_a_python_view(source):
+    ours = jinja2cpp.Environment()
+    theirs = jinja2.Environment()
+    for env in (ours, theirs):
+        env.globals["keep"] = lambda view: view
+    assert _outcome_in(ours, source) == _outcome_in(theirs, source), source
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ d.keys() - ['a'] }}",
+        "{{ ['a', 'b', 'a'] - d.keys() }}",
+        "{{ d.items() - [('a', 1)] }}",
+        "{{ d.keys() - d.keys() }}",
+        "{{ d.keys() - {'a': 0} }}",
+        "{{ {'a': 0} - d.keys() }}",
+        "{{ d.keys() - [1, 2] - ['a'] }}",
+        "{% for x in d.keys() - ['b'] %}{{ x }}{% endfor %}",
+        "{{ d.keys().isdisjoint(['z']) }}|{{ d.keys().isdisjoint(['a']) }}",
+        "{{ d.keys() < d.keys() }}|{{ d.keys() <= d.keys() }}",
+        "{{ d.keys() + [] }}",
+        "{{ d.keys() - 5 }}",
+        "{{ d.values() - [] }}",
+        "{{ d.keys().mapping | pprint }}|{{ d.keys().mapping }}|{{ d.keys().mapping | length }}",
+        "{{ d.keys().mapping | tojson }}",
+        "{{ d | random }}",
+        "{{ d.keys().mapping | random }}",
+    ],
+)
+def test_a_host_dict_view_has_the_set_operators_of_the_engine_view(source):
+    context = {"d": {"a": 1, "b": 2}}
+    assert _outcome_in(jinja2cpp.Environment(), source, context) == _outcome_in(jinja2.Environment(), source, context), source
+
+
+def test_random_of_a_host_dict_indexes_it_like_python():
+    env = jinja2cpp.Environment()
+    with pytest.raises(KeyError):
+        env.from_string("{{ d | random }}").render(d={"a": 1})
+    assert env.from_string("{{ d | random }}").render(d={0: "z"}) == "z"

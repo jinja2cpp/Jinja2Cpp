@@ -3195,18 +3195,59 @@ enum class SetOp : uint8_t
     SymmetricDifference,
 };
 
-// The items of `entries` that are (keepPresent) or are not in `other`
-InternalDict SetFiltered(const InternalDict& entries, const InternalDict& other, bool keepPresent)
+// The items of `source` that are (keepPresent) or are not in `reference`
+InternalDict SetFiltered(const InternalDict& source, const InternalDict& reference, bool keepPresent)
 {
     InternalDict kept;
-    for (const auto& entry : entries)
+    for (const auto& entry : source)
     {
-        if ((other.find(entry.first) != other.end()) == keepPresent)
+        if ((reference.find(entry.first) != reference.end()) == keepPresent)
         {
             kept.try_emplace(entry.first, entry.second);
         }
     }
     return kept;
+}
+
+// The items of `other` added to `entries`
+void SetUnionInto(InternalDict& entries, const InternalDict& other)
+{
+    for (const auto& item : other)
+    {
+        if (entries.try_emplace(item.first, item.second).second)
+        {
+            CheckSequenceSize(uint64_t{ entries.size() }, "a set");
+        }
+    }
+}
+
+// The items of `entries` that `other` has. They come from the argument, as Python's do (2.0 for 2), unless it is a set
+// larger than the receiver
+InternalDict SetIntersection(const InternalDict& entries, const InternalDict& other, const InternalValue& arg)
+{
+    const auto list = AsList(arg);
+    const bool fromReceiver = list && list->GetIteratorKind() == IteratorKind::Set && other.size() > entries.size();
+    InternalDict kept;
+    for (const auto& entry : entries)
+    {
+        if (const auto found = other.find(entry.first); found != other.end())
+        {
+            kept.try_emplace(entry.first, fromReceiver ? entry.second : found->second);
+        }
+    }
+    return kept;
+}
+
+// The items that only one of `entries` and `other` has
+InternalDict SetSymmetricDifference(const InternalDict& entries, const InternalDict& other)
+{
+    auto result = SetFiltered(entries, other, false);
+    for (const auto& item : SetFiltered(other, entries, false))
+    {
+        result.try_emplace(item.first, item.second);
+    }
+    CheckSequenceSize(uint64_t{ result.size() }, "a set");
+    return result;
 }
 
 // The set `op` makes of the receiver and the iterables of the call; every argument is read before anything is made
@@ -3219,56 +3260,29 @@ InternalDict SetCombine(SetOp op, const InternalValue& self, const CallParams& p
         switch (op)
         {
         case SetOp::Union:
-            for (const auto& entry : other)
-            {
-                if (entries.try_emplace(entry.first, entry.second).second)
-                {
-                    CheckSequenceSize(uint64_t{ entries.size() }, "a set");
-                }
-            }
+            SetUnionInto(entries, other);
             break;
         case SetOp::Intersection:
-        {
-            // The items come from the argument, as Python's do (2.0 for 2), unless it is a set larger than the receiver
-            const auto list = AsList(arg);
-            const bool fromReceiver = list && list->GetIteratorKind() == IteratorKind::Set && other.size() > entries.size();
-            InternalDict kept;
-            for (const auto& entry : entries)
-            {
-                if (const auto found = other.find(entry.first); found != other.end())
-                {
-                    kept.try_emplace(entry.first, fromReceiver ? entry.second : found->second);
-                }
-            }
-            entries = std::move(kept);
+            entries = SetIntersection(entries, other, arg);
             break;
-        }
         case SetOp::Difference:
             entries = SetFiltered(entries, other, false);
             break;
         case SetOp::SymmetricDifference:
-        {
-            auto result = SetFiltered(entries, other, false);
-            for (const auto& entry : SetFiltered(other, entries, false))
-            {
-                result.try_emplace(entry.first, entry.second);
-            }
-            CheckSequenceSize(uint64_t{ result.size() }, "a set");
-            entries = std::move(result);
+            entries = SetSymmetricDifference(entries, other);
             break;
-        }
         }
     }
     return entries;
 }
 
-template<SetOp Op>
+template<SetOp op>
 InternalValue SetCombined(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     constexpr const char* names[] = { "union", "intersection", "difference", "symmetric_difference" };
-    constexpr bool single = Op == SetOp::SymmetricDifference;
-    CheckArgs(params, names[static_cast<size_t>(Op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
-    return MakeSet(SetCombine(Op, self, params));
+    constexpr bool single = op == SetOp::SymmetricDifference;
+    CheckArgs(params, names[static_cast<size_t>(op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
+    return MakeSet(SetCombine(op, self, params));
 }
 
 // The receiver's items become `entries`, which SetCombine made from them
@@ -3299,13 +3313,13 @@ InternalValue SetReplace(const InternalValue& self, const InternalDict& entries)
     return InternalValue(NoneValue());
 }
 
-template<SetOp Op>
+template<SetOp op>
 InternalValue SetCombinedUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     constexpr const char* names[] = { "update", "intersection_update", "difference_update", "symmetric_difference_update" };
-    constexpr bool single = Op == SetOp::SymmetricDifference;
-    CheckArgs(params, names[static_cast<size_t>(Op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
-    return SetReplace(self, SetCombine(Op, self, params));
+    constexpr bool single = op == SetOp::SymmetricDifference;
+    CheckArgs(params, names[static_cast<size_t>(op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
+    return SetReplace(self, SetCombine(op, self, params));
 }
 
 InternalValue SetIsSubset(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -3879,6 +3893,14 @@ std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context,
     if ((map && (map->GetObjectClass() || map->IsNamespace())) || GetIf<Callable>(&obj))
     {
         return SandboxedNativeAttribute(context, obj, name);
+    }
+    // The data attributes of a list the engine reads itself: a groupby group's `grouper` and `list`, a range's
+    // `start`, `stop` and `step` (docs/tasks/0425)
+    if (const auto list = AsList(obj))
+    {
+        const auto* fields = list->GetFieldNames();
+        const bool isData = fields ? std::find(fields->begin(), fields->end(), name) != fields->end() : list->GetRangeInfo() != nullptr && (name == "start" || name == "stop" || name == "step");
+        return isData ? SandboxedNativeAttribute(context, obj, name) : std::nullopt;
     }
     return std::nullopt;
 }
