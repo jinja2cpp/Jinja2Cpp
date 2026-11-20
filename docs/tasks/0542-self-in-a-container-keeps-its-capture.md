@@ -34,5 +34,5 @@ reference (`l.append` in one call seen by the next). Mutating the shared contain
 What is left is the first option: let the module's call collector traverse the copy and the capture (a
 `ClosureCapture` is not a traversed object today, and `Callable` keep-alives are not visited by `TraverseBoxed`), so
 that copy -> container -> `self` -> capture -> copy is collected once nothing outside holds the capture. That is a
-change to the cycle collector's object model, so it wants an architect plan first. The prototype is commit a3cbd6c
-on the worktree branch of that thread (not pushed).
+change to the cycle collector's object model, so it wants an architect plan first. The prototype is in the project files at
+`0542/container-weakening-prototype.patch`.
