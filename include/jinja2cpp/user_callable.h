@@ -9,6 +9,8 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include <stdexcept> // IWYU pragma: keep (public header: user code may rely on it)
 #include <string>
@@ -60,6 +62,106 @@ public:
     }
 };
 
+// An integer parameter other than bool, which an argument's number may not fit (docs/tasks/0544)
+template<typename U>
+inline constexpr bool IsRangeCheckedParam = std::is_integral_v<U> && !std::is_same_v<U, bool>;
+
+// Whether a `T` argument can hold a value outside the range of a `U` parameter: always for a floating-point
+// argument, for an integer one when `U` is narrower or cannot hold its negative values
+template<typename T, typename U>
+constexpr bool NeedsRangeCheck()
+{
+    if constexpr (!IsRangeCheckedParam<U> || !std::is_arithmetic_v<T> || std::is_same_v<T, bool>)
+    {
+        return false;
+    }
+    else if constexpr (std::is_floating_point_v<T>)
+    {
+        return true;
+    }
+    else
+    {
+        using TL = std::numeric_limits<T>;
+        using UL = std::numeric_limits<U>;
+        return (TL::is_signed && !UL::is_signed) || UL::digits < TL::digits;
+    }
+}
+
+template<typename F>
+constexpr F PowerOfTwo(int exponent)
+{
+    F result = 1;
+    for (int i = 0; i != exponent; ++i)
+    {
+        result *= 2;
+    }
+    return result;
+}
+
+// Whether `val` converts to a `U` without wrapping or undefined behaviour: an integer in range, or a finite
+// float whose truncation is in range (C++'s float-to-integer conversion truncates)
+template<typename U, typename T>
+constexpr bool ArgFits(T val) noexcept
+{
+    using UL = std::numeric_limits<U>;
+    if constexpr (std::is_floating_point_v<T>)
+    {
+        // 2^digits is max() + 1 and exact in every floating-point type; NaN fails each comparison
+        const T bound = PowerOfTwo<T>(UL::digits);
+        if constexpr (!UL::is_signed)
+        {
+            return val > T(-1) && val < bound;
+        }
+        else if constexpr (UL::digits < std::numeric_limits<T>::digits)
+        {
+            return val > -bound - T(1) && val < bound;
+        }
+        else
+        {
+            // No value lies between min() - 1 and min() at this magnitude
+            return val >= -bound && val < bound;
+        }
+    }
+    else
+    {
+        if constexpr (std::is_signed_v<T>)
+        {
+            if (val < 0)
+            {
+                if constexpr (UL::is_signed)
+                {
+                    return val >= static_cast<T>(UL::min());
+                }
+                else
+                {
+                    return false;
+                }
+            }
+        }
+        return static_cast<std::make_unsigned_t<T>>(val) <= static_cast<std::make_unsigned_t<U>>(UL::max());
+    }
+}
+
+//! Fails a call whose argument does not fit its integer parameter, as Python's OverflowError
+//! (ErrorCode::IntegerOutOfRange); an empty `paramName` when the parameter is not described
+[[noreturn]] JINJA2CPP_EXPORT void ThrowArgumentOutOfRange(std::string_view paramName, int64_t value, int bits, bool isSigned);
+//! \copydoc ThrowArgumentOutOfRange(std::string_view, int64_t, int, bool)
+[[noreturn]] JINJA2CPP_EXPORT void ThrowArgumentOutOfRange(std::string_view paramName, double value, int bits, bool isSigned);
+
+template<typename U, typename T>
+void CheckArgRange(std::string_view paramName, T val)
+{
+    if constexpr (NeedsRangeCheck<T, U>())
+    {
+        if (!ArgFits<U>(val))
+        {
+            using UL = std::numeric_limits<U>;
+            using Shown = std::conditional_t<std::is_floating_point_v<T>, double, int64_t>;
+            ThrowArgumentOutOfRange(paramName, static_cast<Shown>(val), UL::digits + (UL::is_signed ? 1 : 0), UL::is_signed);
+        }
+    }
+}
+
 template<typename T>
 struct ArgPromoter<T, std::enable_if_t<std::is_fundamental_v<T>>>
 {
@@ -68,9 +170,11 @@ struct ArgPromoter<T, std::enable_if_t<std::is_fundamental_v<T>>>
     {
     }
 
+    // A number that does not fit an integer parameter fails the call rather than wrap (docs/tasks/0544)
     template<typename U = T, typename = std::enable_if_t<std::is_convertible_v<T, U>>>
     operator U() const // NOLINT(google-explicit-constructor)
     {
+        CheckArgRange<U>({}, *m_ptr);
         return static_cast<U>(*m_ptr);
     }
 
@@ -399,9 +503,18 @@ struct TypedParamUnwrapper
 {
     TypedParam<T>* param;
     using ValueType = typename TypedParam<T>::decayed_t;
-    explicit TypedParamUnwrapper(TypedParam<T>& p)
+    struct NoInfo
+    {
+    };
+    // Kept only for an integer parameter, to name it in an error: other parameters pay nothing
+    std::conditional_t<IsRangeCheckedParam<ValueType>, const ArgInfo*, NoInfo> info;
+    TypedParamUnwrapper(TypedParam<T>& p, [[maybe_unused]] const ArgInfo& argInfo)
         : param(&p)
     {
+        if constexpr (IsRangeCheckedParam<ValueType>)
+        {
+            info = &argInfo;
+        }
     }
 
     template<typename U>
@@ -445,6 +558,12 @@ struct TypedParamUnwrapper
             {
                 param->SetValue(Promote(v));
             }
+        }
+        else if constexpr (NeedsRangeCheck<U, ValueType>())
+        {
+            // Checked here, where the parameter's name is known
+            CheckArgRange<ValueType>(info->paramName, v);
+            param->SetValue(static_cast<ValueType>(v));
         }
         else
         {
@@ -510,7 +629,7 @@ struct ValueParam
 };
 
 template<typename T>
-auto TypedUnwrapParam(const Value& value)
+auto TypedUnwrapParam(const Value& value, const ArgInfo& info)
 {
     if constexpr (std::is_same_v<std::decay_t<T>, Value>)
     {
@@ -526,7 +645,7 @@ auto TypedUnwrapParam(const Value& value)
         }
         else
         {
-            TypedParamUnwrapper<T> visitor(param);
+            TypedParamUnwrapper<T> visitor(param, info);
             std::visit(ParamUnwrapper<TypedParamUnwrapper<T>>(&visitor), value.GetData());
         }
         return param;
@@ -544,7 +663,7 @@ struct ParamList
 template<typename... T, typename Fn, typename... ArgDescr>
 Value InvokeWithParamTypes(ParamList<T...> /*types*/, const Fn& fn, const UserCallableParams& params, const ArgDescr&... ad)
 {
-    auto typedParams = std::make_tuple(TypedUnwrapParam<T>(GetParamValue(params, ad))...);
+    auto typedParams = std::make_tuple(TypedUnwrapParam<T>(GetParamValue(params, ad), ad)...);
     return std::apply(
         [&fn](auto&... args) {
             bool hasValue = (true && ... && args.HasValue());
@@ -691,7 +810,10 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
  * Each argument is converted to the type of its parameter: the stored alternative as is or converted (a number to
  * another arithmetic type, a string to the other character width, a string to an escaped \ref Markup), None to a
  * default-constructed value, an omitted argument without a default the same as None. When an argument cannot be
- * converted the function is not called and the call returns None. A \ref Value parameter (by value or `const&`) takes
+ * converted the function is not called and the call returns None. A number outside the range of an integer
+ * parameter (`2**40` for an `int`, `-1` for an `unsigned`, `300` for a `char`, a NaN or infinite float) fails the
+ * call with ErrorCode::IntegerOutOfRange, as Python's OverflowError, rather than wrap; a float in range is
+ * truncated (docs/tasks/0544). A \ref Value parameter (by value or `const&`) takes
  * the argument as passed. The parameter types are read from the signature of a function, a function pointer or a
  * class with one const, non-template `operator()`; for a generic lambda or an overload set describe them with
  * \ref ArgInfoT (a generic callable with untyped descriptors is limited to two parameters).

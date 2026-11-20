@@ -1,17 +1,23 @@
+#include "engine_errors.h"
 #include "internal_value.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
+
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <charconv>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <new>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <utility>
 #include <variant>
@@ -341,5 +347,31 @@ std::optional<Value> DeepCopy(const Value& value, std::size_t maxDepth)
     return std::optional<Value>(std::in_place, std::move(root));
 }
 
+namespace detail
+{
+namespace
+{
+template<typename T>
+[[noreturn]] void ThrowOutOfRange(std::string_view paramName, T value, int bits, bool isSigned)
+{
+    const char* kind = isSigned ? "signed" : "unsigned";
+    if (paramName.empty())
+    {
+        throw IntegerOutOfRangeError(fmt::format("callable argument {} is out of range for its {}-bit {} integer parameter", value, bits, kind));
+    }
+    throw IntegerOutOfRangeError(fmt::format("callable argument '{}' = {} is out of range for its {}-bit {} integer parameter", paramName, value, bits, kind));
+}
+} // namespace
+
+void ThrowArgumentOutOfRange(std::string_view paramName, int64_t value, int bits, bool isSigned)
+{
+    ThrowOutOfRange(paramName, value, bits, isSigned);
+}
+
+void ThrowArgumentOutOfRange(std::string_view paramName, double value, int bits, bool isSigned)
+{
+    ThrowOutOfRange(paramName, value, bits, isSigned);
+}
+} // namespace detail
 } // namespace v2
 } // namespace jinja2
