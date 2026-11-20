@@ -1143,6 +1143,10 @@ struct LoopFrame : LoopState
         {
             TraverseValue(entry.second, fn);
         }
+        for (const auto& entry : lastPassScope)
+        {
+            TraverseValue(entry.second, fn);
+        }
     }
 
     LoopAccessor accessor{ this };
@@ -1152,6 +1156,9 @@ struct LoopFrame : LoopState
     // not running: emptied of values, but with their names
     InternalValueMap loopScope;
     InternalValueMap bodyScope;
+    // A recursive loop's body scope as the last pass left it, which the closures defined in the body read once the
+    // loop ends (ForStatement::KeepsLastPass, docs/tasks/0537); empty otherwise
+    InternalValueMap lastPassScope;
     InternalValue* loopSlot = nullptr;
     LoopTargetSlots targetSlots;
 
@@ -1353,6 +1360,43 @@ JINJA2CPP_NOINLINE_INLINE void KeepStoppedLoop(const IntrusivePtr<LoopFrame>& st
 
 namespace
 {
+// Whether a frame a failure leaves closes over its names first, as a stop does (docs/tasks/0479): a stop, or any
+// failure in a context that ends before the render. There a render nested under a keeper may fail, its host swallow
+// the failure and the outer render call a closure the frame stored in a shared global, which reads the names the
+// frame held, as Jinja2's does (docs/tasks/0531). Asked only on the failure path
+bool ClosesOverOnFailure(const std::exception_ptr& failure, const RenderContext& context)
+{
+    return detail::IsStop(failure) || context.EndsBeforeRender();
+}
+
+// The end of a block body or an included template that failed: the closures defined there close over its names first
+// when `asked` says so (ClosesOverOnFailure). The rethrow is outside the handler, as in the body loops (renderer.h)
+[[noreturn]] JINJA2CPP_NOINLINE void EndFailedFrame(RenderContext& context, const RenderContext& asked, const FrameEnd& end)
+{
+    auto failure = detail::TakeKept();
+    if (ClosesOverOnFailure(failure, asked))
+    {
+        context.CaptureClosures(end);
+    }
+    std::rethrow_exception(std::move(failure));
+}
+
+// Renders `body`, a frame that `end` ends, in `context`: a failure ends it as EndFailedFrame says
+template<typename Body, typename End>
+void RenderFailingFrame(RenderContext& context, const RenderContext& asked, const Body& body, const End& end)
+{
+    try
+    {
+        body();
+        return;
+    }
+    catch (...)
+    {
+        detail::KeepFailure();
+    }
+    EndFailedFrame(context, asked, end());
+}
+
 // The frame of slots of one call of a unit (0117 P1): taken from the thread's workspace and
 // installed in the context for the call, then given back, with the frame it replaced
 // installed again, on any exit. A unit without slots leaves the frame as it is
@@ -1522,6 +1566,44 @@ void ForStatement::RenderElse(OutStream& os, RenderContext& values)
     values.ExitScope();
 }
 
+namespace
+{
+// The end of a recursive loop whose body defines closures: they keep the names its last pass left, as Jinja2's body
+// function does (docs/tasks/0537). Out of line: few loops are recursive
+JINJA2CPP_NOINLINE void CaptureLastPass(RenderContext& values, ScopeRef& bodyScope, InternalValueMap& lastPass, size_t endScopes)
+{
+    bodyScope.RestoreFrom(lastPass);
+    values.CaptureClosures(FrameEnd::Stopped(endScopes));
+    bodyScope.Clear();
+}
+
+// What the outermost level of a recursive loop keeps of the frames around it, which may end before a level stored past
+// them runs: the names its body reads, `reads` by hash (ForStatement::SetRecursiveBody), or every name when
+// `readsAll`. Out of line: few loops outlive their frames
+JINJA2CPP_NOINLINE std::shared_ptr<ClosureCapture> CaptureRecursiveSite(ClosureSite& site, RenderContext& values, Span<const SlotName> reads, bool readsAll)
+{
+    SmallVector<std::size_t, 16> hashes;
+    hashes.reserve(reads.size());
+    for (const auto& name : reads)
+    {
+        hashes.push_back(name.hash);
+    }
+    return site.CaptureOnEnd(values, Span<const std::size_t>(hashes.data(), hashes.size()), readsAll);
+}
+} // namespace
+
+void ForStatement::SetRecursiveBody(NodeArena& nodes, bool keepsLastPass, Span<const std::size_t> reads)
+{
+    m_keepsLastPass = keepsLastPass;
+    SmallVector<SlotName, 8> names;
+    names.reserve(reads.size());
+    for (const auto hash : reads)
+    {
+        names.push_back(SlotName{ ArenaText(), hash });
+    }
+    m_resetsAtEnd = nodes.MakeSpan(Span<const SlotName>(names.data(), names.size()));
+}
+
 void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
 {
     bool isConverted = false;
@@ -1561,10 +1643,11 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         else
         {
             state->recursiveSite = ClosureSite(values);
-            // Its body reads any name: the loop's names are not recorded as a macro body's are
+            // Only the names its body reads, as a macro's capture: a level stored past the loop keeps no more of the
+            // frames around it, so that a chain of them through a name nothing reads does not hold each tree (0539)
             if (state->recursiveSite.OutlivesItsFrames(values))
             {
-                state->recursiveCapture = state->recursiveSite.CaptureOnEnd(values, {}, true);
+                state->recursiveCapture = CaptureRecursiveSite(state->recursiveSite, values, values.Nodes()[m_resetsAtEnd], static_cast<bool>(m_ifExpr));
             }
         }
         state->recursiveAutoescape = values.IsStaticAutoescape();
@@ -1603,6 +1686,8 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     const auto target = values.Nodes()[m_target];
     // The scopes of the loop's end, which a call that stops closes over as the end does
     const size_t endScopes = values.GetScopesCount() - 1;
+    // A recursive loop's body is a function in Jinja2: its closures read the names the last pass left (docs/tasks/0537)
+    const bool keepsLastPass = m_keepsLastPass;
     bool failed = false;
     try
     {
@@ -1615,7 +1700,14 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             AssignLoopTarget(target, curValue, context, targetSlots, values);
 
             values.Nodes()[m_mainBody].Render(os, values);
-            bodyScope.Clear();
+            if (keepsLastPass)
+            {
+                bodyScope.MoveTo(state->lastPassScope);
+            }
+            else
+            {
+                bodyScope.Clear();
+            }
 
             // As in Jinja2, the `else` body is skipped only once a pass through the body has
             // finished without `break` or `continue`
@@ -1646,17 +1738,31 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     {
         // Taken: the collecting below may run calls that are guarded in turn
         auto failure = detail::TakeKept();
+        // The pooled frame keeps no values past the loop, also when a capture below fails to allocate; the closures
+        // read the failing pass, in the body scope
+        state->lastPassScope.clear();
         if (detail::IsStop(failure))
         {
             values.CaptureClosures(FrameEnd::Stopped(endScopes));
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
+        }
+        else if (values.EndsBeforeRender())
+        {
+            values.CaptureClosures(FrameEnd::Stopped(endScopes));
         }
         std::rethrow_exception(std::move(failure));
     }
     // A closure defined in the body and kept past the loop sees the frame below it (0373). A recursive loop's body
     // is a function in Jinja2, which resets nothing as it ends: its closures keep its names (docs/tasks/0526)
     JINJA2CPP_ASSERT(values.GetScopesCount() - 1 == endScopes);
-    values.CaptureClosures(m_isRecursive ? FrameEnd::Stopped(endScopes) : FrameEnd::Soft(endScopes, values.Nodes()[m_resetsAtEnd]));
+    if (keepsLastPass)
+    {
+        CaptureLastPass(values, bodyScope, state->lastPassScope, endScopes);
+    }
+    else
+    {
+        values.CaptureClosures(m_isRecursive ? FrameEnd::Stopped(endScopes) : FrameEnd::Soft(endScopes, values.Nodes()[m_resetsAtEnd]));
+    }
     values.ExitScope(state->bodyScope);
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
@@ -1833,9 +1939,13 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     {
         // Taken: the collecting below may run calls that are guarded in turn
         auto failure = detail::TakeKept();
-        if (detail::IsStop(failure))
+        const bool isStop = detail::IsStop(failure);
+        if (isStop || values.EndsBeforeRender())
         {
-            KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
+            if (isStop)
+            {
+                KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
+            }
             // The closures keep the loop's targets too, still in their slots (FrameEnd::Stopped)
             values.CaptureClosures(FrameEnd::Stopped(endScopes));
             guard.Unbind();
@@ -2739,9 +2849,12 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
     }
     // What the closures of the frame and of the frames above it read there: the copy keeps
     // those, the frame below sees them read too. An included template's top level keeps every
-    // name, as Jinja2's context of the include does
+    // name, as Jinja2's context of the include does. A render's own context, or a module's, that ends before an outer
+    // render (CaptureClosuresForOuter) keeps what its closures read only: a value stored at its top level that only
+    // a name nothing reads holds, such as the `loop` of an earlier nested render, would keep that render's tree
+    // (docs/tasks/0539)
     ClosureCapture keeps;
-    keeps.readsAll = end.count == 0;
+    keeps.readsAll = end.count == 0 && static_cast<bool>(m_parent);
     for (const auto& capture : ending)
     {
         keeps.AddReads(*capture);
@@ -2945,6 +3058,18 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
             }
             return false;
         });
+    // Below the first scope of a context of its own, the names it sees outside: a module imported with context sees
+    // its importer's there (CloneWith), which go when the module's render ends (docs/tasks/0533)
+    if (lowest == 0 && !m_parent && m_externalScope)
+    {
+        for (const auto& [name, value] : *m_externalScope)
+        {
+            if (!keeps || keeps->Reads(HashedName::Hash(name)))
+            {
+                AddCollected(collected, name, value, captures, copies);
+            }
+        }
+    }
 }
 
 void RenderContext::HideNamesDownTo(InternalValueMap& hidden, size_t lowest, const ClosureCapture* keeps) const
@@ -3105,17 +3230,18 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     // `{% autoescape %}` surrounds it; the runtime setting stays the caller's, as Jinja2's
     // derived context shares its EvalContext
     OutputAutoescapeGuard autoescapeGuard(values, m_autoescape);
-    values.Nodes()[m_mainBody].Render(os, values);
     // A closure defined in the block and kept past it sees what the block saw above its
     // template's top level, as Jinja2's block function sees its derived context (0373). The
     // frame is all of the block context's own scopes (RenderBlockAt makes it), so that it ends
-    // the capture of super() too, whose site is below the block's scope (0501)
-    {
+    // the capture of super() too, whose site is below the block's scope (0501). A failure ends it so too (0531)
+    const auto blockEnd = [&values, frame] {
         const size_t count = values.GetScopesCount();
         const size_t first = std::min(values.FirstOwnScope(), count);
         const size_t root = frame ? std::min(frame->baseDepth, first - 1) : first - 1;
-        values.CaptureClosures(FrameEnd{ first, true, root, root });
-    }
+        return FrameEnd{ first, true, root, root };
+    };
+    RenderFailingFrame(values, values, [&] { values.Nodes()[m_mainBody].Render(os, values); }, blockEnd);
+    values.CaptureClosures(blockEnd());
     values.ExitScope();
     values.SetSelfFromContext(prevSelfFromContext);
     values.SetSelfDepth(prevSelfDepth);
@@ -3399,13 +3525,10 @@ void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopH
     }
 }
 
-// Renders `tpl` for `include`: the names it sets stay its own
+// Renders `tpl` for `include` in `innerContext`, made from `values`: the names it sets stay its own
 template<typename CharT>
-void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
+JINJA2CPP_ALWAYS_INLINE void RenderIncludedIn(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values, RenderContext& innerContext, LoopHiding& hidden)
 {
-    RenderContext innerContext = values.Clone(withContext);
-    // Its macros and `self` kept past the include see what it saw (0323)
-    innerContext.SetEndsBeforeRender();
     if (withContext)
     {
         // Jinja2 renders it in a new Context, with an EvalContext of its own
@@ -3416,19 +3539,41 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
         // takes the loop's targets, not its LoopContext); a `loop` set outside it is
         if (tpl.MayReadLoop())
         {
-            // Declared after the context: the loop is put back once the included template has rendered
-            LoopHiding hidden;
             HideIncludingLoop(values, innerContext, hidden);
             innerContext.SetNodes(tpl.Nodes());
             innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
-            innerContext.CaptureClosures(FrameEnd{ 0, true, 0, 0 });
             return;
         }
     }
-
     innerContext.SetNodes(tpl.Nodes());
     innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
-    // What it saw, its parents' names too: Jinja2 renders it with a copy of the context
+}
+
+// Renders `tpl` for `include`. Its closures keep what it saw, its parents' names too: Jinja2 renders it with a copy
+// of the context. Also when it fails where the context of `values` ends before the render: something outside may
+// still hold them (docs/tasks/0531)
+template<typename CharT>
+void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
+{
+    RenderContext innerContext = values.Clone(withContext);
+    // Its macros and `self` kept past the include see what it saw (0323)
+    innerContext.SetEndsBeforeRender();
+    // Declared after the context: the loop is put back once the closures of the include took what it saw
+    LoopHiding hidden;
+    bool failed = false;
+    try
+    {
+        RenderIncludedIn(tpl, withContext, os, values, innerContext, hidden);
+    }
+    catch (...)
+    {
+        failed = true;
+        detail::KeepFailure();
+    }
+    if (failed)
+    {
+        EndFailedFrame(innerContext, values, FrameEnd{ 0, true, 0, 0 });
+    }
     innerContext.CaptureClosures(FrameEnd{ 0, true, 0, 0 });
 }
 
@@ -4476,7 +4621,7 @@ namespace
 [[noreturn]] JINJA2CPP_NOINLINE void EndFailedMacroBody(RenderContext& context, size_t link, size_t endScopes)
 {
     auto failure = detail::TakeKept();
-    if (detail::IsStop(failure))
+    if (ClosesOverOnFailure(failure, context))
     {
         context.CaptureClosures(FrameEnd::Call(endScopes, link));
     }
@@ -4673,7 +4818,7 @@ namespace
 [[noreturn]] JINJA2CPP_NOINLINE void EndStoppedSoftBody(RenderContext& inner)
 {
     auto failure = detail::TakeKept();
-    if (detail::IsStop(failure))
+    if (ClosesOverOnFailure(failure, inner))
     {
         inner.CaptureClosuresAtStop();
     }

@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 #include "recursion_guard.h"
+#include "span.h"
 
 #include <jinja2cpp/big_int.h>
 #include <jinja2cpp/big_int_backend.h>
@@ -55,14 +56,365 @@ IntrusivePtr<BigIntObject> BigIntObject::Make(std::string_view decimal)
 
 namespace
 {
-// A magnitude in base 10^9, least significant limb first: the core's only arithmetic, used to
-// change bases. Every conversion is quadratic in the length, which MaxBigIntBits bounds
+// A magnitude as limbs of a radix of at most 2^32, least significant limb first: the core's only
+// arithmetic, used to change bases. The decimal form is in base 10^9 and the binary form in base
+// 2^32. A conversion splits the number in halves by a power of the source radix and multiplies
+// in the target radix (Karatsuba), so it takes about O(n^1.6) rather than the O(n^2) of a digit
+// at a time, which at MaxBigIntBits is the difference between milliseconds and seconds
+// (docs/tasks/0287)
 constexpr uint32_t LimbBase = 1000000000;
 constexpr size_t LimbDigits = 9;
 using Limbs = std::vector<uint32_t>;
+using LimbSpan = Span<const uint32_t>;
 
 // log2(10): the bits of a decimal digit
 constexpr double BitsPerDigit = 3.321928094887362;
+
+// The radix of limbs. The decimal and binary ones are constants, so dividing by them is cheap
+struct DecimalRadix
+{
+    static constexpr uint64_t Value() noexcept { return LimbBase; }
+};
+struct BinaryRadix
+{
+    static constexpr uint64_t Value() noexcept { return uint64_t{ 1 } << 32; }
+};
+// base^k for the digits of another base
+struct AnyRadix
+{
+    uint64_t value;
+    [[nodiscard]] uint64_t Value() const noexcept { return value; }
+};
+
+// Products and sums of limbs stay within 64 bits: (R - 1)^2 + 2 (R - 1) < R^2 <= 2^64
+static_assert(BinaryRadix::Value() <= (uint64_t{ 1 } << 32), "a limb product must fit 64 bits");
+
+// `limbs` without its leading zero limbs
+LimbSpan Trimmed(LimbSpan limbs) noexcept
+{
+    auto size = limbs.size();
+    while (size != 0 && limbs[size - 1] == 0)
+    {
+        --size;
+    }
+    return limbs.first(size);
+}
+
+// acc += addend * radix^offset
+template<typename Radix>
+void AddAt(Limbs& acc, LimbSpan addend, size_t offset, Radix radix)
+{
+    const uint64_t base = radix.Value();
+    if (acc.size() < offset + addend.size())
+    {
+        acc.resize(offset + addend.size(), 0);
+    }
+    uint64_t carry = 0;
+    for (size_t idx = 0; idx != addend.size(); ++idx)
+    {
+        const uint64_t cur = uint64_t{ acc[offset + idx] } + addend[idx] + carry;
+        carry = cur >= base ? 1 : 0;
+        acc[offset + idx] = static_cast<uint32_t>(cur - (carry * base));
+    }
+    for (auto idx = offset + addend.size(); carry != 0; ++idx)
+    {
+        if (idx == acc.size())
+        {
+            acc.push_back(1);
+            break;
+        }
+        const uint64_t cur = uint64_t{ acc[idx] } + 1;
+        carry = cur >= base ? 1 : 0;
+        acc[idx] = static_cast<uint32_t>(cur - (carry * base));
+    }
+}
+
+// acc -= subtrahend, which is at most acc
+template<typename Radix>
+void SubtractFrom(Limbs& acc, LimbSpan subtrahend, Radix radix)
+{
+    const uint64_t base = radix.Value();
+    assert(subtrahend.size() <= acc.size());
+    uint64_t borrow = 0;
+    size_t idx = 0;
+    for (; idx != subtrahend.size(); ++idx)
+    {
+        const uint64_t sub = uint64_t{ subtrahend[idx] } + borrow;
+        const uint64_t cur = acc[idx];
+        borrow = cur < sub ? 1 : 0;
+        acc[idx] = static_cast<uint32_t>(cur + (borrow * base) - sub);
+    }
+    for (; borrow != 0; ++idx)
+    {
+        assert(idx < acc.size());
+        borrow = acc[idx] == 0 ? 1 : 0;
+        acc[idx] = static_cast<uint32_t>(borrow != 0 ? base - 1 : acc[idx] - 1);
+    }
+}
+
+template<typename Radix>
+Limbs Sum(LimbSpan left, LimbSpan right, Radix radix)
+{
+    Limbs result(left.begin(), left.end());
+    AddAt(result, right, 0, radix);
+    return result;
+}
+
+// Operands at most this long multiply digit by digit, which is faster than splitting them
+constexpr size_t KaratsubaCutoff = 48;
+
+// The rows of products that 64-bit columns can add up before they must carry. A product is at
+// most (R - 1)^2, and the remainder and carry a column holds then are below (rows + 2) R, which
+// one more product's room covers for the radixes here (R > 2^26). Zero for radix 2^32
+template<typename Radix>
+uint64_t LazyRows(Radix radix) noexcept
+{
+    const uint64_t top = radix.Value() - 1;
+    return top > 0xffffffffU ? 0 : (std::numeric_limits<uint64_t>::max() / (top * top)) - 1;
+}
+
+// out = left * right digit by digit, both at most KaratsubaCutoff long; out holds
+// left.size() + right.size() zero limbs
+template<typename Radix>
+void MultiplySchoolbook(Limbs& out, LimbSpan left, LimbSpan right, Radix radix)
+{
+    assert(left.size() <= KaratsubaCutoff && right.size() <= KaratsubaCutoff);
+    const uint64_t base = radix.Value();
+    const uint64_t rows = LazyRows(radix);
+    if (rows < 2)
+    {
+        for (size_t i = 0; i != left.size(); ++i)
+        {
+            const uint64_t digit = left[i];
+            uint64_t carry = 0;
+            for (size_t j = 0; j != right.size(); ++j)
+            {
+                const uint64_t cur = uint64_t{ out[i + j] } + (digit * right[j]) + carry;
+                out[i + j] = static_cast<uint32_t>(cur % base);
+                carry = cur / base;
+            }
+            out[i + right.size()] = static_cast<uint32_t>(carry);
+        }
+        return;
+    }
+    // Columns add up products without carrying, which the compiler can vectorise, and carry once
+    // every `rows` rows: for base 10^9, one division per 18 products rather than per product
+    std::array<uint64_t, 2 * KaratsubaCutoff> columns{};
+    const size_t total = left.size() + right.size();
+    const auto carryAll = [&columns, total](uint64_t divisor) {
+        uint64_t carry = 0;
+        for (size_t k = 0; k != total; ++k)
+        {
+            const uint64_t cur = columns[k] + carry;
+            columns[k] = cur % divisor;
+            carry = cur / divisor;
+        }
+        assert(carry == 0);
+    };
+    uint64_t pending = 0;
+    for (size_t i = 0; i != left.size(); ++i)
+    {
+        const uint64_t digit = left[i];
+        for (size_t j = 0; j != right.size(); ++j)
+        {
+            columns[i + j] += digit * right[j];
+        }
+        if (++pending == rows)
+        {
+            carryAll(base);
+            pending = 0;
+        }
+    }
+    carryAll(base);
+    for (size_t k = 0; k != total; ++k)
+    {
+        out[k] = static_cast<uint32_t>(columns[k]);
+    }
+}
+
+// The conversions below recurse about 2 log2(n / 32) deep, which the bit cap bounds; a
+// conversion that starts deep in a nested render still checks the stack (REVIEW.md)
+void CheckConversionStack()
+{
+    if (StackNearlyExhausted())
+    {
+        throw RecursionLimitError();
+    }
+}
+
+// left * right in left.size() + right.size() limbs
+template<typename Radix>
+Limbs Multiply(LimbSpan left, LimbSpan right, Radix radix)
+{
+    if (left.size() < right.size())
+    {
+        std::swap(left, right);
+    }
+    Limbs out(left.size() + right.size(), 0);
+    if (right.size() <= KaratsubaCutoff)
+    {
+        // `left` in pieces as long as the cutoff
+        Limbs part;
+        for (size_t pos = 0; pos < left.size(); pos += KaratsubaCutoff)
+        {
+            const auto piece = left.subspan(pos, std::min(KaratsubaCutoff, left.size() - pos));
+            part.assign(piece.size() + right.size(), 0);
+            MultiplySchoolbook(part, piece, right, radix);
+            AddAt(out, Trimmed(part), pos, radix);
+        }
+        return out;
+    }
+    CheckConversionStack();
+    if (2 * right.size() <= left.size())
+    {
+        // Unbalanced: `left` in pieces as long as `right`
+        for (size_t pos = 0; pos < left.size(); pos += right.size())
+        {
+            const auto piece = Trimmed(left.subspan(pos, std::min(right.size(), left.size() - pos)));
+            if (!piece.empty())
+            {
+                const auto part = Multiply(piece, right, radix);
+                AddAt(out, Trimmed(part), pos, radix);
+            }
+        }
+        return out;
+    }
+    // left = l1 R^h + l0, right = r1 R^h + r0, and right is longer than h:
+    // left * right = z2 R^2h + ((l0 + l1)(r0 + r1) - z2 - z0) R^h + z0
+    const size_t half = left.size() / 2;
+    const auto l0 = Trimmed(left.first(half));
+    const auto l1 = left.subspan(half);
+    const auto r0 = Trimmed(right.first(half));
+    const auto r1 = right.subspan(half);
+    const auto z0 = Multiply(l0, r0, radix);
+    const auto z2 = Multiply(l1, r1, radix);
+    const auto leftSum = Sum(l0, l1, radix);
+    const auto rightSum = Sum(r0, r1, radix);
+    auto z1 = Multiply(Trimmed(leftSum), Trimmed(rightSum), radix);
+    SubtractFrom(z1, Trimmed(z0), radix);
+    SubtractFrom(z1, Trimmed(z2), radix);
+    AddAt(out, Trimmed(z0), 0, radix);
+    AddAt(out, Trimmed(z1), half, radix);
+    AddAt(out, Trimmed(z2), 2 * half, radix);
+    out.resize(left.size() + right.size());
+    return out;
+}
+
+// limbs = limbs * mult + add, all in `radix`; mult <= 2^32 and add < mult, so that
+// limb * mult + carry <= radix * mult <= 2^64 stays within 64 bits
+template<typename Radix>
+void MulAdd(Limbs& limbs, uint64_t mult, uint64_t add, Radix radix)
+{
+    const uint64_t base = radix.Value();
+    uint64_t carry = add;
+    for (auto& limb : limbs)
+    {
+        const uint64_t cur = (uint64_t{ limb } * mult) + carry;
+        limb = static_cast<uint32_t>(cur % base);
+        carry = cur / base;
+    }
+    while (carry != 0)
+    {
+        limbs.push_back(static_cast<uint32_t>(carry % base));
+        carry /= base;
+    }
+}
+
+// Changes limbs of radix `from` (at most 2^32) to limbs of `to`. Halves of the source split at
+// from^(Block 2^k), whose powers in the target radix it computes once each
+template<typename Radix>
+class RadixConverter
+{
+public:
+    RadixConverter(uint64_t from, Radix to)
+        : m_from(from)
+        , m_to(to)
+    {
+    }
+
+    // The magnitude `source` in the target radix, without leading zero limbs
+    Limbs Convert(LimbSpan source)
+    {
+        auto result = Run(Trimmed(source));
+        result.resize(Trimmed(result).size());
+        return result;
+    }
+
+private:
+    // Sources at most this long convert a limb at a time
+    static constexpr size_t Block = 32;
+
+    Limbs Run(LimbSpan source)
+    {
+        if (source.size() <= Block)
+        {
+            Limbs result;
+            for (auto idx = source.size(); idx != 0; --idx)
+            {
+                MulAdd(result, m_from, source[idx - 1], m_to);
+            }
+            return result;
+        }
+        CheckConversionStack();
+        // The largest Block 2^k below the length, so that both halves are shorter than the source
+        size_t level = 0;
+        while ((Block << (level + 1)) < source.size())
+        {
+            ++level;
+        }
+        const size_t split = Block << level;
+        const auto high = Run(Trimmed(source.subspan(split)));
+        const auto low = Run(Trimmed(source.first(split)));
+        auto result = Multiply(Trimmed(high), Power(level), m_to);
+        AddAt(result, Trimmed(low), 0, m_to);
+        return result;
+    }
+
+    // from^(Block 2^level) in the target radix
+    LimbSpan Power(size_t level)
+    {
+        if (m_powers.empty())
+        {
+            Limbs first{ 1 };
+            for (size_t idx = 0; idx != Block; ++idx)
+            {
+                MulAdd(first, m_from, 0, m_to);
+            }
+            m_powers.push_back(std::move(first));
+        }
+        while (m_powers.size() <= level)
+        {
+            const LimbSpan last = Trimmed(m_powers.back());
+            auto next = Multiply(last, last, m_to);
+            next.resize(Trimmed(next).size());
+            m_powers.push_back(std::move(next));
+        }
+        return m_powers[level];
+    }
+
+    uint64_t m_from;
+    Radix m_to;
+    std::vector<Limbs> m_powers;
+};
+
+// The limbs of base^k for the largest k with base^k <= 2^32, and that k
+struct ChunkRadix
+{
+    uint64_t value;
+    size_t digits;
+};
+
+ChunkRadix DigitChunk(int base) noexcept
+{
+    auto mult = static_cast<uint64_t>(base);
+    size_t digits = 1;
+    while (mult * static_cast<uint64_t>(base) <= BinaryRadix::Value())
+    {
+        mult *= static_cast<uint64_t>(base);
+        ++digits;
+    }
+    return { mult, digits };
+}
 
 Limbs ToLimbs(std::string_view digits)
 {
@@ -110,23 +462,6 @@ std::string FromLimbs(const Limbs& limbs, bool negative)
     return result;
 }
 
-// limbs = limbs * mult + add, with mult * LimbBase within 64 bits
-void MulAdd(Limbs& limbs, uint64_t mult, uint64_t add)
-{
-    uint64_t carry = add;
-    for (auto& limb : limbs)
-    {
-        const uint64_t cur = (static_cast<uint64_t>(limb) * mult) + carry;
-        limb = static_cast<uint32_t>(cur % LimbBase);
-        carry = cur / LimbBase;
-    }
-    while (carry != 0)
-    {
-        limbs.push_back(static_cast<uint32_t>(carry % LimbBase));
-        carry /= LimbBase;
-    }
-}
-
 int DigitValue(char ch)
 {
     if (ch >= '0' && ch <= '9')
@@ -140,36 +475,50 @@ int DigitValue(char ch)
     return ch - 'A' + 10;
 }
 
-// The magnitude of `digits` (valid in `base` 2-36, no leading zero, not empty) in base 10^9
-Limbs LimbsFromDigits(std::string_view digits, int base)
+// The decimal form of `digits` (valid in `base` 2-36, no leading zero, not empty)
+std::string DecimalFromDigits(std::string_view digits, int base, bool negative)
 {
-    // As many digits at a time as fit 32 bits
-    auto chunkMult = static_cast<uint64_t>(base);
-    size_t chunkSize = 1;
-    while (chunkMult * static_cast<uint64_t>(base) <= std::numeric_limits<uint32_t>::max())
+    if (base == 10)
     {
-        chunkMult *= static_cast<uint64_t>(base);
-        ++chunkSize;
+        return (negative ? "-" : "") + std::string(digits);
     }
-    Limbs limbs;
-    limbs.reserve(static_cast<size_t>(static_cast<double>(digits.size()) * std::log10(base) / LimbDigits) + 2);
-    size_t pos = 0;
-    // The first chunk takes the remainder, so that every later one is full
-    size_t take = digits.size() % chunkSize == 0 ? chunkSize : digits.size() % chunkSize;
-    while (pos != digits.size())
+    const auto chunk = DigitChunk(base);
+    // Limbs of base^k, least significant first
+    Limbs source;
+    source.reserve((digits.size() / chunk.digits) + 1);
+    auto end = digits.size();
+    while (end != 0)
     {
-        uint64_t chunk = 0;
-        uint64_t mult = 1;
-        for (size_t idx = 0; idx != take; ++idx)
+        const auto begin = end > chunk.digits ? end - chunk.digits : 0;
+        uint64_t limb = 0;
+        for (auto idx = begin; idx != end; ++idx)
         {
-            chunk = (chunk * static_cast<uint64_t>(base)) + static_cast<uint64_t>(DigitValue(digits[pos + idx]));
-            mult *= static_cast<uint64_t>(base);
+            limb = (limb * static_cast<uint64_t>(base)) + static_cast<uint64_t>(DigitValue(digits[idx]));
         }
-        MulAdd(limbs, mult, chunk);
-        pos += take;
-        take = chunkSize;
+        source.push_back(static_cast<uint32_t>(limb));
+        end = begin;
     }
-    return limbs;
+    // base^k is 2^32 for bases 2, 4, 16 and 256: a limb of it is its own value then
+    RadixConverter<DecimalRadix> converter(chunk.value, DecimalRadix{});
+    return FromLimbs(converter.Convert(source), negative);
+}
+
+// The magnitude of a canonical decimal form in base 2^32, without leading zero limbs
+Limbs BinaryWords(std::string_view magnitude)
+{
+    RadixConverter<BinaryRadix> converter(LimbBase, BinaryRadix{});
+    return converter.Convert(ToLimbs(magnitude));
+}
+
+// The bits of a word: 0 for 0
+size_t WordBits(uint32_t word) noexcept
+{
+    size_t bits = 0;
+    for (; word != 0; word >>= 1)
+    {
+        ++bits;
+    }
+    return bits;
 }
 
 bool IsPowerOfTwo(int base)
@@ -203,7 +552,17 @@ bool ExceedsBitCap(std::string_view magnitude)
 }
 } // namespace
 
-InternalValue MakeBigIntValue(std::string_view decimal)
+namespace
+{
+// The bits of `digits` (no leading zero, not empty) in a power-of-two base, exactly
+size_t PowerOfTwoDigitsBits(std::string_view digits, int base) noexcept
+{
+    const auto bitsPerDigit = WordBits(static_cast<uint32_t>(base)) - 1;
+    return ((digits.size() - 1) * bitsPerDigit) + WordBits(static_cast<uint32_t>(DigitValue(digits.front())));
+}
+
+// MakeBigIntValue, past the bit check when the caller has made it
+InternalValue MakeBigInt(std::string_view decimal, bool withinBitCap)
 {
     int64_t small = 0;
     const char* begin = decimal.data();
@@ -213,7 +572,7 @@ InternalValue MakeBigIntValue(std::string_view decimal)
     {
         return small;
     }
-    if (ExceedsBitCap(decimal.front() == '-' ? decimal.substr(1) : decimal))
+    if (!withinBitCap && ExceedsBitCap(decimal.front() == '-' ? decimal.substr(1) : decimal))
     {
         ThrowTooManyBits();
     }
@@ -222,6 +581,12 @@ InternalValue MakeBigIntValue(std::string_view decimal)
     detail::InternalValueAccess::Data(result) = detail::BigIntHandle{ obj.get() };
     detail::InternalValueAccess::ObjectPtr(result) = std::move(obj);
     return result;
+}
+} // namespace
+
+InternalValue MakeBigIntValue(std::string_view decimal)
+{
+    return MakeBigInt(decimal, false);
 }
 
 InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative)
@@ -247,16 +612,21 @@ InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative
         decimal.append(digits);
         return MakeBigIntValue(decimal);
     }
-    if (!IsPowerOfTwo(base) && digits.size() > MaxIntStrDigits)
+    if (!IsPowerOfTwo(base))
     {
-        ThrowStrDigits(": value has " + std::to_string(digits.size()) + " digits");
+        if (digits.size() > MaxIntStrDigits)
+        {
+            ThrowStrDigits(": value has " + std::to_string(digits.size()) + " digits");
+        }
+        // Far below the bit cap
+        return MakeBigInt(DecimalFromDigits(digits, base, negative), false);
     }
-    // Rejected before converting, which is quadratic in the length
-    if (static_cast<double>(digits.size() - 1) * std::log2(base) >= static_cast<double>(MaxBigIntBits))
+    // Python sets no digit limit here: the exact width, known before converting, keeps to the cap
+    if (PowerOfTwoDigitsBits(digits, base) > MaxBigIntBits)
     {
         ThrowTooManyBits();
     }
-    return MakeBigIntValue(FromLimbs(LimbsFromDigits(digits, base), negative));
+    return MakeBigInt(DecimalFromDigits(digits, base, negative), true);
 }
 
 BigInt BigInt::FromDigits(std::string_view digits, int base, bool negative)
@@ -283,15 +653,16 @@ BigInt BigInt::FromDigits(std::string_view digits, int base, bool negative)
         return BigInt();
     }
     digits.remove_prefix(first);
-    // The conversion is quadratic in the length: past the width a Value may hold, refuse before starting
-    if (static_cast<double>(digits.size() - 1) * std::log2(base) >= static_cast<double>(MaxBigIntBits))
+    // Past the width a Value may hold, refuse before converting: exactly in a power-of-two base,
+    // else by an estimate that lets a number a few bits too wide through to the exact check below
+    const bool exact = IsPowerOfTwo(base);
+    if (exact ? PowerOfTwoDigitsBits(digits, base) > MaxBigIntBits : static_cast<double>(digits.size() - 1) * std::log2(base) >= static_cast<double>(MaxBigIntBits))
     {
         throw std::length_error("BigInt::FromDigits: integer is wider than " + std::to_string(MaxBigIntBits) + " bits");
     }
     BigInt result;
-    result.m_decimal = FromLimbs(LimbsFromDigits(digits, base), negative);
-    // The estimate above lets a number a few bits too wide through: the exact width decides
-    if (ExceedsBitCap(negative ? std::string_view(result.m_decimal).substr(1) : std::string_view(result.m_decimal)))
+    result.m_decimal = DecimalFromDigits(digits, base, negative);
+    if (!exact && ExceedsBitCap(negative ? std::string_view(result.m_decimal).substr(1) : std::string_view(result.m_decimal)))
     {
         throw std::length_error("BigInt::FromDigits: integer is wider than " + std::to_string(MaxBigIntBits) + " bits");
     }
@@ -309,47 +680,42 @@ std::string BigInt::ToDigits(int base) const
     {
         magnitude.remove_prefix(1);
     }
-    auto limbs = ToLimbs(magnitude);
-    // Divide by base^chunkSize (within 32 bits) repeatedly; each remainder gives chunkSize digits
-    auto chunkMult = static_cast<uint64_t>(base);
-    size_t chunkSize = 1;
-    while (chunkMult * static_cast<uint64_t>(base) <= std::numeric_limits<uint32_t>::max())
+    if (magnitude.empty())
     {
-        chunkMult *= static_cast<uint64_t>(base);
-        ++chunkSize;
+        return "0";
     }
-    std::string reversed;
-    reversed.reserve(static_cast<size_t>(static_cast<double>(magnitude.size()) * BitsPerDigit / std::log2(base)) + chunkSize + 1);
-    auto top = limbs.size();
-    while (top != 0 && limbs[top - 1] == 0)
+    if (base == 10)
     {
-        --top;
+        return std::string(magnitude);
     }
-    while (top != 0)
+    if (IsPowerOfTwo(base))
     {
-        uint64_t rem = 0;
-        for (auto idx = top; idx != 0; --idx)
+        return MagnitudeInBase(BigIntView{ magnitude }, base);
+    }
+    // Limbs of base^k, each k digits
+    const auto chunk = DigitChunk(base);
+    RadixConverter<AnyRadix> converter(LimbBase, AnyRadix{ chunk.value });
+    const auto limbs = converter.Convert(ToLimbs(magnitude));
+    if (limbs.empty())
+    {
+        return "0";
+    }
+    std::string result;
+    result.reserve(limbs.size() * chunk.digits);
+    std::string piece(chunk.digits, '0');
+    for (auto idx = limbs.size(); idx != 0; --idx)
+    {
+        uint64_t limb = limbs[idx - 1];
+        for (auto pos = chunk.digits; pos != 0; --pos)
         {
-            const uint64_t cur = (rem * LimbBase) + limbs[idx - 1];
-            limbs[idx - 1] = static_cast<uint32_t>(cur / chunkMult);
-            rem = cur % chunkMult;
+            piece[pos - 1] = "0123456789abcdefghijklmnopqrstuvwxyz"[limb % static_cast<uint64_t>(base)];
+            limb /= static_cast<uint64_t>(base);
         }
-        while (top != 0 && limbs[top - 1] == 0)
-        {
-            --top;
-        }
-        for (size_t idx = 0; idx != chunkSize && (top != 0 || rem != 0); ++idx)
-        {
-            reversed.push_back("0123456789abcdefghijklmnopqrstuvwxyz"[rem % static_cast<uint64_t>(base)]);
-            rem /= static_cast<uint64_t>(base);
-        }
+        // The top limb without its leading zeros
+        const auto skip = idx == limbs.size() ? std::min(piece.find_first_not_of('0'), chunk.digits - 1) : 0;
+        result.append(std::string_view(piece).substr(skip));
     }
-    if (reversed.empty())
-    {
-        reversed.push_back('0');
-    }
-    std::reverse(reversed.begin(), reversed.end());
-    return reversed;
+    return result;
 }
 
 InternalValue IntegerFromDouble(double val)
@@ -374,54 +740,36 @@ std::string_view CheckedDecimal(const BigIntView& val)
 
 std::string MagnitudeInBase(const BigIntView& val, int base)
 {
-    // Binary words, least significant first, built from the decimal limbs most significant first
-    const auto limbs = ToLimbs(val.Magnitude());
-    std::vector<uint32_t> words;
-    words.reserve((static_cast<size_t>(static_cast<double>(val.Magnitude().size()) * BitsPerDigit) / 32) + 2);
-    for (auto idx = limbs.size(); idx != 0; --idx)
+    const auto words = BinaryWords(val.Magnitude());
+    if (words.empty())
     {
-        uint64_t carry = limbs[idx - 1];
-        for (auto& word : words)
-        {
-            const uint64_t cur = (static_cast<uint64_t>(word) * LimbBase) + carry;
-            word = static_cast<uint32_t>(cur);
-            carry = cur >> 32;
-        }
-        if (carry != 0)
-        {
-            words.push_back(static_cast<uint32_t>(carry));
-        }
+        return "0";
     }
-    const int bitsPerDigit = base == 2 ? 1 : (base == 8 ? 3 : 4);
-    const auto totalBits = words.size() * 32;
-    std::string result;
-    result.reserve((totalBits / static_cast<size_t>(bitsPerDigit)) + 1);
-    // Digits from the least significant bit up, then reversed
-    for (size_t bit = 0; bit < totalBits; bit += static_cast<size_t>(bitsPerDigit))
+    const auto bitsPerDigit = WordBits(static_cast<uint32_t>(base)) - 1;
+    const auto totalBits = ((words.size() - 1) * 32) + WordBits(words.back());
+    const auto count = (totalBits + bitsPerDigit - 1) / bitsPerDigit;
+    const auto mask = static_cast<uint64_t>(base - 1);
+    std::string result(count, '0');
+    // Digit `idx` from the least significant end holds the bits from idx * bitsPerDigit up
+    for (size_t idx = 0; idx != count; ++idx)
     {
-        uint32_t digit = 0;
-        for (int idx = 0; idx != bitsPerDigit; ++idx)
+        const auto bit = idx * bitsPerDigit;
+        const auto word = bit / 32;
+        const auto shift = bit % 32;
+        uint64_t window = uint64_t{ words[word] } >> shift;
+        if (shift + bitsPerDigit > 32 && word + 1 < words.size())
         {
-            const auto pos = bit + static_cast<size_t>(idx);
-            if (pos < totalBits && ((words[pos / 32] >> (pos % 32)) & 1U) != 0)
-            {
-                digit |= 1U << idx;
-            }
+            window |= uint64_t{ words[word + 1] } << (32 - shift);
         }
-        result.push_back("0123456789abcdef"[digit]);
+        result[count - 1 - idx] = "0123456789abcdefghijklmnopqrstuvwxyz"[window & mask];
     }
-    while (result.size() > 1 && result.back() == '0')
-    {
-        result.pop_back();
-    }
-    std::reverse(result.begin(), result.end());
     return result;
 }
 
 size_t BitLength(const BigIntView& val)
 {
-    const auto binary = MagnitudeInBase(val, 2);
-    return binary == "0" ? 0 : binary.size();
+    const auto words = BinaryWords(val.Magnitude());
+    return words.empty() ? 0 : ((words.size() - 1) * 32) + WordBits(words.back());
 }
 
 int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept
@@ -694,7 +1042,8 @@ InternalValue ToValue(const BigIntBackend& backend, const BackendObject& obj)
     {
         ThrowBackendFailure(backend, status);
     }
-    return MakeBigIntValue(sink.decimal);
+    // Within the cap by the backend's own width, which spares converting the text back to count it
+    return MakeBigInt(sink.decimal, true);
 }
 
 int Sign(const IntOperand& val) noexcept

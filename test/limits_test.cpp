@@ -860,7 +860,7 @@ namespace
 // its memory budget (docs/tasks/0492) for as long as something owns it (docs/tasks/0521). The template stores nothing,
 // or with `store` a macro of it in the global `g`, which owns the template. With `byName`, `inner()` renders the
 // environment's cached template instead, one tree however often it is called. `after` runs once the template has
-// gone, `extra` adds params
+// gone, `extra` adds params; `body`, when not empty, is the template instead
 template<typename CharT>
 nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderNestedLoads(TemplateEnv& env,
                                                                                     const std::string& outer,
@@ -868,13 +868,14 @@ nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderNestedLo
                                                                                     bool byName = false,
                                                                                     bool store = false,
                                                                                     const std::function<void()>& after = {},
-                                                                                    ValuesMap extra = {})
+                                                                                    ValuesMap extra = {},
+                                                                                    const std::string& customBody = {})
 {
     auto settings = UntrustedSettings();
     settings.limits.maxRenderMemory = budget;
     env.SetSettings(settings);
     env.AddGlobal("g", ValuesList{});
-    const std::string body = std::string(store ? "{% macro m() %}x{% endmacro %}{% set _ = g.append(m) %}" : "{% set x = 1 %}") + std::string(2000, 'x');
+    const std::string body = !customBody.empty() ? customBody : std::string(store ? "{% macro m() %}x{% endmacro %}{% set _ = g.append(m) %}" : "{% set x = 1 %}") + std::string(2000, 'x');
     std::basic_string<CharT> source(body.begin(), body.end());
     auto fs = std::make_shared<MemoryFileSystem>();
     fs->AddFile("inner.j2", body);
@@ -995,6 +996,36 @@ TEST_F(LimitsEnvTest, GivenBackTreesCreditOnlyTheirCharge)
     ASSERT_TRUE(result.has_value()) << result.error().ToString();
     EXPECT_GT(start, 0U);
     EXPECT_LE(maxLeft, start);
+}
+
+// 0539: a closure that reads a name, or a recursive `loop`, stored by each nested render and dropped by the next, keeps
+// its tree no longer than something holds it: with no budget at most a few trees are live, and a budget of a few
+// trees holds the loop
+TEST_F(LimitsEnvTest, DroppedNestedClosuresGiveTheirTreesBack)
+{
+    const std::string pop = "{% if g %}{% set _ = g.pop() %}{% endif %}";
+    const std::string bodies[] = {
+        pop + "{% set y = 1 %}{% macro m() %}{{ y }}{% endmacro %}{% set _ = g.append(m) %}" + std::string(32000, 'x'),
+        pop + "{% for x in [1] recursive %}{% set _ = g.append(loop) %}{% endfor %}" + std::string(2000, 'x'),
+        "{% if g %}{{ g.pop() is none }}{% endif %}{% for x in [1] recursive %}{% set _ = g.append(loop) %}{% endfor %}" + std::string(2000, 'x'),
+    };
+    for (const auto& body : bodies)
+    {
+        std::size_t maxLive = 0;
+        auto probe = [&] {
+            auto* collector = CycleCollector::Current();
+            ASSERT_NE(nullptr, collector);
+            maxLive = std::max(maxLive, collector->KeptTreeCount());
+        };
+        auto result = RenderNestedLoads<char>(m_env, "{% for i in range(2000) %}{{ inner() }}{% endfor %}", 0, false, false, probe, {}, body);
+        ASSERT_TRUE(result.has_value()) << result.error().ToString();
+        EXPECT_LE(maxLive, 4U) << body.substr(0, 80);
+        // A few live trees of the 32 KB template take about 1 MiB in an MSVC Debug build: 4 MiB holds them there too,
+        // where the 64 kept before 0539 do not
+        const std::uint64_t budget = body.size() > 10000 ? std::uint64_t{ 4 } << 20 : std::uint64_t{ 1 } << 20;
+        auto budgeted = RenderNestedLoads<char>(m_env, "{% for i in range(2000) %}{{ inner() }}{% endfor %}", budget, false, false, {}, {}, body);
+        EXPECT_TRUE(budgeted.has_value()) << body.substr(0, 80) << ": " << (budgeted ? std::string() : budgeted.error().ToString());
+    }
 }
 #endif
 

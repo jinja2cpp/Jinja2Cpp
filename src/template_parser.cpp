@@ -15,6 +15,7 @@
 #include "renderer.h"
 #include "small_vector.h"
 #include "slot_frame.h"
+#include "span.h"
 #include "statements.h"
 
 #include <jinja2cpp/error_info.h>
@@ -601,6 +602,8 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     {
         isRecursive = true;
     }
+    // The names an unfiltered recursive loop's body reads, which its levels keep of the frames around it (0539)
+    const bool recordsReads = isRecursive && !ifExpr;
 
     if (!ifExpr && lexer.PeekNextToken() != Token::Eof)
     {
@@ -613,6 +616,10 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = renderer;
     statementInfo.marks = m_nodes.Marks();
+    if (recordsReads)
+    {
+        statementInfo.useMark = m_names.BeginReads();
+    }
     statementInfo.frame = m_names.PushFor(outerFrame, renderer, isRecursive);
     if (filterFrame != NameResolver::NoFrame)
     {
@@ -860,6 +867,11 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     if (!renderer.IsRecursive())
     {
         renderer.SetResetsAtEnd(m_names.NamesResetAtEnd(info.frame, m_nodes));
+    }
+    else
+    {
+        const bool keepsLastPass = !m_names.NamesResetAtEnd(info.frame, m_nodes).empty();
+        renderer.SetRecursiveBody(m_nodes, keepsLastPass, renderer.HasFilter() ? Span<const std::size_t>() : m_names.EndReads(info.useMark));
     }
     renderer.SetBodyReadsLoop(renderer.IsRecursive() || bodyEndReads != info.marks.loopReads);
     // An included template reads the loop it is included from only outside its own loops' bodies

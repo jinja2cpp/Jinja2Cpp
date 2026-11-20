@@ -360,6 +360,11 @@ public:
     InternalValue& ForName(const HashedName& name);
     void Erase(const std::string& name);
     void Clear();
+    // Empties the scope as Clear does, handing what it held to `kept` (what `kept` held goes): the last pass of a
+    // recursive loop's body, which its closures read once the loop ends (docs/tasks/0537)
+    void MoveTo(InternalValueMap& kept);
+    // Puts back what MoveTo handed to `kept` in the empty scope, emptying `kept`
+    void RestoreFrom(InternalValueMap& kept);
     [[nodiscard]] bool empty() const { return m_map->empty(); }
     [[nodiscard]] const InternalValueMap& Map() const { return *m_map; }
 
@@ -1951,6 +1956,26 @@ inline void ScopeRef::Clear()
         m_context->ForgetBuckets(std::exchange(*m_buckets, 0));
         m_map->clear();
     }
+}
+
+inline void ScopeRef::MoveTo(InternalValueMap& kept)
+{
+    m_context->ForgetBuckets(std::exchange(*m_buckets, 0));
+    m_map->swap(kept);
+    m_map->clear();
+}
+
+inline void ScopeRef::RestoreFrom(InternalValueMap& kept)
+{
+    JINJA2CPP_ASSERT(m_map->empty());
+    if (kept.empty())
+    {
+        return;
+    }
+    m_map->swap(kept);
+    // Names whose buckets the scope does not know, as RenderContext::EnterScope(map) has
+    m_context->NewEpoch();
+    *m_buckets = ~uint32_t{ 0 };
 }
 
 // Sets the autoescape modes (RenderContext::IsAutoescape) for a scope and restores the
