@@ -401,6 +401,85 @@ TEST(RenderOptionsTest, PollRunsDuringALongRenderAndMayStopIt)
     EXPECT_THROW(std::rethrow_exception(result.error().GetException()), PollStop);
 }
 
+TEST(RenderOptionsTest, ModulePollRunsDuringItsRenderAndItsMacroCalls)
+{
+    // Template::MakeModule with RenderOptions (docs/tasks/0440): the poll runs during the top level's render and,
+    // kept by the module, during each call of its macros
+    TemplateEnv env;
+    auto tpl = env.FromString("{% for i in range(20000) %}{% endfor %}{% macro m(n) %}{% for i in range(n) %}{{ i }}{% endfor %}{% endmacro %}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    int polls = 0;
+    bool stop = false;
+    RenderOptions options;
+    options.poll = [&polls, &stop] {
+        ++polls;
+        if (stop)
+        {
+            throw PollStop{};
+        }
+    };
+    auto module = tpl->MakeModule({}, options);
+    ASSERT_TRUE(module) << module.error().ToString();
+    EXPECT_GT(polls, 5);
+
+    const auto& macro = module->exports["m"].As<UserCallable>();
+    UserCallableParams params;
+    params.extraPosArgs = ValuesList{ 20000 };
+    polls = 0;
+    EXPECT_NO_THROW(macro.callable(params));
+    EXPECT_GT(polls, 5);
+
+    // A throwing poll stops the call, which fails with its exception
+    stop = true;
+    polls = 0;
+    try
+    {
+        macro.callable(params);
+        FAIL() << "the call was not stopped";
+    }
+    catch (const BadResultAccess<char>& failure)
+    {
+        EXPECT_EQ(1, polls);
+        ASSERT_TRUE(failure.error().GetException());
+        EXPECT_THROW(std::rethrow_exception(failure.error().GetException()), PollStop);
+    }
+    // The module works again once the poll lets it
+    stop = false;
+    params.extraPosArgs = ValuesList{ 3 };
+    EXPECT_EQ("012", macro.callable(params).AsString());
+
+    // Without options nothing polls the module or its calls
+    auto plain = tpl->MakeModule();
+    ASSERT_TRUE(plain) << plain.error().ToString();
+    polls = 0;
+    stop = true;
+    params.extraPosArgs = ValuesList{ 20000 };
+    EXPECT_NO_THROW(plain->exports["m"].As<UserCallable>().callable(params));
+    EXPECT_EQ(0, polls);
+}
+
+TEST(RenderOptionsTest, ModuleGlobalsReplaceTheEnvironments)
+{
+    TemplateEnv env;
+    env.AddGlobal("site", std::string("env"));
+    env.AddGlobal("only_env", 1);
+    auto tpl = env.FromString("{% set top = site %}{% macro m() %}{{ site }} {{ only_env is defined }} {{ arg }}{% endmacro %}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    RenderOptions options;
+    options.globals = std::make_shared<const ValuesMap>(ValuesMap{ { "site", std::string("host") }, { "arg", std::string("global") } });
+    // The params are on top of the globals
+    auto module = tpl->MakeModule({ { "arg", std::string("param") } }, options);
+    ASSERT_TRUE(module) << module.error().ToString();
+    EXPECT_EQ("host", module->exports["top"].AsString());
+    options.globals.reset();
+    EXPECT_EQ("host False param", module->exports["m"].As<UserCallable>().callable(UserCallableParams{}).AsString());
+
+    // Null globals keep the environment's
+    auto envModule = tpl->MakeModule({}, RenderOptions{});
+    ASSERT_TRUE(envModule) << envModule.error().ToString();
+    EXPECT_EQ("env", envModule->exports["top"].AsString());
+}
+
 TEST(RenderOptionsTest, PollKeepsTheTemplatesLimits)
 {
     TemplateEnv env;

@@ -595,9 +595,10 @@ public:
     // The same for a source the caller has not copied yet: the copy is made out of its path
     static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string&& name);
 
-    // Template::MakeModule: renders the template, which `self` owns, as a module for the host
-    // (template_module.cpp)
-    static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params);
+    // Template::MakeModule: renders the template, which `self` owns, as a module for the host, with the host's
+    // globals and poll of `options` when it is not null (template_module.cpp)
+    static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params,
+                                                                                          const RenderOptions* options = nullptr);
 
     // What a render takes besides its params (Template::RenderTo with RenderOptions, docs/tasks/0357 B3)
     struct RenderHooks

@@ -578,6 +578,24 @@ public:
      * @return The module, or the error of the render (TemplateNotParsed before a successful Load)
      */
     [[nodiscard]] Result<BasicTemplateModule<CharT>, CharT> MakeModule(const ValuesMap& params = {}) const;
+    /*!
+     * \brief \ref MakeModule with the host's globals and poll of \ref RenderOptions
+     *
+     * `options.globals`, when not null, take the place of the environment's globals for the module: its top level
+     * and the calls of its macros see them under `params`. They are copied into the module, as the params are.
+     * `options.poll` is called as it is in a render, during the render of the module's top level and during each
+     * call of one of its macros (\ref BasicTemplateModule), which keeps a copy of it for those calls: a call made in
+     * a render polled by another poll is polled by this one. It may throw to stop the render or the call, which
+     * then fails with the exception (a call throws \ref BadResultAccess "BadResultAccess<CharT>" holding it in its
+     * error). It is called on the thread of the call and must stay callable while a macro of the module may be.
+     * The other options are for a render's output and are ignored.
+     *
+     * @param params   Set of params which the template's top level and its macros see
+     * @param options  The globals and the poll of the module
+     *
+     * @return The module, or the error of the render (TemplateNotParsed before a successful Load)
+     */
+    [[nodiscard]] Result<BasicTemplateModule<CharT>, CharT> MakeModule(const ValuesMap& params, const RenderOptions& options) const;
 
     /* !
      * \brief compares to an other object of the same type
