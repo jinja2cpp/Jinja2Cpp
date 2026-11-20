@@ -157,7 +157,11 @@ public:
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ContextPartMapper*>(&other);
-        return val && val->m_part == m_part && m_source->IsEqual(*val->m_source);
+        if (!val)
+        {
+            return false;
+        }
+        return val->m_part == m_part && m_source->IsEqual(*val->m_source);
     }
 
 private:

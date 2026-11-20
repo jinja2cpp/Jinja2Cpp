@@ -1632,6 +1632,28 @@ private:
             });
         return result;
     }
+    // Adds the names of the params, the external, global and built-in scopes (FindInOuterLevels)
+    void AddOuterLevelNames(std::vector<std::string>& names) const
+    {
+        if (m_params)
+        {
+            for (const auto& param : *m_params)
+            {
+                names.emplace_back(param.name);
+            }
+        }
+        for (const auto* map : { m_externalScope, m_globalScope, m_builtinScope })
+        {
+            if (!map)
+            {
+                continue;
+            }
+            for (const auto& entry : *map)
+            {
+                names.emplace_back(entry.first);
+            }
+        }
+    }
     // The names a part of Python's Context holds (CollectTopLevelNames), sorted, each once
     [[nodiscard]] std::vector<std::string> CollectPartNames(bool topLevel) const
     {
@@ -1661,23 +1683,7 @@ private:
             });
         if (!topLevel)
         {
-            if (m_params)
-            {
-                for (const auto& param : *m_params)
-                {
-                    names.emplace_back(param.name);
-                }
-            }
-            for (const auto* map : { m_externalScope, m_globalScope, m_builtinScope })
-            {
-                if (map)
-                {
-                    for (const auto& entry : *map)
-                    {
-                        names.emplace_back(entry.first);
-                    }
-                }
-            }
+            AddOuterLevelNames(names);
         }
         std::sort(names.begin(), names.end());
         names.erase(std::unique(names.begin(), names.end()), names.end());
