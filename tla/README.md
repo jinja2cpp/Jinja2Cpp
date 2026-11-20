@@ -22,13 +22,15 @@ python3 tla/check.py --only mixed threads   # ... about 1h40m ...
 python3 tla/check.py --except render mixed threads   # ... and 1h10m
 python3 tla/check.py --only f1-nested-export --traces
 python3 tla/check.py --list
+python3 tla/check.py --kind exhaustive            # past the level bound: about 90 minutes
+python3 tla/check.py --simulate 900 --depth 40    # random behaviours of each pass run, 15 min each
 ```
 
 The GitHub Actions workflow `tla-model` (`.github/workflows/tla-model.yml`, task 0350) runs
 the same suite in four parallel jobs (`render`, `mixed`, `threads` and the rest) as a routine,
 not per pull request: weekly on master when `tla/` changed, and on demand from the Actions tab
 (Run workflow, on any branch or tag such as a frozen release candidate, optionally with a list
-of runs).
+of runs). It has two more shards, `exhaustive` and `simulate` (see "Past the depth bound").
 Prefer it to a local run for anything longer than an hour: the job summary has a row per run
 and the `tlc-*` artifacts keep each run's `MC.cfg` and `tlc.out`.
 
@@ -38,7 +40,8 @@ run but those, `--cache DIR` (or `TLC_CACHE`) skips a run whose spec, model and 
 match an expected verdict recorded there (the workflow keeps one per shard), and `--java-opts` (or `TLC_JAVA_OPTS`) passes JVM options to TLC.
 
 Java 11 or later is needed. `--set Name=Value` overrides a constant, for example
-`--set MaxLevel=14`. `--timeout SECONDS` limits each run; a run stopped by it fails as
+`--set MaxLevel=14`. `--kind KIND ...` selects the runs of some kinds (`pass`, `exhaustive`,
+`mutant`, `finding`). `--timeout SECONDS` limits each run; a run stopped by it fails as
 inconclusive, so a pass is always a completed search of its bounded space. Each run writes `MC.cfg` and `tlc.out` into a temporary directory; the
 last line of the output names it. The TLA+ Toolbox or the VS Code TLA+ extension can open
 `CellProtocol.tla` with such an `MC.cfg`.
@@ -119,7 +122,9 @@ What the model abstracts:
 Bounds: owned addresses `O1` and `O2`, values up to 3, one allocation failure, and two
 exports. "Level" is the most states a behaviour has (TLC's BFS depth, the initial state is
 level 1), and each GC or DropUnheld step counts as one. `Next` stops at that level, so TLC
-explores every behaviour up to it and none past it.
+explores every behaviour up to it and none past it: every run in this table is
+**depth-bounded**. The exhaustive runs, which check every behaviour of smaller scopes at any
+length, and the simulation are in "Past the depth bound" below.
 
 | Run | Scope | Result |
 |---|---|---|
@@ -339,6 +344,58 @@ module cell at the top (task 0361). Before step D they kept what the pin recorde
 failure and read the host's data for the rest, a mix of the call's end and its start
 (`FailedCallsPinIsAllOrNothing` shows `[[0], 2]` on that code).
 
+## Past the depth bound (task 0351)
+
+Every run in the table above is **depth-bounded**: `Next` stops at its level, 9 to 16 states,
+and the space grows about six times a level, so a faster machine buys one level at most. Two
+kinds of run go past it.
+
+**Exhaustive runs** (kind `exhaustive`) have no level bound (`MaxLevel` is 1,000,000) and
+smaller allocation bounds. Since every scope is finite (see "Depth: every scope is finite"
+below), TLC reaches a fixed point: the run passes only on "No error" with the depth of the
+complete search below the guard, which `check.py` checks. That is a check of **every behaviour
+of those constants, at any length**, the result an inductive invariant would give for them.
+The bounds are written `MaxAd/MaxCell/MaxGen/MaxEx`; a module call takes two adapters, so
+`MaxAd=6` is three calls and `8` four. Measured on 4 cores (the runner is about 1.9 times
+slower):
+
+| Run | Scope | Bounds | States | Fixed point at depth | Time |
+|---|---|---|---|---|---|
+| `module-exhaustive` | 1 thread: module calls, nested through a callback | 6/2/2/1 | 22,593,199 | 35 | 26 min |
+| `module-0332-exhaustive` | `module-0332`: `keep([x])`, nested writes, `drop` | 6/1/2/1 | 3,167,437 | 27 | 3 min |
+| `module-generic-exhaustive` | `module-generic`: generic containers the host may keep | 6/1/2/1 | 34,093,829 | 31 | 26 min |
+| `threads-module-exhaustive` | `threads-module`: two threads, module calls only | 6/2/2/1 | 9,181,371 | 33 | 8 min |
+| `threads-module-exhaustive-4` | the same, four calls | 8/1/2/1 | 14,263,417 | 34 | 12 min |
+| `threads-module-kept-exhaustive` | `threads-module-kept`: `keep([x])` handed off | 8/1/2/1 | 15,417,037 | 33 | 10 min |
+| `render-exhaustive` | `render`: renders nested through a callback | 4/2/2/1 | 480,498 | 19 | 1 min |
+| `mixed-exhaustive` | `mixed`: renders and module calls on one thread | 4/2/2/1 | 1,389,466 | 29 | 2 min |
+| `threads-exhaustive` | `threads`: two threads, renders and the locked module | 4/1/2/1 | 123,118 | 22 | 10 s |
+
+All nine find no error, with every pass invariant (`WellFormed` included): 88 minutes in all,
+one weekly shard.
+
+The depths, 19 to 35 states, are about twice the levels of the depth-bounded runs of the
+same scopes, and past the 14 steps the deep counterexamples needed. What they do not cover is
+larger allocation bounds: `module-0332`, `module-generic` and `render` with two cells and three
+calls (6/2) did not finish in 30 minutes, at levels 22, 18 and 17. The depth-bounded runs keep
+the larger bounds; the two kinds together cover long behaviours of few objects and short
+behaviours of more.
+
+**Simulation** (`--simulate SECONDS --depth N`, the weekly `simulate` shard: every pass run,
+15 minutes each, 40 states) runs TLC's random simulation: it samples whole behaviours of up to
+`N` states with the level guard off, in the full scopes of the pass runs. It is not a proof:
+a pass means no violation in the sample. The seed is printed, and `--seed` repeats it with one
+worker. Its power, measured on mutants (120 s each, depth 40):
+
+| Mutant | Found by simulation |
+|---|---|
+| `f1-nested-export`, `no-sort-refetch`, `no-call-pin-nested`, `call-id-wrap-no-pin`, `no-freeze`, `no-read-only-export` | yes, in 0 to 4 s |
+| `no-enum-refetch` (the deep loop counterexample, about 14 steps) | yes, in 78 s |
+| `render-links-unowned`, `module-links-unowned` (a hand-off on the other thread at one point of the call) | no, also at depth 16 and 24 with 300 s |
+
+So simulation finds deep defects that most interleavings reach, and misses ones that need one
+narrow interleaving; those are what the exhaustive and depth-bounded runs are for.
+
 ## Past the bounds: depth, sizes and Apalache (task 0338, step F)
 
 Step F was to replace "bounded" with inductive invariants checked by Apalache plus a cutoff
@@ -404,8 +461,9 @@ a cell) and in `FinishFreeze` of a render with listed cells, so it stays at or b
 or below `MaxAd / 2`; `fails <= MaxFail`, values `<= MaxVal`. Every other field ranges over a
 finite set. So each scope has finitely many reachable states, and a run without the level
 guard that completes checks every behaviour of that scope, at any length. That is what an
-inductive invariant gives for fixed constants; task 0351 (item 1) runs it. It is slow, not
-blocked: `module` at 6/2/3/1 with `MaxLevel=500` had not finished after 25 minutes.
+inductive invariant gives for fixed constants; the exhaustive runs (task 0351, "Past the
+depth bound" above) do it for small allocation bounds. It is slow, not blocked: `module` at
+6/2/3/1 had not finished after 25 minutes, while 6/2/2/1 finishes in 27.
 
 ### Sizes: the cutoff argument
 
@@ -475,8 +533,9 @@ rest, so they test the argument's assumptions rather than prove them.
 
 Bounded evidence, not a proof. Each pass run covers every behaviour up to its level within its
 bounds, under sequentially consistent interleavings of the steps listed above. Each scope is
-finite, so a run without the level bound that completes covers every behaviour of its scope
-(task 0351); the cutoff argument above, on paper, carries the results to more threads and
+finite, so a run without the level bound that completes covers every behaviour of its scope:
+the exhaustive runs do that for small allocation bounds, and the simulation samples deeper
+behaviours of the larger ones (task 0351); the cutoff argument above, on paper, carries the results to more threads and
 identities, with the limits it states. The mechanized inductive proof is task 0363. The path
 from here to a safety argument for the implementation is task 0338.
 

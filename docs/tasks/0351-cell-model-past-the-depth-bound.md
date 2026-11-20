@@ -1,6 +1,6 @@
 ---
-status: open
-pr:
+status: in-progress
+pr: PRLINK
 priority: medium
 area: robustness
 depends: [0338, 0350]
@@ -44,3 +44,26 @@ validation of 0338 step B, so it is worth it only if Apalache cannot handle `Clo
 
 **Done when** the README states, per run, whether it is depth-bounded or exhaustive for its
 constants, and the weekly job runs the exhaustive and simulation kinds.
+
+**Resolution (2026-11-20).** Items 1 and 2 are in `tla/check.py`, the `tla-model` workflow and
+`tla/README.md` ("Past the depth bound"):
+
+- Run kind `exhaustive` (`MaxLevel` 1,000,000; the verdict needs TLC's "No error" and a complete
+  search depth below the guard) and `--kind`. Nine runs: `module`, `module-0332`,
+  `module-generic`, `threads-module` (twice), `threads-module-kept`, `render`, `mixed` and
+  `threads`, with allocation bounds of two to four module calls and one or two cells. All reach
+  their fixed points with no error, at depths 19 to 35, 88 minutes in all on 4 cores; the same
+  scopes with `FixCallPin` or the owning links off still find their counterexamples. The 6/2
+  bounds of `module-0332`, `module-generic` and `render` did not finish in 30 minutes and stay
+  depth-bounded only.
+- `--simulate SECONDS --depth N --seed S`: TLC's random simulation with the guard off, pass
+  runs by default. Measured on mutants: it finds F1, the loop and sort counterexamples and four
+  others in seconds, and misses the two hand-off mutants (`render-links-unowned`,
+  `module-links-unowned`) even with 300 s, so it complements the exhaustive runs and does not
+  replace them.
+- The weekly job has two more shards, `exhaustive` and `simulate` (each pass run 15 minutes,
+  40 states); the `rest` shard keeps the depth-bounded pass, mutant and finding runs.
+- The README states per run whether it is depth-bounded (the Results table) or exhaustive (the
+  new table).
+
+Item 3 stays with 0338 step F and task 0363.
