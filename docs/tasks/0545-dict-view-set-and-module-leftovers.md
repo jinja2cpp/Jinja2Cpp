@@ -58,3 +58,12 @@ Markup's `encoding` refuses a str base.
 
 **Done when** the module-divergences lines above are gone, items 4-7 have corpus cases that match or are recorded deliberate, the set methods have corpus cases that match in narrow and
 wide runs, and `d.keys() | indent` reports Python's message.
+
+**Decisions (2026-11-20, batch 11 C).** Public API: `IListItemAccessor::GetViewClass()` (virtual, default null)
+and `GenericList::GetViewClass()` in jinja2cpp/generic_list.h, so a host learns that a lent list is a
+`dict_keys`, `dict_values`, `dict_items` or `set` (as `IsTuple`, `GetObjectClass` do). Additive; adding a virtual
+to `IListItemAccessor` changes its vtable, accepted while the G1 freeze is postponed. Item 1 already matched
+(cases added). Item 5's `range.mro()` matches in a plain environment (the oracle's `range` is the builtin class);
+in the module's sandbox it is `safe_range`'s UndefinedError. Deliberate lines (tag 0545): sets changed in a loop
+over them (follow-up 0560), an entry erased and re-added on every pass, and the lazy pipelines and mappingproxy
+loops that walk a snapshot. Not probed: `Markup.format` of a host `__html__` object with a non-empty spec.

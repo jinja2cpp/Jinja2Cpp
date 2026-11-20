@@ -29,3 +29,12 @@ counter of the environment).
 
 **Done when.** Each case above has a row in `python/tests/test_sandbox.py` that agrees with the oracle,
 and the matching sentence in the Sandbox bullet of `docs/python.md` is gone.
+
+**Result (2026-11-20, batch 11 C).** Bullets 1-2 already matched the oracle (rows added). Bullet 3: the module's
+`PyEnvironment::Enter()` reads `_sandbox_judges_public_names()` at every native entry, so a template loaded
+before a stricter `is_safe_attribute` is asked the new question, includes too. Bullet 4: an `unsafe_undefined`
+result of any kind is the attribute for the engine's values. Bullet 5: the groupby tuple's fields and a range's
+attributes are asked (`_GroupTuple`, `range` stand-ins). Bullet 6: `loop`, cycler, joiner and namespace no longer
+take dict mutators. Left as a documented difference (strict xfail row): the value a custom `is_safe_attribute`
+receives for the engine's containers (an empty stand-in) and for loop, cycler, namespace and macro attributes
+(`None`); handing the real container would cost a conversion per attribute read.
