@@ -343,6 +343,10 @@ struct LoopState : ValueObject
     std::optional<ListRef> sizeOfList;
     // Whether the item after the current one is fetched, isLast telling if there is one
     bool isPeeked = false;
+    // The failure of a walk over what a loop object kept past its statement had left (a dict changed in the body),
+    // which Python raises only when the kept loop goes on: set by CollectRest of such a loop, thrown by the step that
+    // would fetch the item after the last one collected
+    std::exception_ptr keptFailure;
     // Whether the enumerator can run past the statement: over indexedList, the rest the state
     // collected (CollectRest), or over a `loop` object, which collects its own rest when kept
     // (docs/tasks/0390); not over a list of the statement
@@ -426,6 +430,10 @@ struct LoopState : ValueObject
             {
                 Item(index0 + 1) = current->GetCurrent();
             }
+            else if (keptFailure)
+            {
+                std::rethrow_exception(keptFailure);
+            }
         }
         else
         {
@@ -450,6 +458,10 @@ struct LoopState : ValueObject
                 item = (*enumerator)->GetCurrent();
             }
             isAdvancing = false;
+            if (!hasNext && keptFailure)
+            {
+                std::rethrow_exception(keptFailure);
+            }
             return hasNext;
         }
         catch (...)
@@ -478,6 +490,7 @@ struct LoopState : ValueObject
         }
         listSize.reset();
         sizeOfList.reset();
+        keptFailure = nullptr;
         index0 = 0;
         isLast = false;
         isAdvancing = false;
@@ -606,31 +619,58 @@ struct LoopState : ValueObject
     // object kept past its statement (`set ns.x = loop`), whose enumerator may run over a
     // list the statement owned: iterating the object goes on after the item it stopped at.
     // Returns the loop's length
-    size_t CollectRest()
+    // `keptPastStatement`: the loop object outlives its statement, where a failing walk (a dict changed in the body) is
+    // Python's only if the kept loop is iterated: the items collected up to it are kept, and the failure is thrown when
+    // the loop goes past them (keptFailure)
+    size_t CollectRest(bool keptPastStatement = false)
     {
         // Collecting the rest from inside the filter would replace the enumerator that is
         // running it. Jinja2 has no `loop` in the filter at all
-        Peek();
-        // A length taken from what the loop runs over stays: Jinja2 keeps the first len()
-        if (!listSize || sizeOfList)
-        {
-            TakeLengthOf();
-        }
-        // On the last item the enumerator has nothing left to collect
-        if (isLast)
-        {
-            listSize = listSize.value_or(index0 + 1);
-            enumerator.reset();
-            lazyFilter = nullptr;
-            return index0 + 1;
-        }
-
-        // The rest after the next item, which is fetched
         InternalValueList rest;
-        for (InternalValue item; FetchNext(item);)
+        try
         {
-            CheckSequenceSize(rest.size() + 1, "a loop");
-            rest.push_back(std::move(item));
+            Peek();
+            // A length taken from what the loop runs over stays: Jinja2 keeps the first len()
+            if (!listSize || sizeOfList)
+            {
+                TakeLengthOf();
+            }
+            // On the last item the enumerator has nothing left to collect
+            if (isLast)
+            {
+                listSize = listSize.value_or(index0 + 1);
+                enumerator.reset();
+                lazyFilter = nullptr;
+                return index0 + 1;
+            }
+
+            // The rest after the next item, which is fetched
+            for (InternalValue item; FetchNext(item);)
+            {
+                CheckSequenceSize(rest.size() + 1, "a loop");
+                rest.push_back(std::move(item));
+            }
+        }
+        catch (const TemplateRuntimeError& error)
+        {
+            // Only the failure of a dict walk (RuntimeError in Python) waits for the loop to be iterated
+            if (!keptPastStatement || lazyFilter || std::string_view(error.what()).substr(0, 11) != "dictionary ")
+            {
+                throw;
+            }
+            // The item after the current one is fetched or not, as the failing step left it
+            isAdvancing = false;
+            keptFailure = std::current_exception();
+            if (!listSize || sizeOfList)
+            {
+                try
+                {
+                    TakeLengthOf();
+                }
+                catch (const TemplateRuntimeError&) // NOLINT(bugprone-empty-catch): the length stays unknown
+                {
+                }
+            }
         }
 
         const size_t length = listSize.value_or(index0 + rest.size() + 2);
@@ -723,7 +763,7 @@ JINJA2CPP_NOINLINE_INLINE void KeepLoopState(LoopState& state, bool isFiltered, 
         state.keepsEnumerator = true;
         return;
     }
-    state.CollectRest();
+    state.CollectRest(true);
 }
 
 // Fetches the item after `itemIdx` once the body is done with it, through the enumerator

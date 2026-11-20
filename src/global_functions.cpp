@@ -1331,7 +1331,37 @@ InternalValue CallPythonClass(std::string_view className, const CallParams& para
                 ThrowTypeError("Markup.__new__() got an unexpected keyword argument '" + kw.first + "'");
             }
         }
-        CheckClassArguments("Markup", params, 1);
+        CheckClassArguments("Markup", params, 3);
+        // An encoding other than None is str()'s: the engine has no bytes, so a base is never decodable
+        const InternalValue* encoding = params.posParams.size() > 1 ? &params.posParams[1] : nullptr;
+        for (const auto& kw : params.kwParams)
+        {
+            if (kw.first == "encoding")
+            {
+                if (encoding)
+                {
+                    ThrowTypeError("Markup.__new__() got multiple values for argument 'encoding'");
+                }
+                encoding = &kw.second;
+            }
+        }
+        if (encoding && !encoding->IsNone())
+        {
+            if (!IsStringValue(*encoding))
+            {
+                ThrowTypeError(std::string("str() argument 'encoding' must be str, not ") + Apply<visitors::PythonTypeNameGetter>(*encoding));
+            }
+            if (params.posParams.empty() || IsStringValue(params.posParams.front()))
+            {
+                ThrowTypeError("decoding str is not supported");
+            }
+            // An object with __html__ is its markup, a str
+            if (const auto* host = GetHostObject(params.posParams.front()); !host || !host->IsMarkupLike())
+            {
+                ThrowTypeError(std::string("decoding to str: need a bytes-like object, ") + Apply<visitors::PythonTypeNameGetter>(params.posParams.front()) + " found");
+            }
+            ThrowTypeError("decoding str is not supported");
+        }
         return params.posParams.empty() ? InternalValue(std::string()).SetMarkup() : ApplyBuiltinFilter("safe", CallParams(), params.posParams.front(), context);
     }
     if (IsUndefinedClass(className))

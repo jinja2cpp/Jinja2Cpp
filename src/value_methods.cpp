@@ -4097,6 +4097,12 @@ InternalValue MakeMutable(const InternalValue& value)
     {
         return value;
     }
+    // Nor an object that keeps its attributes as a map (loop, cycler, joiner): a copy would be a dict that
+    // takes the dict methods the object lacks (docs/tasks/0425)
+    if (auto map = AsMap(value); map && map->GetObjectClass())
+    {
+        return value;
+    }
     if (auto map = AsMap(value))
     {
         TemplateDict items;

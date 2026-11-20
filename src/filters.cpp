@@ -1472,11 +1472,11 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 throw TemplateRuntimeError("'"s + view + "' object is not subscriptable");
             }
         }
-        // random.choice of a mappingproxy reads it at a random index below its len(): that key's value, or a
+        // random.choice of a dict or mappingproxy reads it at a random index below its len(): that key's value, or a
         // KeyError (docs/tasks/0538)
         if (m_mode == RandomMode)
         {
-            if (const auto proxy = AsMap(baseVal); proxy && proxy->GetProxiedMapping() && proxy->GetSize() != 0)
+            if (const auto proxy = AsMap(baseVal); proxy && !proxy->GetObjectClass() && !proxy->IsHost() && proxy->GetSize() != 0)
             {
                 std::random_device rd;
                 std::mt19937 gen(rd());

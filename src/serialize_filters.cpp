@@ -136,7 +136,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         CheckStack();
         if (auto list = AsList(val))
         {
-            if (list->GetRangeInfo())
+            // A dict view has a size, and may hold the dict that holds it
+            if (list->GetRangeInfo() || IsViewKind(list->GetIteratorKind()))
             {
                 return false;
             }
@@ -216,15 +217,66 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return hostItems ? std::optional<ListRef>(hostItems->Ref()) : AsList(val);
     }
 
-    void FormatTo(std::string& out, const InternalValue& val, int64_t indent, int64_t allowance, int level) const
+    static bool IsViewKind(IteratorKind kind) { return IsSetKind(kind) || kind == IteratorKind::DictValues; }
+
+    // The identity and Python class name of a container pprint breaks over lines and tracks in its context: a dict, a
+    // mappingproxy, a list or a tuple. Null for any other value
+    static const void* ContainerIdentity(const InternalValue& val, const char*& typeName)
+    {
+        if (const auto map = AsMap(val); map && !map->GetObjectClass() && !map->IsHost())
+        {
+            typeName = map->GetProxiedMapping() ? "mappingproxy" : "dict";
+            return map->GetIdentity();
+        }
+        if (const auto list = AsList(val); list && !list->GetRangeInfo() && list->GetIteratorKind() == IteratorKind::None && !GetHostObject(val))
+        {
+            typeName = list->IsTuple() ? "tuple" : "list";
+            return list->GetIdentity();
+        }
+        return nullptr;
+    }
+
+    // `fresh`: val is a copy Python makes (the dict a mappingproxy prints), which no context holds
+    void FormatTo(std::string& out, const InternalValue& val, int64_t indent, int64_t allowance, int level, bool fresh = false) const
     {
         CheckStack();
+        const char* typeName = nullptr;
+        const void* identity = fresh ? nullptr : ContainerIdentity(val, typeName);
+        if (identity && std::find(m_stack.begin(), m_stack.end(), identity) != m_stack.end())
+        {
+            Write(out, fmt::format("<Recursion on {} with id={}>", typeName, reinterpret_cast<std::uintptr_t>(identity)));
+            return;
+        }
         // Markup has a repr of its own, which pprint does not break
         if (val.IsMarkup() || ReprWidthAtMost(val, Width - indent - allowance) <= Width - indent - allowance)
         {
             Write(out, Print(val, m_context));
             return;
         }
+        // pprint's context: the containers it is breaking over lines, whose reference in itself prints as a recursion
+        struct StackEntry
+        {
+            std::vector<const void*>& stack;
+            bool pushed;
+            StackEntry(std::vector<const void*>& stackRef, const void* id)
+                : stack(stackRef)
+                , pushed(id != nullptr)
+            {
+                if (pushed)
+                {
+                    stack.push_back(id);
+                }
+            }
+            StackEntry(const StackEntry&) = delete;
+            StackEntry& operator=(const StackEntry&) = delete;
+            ~StackEntry()
+            {
+                if (pushed)
+                {
+                    stack.pop_back();
+                }
+            }
+        } const stackEntry(m_stack, identity);
         std::optional<ListAdapter> hostItems;
         if (auto list = ListOf(val, hostItems))
         {
@@ -233,7 +285,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 Write(out, Print(val, m_context));
                 return;
             }
-            if (const auto kind = list->GetIteratorKind(); IsSetKind(kind) || kind == IteratorKind::DictValues)
+            if (const auto kind = list->GetIteratorKind(); IsViewKind(kind))
             {
                 // pprint has no layout for a dict view: its repr stays on one line. A set breaks as a list does, in braces and
                 // sorted (_pprint_set, docs/tasks/0545)
@@ -268,7 +320,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             if (const auto* proxied = map->GetProxiedMapping())
             {
                 out += "mappingproxy(";
-                FormatTo(out, *proxied, indent + 13, allowance + 1, level);
+                FormatTo(out, *proxied, indent + 13, allowance + 1, level, true);
                 out += ')';
                 return;
             }
@@ -309,7 +361,9 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             return limit + 1;
         }
         std::optional<ListAdapter> hostItems;
-        if (auto list = ListOf(val, hostItems); list && !list->GetRangeInfo())
+        // A dict view or set is measured by its repr, as pprint's _safe_repr takes it: it may hold the dict that holds it,
+        // which the repr prints as `...` where a walk of its items would not end
+        if (auto list = ListOf(val, hostItems); list && !list->GetRangeInfo() && !IsViewKind(list->GetIteratorKind()))
         {
             return ItemsWidthAtMost(*list, limit);
         }
@@ -707,6 +761,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     std::string operator()(const BigIntView& val) const { return std::string(CheckedDecimal(val)); }
 
     const RenderContext* m_context;
+    // The containers FormatTo is breaking over lines
+    mutable std::vector<const void*> m_stack;
 };
 
 PrettyPrint::PrettyPrint(const FilterParams& params)

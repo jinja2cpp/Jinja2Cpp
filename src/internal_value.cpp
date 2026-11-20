@@ -5464,7 +5464,7 @@ std::optional<InternalValue> ClassObjectAttribute(const InternalValue& value, st
     });
     // Printed as Python's <built-in method mro of type object at 0x...>
     mro.SetBoundMethod(nullptr, "mro");
-    mro.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__self__", value } }));
+    mro.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__self__", value }, { "__name__", InternalValue(std::string("mro")) }, { "__qualname__", InternalValue(std::string(name) + ".mro") } }));
     return InternalValue(std::move(mro));
 }
 
