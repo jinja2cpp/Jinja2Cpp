@@ -22,6 +22,7 @@
 #include "value_methods.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
@@ -37,6 +38,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -277,6 +279,58 @@ std::optional<bool> TryFoldTruth(RenderContext& values, NodeRef<Expression> expr
     }
 }
 } // namespace
+
+bool OutputFoldsAt(RenderContext& values, NodeRef<Expression> expr, bool byChoice, const void* key)
+{
+    try
+    {
+        if (byChoice && !values.Nodes()[expr].IsFoldableAt(values))
+        {
+            return false;
+        }
+        auto value = values.Nodes()[expr].Evaluate(values);
+        if (value.IsUndefined())
+        {
+            if (const auto* info = GetUndefinedInfo(value); info && info->policy == UndefinedPolicy::Strict)
+            {
+                return false;
+            }
+        }
+        // The render writes this value next (FoldedOutputRenderer::Render)
+        values.KeepFoldedValue(key, std::move(value));
+        return true;
+    }
+    // What fails the render whenever it happens, rather than what Jinja2's as_const turns into a run-time
+    // evaluation (FinalizedExpressionRenderer::TryFinalize)
+    catch (const detail::HostUnrecoverableError&)
+    {
+        throw;
+    }
+    catch (const std::bad_alloc&)
+    {
+        throw;
+    }
+    catch (const ResourceLimitError&)
+    {
+        throw;
+    }
+    catch (const RecursionLimitError&)
+    {
+        throw;
+    }
+    catch (const std::exception&)
+    {
+        return false;
+    }
+    catch (const ErrorInfo&)
+    {
+        return false;
+    }
+    catch (const ErrorInfoW&)
+    {
+        return false;
+    }
+}
 
 std::uint8_t Expression::PrepareFold(const NodeArena& nodes)
 {
@@ -638,7 +692,11 @@ InternalValue FilteredExpression::Evaluate(RenderContext& values)
 InternalValue UnaryExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    auto value = values.Nodes()[m_expr].Evaluate(values);
+    return EvaluateWith(values.Nodes()[m_expr].Evaluate(values));
+}
+
+InternalValue UnaryExpression::EvaluateWith(const InternalValue& value) const
+{
     if (m_oper == LogicalNot)
     {
         return !ConvertToBool(value);
@@ -732,6 +790,16 @@ bool BinaryExpression::IsFoldableAt(RenderContext& values) const
             return true;
         }
     }
+    return OperandFoldsAt(values, m_rightExpr, m_rightFold);
+}
+
+bool BinaryExpression::LeftFoldsAt(RenderContext& values) const
+{
+    return OperandFoldsAt(values, m_leftExpr, m_leftFold);
+}
+
+bool BinaryExpression::RightFoldsAt(RenderContext& values) const
+{
     return OperandFoldsAt(values, m_rightExpr, m_rightFold);
 }
 

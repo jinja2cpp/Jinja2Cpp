@@ -173,6 +173,19 @@ CASES = [
     ("tuple_of_slices_strict_conditional_output_concat", "[{{ x ~ (1 if ()[:, :] else 2) }}]", {"env": {"undefined": "strict"}}),
     # a strict filter chain: each step is a candidate, evaluated from the step before it (0527)
     ("tuple_of_slices_strict_filter_chain", "{% set q = [1][:, :]|default([3, 1])|sort|first|string %}[{{ q }}]", {"env": {"undefined": "strict"}}),
+    # 0536: Jinja2's batch, slice, unique and items return generators, which fold on a strict undefined
+    ("tuple_of_slices_strict_generator_filters", "{{ ([1][:, :]|batch(2)) is defined }}|{{ ([1][:, :]|slice(2)) is defined }}|{{ ([1][:, :]|unique) is defined }}|{{ ([1][:, :]|default([])|items) is defined }}", {"env": {"undefined": "strict"}}),
+    # 0536: a filter's value error is Impossible in the fold too; a conditional whose branches do not both
+    # fold still has its test's truth checked
+    ("tuple_of_slices_strict_conditional_value_error", "{% if false and (1 if [1][:, :]|abs else 2) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_unfolded_branch", "{% if false and (1 if 1 else x if [1][:, :] else x) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_unfolded_alt", "{% if false and (0|list if 1 else [1][:, :] ~ x) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_and_unfolded", "{% if false and ([1][:, :] and x) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_or_unfolded", "{% if false and ([1][:, :] or x) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_concat_unfolded", "{% if false and ([1][:, :] ~ x) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_unfolded_operands_pass", "{% if false and (x ~ [1][:, :]) %}a{% endif %}b|{% if false and (x if 1 else [1][:, :]) %}a{% endif %}b|{% if false and (x if [1][:, :] is defined else 2) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_conditional_unfolded_test", "{% if false and (x if [1][:, :]) %}a{% endif %}b", {"env": {"undefined": "strict"}}),
+    ("tuple_of_slices_strict_operator_chain", "{% if [1][:, :] is undefined or a or b or c %}y{% endif %}|{% if not not not ([1][:, :] is defined) %}n{% endif %}|{% set q = ([1][:, :] is undefined) + 1 + 2 + 3 %}{{ q }}", {"env": {"undefined": "strict"}}),
     # a filter drops an argument it does not take; the argument's fold is still checked (0497)
     ("tuple_of_slices_dropped_filter_argument", "{{ x|first([1][:, :]) }}"),
     ("tuple_of_slices_dropped_filter_argument_folds", "{{ x|first([1][:, :]|sort) }}"),

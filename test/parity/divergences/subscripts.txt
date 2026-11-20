@@ -1,3 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
+subscripts.tuple_of_slices_strict_generator_filters rejects 0536 deliberate: Jinja2's batch, slice, unique and items return a generator, which folds unevaluated on the strict undefined a tuple-of-slices subscript of a list gives; the engine's filters are eager, and its sealed tree evaluates the filter again at each render, so the strict undefined fails the Load

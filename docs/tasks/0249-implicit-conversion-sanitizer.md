@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/951
 priority: medium
 area: robustness
 depends: []
@@ -28,3 +29,18 @@ is provably in range or goes through a checked conversion such as `detail::ToSto
 **Done when.** The Clang sanitizer job builds and runs the tests with
 `implicit-conversion` enabled and green, the ignore list names only vendored code, and
 the boundary-cast audit is done (fixes or filed tasks).
+
+**Result.** `JINJA2CPP_SANITIZE_IMPLICIT_CONVERSION=ON` (cmake/sanitizer.cmake, Clang with
+`address+undefined` only) adds `-fsanitize=implicit-conversion -fno-sanitize-recover=implicit-conversion` and
+cmake/implicit-conversion.ignorelist; the Clang `address+undefined` CI row turns it on. A run of the whole
+suite with the check on everything (dependencies included) hit three places: libstdc++'s `string_view`
+compare and `std::copy` of `char` into `unsigned char` (the standard library, the only ignore-list entry) and
+the wrapping generation counter in src/template_slots.h (made an explicit cast). The vendored code the
+proposal expected to hit (`ankerl`, `lexertk.h`, fmt, Boost) did not, so it is not listed.
+
+Boundary-cast audit (`include/jinja2cpp/`, `bindings/`, reflection, callable arguments, the Python module):
+- `HostResult::Set` of an integer type wider than int64 wrapped a `uint64_t` above `INT64_MAX` to a negative
+  `int`; it now writes the big `int` a `Value` of it holds (test `FastReadOfWideUnsignedIsNotWrapped`).
+- A user callable's narrow integer parameter truncates its argument (`ArgPromoter`): filed as 0544.
+- Reflection and `Value`'s integer constructor go through `detail::ToStoredInt`; the JSON bindings read
+  `int64_t`/`uint64_t` by kind; the Python module converts with `PyLong_AsLongLongAndOverflow`. No change.

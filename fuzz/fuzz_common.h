@@ -173,6 +173,32 @@ inline void ApplySettingsByte(jinja2::Settings& settings, std::uint8_t byte)
     }
 }
 
+// Gettext's style (docs/tasks/0534), from spare bits of a byte the loader and allocation-failure targets already split
+// off (the untrusted and host targets use every bit of their settings byte). Zero, what every earlier seed has there,
+// keeps the newstyle default with no install; make_corpus.py --prefix writes the other values too.
+namespace gettext_bits
+{
+// Settings::Extensions::i18nNewstyle off: Jinja2's default, the oldstyle `{% trans %}` node and globals
+constexpr std::uint8_t Oldstyle = 0x01;
+// Two bits: 0 no install, 1-3 null translations installed with GettextStyle FollowLoad, Oldstyle or Newstyle
+constexpr std::uint8_t InstallShift = 1;
+constexpr std::uint8_t InstallMask = 0x06;
+constexpr std::uint8_t Mask = Oldstyle | InstallMask;
+} // namespace gettext_bits
+
+// Applies the gettext bits: the setting, then the install, whose fixed style the setting does not change
+inline void ApplyGettextBits(jinja2::TemplateEnv& env, std::uint8_t bits)
+{
+    env.GetSettings().extensions.i18nNewstyle = (bits & gettext_bits::Oldstyle) == 0;
+    static constexpr jinja2::GettextStyle styles[] = { jinja2::GettextStyle::FollowLoad, jinja2::GettextStyle::Oldstyle, jinja2::GettextStyle::Newstyle };
+    const auto install = static_cast<unsigned>(bits & gettext_bits::InstallMask) >> gettext_bits::InstallShift;
+    if (install != 0)
+    {
+        // Unset callables keep the untranslated message, as Jinja2's install_null_translations does
+        env.InstallGettextCallables(styles[install - 1], jinja2::UserCallable(), jinja2::UserCallable(), jinja2::UserCallable(), jinja2::UserCallable());
+    }
+}
+
 inline const Delimiters& DelimitersOf(std::uint8_t settingsByte)
 {
     return DelimiterSet(static_cast<unsigned>(settingsByte & settings_byte::DelimiterMask) >> settings_byte::DelimiterShift);
@@ -267,7 +293,7 @@ void FuzzUntrusted(const std::uint8_t* data, std::size_t size);
 // The untrusted target with host callables (typed, *args, **kwargs, *context, throwing), reflected structs and
 // lists, a generated list and host filters and tests
 void FuzzHostSurface(const std::uint8_t* data, std::size_t size);
-// Templates on disk: RealFileSystem or ConfinedFileSystem (the second byte) over a temporary root, with canary files
+// Templates on disk: RealFileSystem or ConfinedFileSystem (bit 0 of the second byte, its next bits the gettext_bits) over a temporary root, with canary files
 // outside it and, for ConfinedFileSystem, links inside it that point at them. Canary text in the output aborts
 void FuzzLoader(const std::uint8_t* data, std::size_t size);
 // Fails the Nth allocation (the first two bytes) of a Load and Render: each ends normally or throws std::bad_alloc,

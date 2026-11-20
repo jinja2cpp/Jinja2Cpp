@@ -394,6 +394,8 @@ void FuzzLoader(const std::uint8_t* data, std::size_t size)
 
     jinja2::TemplateEnv env;
     ConfigureUntrustedEnv(env, settingsByte);
+    // The second byte's bits above `confined` (docs/tasks/0534)
+    ApplyGettextBits(env, static_cast<std::uint8_t>((data[1] >> 1) & gettext_bits::Mask));
     if (confined)
     {
         env.AddFilesystemHandler(std::string(), std::make_shared<jinja2::ConfinedFileSystem>(root.string()));

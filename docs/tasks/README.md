@@ -320,7 +320,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0246](0246-public-comparison-report.md) | A user-facing benchmark and feature-parity comparison with rival engines | docs | high | open |
 | [0247](0247-rival-benchmark-coverage.md) | Cover the rival engines' own benchmark cases, then close the gaps | perf | high | open |
 | [0248](0248-python-drop-in-replacement.md) | Jinja2C++ as a drop-in replacement for Python Jinja2 in common cases | api | medium | open |
-| [0249](0249-implicit-conversion-sanitizer.md) | Run the sanitizer CI with `-fsanitize=implicit-conversion` | robustness | medium | open |
+| [0249](0249-implicit-conversion-sanitizer.md) | Run the sanitizer CI with `-fsanitize=implicit-conversion` | robustness | medium | done |
 | [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | done |
 | [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | done |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | done |
@@ -548,7 +548,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0484](0484-tuple-of-slices-fold-leftovers.md) | Tuple-of-slices folds the Load check still decides differently from Jinja2 | parity | low | done |
 | [0485](0485-list-sort-restore-needs-memory.md) | A failed list.sort() loses the list's items when memory stays spent | robustness | low | done |
 | [0486](0486-cycle-walk-needs-memory.md) | Reference cycles leak when memory stays spent at the end of a render | robustness | low | done |
-| [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | open |
+| [0487](0487-nlohmann-allocation-free-release.md) | Release owned nlohmann::json documents without allocating | robustness | low | done |
 | [0488](0488-upstream-reports-and-recipes.md) | Report our fixes upstream and update the package recipes | release | low | open |
 | [0489](0489-dict-views-type.md) | `d.items()`, `d.keys()` and `d.values()` are lists, not dict views | parity | low | done |
 | [0490](0490-class-object-leftovers.md) | Leftovers of 0476: what the engine's class objects still lack | parity | low | done |
@@ -566,7 +566,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0502](0502-stored-loop-namespace-assign.md) | A stored recursive loop that sets a namespace attribute fails after its include ended | parity | low | done |
 | [0503](0503-replaced-trees-slots-and-failed-calls.md) | Replaced trees that hold a slot, or that a failed call loaded, still stay | robustness | low | done |
 | [0504](0504-closure-of-a-stopped-macro-in-with-or-filter-body.md) | A closure made in a `with` or filter body of a stopped macro is kept with the macro's frame | parity | low | done |
-| [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | open |
+| [0505](0505-generate-items-fold-non-literals.md) | generate() items: Jinja2 folds a constant operator, subscript or filter into the text | parity | low | done |
 | [0506](0506-stable-map-fresh-allocations.md) | A fresh scope map allocates once more than robin_hood did, and a new name costs more to add | perf | medium | done |
 | [0507](0507-name-hash-zero-lane-collisions.md) | Host keys of raw bytes can collide in the name hash whatever its per-process key | robustness | low | done |
 | [0508](0508-render-memory-scopes-modules.md) | The render memory budget does not count scope maps, imported modules or closure copies | robustness | medium | done |
@@ -595,13 +595,15 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0531](0531-failed-nested-render-inner-frame-closures.md) | A closure defined in a frame that a failing nested render went out of reads its names as ended | parity | low | open |
 | [0532](0532-copy-nested-render-params-lazily.md) | Copy the params of a nested render when a value of them is stored, not on every render | perf | low | open |
 | [0533](0533-nested-with-context-module-closure-importer-names.md) | A macro of a module imported with context by a nested render loses the importer's names once that render ends | parity | low | open |
-| [0534](0534-fuzz-oldstyle-i18n.md) | Fuzz the oldstyle gettext parser path | robustness | low | open |
-| [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | open |
-| [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | open |
+| [0534](0534-fuzz-oldstyle-i18n.md) | Fuzz the oldstyle gettext parser path | robustness | low | done |
+| [0535](0535-generate-folded-constant-output.md) | generate() items of constant output that is not a literal | parity | low | done |
+| [0536](0536-tuple-of-slices-fold-leftovers-after-0527.md) | Tuple-of-slices folds: generator filters, operator chains and the per-render value | parity | low | done |
 | [0537](0537-recursive-loop-closure-keeps-body-stores.md) | A closure kept past a recursive loop loses the names the body stored | parity | low | open |
 | [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | done |
 | [0539](0539-nested-trees-held-by-kept-closures-and-loops.md) | Kept closures and a dropped recursive loop still hold nested trees after 0521 | robustness | low | open |
 | [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | done |
 | [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
+| [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | open |
 | [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |
+| [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | open |

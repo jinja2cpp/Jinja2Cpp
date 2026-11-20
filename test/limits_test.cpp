@@ -356,6 +356,39 @@ TEST_F(LimitsEnvTest, StrictFilterChainFoldsInLinearSteps)
     EXPECT_EQ(L"[1]", wide.RenderAsString({}).value());
 }
 
+TEST_F(LimitsEnvTest, StrictOperatorChainFoldsInLinearSteps)
+{
+    // docs/tasks/0536: each operator around a tuple-of-slices subscript is a fold candidate, its value and fold
+    // taken from the operand's candidate, so a chain of N operators evaluates N of them at Load
+    Settings settings;
+    settings.undefinedPolicy = UndefinedPolicy::Strict;
+    settings.limits.maxRenderSteps = 20000;
+    m_env.SetSettings(settings);
+    std::string orChain = "{% if [1][:, :] is undefined";
+    std::string sumChain = "{% set q = ([1][:, :] is undefined)";
+    std::string notChain = "{% if ";
+    for (int op = 0; op != 400; ++op)
+    {
+        orChain += " or a" + std::to_string(op);
+        sumChain += " + 1";
+        notChain += "not ";
+    }
+    orChain += " %}y{% endif %}";
+    sumChain += " %}{{ q }}";
+    notChain += "([1][:, :] is defined) %}n{% endif %}";
+    for (const auto& [source, expected] : std::vector<std::pair<std::string, std::string>>{ { orChain, "y" }, { sumChain, "401" }, { notChain, "" } })
+    {
+        Template tpl(&m_env);
+        auto loaded = tpl.Load(source);
+        ASSERT_TRUE(loaded.has_value()) << source.substr(0, 40) << ": " << ErrorToString(loaded.error());
+        EXPECT_EQ(expected, tpl.RenderAsString({}).value());
+
+        TemplateW wide(&m_env);
+        ASSERT_TRUE(wide.Load(std::wstring(source.begin(), source.end())).has_value());
+        EXPECT_EQ(std::wstring(expected.begin(), expected.end()), wide.RenderAsString({}).value());
+    }
+}
+
 TEST_F(LimitsEnvTest, ReprOfSharedItems)
 {
     Settings settings;

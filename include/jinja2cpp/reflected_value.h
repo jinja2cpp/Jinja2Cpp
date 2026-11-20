@@ -668,7 +668,8 @@ struct Reflector<T*>
 template<typename T>
 struct Reflector<std::shared_ptr<T>>
 {
-    static auto Create(const std::shared_ptr<T>& val)
+    // By value: an rvalue moves in, so the view may hold the last reference (docs/tasks/0487)
+    static auto Create(std::shared_ptr<T> val)
     {
         return jinja2::Reflector<T>::CreateFromPtr(std::move(val));
     }

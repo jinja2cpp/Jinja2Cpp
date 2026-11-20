@@ -70,6 +70,11 @@ DELIMITER_SHIFT = 4  # fuzz_common.h settings_byte
 WIDE = 0x80
 # The bytes before the template, and whether the target reads the wide bit
 PREFIXES = {"untrusted": (1, True), "host": (1, True), "loader": (2, False), "alloc_failure": (3, False)}
+# fuzz_common.h gettext_bits: oldstyle, then two bits of install style. The loader target reads them above its
+# `confined` bit, the allocation-failure target reads its spare wide bit as oldstyle with a FollowLoad install
+GETTEXT_OLDSTYLE = 0x01
+GETTEXT_MASK = 0x07
+I18N_MARKERS = (b"trans", b"gettext", b"_(")
 
 
 def with_delimiters(data, index):
@@ -85,11 +90,17 @@ def prefixed(data, target):
     digest = hashlib.sha1(data).digest()
     settings = digest[0] if wide else digest[0] & ~WIDE
     body = with_delimiters(data, (settings >> DELIMITER_SHIFT) & 3)
+    # A template that uses gettext also gets an oldstyle seed, so the corpus reaches that parser (docs/tasks/0534)
+    i18n = any(marker in data for marker in I18N_MARKERS)
     if target == "loader":
-        yield bytes([settings, digest[1] & 1]) + body
+        yield bytes([settings, (digest[1] & 1) | ((digest[2] & GETTEXT_MASK) << 1)]) + body
+        if i18n:
+            yield bytes([0, GETTEXT_OLDSTYLE << 1]) + data
     elif target == "alloc_failure":
         # Small templates make a few hundred allocations; the fuzzer grows the count from there
-        yield bytes([digest[1], 0, settings]) + body
+        yield bytes([digest[1], 0, settings | (digest[2] & WIDE)]) + body
+        if i18n:
+            yield bytes([digest[1], 0, WIDE]) + data
     else:
         yield bytes([settings]) + body
 

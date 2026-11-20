@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/955
 priority: low
 area: parity
 depends: [0456, 0493]
-touches: [src/renderer.h, src/expression_evaluator.h, src/expression_evaluator.cpp]
+touches: [src/renderer.h, src/expression_evaluator.h, src/expression_evaluator.cpp, src/expression_parser.cpp, src/expression_parser.h, src/node_arena.h]
 shares: [python/tests/test_generate.py, test/output_test.cpp]
 ---
 # generate() items of constant output that is not a literal
@@ -24,3 +25,7 @@ Folds by choice (`FoldByChoice`) evaluate the test as `FinalizedExpressionRender
 **Done when.** The cases above yield Jinja2's items and types through `generate()` with and without
 autoescape (python/tests/test_generate.py `test_items_are_markup_where_jinja2s_are`), and
 `OutputTest.SinkLearnsWhichPiecesAreMarkup` has the rows; Load stays within the perf gate.
+
+**Result (parity batch 10 B, with 0505).** A folded constant is `PieceKind::Folded`, so it joins the text around
+it as one `str` item under autoescape too: `a{{ 1 + 1 }}b` gives `['a2b']`
+(`OutputTest.SinkLearnsWhichPiecesAreMarkup`, `test_items_are_markup_where_jinja2s_are`).

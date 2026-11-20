@@ -197,6 +197,11 @@ void FuzzAllocFailure(const std::uint8_t* data, std::size_t size)
 
     jinja2::TemplateEnv env;
     ConfigureUntrustedEnv(env, settingsByte);
+    // The narrow-only target's spare wide bit: oldstyle gettext with null translations (docs/tasks/0534)
+    if ((data[2] & settings_byte::Wide) != 0)
+    {
+        ApplyGettextBits(env, gettext_bits::Oldstyle | (1U << gettext_bits::InstallShift));
+    }
     auto fs = std::make_shared<jinja2::MemoryFileSystem>();
     AddSupportTemplates(*fs, source, DelimitersOf(settingsByte));
     env.AddFilesystemHandler(std::string(), fs);

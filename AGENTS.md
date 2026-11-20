@@ -59,7 +59,7 @@ Useful configurations (see `.github/workflows/` for the actual CI matrix):
 | Purpose | Additional CMake arguments |
 |---|---|
 | Language standard | `-DJINJA2CPP_CXX_STANDARD=17`, `20`, `23` or `26` |
-| Address/undefined sanitizers | `-DJINJA2CPP_WITH_SANITIZERS=address+undefined -DCMAKE_BUILD_TYPE=RelWithDebInfo` |
+| Address/undefined sanitizers | `-DJINJA2CPP_WITH_SANITIZERS=address+undefined -DCMAKE_BUILD_TYPE=RelWithDebInfo`; with Clang add `-DJINJA2CPP_SANITIZE_IMPLICIT_CONVERSION=ON` (CI does) |
 | JSON bindings the tests check (components in `bindings/`) | `-DJINJA2CPP_TEST_BINDINGS="nlohmann_json;boost_json"` (default `nlohmann_json`) |
 | Shared library | `-DJINJA2CPP_BUILD_SHARED=ON` |
 | Node reference checks | `-DJINJA2CPP_NODEREF_CHECKS=OFF`, `ON` (Release default), `FULL` (Debug/sanitizer/fuzz default) |

@@ -1,0 +1,6 @@
+# Files -fsanitize=implicit-conversion does not check (docs/tasks/0249, JINJA2CPP_SANITIZE_IMPLICIT_CONVERSION).
+# Only vendored and third-party code belongs here: its implicit conversions are by design (hashing, bit mixing,
+# character classes) and not ours to change. A hit in src/, include/, bindings/ or test/ is fixed in the code.
+[implicit-conversion]
+# The standard library (libstdc++'s string_view compare subtracts sizes as unsigned and reads the result as signed)
+src:*/include/c++/*
