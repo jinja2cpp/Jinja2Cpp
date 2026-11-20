@@ -1750,6 +1750,26 @@ TEST(CallSiteTest, ContextViewsSplitTopLevelNamesFromParams)
     EXPECT_TRUE(ContextView(Value(1), ContextNames::Parent).IsNone());
 }
 
+TEST(CallSiteTest, ContextViewOfAWideTemplate)
+{
+    std::string seen;
+    TemplateEnv env;
+    env.AddGlobal("probe", UserCallable(
+                               [&seen](const UserCallableParams& params) {
+                                   for (const auto& name : ContextView(params.context, ContextNames::TopLevel).GetIf<GenericMap>()->GetKeys())
+                                   {
+                                       seen += name + ",";
+                                   }
+                                   return Value();
+                               },
+                               { ArgInfo(ArgInfo::Context) }));
+    TemplateW tpl(&env);
+    ASSERT_TRUE(tpl.Load(L"{% set t = 1 %}{% for i in [1] %}{% set u = 2 %}{{ probe() }}{% endfor %}").has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("t,", seen);
+}
+
 TEST(CallSiteTest, ContextViewExpiresWithTheCall)
 {
     Value kept;

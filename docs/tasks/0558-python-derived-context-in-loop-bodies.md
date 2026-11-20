@@ -28,6 +28,11 @@ a `pass_context` callable returning `sorted(ctx.vars)`, `ctx.get('i')` and `ctx.
 | `{% set a = 1 %}{% block x %}{% set b = 1 %}{{ p() }}{% endblock %}` | `[] None 1` | `['a'] None 1` |
 | `{% with w = 3 %}{% set b = 2 %}{{ p() }}{% endwith %}` | `[] None None` | `[] None 2` |
 
+Also (found by the verifier of the 0416 PR): a `scoped` block gets `context.derived(locals)` in Jinja2, so
+`{% set a = 1 %}{% block x scoped %}{{ p() }}{% endblock %}` has `vars` empty and `a` in `parent` (the module: `['a']`),
+and in a loop the scoped block's `parent` also holds the loop's `i` and `loop`; a top-level `{% set loop = 6 %}` is in
+Jinja2's `vars`, while the views leave every `loop` out.
+
 **Proposal.** Tell a name a `set` in a loop or block body stored from a loop target, a `with` name and a macro's
 argument (a parse-time mark on the loop's or block's slot names, say), and give the host a third view (`ContextNames`)
 of the innermost such body's stored names; the Python `Context` then looks up the views only and builds a derived

@@ -458,6 +458,35 @@ TEST(RenderOptionsTest, ModulePollRunsDuringItsRenderAndItsMacroCalls)
     EXPECT_EQ(0, polls);
 }
 
+TEST(RenderOptionsTest, WideModulePollStopsAMacroCall)
+{
+    TemplateEnv env;
+    TemplateW tpl(&env);
+    ASSERT_TRUE(tpl.Load(L"{% macro m(n) %}{% for i in range(n) %}{{ i }}{% endfor %}{% endmacro %}").has_value());
+    int polls = 0;
+    RenderOptions options;
+    options.poll = [&polls] {
+        if (++polls == 2)
+        {
+            throw PollStop{};
+        }
+    };
+    auto module = tpl.MakeModule({}, options);
+    ASSERT_TRUE(module) << module.error().ToString();
+    UserCallableParams params;
+    params.extraPosArgs = ValuesList{ 20000 };
+    try
+    {
+        module->exports["m"].As<UserCallable>().callable(params);
+        FAIL() << "the call was not stopped";
+    }
+    catch (const BadResultAccess<wchar_t>& failure)
+    {
+        ASSERT_TRUE(failure.error().GetException());
+        EXPECT_THROW(std::rethrow_exception(failure.error().GetException()), PollStop);
+    }
+}
+
 TEST(RenderOptionsTest, ModuleGlobalsReplaceTheEnvironments)
 {
     TemplateEnv env;

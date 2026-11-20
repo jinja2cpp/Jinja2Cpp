@@ -372,7 +372,8 @@ enum class ContextNames
  *
  * @param context The context of a call (UserCallableParams::context)
  * @param names   Which names the view shows
- * @return The view, a GenericMap; an empty (none) Value when `context` is not a call's context
+ * @return The view, a GenericMap (of a call that already returned too, whose reads then fail); a none Value when
+ *         `context` is not a call's context
  */
 JINJA2CPP_EXPORT Value ContextView(const Value& context, ContextNames names);
 
@@ -643,6 +644,8 @@ public:
      * a render polled by another poll is polled by this one. It may throw to stop the render or the call, which
      * then fails with the exception (a call throws \ref BadResultAccess "BadResultAccess<CharT>" holding it in its
      * error). It is called on the thread of the call and must stay callable while a macro of the module may be.
+     * Calls of one module take turns (\ref BasicTemplateModule), and the poll runs inside its call: a poll that
+     * waits for another thread calling the same module deadlocks.
      * The other options are for a render's output and are ignored.
      *
      * @param params   Set of params which the template's top level and its macros see

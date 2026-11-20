@@ -522,8 +522,8 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `vars` and its arguments and globals in `parent` (and in `keys()`, `items()`, `get_all()`), with no
   loop variable, `{% with %}` name or macro local (0416). A lookup (`get`, `resolve`, `ctx[name]`)
   still finds the names of the loops, `with` blocks and macros around the call, where Jinja2's finds
-  only those a `{% set %}` in a loop or block body stored, and Jinja2 hands a call in such a body a
-  derived context (`vars` empty, the body's names in `parent`) (0558).
+  only those a `{% set %}` in a loop or block body stored, and Jinja2 hands a call in such a body,
+  and in a `scoped` block, a derived context (`vars` empty, the outer names in `parent`) (0558).
   `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and `exported_vars` (empty) are not
   there.
 - A template callable a Python callable gets (`range`, a macro, `loop.cycle`) prints as Jinja2's object
