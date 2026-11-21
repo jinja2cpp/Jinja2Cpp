@@ -1,10 +1,10 @@
 ---
 status: in-progress
-pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/974
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/976
 priority: low
 area: robustness
 depends: [0287]
-touches: [src/internal_value.h, src/big_int.cpp, src/big_int.h, src/value_visitors.h, src/internal_value.cpp, src/template_dict.cpp, src/filters.cpp, src/python_format.cpp, src/value_methods.cpp, test/big_int_test.cpp]
+touches: [src/internal_value.h, src/big_int.cpp, src/big_int.h, src/value_visitors.h, src/internal_value.cpp, src/template_dict.cpp, src/filters.cpp, src/python_format.cpp, src/value_methods.cpp, test/big_int_test.cpp, test/parity/cases/methods.py, test/parity/expected/methods.json, bench/cases/big_int_radix]
 ---
 # Keep a binary form for big integers past the decimal string limit
 
@@ -47,4 +47,19 @@ cache; phases P1a, P1b, P2, P4; the parity rejection of surviving constants is 0
   so the 50 ms target is not blocked by the lexer; the rest is building the decimal form, which
   P1b/P2 remove. `(s|int(base=16)) is odd` from data renders in 131 ms and `x.bit_length()` on
   the literal in 101 ms.
-
+- P1b (binary words): a `BigIntObject` holds the words of a huge integer (more than
+  `HugeBigIntBits` = 14285 bits) after its header, then its decimal form, which every integer
+  still keeps until P2. `MakeBigInt` converts a decimal source past 4300 digits once and keeps
+  those words only when the integer is huge (the 4301-digit band is checked exactly); a
+  power-of-two `int(s, base)` or literal packs its digits into words without arithmetic and
+  converts only to decimal. On a huge integer `bit_length` is O(1), `bit_count`, `{:x}`/`%x`/
+  `{:o}`/`{:b}` read the words, `is odd` reads the low word, `str`/`tojson`/`float` fail at once,
+  negation and `abs` copy the words, comparison reads them from the top, and a dict key is the
+  new kind `'B'` (sign, word count, words). Bench case `big_int_radix` (Release, GCC 13, median
+  of 3): building `('f' * 262144)|int(base=16)` takes about 150 ms (the decimal form, which P2
+  drops); after it, `bit_length`, `bit_count` and `'{:x}'.format(x)|length` together take about
+  1 ms per iteration, where each was one 100 ms conversion before.
+  A host `BigInt` past 4300 digits now converts to words each time it becomes a template value
+  (plan Q8): once per render for a parameter, but on every access for an item of a host
+  container (118 ms per access at 262144 bits, ASan build). Neither P2 nor P4 removes that:
+  task 0566.

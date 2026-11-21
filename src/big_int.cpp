@@ -18,6 +18,7 @@
 #include <cassert>
 #include <charconv>
 #include <cmath>
+#include <cstring>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -34,27 +35,6 @@ namespace jinja2
 {
 inline namespace v2
 {
-namespace detail
-{
-IntrusivePtr<BigIntObject> BigIntObject::Make(std::string_view decimal)
-{
-    const bool counted = RenderMemoryCounted();
-    if (counted)
-    {
-        ChargeRenderMemory(Bytes(decimal.size()));
-    }
-    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-    IntrusivePtr<BigIntObject> obj(new (CharCount{ decimal.size() }) BigIntObject(decimal.size()));
-    if (counted)
-    {
-        obj->MarkCharged();
-    }
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the object
-    std::copy(decimal.begin(), decimal.end(), reinterpret_cast<char*>(obj.get()) + sizeof(BigIntObject));
-    return obj;
-}
-} // namespace detail
-
 namespace
 {
 // A magnitude as limbs of a radix of at most 2^32, least significant limb first: the core's only
@@ -527,23 +507,41 @@ bool IsPowerOfTwo(int base)
     return (base & (base - 1)) == 0;
 }
 
+// The bits of a magnitude in base 2^32 without leading zero words: 0 for 0
+size_t WordsBits(LimbSpan words) noexcept
+{
+    return words.empty() ? 0 : ((words.size() - 1) * 32) + WordBits(words[words.size() - 1]);
+}
+
 // The bits of a magnitude given in decimal: 0 for 0
 size_t MagnitudeBits(std::string_view magnitude)
 {
-    const auto words = BinaryWords(magnitude);
-    return words.empty() ? 0 : ((words.size() - 1) * 32) + WordBits(words.back());
+    return WordsBits(BinaryWords(magnitude));
 }
 
-// The digits of a magnitude given in decimal, in a power-of-two base (2 to 32), lower case
-std::string MagnitudeDigits(std::string_view magnitude, int base)
+// The set bits of a magnitude in base 2^32
+size_t WordsBitCount(LimbSpan words) noexcept
 {
-    const auto words = BinaryWords(magnitude);
+    size_t count = 0;
+    for (const auto word : words)
+    {
+        for (auto rest = word; rest != 0; rest &= rest - 1)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+// The digits of a magnitude in base 2^32 without leading zero words, in a power-of-two base (2 to 32), lower case
+std::string WordsDigits(LimbSpan words, int base)
+{
     if (words.empty())
     {
         return "0";
     }
     const auto bitsPerDigit = WordBits(static_cast<uint32_t>(base)) - 1;
-    const auto totalBits = ((words.size() - 1) * 32) + WordBits(words.back());
+    const auto totalBits = WordsBits(words);
     const auto count = (totalBits + bitsPerDigit - 1) / bitsPerDigit;
     const auto mask = static_cast<uint64_t>(base - 1);
     std::string result(count, '0');
@@ -563,6 +561,47 @@ std::string MagnitudeDigits(std::string_view magnitude, int base)
     return result;
 }
 
+// The digits of a magnitude given in decimal, in a power-of-two base (2 to 32), lower case
+std::string MagnitudeDigits(std::string_view magnitude, int base)
+{
+    return WordsDigits(BinaryWords(magnitude), base);
+}
+
+// The words of `digits` (valid in a power-of-two `base`, no leading zero, not empty), without
+// leading zero words: each digit is a run of bits, so this packs them without arithmetic
+Limbs PackPowerOfTwoDigits(std::string_view digits, int base)
+{
+    const auto bitsPerDigit = WordBits(static_cast<uint32_t>(base)) - 1;
+    Limbs words;
+    words.reserve(((digits.size() * bitsPerDigit) / 32) + 1);
+    uint64_t acc = 0;
+    size_t accBits = 0;
+    for (auto idx = digits.size(); idx != 0; --idx)
+    {
+        acc |= static_cast<uint64_t>(DigitValue(digits[idx - 1])) << accBits;
+        accBits += bitsPerDigit;
+        if (accBits >= 32)
+        {
+            words.push_back(static_cast<uint32_t>(acc));
+            acc >>= 32;
+            accBits -= 32;
+        }
+    }
+    if (accBits != 0)
+    {
+        words.push_back(static_cast<uint32_t>(acc));
+    }
+    words.resize(Trimmed(words).size());
+    return words;
+}
+
+// The canonical decimal form of a magnitude in base 2^32 (not zero)
+std::string DecimalFromWords(LimbSpan words, bool negative)
+{
+    RadixConverter<DecimalRadix> converter(BinaryRadix::Value(), DecimalRadix{});
+    return FromLimbs(converter.Convert(words), negative);
+}
+
 // The digits of a view's decimal form without its sign
 std::string_view InlineMagnitude(const BigIntView& val) noexcept
 {
@@ -570,19 +609,20 @@ std::string_view InlineMagnitude(const BigIntView& val) noexcept
     return val.Sign() < 0 ? decimal.substr(1) : decimal;
 }
 
+// Whether a magnitude of `digits` decimal digits surely has more than MaxBigIntBits bits, by its length alone
+bool SurelyExceedsBitCap(std::string_view magnitude) noexcept
+{
+    return ((static_cast<double>(magnitude.size()) - 1) * BitsPerDigit) >= static_cast<double>(MaxBigIntBits) + 1;
+}
+
 // Whether a magnitude of `digits` decimal digits has more than MaxBigIntBits bits
 bool ExceedsBitCap(std::string_view magnitude)
 {
-    const auto digits = static_cast<double>(magnitude.size());
-    if ((digits * BitsPerDigit) <= static_cast<double>(MaxBigIntBits) - 1)
+    if ((static_cast<double>(magnitude.size()) * BitsPerDigit) <= static_cast<double>(MaxBigIntBits) - 1)
     {
         return false;
     }
-    if (((digits - 1) * BitsPerDigit) >= static_cast<double>(MaxBigIntBits) + 1)
-    {
-        return true;
-    }
-    return MagnitudeBits(magnitude) > MaxBigIntBits;
+    return SurelyExceedsBitCap(magnitude) || MagnitudeBits(magnitude) > MaxBigIntBits;
 }
 
 [[noreturn]] void ThrowTooManyBits()
@@ -596,6 +636,36 @@ bool ExceedsBitCap(std::string_view magnitude)
 }
 } // namespace
 
+namespace detail
+{
+IntrusivePtr<BigIntObject> BigIntObject::Make(bool negative, Span<const uint32_t> words, std::string_view decimal)
+{
+    // Huge exactly when it has words, and every integer keeps its decimal form for now (docs/tasks/0543 P1b)
+    JINJA2CPP_EXPECTS(!decimal.empty() && (decimal.front() == '-') == negative);
+    JINJA2CPP_EXPECTS(words.empty() || (words[words.size() - 1] != 0 && WordsBits(words) > HugeBigIntBits));
+    const bool counted = RenderMemoryCounted();
+    if (counted)
+    {
+        ChargeRenderMemory(Bytes(words.size(), decimal.size()));
+    }
+    const auto wordBytes = WordBytes(words.size());
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
+    IntrusivePtr<BigIntObject> obj(new (CharCount{ wordBytes + decimal.size() }) BigIntObject(static_cast<uint32_t>(words.size()), static_cast<uint32_t>(decimal.size()), negative));
+    if (counted)
+    {
+        obj->MarkCharged();
+    }
+    // The words and then the digits follow the object
+    char* const parts = obj->Parts();
+    if (!words.empty())
+    {
+        std::memcpy(parts, words.data(), wordBytes);
+    }
+    std::copy(decimal.begin(), decimal.end(), parts + wordBytes);
+    return obj;
+}
+} // namespace detail
+
 namespace
 {
 // The bits of `digits` (no leading zero, not empty) in a power-of-two base, exactly
@@ -605,7 +675,24 @@ size_t PowerOfTwoDigitsBits(std::string_view digits, int base) noexcept
     return ((digits.size() - 1) * bitsPerDigit) + WordBits(static_cast<uint32_t>(DigitValue(digits.front())));
 }
 
-// MakeBigIntValue, past the bit check when the caller has made it
+// The value of a new object: `words` empty unless the integer is huge
+InternalValue ObjectValue(bool negative, LimbSpan words, std::string_view decimal)
+{
+    InternalValue result;
+    auto obj = detail::BigIntObject::Make(negative, words, decimal);
+    detail::InternalValueAccess::Data(result) = detail::BigIntHandle{ obj.get() };
+    detail::InternalValueAccess::ObjectPtr(result) = std::move(obj);
+    return result;
+}
+
+// The words to keep for a magnitude of `words`: all of them for a huge integer, none for another
+LimbSpan HugeWords(LimbSpan words) noexcept
+{
+    return WordsBits(words) > HugeBigIntBits ? words : LimbSpan();
+}
+
+// MakeBigIntValue, past the bit check when the caller has made it. Past MaxIntStrDigits digits
+// the integer may be huge: the words that tell it are the ones a huge integer keeps (docs/tasks/0543)
 InternalValue MakeBigInt(std::string_view decimal, bool withinBitCap)
 {
     int64_t small = 0;
@@ -616,15 +703,22 @@ InternalValue MakeBigInt(std::string_view decimal, bool withinBitCap)
     {
         return small;
     }
-    if (!withinBitCap && ExceedsBitCap(decimal.front() == '-' ? decimal.substr(1) : decimal))
+    const bool negative = decimal.front() == '-';
+    const auto magnitude = negative ? decimal.substr(1) : decimal;
+    if (magnitude.size() <= MaxIntStrDigits)
+    {
+        return ObjectValue(negative, {}, decimal);
+    }
+    if (!withinBitCap && SurelyExceedsBitCap(magnitude))
     {
         ThrowTooManyBits();
     }
-    InternalValue result;
-    auto obj = detail::BigIntObject::Make(decimal);
-    detail::InternalValueAccess::Data(result) = detail::BigIntHandle{ obj.get() };
-    detail::InternalValueAccess::ObjectPtr(result) = std::move(obj);
-    return result;
+    const auto words = BinaryWords(magnitude);
+    if (WordsBits(words) > MaxBigIntBits)
+    {
+        ThrowTooManyBits();
+    }
+    return ObjectValue(negative, HugeWords(words), decimal);
 }
 } // namespace
 
@@ -637,7 +731,7 @@ BigIntView BigIntView::FromText(std::string_view decimal)
 {
     // At most MaxIntStrDigits digits is fewer than 14285 bits: never huge (docs/tasks/0543 B2)
     JINJA2CPP_EXPECTS(!decimal.empty() && decimal.size() - (decimal.front() == '-' ? 1 : 0) <= MaxIntStrDigits);
-    return BigIntView(nullptr, decimal);
+    return BigIntView(nullptr, decimal, decimal.front() == '-');
 }
 
 InternalValue BigIntValue(const BigIntView& val)
@@ -689,7 +783,11 @@ InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative
     {
         ThrowTooManyBits();
     }
-    return MakeBigInt(DecimalFromDigits(digits, base, negative), true);
+    // The digits are the binary form already: a huge integer keeps the words packed from them
+    const auto words = PackPowerOfTwoDigits(digits, base);
+    const auto decimal = DecimalFromWords(words, negative);
+    const auto huge = HugeWords(words);
+    return huge.empty() ? MakeBigInt(decimal, true) : ObjectValue(negative, huge, decimal);
 }
 
 BigInt BigInt::FromDigits(std::string_view digits, int base, bool negative)
@@ -794,7 +892,8 @@ InternalValue IntegerFromDouble(double val)
 
 std::string_view CheckedDecimal(const BigIntView& val)
 {
-    if (InlineMagnitude(val).size() > MaxIntStrDigits)
+    // A huge integer has more than MaxIntStrDigits digits
+    if (val.IsHuge() || InlineMagnitude(val).size() > MaxIntStrDigits)
     {
         ThrowStrDigits("");
     }
@@ -809,12 +908,17 @@ std::string_view CheckedMagnitude(const BigIntView& val)
 
 std::string MagnitudeInBase(const BigIntView& val, int base)
 {
-    return MagnitudeDigits(InlineMagnitude(val), base);
+    return val.IsHuge() ? WordsDigits(val.Words(), base) : MagnitudeDigits(InlineMagnitude(val), base);
 }
 
 size_t BitLength(const BigIntView& val)
 {
-    return MagnitudeBits(InlineMagnitude(val));
+    return val.IsHuge() ? WordsBits(val.Words()) : MagnitudeBits(InlineMagnitude(val));
+}
+
+size_t BitCount(const BigIntView& val)
+{
+    return val.IsHuge() ? WordsBitCount(val.Words()) : WordsBitCount(BinaryWords(InlineMagnitude(val)));
 }
 
 int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept
@@ -825,9 +929,29 @@ int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept
     {
         return leftSign < rightSign ? -1 : 1;
     }
+    const bool leftHuge = left.IsHuge();
+    const bool rightHuge = right.IsHuge();
+    int magnitude = 0;
+    if (leftHuge || rightHuge)
+    {
+        // A huge integer is wider than any other; two huge ones compare their words from the top
+        const auto l = left.Words();
+        const auto r = right.Words();
+        if (l.size() != r.size())
+        {
+            magnitude = l.size() < r.size() ? -1 : 1;
+        }
+        for (auto idx = l.size(); magnitude == 0 && idx != 0; --idx)
+        {
+            if (l[idx - 1] != r[idx - 1])
+            {
+                magnitude = l[idx - 1] < r[idx - 1] ? -1 : 1;
+            }
+        }
+        return leftSign < 0 ? -magnitude : magnitude;
+    }
     const auto l = InlineMagnitude(left);
     const auto r = InlineMagnitude(right);
-    int magnitude = 0;
     if (l.size() != r.size())
     {
         magnitude = l.size() < r.size() ? -1 : 1;
@@ -862,8 +986,8 @@ int CompareBigIntDouble(const BigIntView& left, double right)
 
 double BigIntToDouble(const BigIntView& val)
 {
-    // 10^309 is past the largest double
-    if (InlineMagnitude(val).size() <= 309)
+    // 10^309 is past the largest double, and a huge integer is far wider
+    if (!val.IsHuge() && InlineMagnitude(val).size() <= 309)
     {
         const auto result = ParseDecimal(val.InlineDecimal());
         if (result && std::isfinite(*result))
@@ -928,6 +1052,23 @@ InternalValue RoundIntegerDecimal(std::string_view decimal, int64_t ndigits)
 
 InternalValue NegateBigInt(const BigIntView& val)
 {
+    if (val.IsHuge())
+    {
+        // The same words with the other sign; the decimal form with it
+        const auto decimal = val.InlineDecimal();
+        std::string negated;
+        negated.reserve(decimal.size() + 1);
+        if (val.Sign() > 0)
+        {
+            negated.push_back('-');
+            negated.append(decimal);
+        }
+        else
+        {
+            negated.append(decimal.substr(1));
+        }
+        return ObjectValue(val.Sign() > 0, val.Words(), negated);
+    }
     return WithDecimal(val, [&val](std::string_view decimal) {
         if (val.Sign() < 0)
         {

@@ -14,6 +14,7 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cmath>
 #include <cstdint>
@@ -246,13 +247,30 @@ const BigIntCase BigIntCases[] = {
     { "{{ big + 'a' }}", nullptr, Expect::Python },
     { "{{ -big }}|{{ -nbig }}", "-18446744073709551615|18446744073709551615", Expect::Python },
     { "{{ range(big) }}", "range(0, 18446744073709551615)", Expect::Overflow },
+    // Task 0543 P1b: h has 14400 bits, past HugeBigIntBits, and keeps binary words; hbig is the
+    // same integer from a host BigInt (decimal). 2^14284 has 4300 digits, 2^14285 - 1 has 14285
+    // bits (4301 digits, not huge) and 2^14285 14286 bits (huge). Outputs from Python Jinja2 3.1.6
+    { "{% set h = hs|int(base=16) %}{{ h.bit_length() }}|{{ h.bit_count() }}|{{ '{:x}'.format(h)|length }}|{{ ('%x'|format(h))[:4] }}|{{ h is odd }}|{{ (-h) is even }}|{{ ('{:x}'.format(-h))[:5] }}|{{ ('{:b}'.format(h))|length }}|{{ ('{:o}'.format(h))[:3] }}|{{ ('%#X'|format(-h))[:6] }}", "14400|14400|3600|ffff|True|False|-ffff|14400|777|-0XFFF", Expect::Python },
+    { "{% set h = hs|int(base=16) %}{{ (h|abs) == h }}|{{ ((-h)|abs) == h }}|{{ h == hbig }}|{{ h != hbig }}|{{ -h == -hbig }}|{{ -h < h }}|{{ {h: 1}[hbig] }}|{{ {hbig: 1}[-(-h)] }}|{{ h in [hbig] }}|{{ [h, hbig]|unique|list|length }}", "True|True|True|False|True|True|1|1|True|1", Expect::Python },
+    { "{% set h = hs|int(base=16) %}{{ h > big }}|{{ big < h }}|{{ -h < nbig }}|{{ h > 1e308 }}|{{ -h < -1e308 }}|{{ h < inf }}|{{ h > nan }}|{{ h == 1e308 }}", "True|True|True|True|True|True|False|False", Expect::Python },
+    { "{{ (p14284|int(base=2))|string|length }}|{{ (p14285|int(base=2)).bit_length() }}|{{ (p14285m1|int(base=2)).bit_count() }}|{{ (p14285m1|int(base=2)) is odd }}|{{ (p14285|int(base=2)) is odd }}|{{ (p14285|int(base=2)) > (p14285m1|int(base=2)) }}", "4300|14286|14285|True|False|True", Expect::Python },
+    { "{% set h = hs|int(base=16) %}{{ (o8|int(base=8)) == h }}|{{ (o32|int(base=32)) == h }}|{{ (o4|int(base=4)) == h }}|{{ (o32|int(base=32)).bit_count() }}|{{ ('-' ~ hs)|int(base=16) == -h }}|{{ (('-' ~ hs)|int(base=16)).bit_length() }}|{{ (h|round(-5)).bit_length() }}|{{ (h|round(-5)) > h }}", "True|True|True|14400|True|14400|14400|False", Expect::Python },
+    { "{{ (p14285m1|int(base=2))|string }}", nullptr, Expect::Python },
+    { "{{ (p14285|int(base=2))|string }}", nullptr, Expect::Python },
+    { "{{ hs|int(base=16) }}", nullptr, Expect::Python },
+    { "{{ hbig|tojson }}", nullptr, Expect::Python },
+    { "{{ (hs|int(base=16))|float }}", nullptr, Expect::Python },
+    { "{{ hbig / 2 }}", nullptr, Expect::Python },
+    { "{{ hbig|filesizeformat }}", nullptr, Expect::Python },
+    { "{% set h = hs|int(base=16) %}{{ (h + 1).bit_length() }}|{{ (h * h).bit_count() }}|{{ h - hbig }}|{{ h // hbig }}|{{ (h + 1) is even }}|{{ (h * -1) == -h }}|{{ {h + 0: 2}[hbig] }}|{{ {(p14285m1|int(base=2)): 3}[(p14285|int(base=2)) - 1] }}", "14401|14400|0|1|True|True|2|3", Expect::OverflowWithoutBackend },
 };
 
 ValuesMap BigIntParams()
 {
     BigInt nbig;
     BigInt::TryParse("-18446744073709551615", nbig);
-    return { { "big", std::numeric_limits<uint64_t>::max() }, { "nbig", nbig }, { "nan", std::nan("") }, { "inf", HUGE_VAL }, { "small", BigInt(5) } };
+    const std::string hs(3600, 'f');
+    return { { "big", std::numeric_limits<uint64_t>::max() }, { "nbig", nbig }, { "nan", std::nan("") }, { "inf", HUGE_VAL }, { "small", BigInt(5) }, { "hs", hs }, { "hbig", BigInt::FromDigits(hs, 16, false) }, { "o8", BigInt::FromDigits(hs, 16, false).ToDigits(8) }, { "o32", BigInt::FromDigits(hs, 16, false).ToDigits(32) }, { "o4", BigInt::FromDigits(hs, 16, false).ToDigits(4) }, { "p14284", "1" + std::string(14284, '0') }, { "p14285m1", std::string(14285, '1') }, { "p14285", "1" + std::string(14285, '0') } };
 }
 
 template<typename CharT>
@@ -825,4 +843,44 @@ TEST(BigIntTemplate, RadixLiteralsAtTheBitCap)
     const auto over = wide.RenderAsString({ { "s", "1" + std::string(262144, '0') } });
     ASSERT_FALSE(over.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, over.error().GetCode());
+}
+
+// Task 0543 P1b: an integer is huge, and keeps binary words, exactly when it has more than
+// HugeBigIntBits bits, whichever form it was made from; the words agree with its decimal form
+TEST(BigIntView, HugeExactlyPastTheHugeBitWidth)
+{
+    const auto fromHex = [](const std::string& digits) { return jinja2::IntegerFromDigits(digits, 16, false); };
+    const auto viewOf = [](const jinja2::InternalValue& value) { return jinja2::AsBigInt(value).value(); };
+
+    // 2^14285 - 1 (4301 digits) is not huge, 2^14285 is: from binary digits and from decimal text
+    const auto below = jinja2::IntegerFromDigits(std::string(14285, '1'), 2, false);
+    const auto at = jinja2::IntegerFromDigits("1" + std::string(14285, '0'), 2, false);
+    EXPECT_FALSE(viewOf(below).IsHuge());
+    EXPECT_EQ(4301U, viewOf(below).InlineDecimal().size());
+    ASSERT_TRUE(viewOf(at).IsHuge());
+    EXPECT_EQ(447U, viewOf(at).Words().size());
+    EXPECT_EQ(1U << 13, viewOf(at).Words()[446]); // 14285 = 446 * 32 + 13
+    const auto belowFromText = jinja2::MakeBigIntValue(viewOf(below).InlineDecimal());
+    const auto atFromText = jinja2::MakeBigIntValue(viewOf(at).InlineDecimal());
+    EXPECT_FALSE(viewOf(belowFromText).IsHuge());
+    ASSERT_TRUE(viewOf(atFromText).IsHuge());
+    EXPECT_TRUE(std::equal(viewOf(at).Words().begin(), viewOf(at).Words().end(), viewOf(atFromText).Words().begin(), viewOf(atFromText).Words().end()));
+    EXPECT_EQ(0, jinja2::CompareBigInts(viewOf(at), viewOf(atFromText)));
+    EXPECT_EQ(1, jinja2::CompareBigInts(viewOf(at), viewOf(below)));
+    EXPECT_EQ(-1, jinja2::CompareBigInts(viewOf(below), viewOf(at)));
+
+    // Negation keeps the words and flips the sign of both forms
+    const auto huge = fromHex(std::string(3600, 'f'));
+    const auto negated = jinja2::NegateBigInt(viewOf(huge));
+    ASSERT_TRUE(viewOf(negated).IsHuge());
+    EXPECT_EQ(-1, viewOf(negated).Sign());
+    EXPECT_EQ('-', viewOf(negated).InlineDecimal().front());
+    EXPECT_EQ(viewOf(huge).InlineDecimal(), viewOf(negated).InlineDecimal().substr(1));
+    EXPECT_EQ(-1, jinja2::CompareBigInts(viewOf(negated), viewOf(huge)));
+    EXPECT_EQ(1, jinja2::CompareBigInts(viewOf(huge), viewOf(negated)));
+    EXPECT_EQ(14400U, jinja2::BitLength(viewOf(negated)));
+    EXPECT_EQ(14400U, jinja2::BitCount(viewOf(negated)));
+    EXPECT_TRUE(jinja2::IsOdd(viewOf(negated)));
+    EXPECT_THROW(static_cast<void>(jinja2::CheckedDecimal(viewOf(huge))), std::runtime_error);
+    EXPECT_THROW(static_cast<void>(jinja2::BigIntToDouble(viewOf(huge))), std::overflow_error);
 }
