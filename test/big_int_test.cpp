@@ -919,17 +919,23 @@ TEST(BigIntView, HugeFromBinaryKeepsNoDecimal)
     const auto result = tpl.RenderAsString({ { "s", "-" + hex }, { "t", hostBig } });
     ASSERT_TRUE(result.has_value()) << result.error().ToString();
     EXPECT_EQ("1|2|True|True", result.value());
+    TemplateW wide;
+    ASSERT_TRUE(wide.Load(L"{% set h = s|int(base=16) %}{{ {h: 1}[t] }}|{{ (-h)|abs == -t }}|{{ h|round(-4336) }}|{{ h|round(-10) is odd }}"));
+    const auto wideResult = wide.RenderAsString({ { "s", "-" + hex }, { "t", hostBig } });
+    ASSERT_TRUE(wideResult.has_value()) << wideResult.error().ToString();
+    EXPECT_EQ(L"1|True|0|False", wideResult.value());
 }
 
 // Task 0543 P2: a cap-sized integer from data costs its words, not its decimal form, against the
 // memory budget. Bit operations, negation and the hex digits (128 KB each, then 256 KB) fit in
 // 640 KB; round(x, -1) and leaving the render need the decimal form (about 315 KB of digits and
-// 256 KB for the converter's words next to x), which does not
+// up to 896 KB for the converter's words next to x), which does not. round(x, -n) past the
+// value's digits is 0 without converting
 TEST(BigIntTemplate, HugeFromBinaryBuildsDecimalWithinTheBudget)
 {
     TemplateEnv env;
     Settings settings;
-    settings.limits.maxRenderMemory = 640 * 1024;
+    settings.limits.maxRenderMemory = std::uint64_t{ 640 } * 1024;
     env.SetSettings(settings);
     const ValuesMap params{ { "s", std::string(262144, 'f') } };
     const auto render = [&env, &params](const std::string& source) {
@@ -941,6 +947,9 @@ TEST(BigIntTemplate, HugeFromBinaryBuildsDecimalWithinTheBudget)
     const auto ok = render("{% set x = s|int(base=16) %}{% set y = -x %}{{ x.bit_length() }}|{{ x.bit_count() }}|{{ '{:x}'.format(y)|length }}|{{ y is odd }}|{{ y < x }}");
     ASSERT_TRUE(ok.has_value()) << ok.error().ToString();
     EXPECT_EQ("1048576|1048576|262145|True|True", ok.value());
+    const auto roundedAway = render("{% set x = s|int(base=16) %}{{ x|round(-315700, 'common') }}|{{ (-x)|round(-400000, 'common') }}");
+    ASSERT_TRUE(roundedAway.has_value()) << roundedAway.error().ToString();
+    EXPECT_EQ("0|0", roundedAway.value());
 
     for (const auto* source : { "{% set x = s|int(base=16) %}{{ (x|round(-1, 'common')) is odd }}", "{{ f(s|int(base=16)) }}" })
     {

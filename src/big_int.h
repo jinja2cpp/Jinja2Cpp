@@ -41,7 +41,7 @@ JINJA2CPP_EXPORT InternalValue BigIntValue(const BigIntView& val);
 
 // The canonical decimal form of a huge integer that keeps only its binary words, built for one
 // WithDecimal call. While it lives it counts against the running render's memory budget (its
-// digits and the converter's working words, an estimate that errs high): ResourceLimitError
+// digits and the converter's peak working words, 7 times the input words): ResourceLimitError
 // before converting when they do not fit (docs/tasks/0543 P2)
 class TransientDecimal
 {

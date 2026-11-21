@@ -1059,9 +1059,10 @@ TransientDecimal::TransientDecimal(const BigIntView& val)
     // Only a huge integer lacks its decimal form
     JINJA2CPP_EXPECTS(val.IsHuge() && val.InlineDecimal().empty());
     const auto words = val.Words();
-    // The digits (at most bits * log10(2) + 1, and a sign) and the converter's words, about twice the input
+    // The digits (at most bits * log10(2) + 1, and a sign) and the converter's working words, which
+    // peak at about 6.2 times the input at MaxBigIntBits (measured with a counting operator new)
     const auto digits = static_cast<std::uint64_t>(static_cast<double>(WordsBits(words)) / BitsPerDigit) + 2;
-    const auto bytes = digits + (std::uint64_t{ 2 } * detail::BigIntObject::WordBytes(words.size()));
+    const auto bytes = digits + (std::uint64_t{ 7 } * detail::BigIntObject::WordBytes(words.size()));
     ChargeRenderMemory(bytes);
     m_charged = bytes;
     try

@@ -66,9 +66,10 @@ cache; phases P1a, P1b, P2, P4; the parity rejection of surviving constants is 0
 - P2 (no decimal form for words-made values): a huge integer made from its binary form (a
   power-of-two literal or `int(s, base)`, and its negation or `abs`) keeps only its words.
   `WithDecimal` builds the decimal form for each call through `TransientDecimal`, which counts
-  the digits and the converter's words (an estimate that errs high) against the render's memory
-  budget while it lives, so exporting such a value, a backend's `Load` and `round(x, -n)` pay
-  about 0.1 s each at the cap. A huge integer made from decimal text (a host `BigInt`, a
+  the digits and the converter's peak working words (7 times the input words; measured peak 6.2x
+  at the cap) against the render's memory budget while it lives, so exporting such a value, a
+  backend's `Load` and `round(x, -n)` pay about 0.1 s each at the cap (`round` to a unit past
+  the value's digits is 0 from `bit_length` alone, without converting). A huge integer made from decimal text (a host `BigInt`, a
   backend result) keeps that text. No shared or lazy state was added (plan Q3), so no TSan job.
   Measured in Release (GCC 13 -O2, 4-core container, median of 7, master 81e8e02 -> P2):
   `{{ (0x<262144 f>) is odd }}` loads in 0.84 ms (was 98 ms); `(s|int(base=16)) is odd` renders
@@ -77,3 +78,4 @@ cache; phases P1a, P1b, P2, P4; the parity rejection of surviving constants is 0
   1,520,506,563 -> 308,312,988 instructions (-79.7%), 297,927 -> 163 allocations. The
   done-when targets (load < 50 ms, each operation < 10 ms) are met; P4 (backend word entries)
   remains. Tests: `HugeFromBinaryKeepsNoDecimal`, `HugeFromBinaryBuildsDecimalWithinTheBudget`.
+  Filed 0568 (huge list index and `range()` bound, pre-existing).
