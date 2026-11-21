@@ -648,15 +648,15 @@ IntrusivePtr<BigIntObject> BigIntObject::Make(bool negative, Span<const uint32_t
     {
         ChargeRenderMemory(Bytes(words.size(), decimal.size()));
     }
-    const auto wordBytes = words.size() * sizeof(uint32_t);
+    const auto wordBytes = WordBytes(words.size());
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
     IntrusivePtr<BigIntObject> obj(new (CharCount{ wordBytes + decimal.size() }) BigIntObject(static_cast<uint32_t>(words.size()), static_cast<uint32_t>(decimal.size()), negative));
     if (counted)
     {
         obj->MarkCharged();
     }
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the words and then the digits follow the object
-    auto* const parts = reinterpret_cast<char*>(obj.get()) + sizeof(BigIntObject);
+    // The words and then the digits follow the object
+    char* const parts = obj->Parts();
     if (!words.empty())
     {
         std::memcpy(parts, words.data(), wordBytes);

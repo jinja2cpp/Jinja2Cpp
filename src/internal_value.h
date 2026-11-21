@@ -1284,9 +1284,16 @@ struct BigIntObject final : ValueObject
 
     [[nodiscard]] bool IsNegative() const noexcept { return m_negative; }
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the words follow the object
-    [[nodiscard]] Span<const uint32_t> Words() const noexcept { return { reinterpret_cast<const uint32_t*>(reinterpret_cast<const char*>(this) + sizeof(BigIntObject)), m_words }; }
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the words
-    [[nodiscard]] std::string_view Decimal() const noexcept { return { reinterpret_cast<const char*>(this) + sizeof(BigIntObject) + (std::size_t{ m_words } * sizeof(uint32_t)), m_digits }; }
+    [[nodiscard]] Span<const uint32_t> Words() const noexcept { return { reinterpret_cast<const uint32_t*>(Parts()), m_words }; }
+    [[nodiscard]] std::string_view Decimal() const noexcept { return { Parts() + WordBytes(m_words), m_digits }; }
+    // The bytes of `words` words
+    [[nodiscard]] static constexpr std::size_t WordBytes(std::size_t words) noexcept { return words * sizeof(uint32_t); }
+    // Where the parts start: right after the object, in its allocation
+    [[nodiscard]] const char* Parts() const noexcept
+    {
+        const std::size_t headerBytes = sizeof(BigIntObject);
+        return reinterpret_cast<const char*>(this) + headerBytes; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the parts follow the object
+    }
 
     BigIntObject(const BigIntObject&) = delete;
     BigIntObject(BigIntObject&&) = delete;
@@ -1304,6 +1311,13 @@ struct BigIntObject final : ValueObject
     [[nodiscard]] static constexpr std::uint64_t Bytes(size_t words, size_t digits) noexcept { return std::uint64_t{ sizeof(BigIntObject) } + (std::uint64_t{ words } * sizeof(uint32_t)) + digits; }
 
 private:
+    // The parts for Make to fill
+    [[nodiscard]] char* Parts() noexcept
+    {
+        const std::size_t headerBytes = sizeof(BigIntObject);
+        return reinterpret_cast<char*>(this) + headerBytes; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the parts follow the object
+    }
+
     BigIntObject(uint32_t words, uint32_t digits, bool negative) noexcept
         : m_words(words)
         , m_digits(digits)
@@ -1331,7 +1345,11 @@ inline Span<const uint32_t> BigIntView::Words() const noexcept
 
 inline bool BigIntView::IsHuge() const noexcept
 {
-    return m_object && !m_object->Words().empty();
+    if (!m_object)
+    {
+        return false;
+    }
+    return !m_object->Words().empty();
 }
 
 namespace detail
