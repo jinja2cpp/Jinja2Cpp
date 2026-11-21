@@ -51,6 +51,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -2738,6 +2739,10 @@ ClosureSite::ClosureSite(RenderContext& context, size_t depth)
             m_state = TopLevel;
         }
     }
+    if (m_endsWithCall && (context.m_topLevelRun || m_state != TopLevel))
+    {
+        context.m_madeOtherClosures = true;
+    }
 }
 
 std::shared_ptr<RenderContext> ClosureSite::LiveHome(const ClosureCapture& capture)
@@ -3954,6 +3959,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
             module.Render(*tplPtr);
             return true;
         });
+        module.Context().SetTopLevelRun();
         ImportNames(values, nodes, module, name);
         return;
     }
@@ -4234,6 +4240,12 @@ const void* MacroStatement::TreeOwnerOf(const InternalValue& value, const void*&
     return macro ? macro->treeOwner.get() : nullptr;
 }
 
+const ClosureSite* MacroStatement::SiteOf(const Callable::StatementCallable& function) noexcept
+{
+    const auto* macro = function.target<CallableBody>();
+    return macro ? &macro->site : nullptr;
+}
+
 template<typename Note>
 void ImportedModule::ForEachHeldValue(const Note& note) const
 {
@@ -4352,6 +4364,127 @@ bool ImportedModule::HeldOnlyBy(const Group& ending, const Group& staying)
 bool ImportedModule::TreesHeldOnlyBy(const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all)
 {
     return std::all_of(loads.begin(), loads.end(), [&all](const auto& entry) { return TreeHeldOnlyByModules(entry.first, entry.second, all); });
+}
+
+void ImportedModule::AppendHeldObjects(std::vector<const ValueObject*>& objects) const
+{
+    ForEachHeldValue([&objects](const InternalValue& value) {
+        if (const auto* object = detail::InternalValueAccess::Object(value))
+        {
+            objects.push_back(object);
+        }
+    });
+}
+
+void ImportedModule::NoteHeldValues() const
+{
+    ForEachHeldValue([](const InternalValue& value) { CycleCollector::NoteStore(value); });
+}
+
+namespace
+{
+// The site of the closure `object` is, when it is one: a macro or a caller, super() or a block of `self`
+const ClosureSite* ClosureSiteOfObject(const ValueObject& object)
+{
+    const auto* box = dynamic_cast<const ValueBox<Callable>*>(&object);
+    if (!box || box->Get().GetType() != Callable::Type::Statement)
+    {
+        return nullptr;
+    }
+    const auto& function = box->Get().GetStatementCallable();
+    if (const auto* site = MacroStatement::SiteOf(function))
+    {
+        return site;
+    }
+    if (const auto* super = function.target<SuperBlockCall>())
+    {
+        return &super->site;
+    }
+    if (const auto* block = function.target<SelfBlockCall>())
+    {
+        return &block->site;
+    }
+    return nullptr;
+}
+} // namespace
+
+bool ImportedModule::MayBeReached(const std::vector<const ImportedModule*>& candidates)
+{
+    // The objects the candidates' held values hold, each with the number of those holding it
+    SmallVector<std::pair<const ValueObject*, unsigned>, 16> held;
+    for (const auto* module : candidates)
+    {
+        // Its top level failed in a scope it left on its context (a loop, a `with`): Names() is that scope's
+        if (module->m_context.MadeOtherClosures() || module->m_context.GetScopesCount() != module->m_frame.baseDepth)
+        {
+            return true;
+        }
+        if (module->m_frame.self && detail::InternalValueAccess::Object(*module->m_frame.self))
+        {
+            return true;
+        }
+        module->ForEachHeldValue([&held](const InternalValue& value) {
+            const auto* object = detail::InternalValueAccess::Object(value);
+            if (!object)
+            {
+                return;
+            }
+            if (auto* found = std::find_if(held.begin(), held.end(), [object](const auto& entry) { return entry.first == object; }); found != held.end())
+            {
+                ++found->second;
+                return;
+            }
+            held.emplace_back(object, 1U);
+        });
+    }
+    const auto isCandidateObject = [&candidates](const ValueObject* object) {
+        return std::any_of(candidates.begin(), candidates.end(), [object](const ImportedModule* module) { return detail::InternalValueAccess::Object(module->m_object) == object; });
+    };
+    return std::any_of(held.begin(), held.end(), [&candidates, &isCandidateObject](const auto& entry) {
+        const auto* object = entry.first;
+        const auto* site = ClosureSiteOfObject(*object);
+        const bool ofCandidate = isCandidateObject(object)
+                                 || (site && std::any_of(candidates.begin(), candidates.end(), [site](const ImportedModule* module) { return site->RunsInEndingModule(module->m_context); }));
+        if (!ofCandidate)
+        {
+            return false;
+        }
+        if (object->use_count() != entry.second) // use_count: as in TreeHeldOnlyByModules
+        {
+            return true;
+        }
+        const auto* box = site ? dynamic_cast<const ValueBox<Callable>*>(object) : nullptr;
+        return box && box->Get().SharesBody();
+    });
+}
+
+void ImportedModule::MarkReached(std::vector<const ValueObject*> roots, const std::vector<const ImportedModule*>& candidates, std::vector<bool>& reached)
+{
+    auto& pending = roots;
+    std::unordered_set<const ValueObject*> seen;
+    while (!pending.empty())
+    {
+        const auto* object = pending.back();
+        pending.pop_back();
+        // Strings, numbers and host adapters hold no closure
+        if (!object->IsTraversable() || !seen.insert(object).second)
+        {
+            continue;
+        }
+        if (const auto* site = ClosureSiteOfObject(*object))
+        {
+            for (std::size_t index = 0; index != candidates.size(); ++index)
+            {
+                if (!reached[index] && site->RunsInEndingModule(candidates[index]->m_context))
+                {
+                    reached[index] = true;
+                    // The module stays: what its macros see stays reachable, and so do the modules it reaches
+                    candidates[index]->AppendHeldObjects(pending);
+                }
+            }
+        }
+        object->Traverse([&pending](const ValueObject* held) { pending.push_back(held); });
+    }
 }
 
 namespace

@@ -1507,45 +1507,187 @@ private:
         // top level imported. The trees stay too, until PruneReplaced: what a module's macro
         // stored holds the owner of its own. What still refers to an ended module does so through its
         // anchor (ClosureSite), which a module made in the call marks as ending with it
-        template<typename IsKept>
-        void EndCall(const CallMark& mark, const IsKept& isKept) noexcept
+        // A module whose closure a value that outlives the call reaches stays, as Jinja2 keeps a module while a stored
+        // macro reaches it (docs/tasks/0312): the outermost call, `outermost`, walks from what lives on, the objects
+        // `addRoots` appends and those of the modules that stay, when a call since the last walk noted a store, and
+        // ends the modules kept so once nothing that lives on reaches them. A nested call leaves its modules to it then
+        template<typename IsKept, typename AddRoots>
+        void EndCall(const CallMark& mark, const IsKept& isKept, bool outermost, const AddRoots& addRoots) noexcept
         {
             if (!m_loaded)
             {
                 return;
             }
-            auto& modules = m_loaded->modules;
-            const auto& shared = m_loaded->sharedModules;
-            // The newest first, as a render ends them
-            for (auto p = modules.size(); p-- > mark.modules;)
+            auto& loaded = *m_loaded;
+            // What the call noted: a store, or a container letting go of a value, which may be a closure kept so
+            if (const auto* collector = CycleCollector::Current(); collector && collector->HasNotes())
             {
-                auto& module = modules[p];
-                const bool isShared = std::any_of(shared.begin(), shared.end(), [&module](const auto& entry) { return entry.second == module.get(); });
-                if (isShared || isKept(module.get()))
+                loaded.mayHaveStored = true;
+            }
+            if (!outermost && loaded.mayHaveStored)
+            {
+                return;
+            }
+            // A module whose top level failed in a loop or a `with` ends those scopes first, as a render that fails does
+            // (EndModuleScopesLeftByFailure): its names are its top level's again, which a stored macro of it sees and
+            // the collector is told of when it ends (Codex review of #977)
+            EndScopesLeftByFailure(mark, isKept);
+            if (!outermost || !loaded.mayHaveStored || !EndUnreached(mark, isKept, addRoots))
+            {
+                auto& modules = loaded.modules;
+                for (auto p = modules.size(); p-- > mark.modules;)
                 {
-                    continue;
-                }
-                // Its values may hold themselves: the call's collector frees those cycles. Noting
-                // them allocates; when that fails, the rest of the module's cycles leak
-                try
-                {
-                    for (const auto& [name, value] : module->Names())
+                    if (EndsWithCall(modules[p].get(), isKept) && !KeptByStoredClosure(modules[p].get()))
                     {
-                        CycleCollector::NoteStore(value);
+                        EndModule(modules[p]);
                     }
                 }
-                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
-                {
-                }
-                module.reset();
+                modules.erase(std::remove(modules.begin() + static_cast<std::ptrdiff_t>(mark.modules), modules.end(), nullptr), modules.end());
             }
-            modules.erase(std::remove(modules.begin() + static_cast<std::ptrdiff_t>(mark.modules), modules.end(), nullptr), modules.end());
             // Errors only, which the statement that looked them up has thrown
-            auto& invalid = m_loaded->invalidNames;
+            auto& invalid = loaded.invalidNames;
             while (invalid.size() > mark.invalidNames)
             {
                 invalid.pop_back();
             }
+        }
+        // Notes the values of the modules, and the importer's names each sees, to the collector running on this thread: the template module that owns them
+        // goes, and a cycle among them, which a call made, has no note left (TemplateModuleState's destructor). When
+        // noting one cannot allocate, the cycles not noted leak
+        void NoteModuleNames() const noexcept
+        {
+            if (!m_loaded)
+            {
+                return;
+            }
+            try
+            {
+                for (const auto& module : m_loaded->modules)
+                {
+                    module->NoteHeldValues();
+                }
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+            {
+            }
+        }
+        // Whether a closure a call stored keeps `module`, a module that call made (EndCall, docs/tasks/0312)
+        [[nodiscard]] bool KeptByStoredClosure(const ImportedModule* module) const noexcept
+        {
+            return m_loaded && std::find(m_loaded->storedKept.begin(), m_loaded->storedKept.end(), module) != m_loaded->storedKept.end();
+        }
+
+        // Whether `module`, one a host's call made, ends with a call: neither shared nor `isKept` (EndCall)
+        template<typename IsKept>
+        [[nodiscard]] bool EndsWithCall(const ImportedModule* module, const IsKept& isKept) const noexcept
+        {
+            const auto& shared = m_loaded->sharedModules;
+            return std::none_of(shared.begin(), shared.end(), [module](const auto& entry) { return entry.second == module; }) && !isKept(module);
+        }
+        // Ends the scopes above the top levels of the modules the call that took `mark` made that a failure left
+        // (EndCall). When that cannot allocate, the scopes stay
+        template<typename IsKept>
+        void EndScopesLeftByFailure(const CallMark& mark, const IsKept& isKept) noexcept
+        {
+            auto& modules = m_loaded->modules;
+            for (auto p = mark.modules; p != modules.size(); ++p)
+            {
+                auto& context = modules[p]->Context();
+                if (context.GetScopesCount() == context.FirstOwnScope() || !EndsWithCall(modules[p].get(), isKept))
+                {
+                    continue;
+                }
+                try
+                {
+                    context.EndScopesLeftByFailure(context.FirstOwnScope());
+                }
+                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the comment above says what happens
+                {
+                }
+            }
+        }
+        // The walk of EndCall: ends the modules the call that took `mark` made, and those a stored closure kept, that no
+        // closure found from what lives on runs in, the newest first, as a render ends them. False, ending nothing, when
+        // there are none or the walk failed (out of memory): the modules kept so far stay then
+        template<typename IsKept, typename AddRoots>
+        bool EndUnreached(const CallMark& mark, const IsKept& isKept, const AddRoots& addRoots) noexcept
+        {
+            auto& loaded = *m_loaded;
+            loaded.mayHaveStored = false;
+            auto& modules = loaded.modules;
+            std::vector<const ImportedModule*> candidates;
+            std::vector<bool> reached;
+            std::vector<const ImportedModule*> stay;
+            try
+            {
+                candidates = loaded.storedKept;
+                for (auto p = mark.modules; p != modules.size(); ++p)
+                {
+                    if (EndsWithCall(modules[p].get(), isKept))
+                    {
+                        candidates.push_back(modules[p].get());
+                    }
+                }
+                if (candidates.empty())
+                {
+                    return false;
+                }
+                reached.assign(candidates.size(), false);
+                // Nothing kept so far, and nothing outside the call's modules holds what they made: they end unwalked
+                if (!loaded.storedKept.empty() || ImportedModule::MayBeReached(candidates))
+                {
+                    std::vector<const ValueObject*> roots;
+                    addRoots(roots);
+                    for (const auto& module : modules)
+                    {
+                        if (std::find(candidates.begin(), candidates.end(), module.get()) == candidates.end())
+                        {
+                            module->AppendHeldObjects(roots);
+                        }
+                    }
+                    ImportedModule::MarkReached(std::move(roots), candidates, reached);
+                }
+                for (std::size_t index = 0; index != candidates.size(); ++index)
+                {
+                    if (reached[index])
+                    {
+                        stay.push_back(candidates[index]);
+                    }
+                }
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the comment above says what happens
+            {
+                return false;
+            }
+            catch (...) // NOLINT(bugprone-empty-catch): a vector past its max_size (std::length_error), as out of memory
+            {
+                return false;
+            }
+            loaded.storedKept.swap(stay);
+            for (auto p = modules.size(); p-- > 0;)
+            {
+                const auto found = std::find(candidates.begin(), candidates.end(), modules[p].get());
+                if (found != candidates.end() && !reached[static_cast<std::size_t>(found - candidates.begin())])
+                {
+                    EndModule(modules[p]);
+                }
+            }
+            modules.erase(std::remove(modules.begin(), modules.end(), nullptr), modules.end());
+            return true;
+        }
+        // Ends `module`, which a host's call made (EndCall). Its values may hold themselves: the call's collector frees
+        // those cycles. Noting them allocates; when that fails, the rest of the module's cycles leak
+        static void EndModule(std::unique_ptr<ImportedModule>& module) noexcept
+        {
+            try
+            {
+                // The importer's names it sees too: a call's own values, which it may keep past the call (Codex review of #977)
+                module->NoteHeldValues();
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+            {
+            }
+            module.reset();
         }
 
         // The owner of the template whose tree is `nodes`: the rendered one or one this render loaded (docs/tasks/0482)
@@ -2143,6 +2285,10 @@ private:
             // The modules imported without context, by the template they were made from. A
             // render imports few templates, so a list beats hashing
             std::vector<std::pair<const LoadTemplateResult*, ImportedModule*>> sharedModules;
+            // The modules host's calls made that a closure stored past them keeps (EndCall, docs/tasks/0312)
+            std::vector<const ImportedModule*> storedKept;
+            // A call noted a store since the last walk of EndCall
+            bool mayHaveStored = false;
         };
         // Made on the first lookup or handle, so a render that loads nothing does not pay for it
         LoadedTemplates& Loaded() const

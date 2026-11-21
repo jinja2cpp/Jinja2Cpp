@@ -892,6 +892,12 @@ public:
     // (IRendererCallback::ModulesEndWithCall): a closure defined here and called after that
     // call fails with TemplateExpired (ClosureSite::Resolve)
     void SetEndsWithCall() { m_endsWithCall = true; }
+    // The top level of such a module has run: a closure made in it from now on (in a call of its macro) may be stored
+    // where no value of the module shows it (ImportedModule::MayBeReached, docs/tasks/0312)
+    void SetTopLevelRun() { m_topLevelRun = true; }
+    // Whether such a module made a closure that is not one of its top-level names: in a call of its macro, or below its
+    // top-level scope
+    [[nodiscard]] bool MadeOtherClosures() const { return m_madeOtherClosures; }
     // The context of an included template, which ends with the include: the closures defined
     // at its top level keep the names they see (ClosureCapture), which CaptureClosures copies
     // when the include ends
@@ -1986,6 +1992,9 @@ private:
     // An imported module's context that ends with the host's call that made it, before the
     // render (SetEndsWithCall); not copied
     bool m_endsWithCall = false;
+    // SetTopLevelRun and MadeOtherClosures; not copied
+    bool m_topLevelRun = false;
+    bool m_madeOtherClosures = false;
     // An included template's context, which ends before the render (SetEndsBeforeRender); not copied
     bool m_endsBeforeRender = false;
     // A module's context: the names its top level imported (SetModuleImports); not copied
@@ -2444,6 +2453,10 @@ public:
     // The closure reads the names of `reads` (ClosureCapture::reads), every name for `readsAll`.
     // Throws std::bad_alloc
     [[nodiscard]] std::shared_ptr<ClosureCapture> CaptureOnEnd(RenderContext& context, Span<const std::size_t> reads, bool readsAll);
+    // Whether the closure runs in `context`, a module's that ends with the host's call that made it
+    // (RenderContext::SetEndsWithCall): a value that outlives that call and reaches the closure keeps the module
+    // (docs/tasks/0312)
+    [[nodiscard]] bool RunsInEndingModule(const RenderContext& context) const { return m_endsWithCall && IsDefinedIn(context); }
 
 private:
     friend class HomeCall;

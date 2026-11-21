@@ -521,10 +521,11 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     class CallScope
     {
     public:
-        // `holdsHandles`: the module holds handles of the callback's table of templates (its blocks)
-        CallScope(Callback& callback, bool holdsHandles, KeptObjects& kept)
+        // `holdsHandles`: the module, `outer`, holds handles of the callback's table of templates (its blocks)
+        CallScope(Callback& callback, const ImportedModule& outer, KeptObjects& kept)
             : m_callback(callback)
-            , m_holdsHandles(holdsHandles)
+            , m_outer(outer)
+            , m_holdsHandles(outer.HoldsTemplateHandles())
             , m_kept(kept)
             , m_mark(callback.MarkCall())
             , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
@@ -540,7 +541,11 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             --m_callback.calls;
             m_callback.sharedDepth = m_sharedDepth;
             const auto& owner = m_callback;
-            m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
+            // What outlives the call: the module's own values and the modules that stay, which EndCall adds
+            const auto& outer = m_outer;
+            m_callback.EndCall(
+                m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); }, m_callback.calls == 0,
+                [&outer](std::vector<const ValueObject*>& roots) { outer.AppendHeldObjects(roots); });
             // A call that failed leaves what its error views as it is until the error is made,
             // then prunes (PruneAfterFailedCall, docs/tasks/0503)
             // What closures the host's calls let go of kept goes now, before the slots are asked who holds them
@@ -564,6 +569,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
 
     private:
         Callback& m_callback;
+        const ImportedModule& m_outer;
         bool m_holdsHandles;
         KeptObjects& m_kept;
         typename Callback::CallMark m_mark;
@@ -615,6 +621,12 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
             {
             }
+        }
+        // So do the values of the modules its calls imported that stay with it: shared ones, and those a stored
+        // closure kept (docs/tasks/0312)
+        if (callback)
+        {
+            callback->NoteModuleNames();
         }
         // A cycle a call made among the module's values, below a value that is in none, has no
         // note left: the walk reaches it from the module's names
@@ -753,7 +765,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // among them (docs/tasks/0480)
             NoteDropped();
             // Then what the call loads, which its collector sees go
-            CallScope callScope(*callback, module->HoldsTemplateHandles(), kept);
+            CallScope callScope(*callback, *module, kept);
             // Then the module's context as the call found it, which a failed call would leave
             // with its scopes pushed
             const HomeCall::Restore restore(module->Context());
