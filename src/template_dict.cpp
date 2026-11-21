@@ -196,7 +196,7 @@ struct KeyTokenBuilder
     }
     const char* operator()(const BigIntView& val) const
     {
-        AppendBigInt(m_out, val.decimal);
+        WithDecimal(val, [this](std::string_view decimal) { AppendBigInt(m_out, decimal); });
         return nullptr;
     }
     const char* operator()(double val) const
