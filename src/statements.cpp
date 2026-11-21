@@ -4409,7 +4409,8 @@ bool ImportedModule::MayBeReached(const std::vector<const ImportedModule*>& cand
     SmallVector<std::pair<const ValueObject*, unsigned>, 16> held;
     for (const auto* module : candidates)
     {
-        if (module->m_context.MadeOtherClosures())
+        // Its top level failed in a scope it left on its context (a loop, a `with`): Names() is that scope's
+        if (module->m_context.MadeOtherClosures() || module->m_context.GetScopesCount() != module->m_frame.baseDepth)
         {
             return true;
         }

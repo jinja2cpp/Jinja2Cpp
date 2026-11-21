@@ -683,6 +683,20 @@ TEST_F(TemplateModuleTest, MacroStoredAcrossCallsKeepsItsModule)
     EXPECT_EQ("BAM", Call(module.exports["use"], { std::string("b") }).AsString());
 }
 
+// A module whose top level failed partway, inside a loop and a `with`, after storing its macro, stays for that macro with
+// the scopes the failure left: G1 on each later call, as in Jinja2 3.1.6 (docs/tasks/0312, security review)
+TEST_F(TemplateModuleTest, MacroStoredByAFailedImportKeepsItsModule)
+{
+    AddFile("half", "{% macro g() %}G{{ v }}{% endmacro %}{% set v = 1 %}{% set ns.f = g %}{% for i in [1] %}{% with w = 2 %}{{ 1 // 0 }}{% endwith %}{% endfor %}");
+    auto module = Make("{% set ns = namespace(f=none) %}{% macro keep() %}{% import 'half' as h with context %}{% endmacro %}{% macro use() %}{{ ns.f() }}{% endmacro %}");
+    for (int i = 0; i != 3; ++i)
+    {
+        EXPECT_THROW(Call(module.exports["keep"]), jinja2::BadResultAccess<>);
+        EXPECT_EQ("G1", Call(module.exports["use"]).AsString());
+        EXPECT_EQ("G1", Call(module.exports["use"]).AsString());
+    }
+}
+
 // With EveryUse and no cache a module drops the trees a source change replaced when a call ends (docs/tasks/0482).
 // What a call stored from one still runs it, as Jinja2 keeps the old Template alive: the next call prints the old
 // output, the one after it the new (3.1.6; the rows are its make_module() results)
