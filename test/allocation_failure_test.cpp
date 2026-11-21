@@ -684,7 +684,8 @@ TEST_F(JsonAllocationFailureTest, NlohmannOwnedDocumentDropsWithoutAllocating)
 class ModuleCallTest : public AllocationFailureTest
 {
 protected:
-    jinja2::TemplateModule MakeModule(const std::string& body)
+    // `top`: the template's top level, before the macro `m`
+    jinja2::TemplateModule MakeModule(const std::string& body, const std::string& top = std::string())
     {
         // One file system for every module the test makes: the environment looks a name up in
         // its handlers in order, so that a second one would never be asked for 'lib'
@@ -695,7 +696,7 @@ protected:
         }
         m_fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}");
         m_fs->AddFile("fails", "{% import 'lib' as l with context %}{{ 1 // 0 }}");
-        EXPECT_TRUE(!!m_tpl.Load("{% macro m() %}" + body + "{% endmacro %}"));
+        EXPECT_TRUE(!!m_tpl.Load(top + "{% macro m() %}" + body + "{% endmacro %}"));
         auto module = m_tpl.MakeModule();
         EXPECT_TRUE(!!module);
         return module ? std::move(*module) : jinja2::TemplateModule{};
@@ -747,6 +748,45 @@ TEST_F(ModuleCallTest, CallsStayFlat)
         const long before = g_live.load(std::memory_order_relaxed);
         callMany(2000);
         // Each call kept about 30 allocations before 0301
+        EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
+    }
+}
+
+// A macro each call stores keeps the module it runs in until a later call replaces it, as in Jinja2 (docs/tasks/0312): the
+// module then ends, and so does one whose macro is stored nowhere that lives on (a list of the module's own, a local)
+TEST_F(ModuleCallTest, StoredMacrosStayFlat)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
+    m_fs = std::make_shared<MemoryFileSystem>();
+    m_env.AddFilesystemHandler(std::string(), m_fs);
+    m_fs->AddFile("own", "{% macro y() %}Y{% endmacro %}{% set keep = namespace(f=y, l=[y]) %}{% set keep.self = keep %}");
+    m_fs->AddFile("both", "{% import 'lib' as l with context %}{% macro z() %}{{ l.x() }}{% endmacro %}");
+    for (const char* body : { "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}",
+                              "{% import 'lib' as l with context %}{% set ns.l = [l] %}{% set ns.d = {'f': l.x} %}{{ ns.l[0].x() }}",
+                              "{% import 'both' as b with context %}{% set ns.f = b.z %}{{ ns.f() }}",
+                              "{% import 'own' as o with context %}{% set f = o.y %}{% set ns.n = ns.n + 1 %}{{ f() }}",
+                              "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ 1 // 0 }}" })
+    {
+        auto module = MakeModule(body, "{% set ns = namespace(f=none, n=0) %}");
+        const auto& m = module.exports["m"];
+        const auto callMany = [&m](int count) {
+            for (int i = 0; i != count; ++i)
+            {
+                try
+                {
+                    Call(m);
+                }
+                catch (const jinja2::BadResultAccess<>&) // NOLINT(bugprone-empty-catch): the failing case fails every call
+                {
+                }
+            }
+        };
+        callMany(100);
+        const long before = g_live.load(std::memory_order_relaxed);
+        callMany(2000);
         EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
     }
 }

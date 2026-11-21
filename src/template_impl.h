@@ -1507,45 +1507,130 @@ private:
         // top level imported. The trees stay too, until PruneReplaced: what a module's macro
         // stored holds the owner of its own. What still refers to an ended module does so through its
         // anchor (ClosureSite), which a module made in the call marks as ending with it
-        template<typename IsKept>
-        void EndCall(const CallMark& mark, const IsKept& isKept) noexcept
+        // A module whose closure a value that outlives the call reaches stays, as Jinja2 keeps a module while a stored
+        // macro reaches it (docs/tasks/0312): the outermost call, `outermost`, walks from what lives on, the objects
+        // `addRoots` appends and those of the modules that stay, when a call since the last walk noted a store, and
+        // ends the modules kept so once nothing that lives on reaches them. A nested call leaves its modules to it then
+        template<typename IsKept, typename AddRoots>
+        void EndCall(const CallMark& mark, const IsKept& isKept, bool outermost, const AddRoots& addRoots) noexcept
         {
             if (!m_loaded)
             {
                 return;
             }
-            auto& modules = m_loaded->modules;
-            const auto& shared = m_loaded->sharedModules;
-            // The newest first, as a render ends them
-            for (auto p = modules.size(); p-- > mark.modules;)
+            auto& loaded = *m_loaded;
+            // What the call noted: a store, or a container letting go of a value, which may be a closure kept so
+            if (const auto* collector = CycleCollector::Current(); collector && collector->HasNotes())
             {
-                auto& module = modules[p];
-                const bool isShared = std::any_of(shared.begin(), shared.end(), [&module](const auto& entry) { return entry.second == module.get(); });
-                if (isShared || isKept(module.get()))
-                {
-                    continue;
-                }
-                // Its values may hold themselves: the call's collector frees those cycles. Noting
-                // them allocates; when that fails, the rest of the module's cycles leak
+                loaded.mayHaveStored = true;
+            }
+            if (!outermost && loaded.mayHaveStored)
+            {
+                return;
+            }
+            auto& modules = loaded.modules;
+            const auto& shared = loaded.sharedModules;
+            const auto endsWithCall = [&shared, &isKept](const ImportedModule* module) {
+                return std::none_of(shared.begin(), shared.end(), [module](const auto& entry) { return entry.second == module; }) && !isKept(module);
+            };
+            // The modules that may end: the call's and, for the outermost call, those a stored closure kept
+            std::vector<const ImportedModule*> candidates;
+            std::vector<bool> reached;
+            bool walked = false;
+            if (outermost && loaded.mayHaveStored)
+            {
+                loaded.mayHaveStored = false;
                 try
                 {
-                    for (const auto& [name, value] : module->Names())
+                    candidates = loaded.storedKept;
+                    for (auto p = mark.modules; p != modules.size(); ++p)
                     {
-                        CycleCollector::NoteStore(value);
+                        if (endsWithCall(modules[p].get()))
+                        {
+                            candidates.push_back(modules[p].get());
+                        }
+                    }
+                    if (!candidates.empty())
+                    {
+                        std::vector<const ValueObject*> roots;
+                        addRoots(roots);
+                        for (const auto& module : modules)
+                        {
+                            if (std::find(candidates.begin(), candidates.end(), module.get()) == candidates.end())
+                            {
+                                module->AppendHeldObjects(roots);
+                            }
+                        }
+                        reached.assign(candidates.size(), false);
+                        ImportedModule::MarkReached(std::move(roots), candidates, reached);
+                        loaded.storedKept.reserve(candidates.size());
+                        walked = true;
                     }
                 }
-                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the modules kept so far stay, the call's end
                 {
                 }
-                module.reset();
             }
-            modules.erase(std::remove(modules.begin() + static_cast<std::ptrdiff_t>(mark.modules), modules.end(), nullptr), modules.end());
+            if (walked)
+            {
+                // The ones reached stay, the others end, the newest first, as a render ends them
+                loaded.storedKept.clear();
+                for (std::size_t index = 0; index != candidates.size(); ++index)
+                {
+                    if (reached[index])
+                    {
+                        loaded.storedKept.push_back(candidates[index]);
+                    }
+                }
+                for (auto p = modules.size(); p-- > 0;)
+                {
+                    const auto found = std::find(candidates.begin(), candidates.end(), modules[p].get());
+                    if (found != candidates.end() && !reached[static_cast<std::size_t>(found - candidates.begin())])
+                    {
+                        EndModule(modules[p]);
+                    }
+                }
+                modules.erase(std::remove(modules.begin(), modules.end(), nullptr), modules.end());
+            }
+            else
+            {
+                for (auto p = modules.size(); p-- > mark.modules;)
+                {
+                    if (endsWithCall(modules[p].get()) && std::find(loaded.storedKept.begin(), loaded.storedKept.end(), modules[p].get()) == loaded.storedKept.end())
+                    {
+                        EndModule(modules[p]);
+                    }
+                }
+                modules.erase(std::remove(modules.begin() + static_cast<std::ptrdiff_t>(mark.modules), modules.end(), nullptr), modules.end());
+            }
             // Errors only, which the statement that looked them up has thrown
-            auto& invalid = m_loaded->invalidNames;
+            auto& invalid = loaded.invalidNames;
             while (invalid.size() > mark.invalidNames)
             {
                 invalid.pop_back();
             }
+        }
+        // Whether a closure a call stored keeps `module`, a module that call made (EndCall, docs/tasks/0312)
+        [[nodiscard]] bool KeptByStoredClosure(const ImportedModule* module) const noexcept
+        {
+            return m_loaded && std::find(m_loaded->storedKept.begin(), m_loaded->storedKept.end(), module) != m_loaded->storedKept.end();
+        }
+
+        // Ends `module`, which a host's call made (EndCall). Its values may hold themselves: the call's collector frees
+        // those cycles. Noting them allocates; when that fails, the rest of the module's cycles leak
+        static void EndModule(std::unique_ptr<ImportedModule>& module) noexcept
+        {
+            try
+            {
+                for (const auto& [name, value] : module->Names())
+                {
+                    CycleCollector::NoteStore(value);
+                }
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+            {
+            }
+            module.reset();
         }
 
         // The owner of the template whose tree is `nodes`: the rendered one or one this render loaded (docs/tasks/0482)
@@ -2143,6 +2228,10 @@ private:
             // The modules imported without context, by the template they were made from. A
             // render imports few templates, so a list beats hashing
             std::vector<std::pair<const LoadTemplateResult*, ImportedModule*>> sharedModules;
+            // The modules host's calls made that a closure stored past them keeps (EndCall, docs/tasks/0312)
+            std::vector<const ImportedModule*> storedKept;
+            // A call noted a store since the last walk of EndCall
+            bool mayHaveStored = false;
         };
         // Made on the first lookup or handle, so a render that loads nothing does not pay for it
         LoadedTemplates& Loaded() const

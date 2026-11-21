@@ -51,6 +51,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -4234,6 +4235,12 @@ const void* MacroStatement::TreeOwnerOf(const InternalValue& value, const void*&
     return macro ? macro->treeOwner.get() : nullptr;
 }
 
+const ClosureSite* MacroStatement::SiteOf(const Callable::StatementCallable& function) noexcept
+{
+    const auto* macro = function.target<CallableBody>();
+    return macro ? &macro->site : nullptr;
+}
+
 template<typename Note>
 void ImportedModule::ForEachHeldValue(const Note& note) const
 {
@@ -4352,6 +4359,72 @@ bool ImportedModule::HeldOnlyBy(const Group& ending, const Group& staying)
 bool ImportedModule::TreesHeldOnlyBy(const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all)
 {
     return std::all_of(loads.begin(), loads.end(), [&all](const auto& entry) { return TreeHeldOnlyByModules(entry.first, entry.second, all); });
+}
+
+void ImportedModule::AppendHeldObjects(std::vector<const ValueObject*>& objects) const
+{
+    ForEachHeldValue([&objects](const InternalValue& value) {
+        if (const auto* object = detail::InternalValueAccess::Object(value))
+        {
+            objects.push_back(object);
+        }
+    });
+}
+
+namespace
+{
+// The site of the closure `object` is, when it is one: a macro or a caller, super() or a block of `self`
+const ClosureSite* ClosureSiteOfObject(const ValueObject& object)
+{
+    const auto* box = dynamic_cast<const ValueBox<Callable>*>(&object);
+    if (!box || box->Get().GetType() != Callable::Type::Statement)
+    {
+        return nullptr;
+    }
+    const auto& function = box->Get().GetStatementCallable();
+    if (const auto* site = MacroStatement::SiteOf(function))
+    {
+        return site;
+    }
+    if (const auto* super = function.target<SuperBlockCall>())
+    {
+        return &super->site;
+    }
+    if (const auto* block = function.target<SelfBlockCall>())
+    {
+        return &block->site;
+    }
+    return nullptr;
+}
+} // namespace
+
+void ImportedModule::MarkReached(std::vector<const ValueObject*> roots, const std::vector<const ImportedModule*>& candidates, std::vector<bool>& reached)
+{
+    auto& pending = roots;
+    std::unordered_set<const ValueObject*> seen;
+    while (!pending.empty())
+    {
+        const auto* object = pending.back();
+        pending.pop_back();
+        // Strings, numbers and host adapters hold no closure
+        if (!object->IsTraversable() || !seen.insert(object).second)
+        {
+            continue;
+        }
+        if (const auto* site = ClosureSiteOfObject(*object))
+        {
+            for (std::size_t index = 0; index != candidates.size(); ++index)
+            {
+                if (!reached[index] && site->RunsInEndingModule(candidates[index]->m_context))
+                {
+                    reached[index] = true;
+                    // The module stays: what its macros see stays reachable, and so do the modules it reaches
+                    candidates[index]->AppendHeldObjects(pending);
+                }
+            }
+        }
+        object->Traverse([&pending](const ValueObject* held) { pending.push_back(held); });
+    }
 }
 
 namespace

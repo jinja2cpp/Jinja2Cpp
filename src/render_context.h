@@ -2444,6 +2444,10 @@ public:
     // The closure reads the names of `reads` (ClosureCapture::reads), every name for `readsAll`.
     // Throws std::bad_alloc
     [[nodiscard]] std::shared_ptr<ClosureCapture> CaptureOnEnd(RenderContext& context, Span<const std::size_t> reads, bool readsAll);
+    // Whether the closure runs in `context`, a module's that ends with the host's call that made it
+    // (RenderContext::SetEndsWithCall): a value that outlives that call and reaches the closure keeps the module
+    // (docs/tasks/0312)
+    [[nodiscard]] bool RunsInEndingModule(const RenderContext& context) const { return m_endsWithCall && IsDefinedIn(context); }
 
 private:
     friend class HomeCall;

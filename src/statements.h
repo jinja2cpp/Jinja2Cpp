@@ -724,6 +724,14 @@ public:
     [[nodiscard]] static bool TreesHeldOnlyBy(const TreeLoads& loads, const std::vector<std::unique_ptr<ImportedModule>>& all);
     // The tree SetTreeOwner keeps alive; null when none
     [[nodiscard]] const void* Tree() const noexcept { return m_treeOwner.get(); }
+    // Appends the objects the module holds (ForEachHeldValue), where a walk from it starts. Throws std::bad_alloc
+    void AppendHeldObjects(std::vector<const ValueObject*>& objects) const;
+    // Sets reached[i] for each of `candidates`, modules that end with the host's call that made them, that a closure
+    // found from `roots` through ValueObject::Traverse runs in, and the walk goes on from what such a module holds: a
+    // value that outlives the call keeps it, as Jinja2 keeps a module while a stored macro reaches it (docs/tasks/0312).
+    // What Traverse does not show (a std::function capture, a host's map) is not walked, so a closure only that
+    // reaches leaves its module to end. Throws std::bad_alloc
+    static void MarkReached(std::vector<const ValueObject*> roots, const std::vector<const ImportedModule*>& candidates, std::vector<bool>& reached);
 
 private:
     // Calls `note` with each value whose object the module holds: its `import ... as` object, its names (twice when the
@@ -944,6 +952,8 @@ public:
     // The owner of the tree `value` runs in when it is a macro of a module that frees replaced trees
     // (RenderContext::TreeOwner), else null; `body` gets the callable's body, which holds it (docs/tasks/0528)
     [[nodiscard]] static const void* TreeOwnerOf(const InternalValue& value, const void*& body) noexcept;
+    // The site of a macro's or caller's body `function`, else null (docs/tasks/0312)
+    [[nodiscard]] static const ClosureSite* SiteOf(const Callable::StatementCallable& function) noexcept;
 
 protected:
     // What MakeCallable's callable holds; defined in statements.cpp
