@@ -947,9 +947,9 @@ TEST(BigIntTemplate, HugeFromBinaryBuildsDecimalWithinTheBudget)
     const auto ok = render("{% set x = s|int(base=16) %}{% set y = -x %}{{ x.bit_length() }}|{{ x.bit_count() }}|{{ '{:x}'.format(y)|length }}|{{ y is odd }}|{{ y < x }}");
     ASSERT_TRUE(ok.has_value()) << ok.error().ToString();
     EXPECT_EQ("1048576|1048576|262145|True|True", ok.value());
-    const auto roundedAway = render("{% set x = s|int(base=16) %}{{ x|round(-315700, 'common') }}|{{ (-x)|round(-400000, 'common') }}|{{ x|round(-9223372036854775807 - 1) }}");
+    const auto roundedAway = render("{% set x = s|int(base=16) %}{{ x|round(-315700, 'common') }}|{{ (-x)|round(-400000, 'common') }}|{{ x|round(-9223372036854775807 - 1) }}|{{ (s[:20]|int(base=16))|round(-9223372036854775807 - 1) }}");
     ASSERT_TRUE(roundedAway.has_value()) << roundedAway.error().ToString();
-    EXPECT_EQ("0|0|0", roundedAway.value());
+    EXPECT_EQ("0|0|0|0", roundedAway.value());
 
     for (const auto* source : { "{% set x = s|int(base=16) %}{{ (x|round(-1, 'common')) is odd }}", "{{ f(s|int(base=16)) }}" })
     {
