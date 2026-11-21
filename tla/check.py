@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """Model-checks tla/CellProtocol.tla with TLC: the fixed protocol, then each #673 fix taken out.
 
-Usage: tla/check.py [--jar tla2tools.jar] [--only NAME ...] [--list]
+Usage: tla/check.py [--jar tla2tools.jar] [--only NAME ...] [--kind KIND ...] [--list]
+       tla/check.py --simulate SECONDS [--depth N] ...   (random behaviours past the bound)
        tla/check.py --trace ...   (trace validation: tla/trace_check.py)
 
 Every run is a TLC model: a set of constants plus the invariants it checks. A "pass" run must
 explore its whole bounded space and find no violation (a run stopped by --timeout is a failure,
-not a partial pass); a "mutant" run puts back the code as it was before one fix and must find a
-counterexample for the named invariant; an "open" run checks an invariant of an open task and
-is expected to fail too. See tla/README.md.
+not a partial pass); an "exhaustive" run has no level bound and must reach the fixed point of
+its scope, so it checks every behaviour of that scope at any length (task 0351); a "mutant" run
+puts back the code as it was before one fix and must find a counterexample for the named
+invariant; a "finding" run reproduces a defect the model found. With --simulate, TLC samples
+random behaviours of each chosen run up to --depth states for a time budget instead (task 0351):
+a pass or exhaustive run must find no violation in it. See tla/README.md.
 """
 
 import argparse
@@ -74,6 +78,9 @@ GLOBAL_ITEMS = dict(Threads='{"t1", "t2"}', ModuleThreads='{}', RenderThreads='{
                     MaxDepth=1, MaxLevel=12, MaxAd=9, MaxCell=2, MaxGen=3, MaxEx=1,
                     HostHandoff=True, Actions='{"keeplist", "release", "read", "gitem"}')
 ALL = '{"touch", "read", "export", "keeplist", "ns", "enum", "sort", "release"}'
+# The level guard of an exhaustive run or a simulation: never reached, so only the scope's own
+# bounds (ids are never reused, each kind is bounded) end a behaviour (README, "Depth")
+UNBOUNDED = 1000000
 
 
 # name: (kind, scope, overrides, invariants, note)
@@ -221,6 +228,39 @@ RUNS = {
                                        {"GenericArgs": True, "DropRule": '"nohostcopy"'},
                                        ["NoLostWrites"],
                                        "0336: a cell dropped while the host can lend its data again"),
+    # Task 0351: no level bound. Each run must reach its scope's fixed point, which checks every
+    # behaviour of these constants at any length (README, "Depth"). The allocation bounds are
+    # smaller than the level-bounded runs' (3 module calls of 2 adapters, one export), as the
+    # space grows with them; the depth TLC reports is where the longest behaviour ends
+    "module-exhaustive": ("exhaustive", MODULE1, {"MaxAd": 6, "MaxCell": 2, "MaxGen": 2, "MaxEx": 1},
+                          SAFETY, "module calls, every behaviour of 3 calls and 2 cells"),
+    "module-0332-exhaustive": ("exhaustive", dict(MODULE1, Actions='{"touch", "drop", "read", "export", "keeplist", "release"}'),
+                               {"AllowModuleKeepList": True, "AllowModuleNested": True,
+                                "MaxAd": 6, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1}, SAFETY,
+                               "keep([x]), nested writes and drop: every behaviour of 3 calls"),
+    "module-generic-exhaustive": ("exhaustive", dict(MODULE1, Actions='{"export", "release", "ns", "read", "hostgen"}'),
+                                  {"GenericArgs": True, "MaxAd": 6, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1},
+                                  SAFETY, "0336: every behaviour of 3 calls taking generic containers"),
+    "threads-module-exhaustive": ("exhaustive", dict(TWO, RenderThreads='{}',
+                                                     Actions='{"export", "release", "ns", "touch", "read"}'),
+                                  {"MaxAd": 6, "MaxCell": 2, "MaxGen": 2, "MaxEx": 1}, SAFETY,
+                                  "two threads: every behaviour of 3 module calls and 2 cells"),
+    "threads-module-exhaustive-4": ("exhaustive", dict(TWO, RenderThreads='{}',
+                                                       Actions='{"export", "release", "ns", "touch", "read"}'),
+                                    {"MaxAd": 8, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1}, SAFETY,
+                                    "two threads: every behaviour of 4 module calls"),
+    "threads-module-kept-exhaustive": ("exhaustive", dict(TWO, RenderThreads='{}',
+                                                          Actions='{"keeplist", "release", "read"}'),
+                                       {"AllowModuleKeepList": True, "HostHandoff": True,
+                                        "MaxAd": 8, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1}, SAFETY,
+                                       "two threads, keep([x]) handed off: every behaviour of 4 calls"),
+    # Renders allocate per frame, so their fixed points are smaller: two adapters of host data
+    "render-exhaustive": ("exhaustive", RENDER1, {"MaxAd": 4, "MaxCell": 2, "MaxGen": 2, "MaxEx": 1},
+                          SAFETY, "renders, nested: every behaviour with 2 cells"),
+    "mixed-exhaustive": ("exhaustive", MIXED1, {"MaxAd": 4, "MaxCell": 2, "MaxGen": 2, "MaxEx": 1},
+                         SAFETY, "renders and module calls: every behaviour with 2 cells"),
+    "threads-exhaustive": ("exhaustive", TWO, {"MaxAd": 4, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1},
+                           SAFETY, "two threads, renders and the module: every behaviour with 1 cell"),
 }
 
 
@@ -272,9 +312,18 @@ def cache_key(jar, workdir, kind):
     return digest.hexdigest()
 
 
-def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_opts=(), cache=None):
+def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_opts=(), cache=None,
+        simulate=None):
+    """One TLC run. simulate=(seconds, depth, seed) samples random behaviours instead of the BFS"""
     kind, scope, overrides, invariants, note = spec
-    overrides = dict(overrides, **(extra or {}))
+    overrides = dict(overrides)
+    if kind == "exhaustive" or simulate:
+        # Past the run's own level bound too (Codex review of #969); only --set MaxLevel stays
+        overrides["MaxLevel"] = UNBOUNDED
+    overrides.update(extra or {})
+    if simulate:
+        # Random behaviours: no verdict to keep, and the time budget ends the run
+        cache, timeout = None, simulate[0]
     os.makedirs(workdir, exist_ok=True)
     shutil.copy(os.path.join(HERE, "CellProtocol.tla"), workdir)
     with open(os.path.join(workdir, "MC.tla"), "w", encoding="utf-8") as mc:
@@ -291,8 +340,9 @@ def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_
     start = time.time()
     # A private java.io.tmpdir: TLC unpacks its standard modules there, and parallel runs sharing
     # /tmp can parse each other's half-written copies
+    mode = ["-simulate", "-depth", str(simulate[1]), "-seed", str(simulate[2])] if simulate else []
     cmd = ["java", "-XX:+UseParallelGC", *java_opts, f"-Djava.io.tmpdir={workdir}", "-cp", jar,
-           "tlc2.TLC", "-workers", "auto",
+           "tlc2.TLC", *mode, "-workers", "auto",
            "-deadlock", "-config", "MC.cfg", "MC.tla"]
     timed_out = False
     try:
@@ -308,15 +358,28 @@ def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_
     shutil.rmtree(os.path.join(workdir, "states"), ignore_errors=True)
     violated = re.search(r"Invariant (\w+) is violated", out)
     states = (re.findall(r"([\d,]+) distinct states found", out)[-1:]
-              or re.findall(r"([\d,]+) states generated", out)[-1:])
+              or re.findall(r"([\d,]+) states generated", out)[-1:]
+              or re.findall(r"Progress: ([\d,]+) states checked", out)[-1:])
+    depth = re.findall(r"The depth of the complete state graph search is (\d+)", out)
     steps = [re.sub(r" line \d+, col.*>", ">", line) for line in out.splitlines()
              if re.match(r"State \d+: <", line)]
+    level = int(overrides.get("MaxLevel", scope.get("MaxLevel", 0)))
+    passing = kind in ("pass", "exhaustive")
     if violated:
         verdict = "counterexample: " + violated.group(1)
-        ok = kind != "pass" and violated.group(1) in invariants
+        ok = not passing and violated.group(1) in invariants
+    elif simulate and timed_out:
+        # The budget ran out with no violation: a sample, not a complete search
+        verdict = f"no error in a sample to depth {simulate[1]}"
+        ok = passing
     elif "Model checking completed. No error has been found." in out:
         verdict = "no error"
-        ok = kind == "pass"
+        ok = passing
+        if kind == "exhaustive":
+            # The fixed point: the deepest behaviour ends below the guard, so it never fired
+            found = int(depth[-1]) if depth else None
+            verdict = f"no error, fixed point at depth {found}"
+            ok = found is not None and found < level
     elif timed_out:
         # Not evidence: a pass run must explore its whole bounded space (Ruslan's review of #688)
         level = re.findall(r"Progress\((\d+)\)", out)
@@ -344,6 +407,13 @@ def main():
     parser.add_argument("--jar", default=os.environ.get("TLA2TOOLS", os.path.join(HERE, "tla2tools.jar")))
     parser.add_argument("--set", nargs="*", default=[], help="override a constant: NAME=VALUE")
     parser.add_argument("--only", nargs="*")
+    parser.add_argument("--kind", nargs="*", choices=["pass", "exhaustive", "mutant", "finding"],
+                        help="only the runs of these kinds")
+    parser.add_argument("--simulate", type=int, metavar="SECONDS",
+                        help="sample random behaviours of each run for SECONDS instead of the "
+                             "complete search (without --only or --kind: the pass runs)")
+    parser.add_argument("--depth", type=int, default=40, help="states per simulated behaviour")
+    parser.add_argument("--seed", type=int, help="TLC's random seed for --simulate (default: random)")
     parser.add_argument("--except", nargs="*", dest="skip", default=[], help="every run but these")
     parser.add_argument("--no-symmetry", action="store_true",
                         help="do not reduce two-thread runs by thread symmetry")
@@ -361,22 +431,32 @@ def main():
         args.cache = os.path.abspath(os.path.expanduser(args.cache))
     if args.timeout is not None and args.timeout <= 0:
         parser.error("--timeout must be positive")
-    if args.list:
-        for name, spec in RUNS.items():
-            print(f"{name:28} {spec[0]:7} {spec[4]}")
-        return 0
-    if not os.path.exists(args.jar):
-        sys.exit(f"tla2tools.jar not found at {args.jar}: download {TLA_URL} or pass --jar")
-    names = [name for name in args.only or list(RUNS) if name not in args.skip]
+    if args.simulate is not None and (args.simulate <= 0 or args.depth <= 1):
+        parser.error("--simulate and --depth must be positive")
+    if args.simulate and not args.only and not args.kind:
+        args.kind = ["pass"]
+    names = [name for name in args.only or list(RUNS)
+             if name not in args.skip and (not args.kind or RUNS.get(name, ("?",))[0] in args.kind)]
     unknown = [name for name in names + args.skip if name not in RUNS]
     if unknown:
         parser.error("unknown runs: " + " ".join(unknown))
+    if args.list:
+        for name in names:
+            print(f"{name:28} {RUNS[name][0]:10} {RUNS[name][4]}")
+        return 0
+    if not os.path.exists(args.jar):
+        sys.exit(f"tla2tools.jar not found at {args.jar}: download {TLA_URL} or pass --jar")
     base = tempfile.mkdtemp(prefix="tlc-cells-")
+    simulate = None
+    if args.simulate:
+        seed = args.seed if args.seed is not None else int.from_bytes(os.urandom(4), "little")
+        simulate = (args.simulate, args.depth, seed)
+        print(f"simulation: {args.simulate} s per run, behaviours of {args.depth} states, seed {seed}")
     failed = 0
     for name in names:
         extra = dict(item.split("=", 1) for item in args.set)
         res = run(args.jar, name, RUNS[name], os.path.join(base, name), extra, args.timeout,
-                  not args.no_symmetry, args.java_opts.split(), args.cache)
+                  not args.no_symmetry, args.java_opts.split(), args.cache, simulate)
         failed += not res["ok"]
         mark = "ok " if res["ok"] else "BAD"
         print(f"{mark} {name:28} {res['kind']:7} {res['verdict']:36} {res['states']:>12} states "

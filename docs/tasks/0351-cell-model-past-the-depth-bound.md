@@ -1,10 +1,10 @@
 ---
-status: open
-pr:
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/969
 priority: medium
 area: robustness
 depends: [0338, 0350]
-touches: [tla/check.py, tla/README.md, .github/workflows/tla-model.yml]
+touches: [tla/check.py, tla/README.md, tla/CellProtocol.tla, .github/workflows/tla-model.yml]
 ---
 # Check the cell model past its depth bound
 
@@ -44,3 +44,30 @@ validation of 0338 step B, so it is worth it only if Apalache cannot handle `Clo
 
 **Done when** the README states, per run, whether it is depth-bounded or exhaustive for its
 constants, and the weekly job runs the exhaustive and simulation kinds.
+
+**Resolution (2026-11-20).** Items 1 and 2 are in `tla/check.py`, the `tla-model` workflow and
+`tla/README.md` ("Past the depth bound"):
+
+- Run kind `exhaustive` (`MaxLevel` 1,000,000; the verdict needs TLC's "No error" and a complete
+  search depth below the guard) and `--kind`. Nine runs: `module`, `module-0332`,
+  `module-generic`, `threads-module` (twice), `threads-module-kept`, `render`, `mixed` and
+  `threads`, with allocation bounds of two to four module calls and one or two cells. All reach
+  their fixed points with no error, at depths 19 to 35, 88 minutes in all on 4 cores; the same
+  scopes with `FixCallPin` or the owning links off still find their counterexamples. The 6/2
+  bounds of `module-0332`, `module-generic` and `render` did not finish in 30 minutes and stay
+  depth-bounded only.
+- `--simulate SECONDS --depth N --seed S`: TLC's random simulation with the guard off, pass
+  runs by default. Measured on mutants: it finds all 17 mutants tried (F1, the loop and sort
+  counterexamples among them) within 78 s. It is a sample, so it complements the exhaustive
+  runs and does not replace them.
+- Finding, fixed here: since 0346 (`FixSnapshotLinks`) `OwningLink` made every link outside a
+  snapshot owning, so `drop-without-source-check`, `module-links-unowned` and
+  `render-links-unowned` no longer found counterexamples and `render-handoff-pin-on-attach`
+  did not test 0340 option (a). The `rest` shard's first full run since then timed out on it.
+  The snapshot term now covers a global's adapter only; all four behave as intended again.
+- The weekly job has two more shards, `exhaustive` and `simulate` (each pass run 15 minutes,
+  40 states); the `rest` shard keeps the depth-bounded pass, mutant and finding runs.
+- The README states per run whether it is depth-bounded (the Results table) or exhaustive (the
+  new table).
+
+Item 3 stays with 0338 step F and task 0363.
