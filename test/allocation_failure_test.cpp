@@ -764,7 +764,10 @@ TEST_F(ModuleCallTest, StoredMacrosStayFlat)
     m_env.AddFilesystemHandler(std::string(), m_fs);
     m_fs->AddFile("own", "{% macro y() %}Y{% endmacro %}{% set keep = namespace(f=y, l=[y]) %}{% set keep.self = keep %}");
     m_fs->AddFile("both", "{% import 'lib' as l with context %}{% macro z() %}{{ l.x() }}{% endmacro %}");
-    for (const char* body : { "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}",
+    // Fails in a loop and a `with` after storing its macro, with a list holding itself (Codex review of #977)
+    m_fs->AddFile("half", "{% set _l = [] %}{% set _ = _l.append(_l) %}{% macro g() %}G{% endmacro %}{% set ns.f = g %}"
+                          "{% for i in [1] %}{% set _m = [] %}{% set _ = _m.append(_m) %}{% with w = 2 %}{{ 1 // 0 }}{% endwith %}{% endfor %}");
+    for (const char* body : { "{% import 'half' as h with context %}", "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}",
                               "{% import 'lib' as l with context %}{% set ns.l = [l] %}{% set ns.d = {'f': l.x} %}{{ ns.l[0].x() }}",
                               "{% import 'both' as b with context %}{% set ns.f = b.z %}{{ ns.f() }}",
                               "{% import 'own' as o with context %}{% set f = o.y %}{% set ns.n = ns.n + 1 %}{{ f() }}",
@@ -802,6 +805,8 @@ TEST_F(ModuleCallTest, KeptModuleGoesWithItsCycles)
     m_fs = std::make_shared<MemoryFileSystem>();
     m_env.AddFilesystemHandler(std::string(), m_fs);
     m_fs->AddFile("own", "{% macro y() %}Y{% endmacro %}{% set k = namespace(f=y, l=[y]) %}{% set k.self = k %}{% set lst = [] %}{% set _ = lst.append(lst) %}");
+    m_fs->AddFile("half", "{% set _l = [] %}{% set _ = _l.append(_l) %}{% macro y() %}Y{% endmacro %}{% set ns.f = y %}"
+                          "{% for i in [1] %}{% with w = 2 %}{{ 1 // 0 }}{% endwith %}{% endfor %}");
     for (const char* body : { "{% import 'own' as o with context %}{% set ns.f = o.y %}{{ ns.f() }}", "{% import 'own' as o %}{% set ns.f = o.y %}{{ ns.f() }}" })
     {
         const auto once = [this, body]() {
@@ -817,6 +822,21 @@ TEST_F(ModuleCallTest, KeptModuleGoesWithItsCycles)
         }
         EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
     }
+    // A module whose top level failed after storing its macro, kept for it (Codex review of #977)
+    const auto failed = [this]() {
+        EXPECT_TRUE(!!m_tpl.Load("{% set ns = namespace(f=none) %}{% macro keep() %}{% import 'half' as h with context %}{% endmacro %}{% macro use() %}{{ ns.f() }}{% endmacro %}"));
+        auto module = m_tpl.MakeModule();
+        ASSERT_TRUE(!!module);
+        EXPECT_THROW(Call(module->exports["keep"]), jinja2::BadResultAccess<>);
+        EXPECT_EQ("Y", Call(module->exports["use"]));
+    };
+    failed();
+    const long before = g_live.load(std::memory_order_relaxed);
+    for (int i = 0; i != 50; ++i)
+    {
+        failed();
+    }
+    EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << "failed import";
 }
 
 // With TemplateLookup::EveryUse and no cache every use parses the template again: a reload whose source did not

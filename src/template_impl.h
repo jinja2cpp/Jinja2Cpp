@@ -1528,6 +1528,10 @@ private:
             {
                 return;
             }
+            // A module whose top level failed in a loop or a `with` ends those scopes first, as a render that fails does
+            // (EndModuleScopesLeftByFailure): its names are its top level's again, which a stored macro of it sees and
+            // the collector is told of when it ends (Codex review of #977)
+            EndScopesLeftByFailure(mark, isKept);
             if (!outermost || !loaded.mayHaveStored || !EndUnreached(mark, isKept, addRoots))
             {
                 auto& modules = loaded.modules;
@@ -1582,6 +1586,28 @@ private:
         {
             const auto& shared = m_loaded->sharedModules;
             return std::none_of(shared.begin(), shared.end(), [module](const auto& entry) { return entry.second == module; }) && !isKept(module);
+        }
+        // Ends the scopes above the top levels of the modules the call that took `mark` made that a failure left
+        // (EndCall). When that cannot allocate, the scopes stay
+        template<typename IsKept>
+        void EndScopesLeftByFailure(const CallMark& mark, const IsKept& isKept) noexcept
+        {
+            auto& modules = m_loaded->modules;
+            for (auto p = mark.modules; p != modules.size(); ++p)
+            {
+                auto& context = modules[p]->Context();
+                if (context.GetScopesCount() == context.FirstOwnScope() || !EndsWithCall(modules[p].get(), isKept))
+                {
+                    continue;
+                }
+                try
+                {
+                    context.EndScopesLeftByFailure(context.FirstOwnScope());
+                }
+                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the comment above says what happens
+                {
+                }
+            }
         }
         // The walk of EndCall: ends the modules the call that took `mark` made, and those a stored closure kept, that no
         // closure found from what lives on runs in, the newest first, as a render ends them. False, ending nothing, when
