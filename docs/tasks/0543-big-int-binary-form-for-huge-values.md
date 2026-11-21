@@ -1,6 +1,6 @@
 ---
 status: in-progress
-pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/976
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/979
 priority: low
 area: robustness
 depends: [0287]
