@@ -621,7 +621,9 @@ UserCallable RecordingDumps()
         }
         else if (const auto* wide = obj.GetIf<std::wstring_view>())
         {
-            text.assign(wide->begin(), wide->end());
+            text.clear();
+            for (const wchar_t ch : *wide)
+                text.push_back(static_cast<char>(ch));
         }
         else if (const auto* owned = obj.GetIf<std::string>())
         {
@@ -629,7 +631,9 @@ UserCallable RecordingDumps()
         }
         else if (const auto* wideOwned = obj.GetIf<std::wstring>())
         {
-            text.assign(wideOwned->begin(), wideOwned->end());
+            text.clear();
+            for (const wchar_t ch : *wideOwned)
+                text.push_back(static_cast<char>(ch));
         }
         const std::string given = indent.IsString() ? "indent=" + indent.AsString() : "indent given";
         return text + "/" + (indent.IsNone() ? "no indent" : given);
