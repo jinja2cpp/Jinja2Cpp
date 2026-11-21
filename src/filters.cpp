@@ -2934,7 +2934,7 @@ InternalValue RoundBigInt(const InternalValue& value, const BigIntView& big, con
         // Below 2^bits, which is below 10^(bits * log10(2) + 1): a unit 10 ** -ndigits past that
         // is more than twice the value, which rounds to 0 without its decimal form (docs/tasks/0543 P2)
         constexpr double log10Of2 = 0.30102999566398120;
-        if (static_cast<double>(-*precision) > (static_cast<double>(BitLength(big)) * log10Of2) + 2)
+        if (-static_cast<double>(*precision) > (static_cast<double>(BitLength(big)) * log10Of2) + 2)
         {
             return int64_t{ 0 };
         }
