@@ -594,7 +594,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     InternalValue operator()(const MapRef& values, const KeyValuePair& key) const { return FindKey(values, InternalValue(key)); }
     // An integer outside int64 indexes no sequence (Python's IndexError, which reads as
     // undefined) and is a key like any int (docs/tasks/0270)
-    InternalValue operator()(const MapRef& values, const BigIntView& key) const { return FindKey(values, MakeBigIntValue(key.decimal)); }
+    InternalValue operator()(const MapRef& values, const BigIntView& key) const { return FindKey(values, BigIntValue(key)); }
     template<typename T>
     InternalValue operator()(const T& /*values*/, const BigIntView& /*index*/) const
     {
@@ -5549,7 +5549,7 @@ struct OutputValueConvertor
     {
         BigInt result;
         // The text is canonical, so TryParse fails only when memory runs out, which it reports as false
-        if (!BigInt::TryParse(val.decimal, result))
+        if (!WithDecimal(val, [&result](std::string_view decimal) { return BigInt::TryParse(decimal, result); }))
         {
             throw std::bad_alloc();
         }

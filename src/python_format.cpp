@@ -260,8 +260,7 @@ void AppendBigInteger(std::string& out, const BigIntView& value, char conversion
         prefix = spec.alternate ? "0o" : "";
         break;
     default:
-        CheckedDecimal(value);
-        digits = std::string(value.Magnitude());
+        digits = std::string(CheckedMagnitude(value));
         break;
     }
     AppendDigits(out, value.Sign() < 0, prefix, digits, spec);
