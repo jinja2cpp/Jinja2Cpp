@@ -759,9 +759,6 @@ TEST(BigIntTest, FromDigitsAndToDigitsRejectBadInput)
     EXPECT_THROW(static_cast<void>(BigInt(5).ToDigits(37)), std::invalid_argument);
 }
 
-// Task 0287: a power-of-two literal at the bit cap converts in well under a second in Release
-// (it took seconds when every conversion was quadratic), and the exact width of one past the cap
-// is known before converting. The numbers are Python's
 // A view of a value reads its object, and the value made back from it shares that object rather
 // than copying the digits (docs/tasks/0543 P1a): unary +, a dict key, abs() of a positive integer
 TEST(BigIntView, ValueOfAViewSharesTheObject)
@@ -799,6 +796,9 @@ TEST(BigIntView, TextViewIsCappedAtTheStrDigitLimit)
     }
 }
 
+// Task 0287: a power-of-two literal at the bit cap converts in well under a second in Release
+// (it took seconds when every conversion was quadratic), and the exact width of one past the cap
+// is known before converting. The numbers are Python's
 TEST(BigIntTemplate, RadixLiteralsAtTheBitCap)
 {
     Template tpl;
