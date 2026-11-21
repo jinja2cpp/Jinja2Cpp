@@ -640,8 +640,8 @@ namespace detail
 {
 IntrusivePtr<BigIntObject> BigIntObject::Make(bool negative, Span<const uint32_t> words, std::string_view decimal)
 {
-    // Huge exactly when it has words, and every integer keeps its decimal form for now (docs/tasks/0543 P1b)
-    JINJA2CPP_EXPECTS(!decimal.empty() && (decimal.front() == '-') == negative);
+    // Huge exactly when it has words; only a huge integer may lack its decimal form (docs/tasks/0543 P2)
+    JINJA2CPP_EXPECTS(decimal.empty() ? !words.empty() : (decimal.front() == '-') == negative);
     JINJA2CPP_EXPECTS(words.empty() || (words[words.size() - 1] != 0 && WordsBits(words) > HugeBigIntBits));
     const bool counted = RenderMemoryCounted();
     if (counted)
@@ -783,11 +783,15 @@ InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative
     {
         ThrowTooManyBits();
     }
-    // The digits are the binary form already: a huge integer keeps the words packed from them
+    // The digits are the binary form already: a huge integer keeps the words packed from them and
+    // no decimal form, which it could never print (docs/tasks/0543 P2); another converts, at most
+    // 14285 bits
     const auto words = PackPowerOfTwoDigits(digits, base);
-    const auto decimal = DecimalFromWords(words, negative);
-    const auto huge = HugeWords(words);
-    return huge.empty() ? MakeBigInt(decimal, true) : ObjectValue(negative, huge, decimal);
+    if (!HugeWords(words).empty())
+    {
+        return ObjectValue(negative, words, {});
+    }
+    return MakeBigInt(DecimalFromWords(words, negative), true);
 }
 
 BigInt BigInt::FromDigits(std::string_view digits, int base, bool negative)
@@ -1050,12 +1054,42 @@ InternalValue RoundIntegerDecimal(std::string_view decimal, int64_t ndigits)
     return MakeBigIntValue(result);
 }
 
+TransientDecimal::TransientDecimal(const BigIntView& val)
+{
+    // Only a huge integer lacks its decimal form
+    JINJA2CPP_EXPECTS(val.IsHuge() && val.InlineDecimal().empty());
+    const auto words = val.Words();
+    // The digits (at most bits * log10(2) + 1, and a sign) and the converter's words, about twice the input
+    const auto digits = static_cast<std::uint64_t>(static_cast<double>(WordsBits(words)) / BitsPerDigit) + 2;
+    const auto bytes = digits + (std::uint64_t{ 2 } * detail::BigIntObject::WordBytes(words.size()));
+    ChargeRenderMemory(bytes);
+    m_charged = bytes;
+    try
+    {
+        m_text = DecimalFromWords(words, val.Sign() < 0);
+    }
+    catch (...)
+    {
+        ReleaseRenderMemory(m_charged);
+        throw;
+    }
+}
+
+TransientDecimal::~TransientDecimal()
+{
+    ReleaseRenderMemory(m_charged);
+}
+
 InternalValue NegateBigInt(const BigIntView& val)
 {
     if (val.IsHuge())
     {
-        // The same words with the other sign; the decimal form with it
+        // The same words with the other sign; the decimal form with it, if the integer keeps one
         const auto decimal = val.InlineDecimal();
+        if (decimal.empty())
+        {
+            return ObjectValue(val.Sign() > 0, val.Words(), {});
+        }
         std::string negated;
         negated.reserve(decimal.size() + 1);
         if (val.Sign() > 0)

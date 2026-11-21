@@ -63,3 +63,17 @@ cache; phases P1a, P1b, P2, P4; the parity rejection of surviving constants is 0
   (plan Q8): once per render for a parameter, but on every access for an item of a host
   container (118 ms per access at 262144 bits, ASan build). Neither P2 nor P4 removes that:
   task 0566.
+- P2 (no decimal form for words-made values): a huge integer made from its binary form (a
+  power-of-two literal or `int(s, base)`, and its negation or `abs`) keeps only its words.
+  `WithDecimal` builds the decimal form for each call through `TransientDecimal`, which counts
+  the digits and the converter's words (an estimate that errs high) against the render's memory
+  budget while it lives, so exporting such a value, a backend's `Load` and `round(x, -n)` pay
+  about 0.1 s each at the cap. A huge integer made from decimal text (a host `BigInt`, a
+  backend result) keeps that text. No shared or lazy state was added (plan Q3), so no TSan job.
+  Measured in Release (GCC 13 -O2, 4-core container, median of 7, master 81e8e02 -> P2):
+  `{{ (0x<262144 f>) is odd }}` loads in 0.84 ms (was 98 ms); `(s|int(base=16)) is odd` renders
+  in 1.6 ms (was 127 ms); after that `bit_length` takes 0.007 ms, `'{:x}'.format(x)|length`
+  0.48 ms and `x|float` fails at once (0.05 ms). `bench/count.py`: `Render/big_int_radix`
+  1,520,506,563 -> 308,312,988 instructions (-79.7%), 297,927 -> 163 allocations. The
+  done-when targets (load < 50 ms, each operation < 10 ms) are met; P4 (backend word entries)
+  remains. Tests: `HugeFromBinaryKeepsNoDecimal`, `HugeFromBinaryBuildsDecimalWithinTheBudget`.
