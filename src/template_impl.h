@@ -614,6 +614,8 @@ public:
         bool* pieceIsMarkup = nullptr;
         // The stack of a render whose sink may suspend it (RenderOptions::suspension), or null
         const RenderSuspension* suspension = nullptr;
+        // The filter policies of the render (RenderOptions::filterPolicies), or null to keep the template's
+        const FilterPolicies* filterPolicies = nullptr;
     };
 
     // The same with the public options: their globals, lent for the render and kept by any value a
@@ -880,6 +882,7 @@ public:
                     heldPiece = outStream.WriteEachPiece(hooks->pieceIsMarkup);
                     eachPieceScope.emplace();
                 }
+                callback.SetFilterPolicies(hooks->filterPolicies);
                 if (hooks->generationSpans)
                 {
                     tracker.root = &outStream;
@@ -1587,56 +1590,115 @@ private:
             return nullptr;
         }
 
+        // Which module's top level imported which, with or without context: (importer, imported). What a module
+        // imported without context imports at its top level lives as long as it does (docs/tasks/0528, 0541)
+        class ModuleImports
+        {
+        public:
+            using Imported = SmallVector<const ImportedModule*, 4>;
+            // Notes that the top level of `importer` imported `imported`, once. Throws std::bad_alloc
+            void Add(const ImportedModule* importer, const ImportedModule* imported)
+            {
+                auto& list = m_byImporter[importer];
+                if (std::find(list.begin(), list.end(), imported) != list.end())
+                {
+                    return;
+                }
+                ++m_importers[imported];
+                try
+                {
+                    list.push_back(imported);
+                }
+                catch (const std::bad_alloc&)
+                {
+                    Release(imported);
+                    throw;
+                }
+            }
+            // What the top level of `importer` imported; null when nothing
+            [[nodiscard]] const Imported* Of(const ImportedModule* importer) const
+            {
+                const auto p = m_byImporter.find(importer);
+                return p != m_byImporter.end() ? &p->second : nullptr;
+            }
+            // How many modules' top levels imported `module`
+            [[nodiscard]] unsigned ImportersOf(const ImportedModule* module) const
+            {
+                const auto p = m_importers.find(module);
+                return p != m_importers.end() ? p->second : 0;
+            }
+            // Forgets `module`, which ends, with what it imported and what imported it, which ends with it
+            void Erase(const ImportedModule* module) noexcept
+            {
+                if (const auto p = m_byImporter.find(module); p != m_byImporter.end())
+                {
+                    for (const auto* imported : p->second)
+                    {
+                        Release(imported);
+                    }
+                    m_byImporter.erase(p);
+                }
+                m_importers.erase(module);
+            }
+
+        private:
+            void Release(const ImportedModule* imported) noexcept
+            {
+                if (const auto p = m_importers.find(imported); p != m_importers.end() && --p->second == 0)
+                {
+                    m_importers.erase(p);
+                }
+            }
+
+            std::unordered_map<const ImportedModule*, Imported> m_byImporter;
+            std::unordered_map<const ImportedModule*, unsigned> m_importers;
+        };
+        // The load each shared module was made from (EndReplacedSharedModules)
+        using SharedResults = std::unordered_map<const ImportedModule*, const LoadTemplateResult*>;
+
         // Ends the modules imported without context whose template a source change replaced and that only they and
-        // their load hold (ImportedModule::HeldOnlyByItself), so that PruneReplaced frees their trees: Jinja2's old
-        // Template goes with its module once nothing refers to them, while a module shared for the module's life
-        // kept one per source change (docs/tasks/0528). Not one that `isKeptOrKeeps` names: another such module's
-        // top level imported it, or it imported modules at its own, which it alone reaches. Called when the
-        // outermost call of a module returned, before PruneReplaced and while the call's collector notes the
-        // values that may hold themselves
-        template<typename IsKeptOrKeeps>
-        void EndReplacedSharedModules(const IsKeptOrKeeps& isKeptOrKeeps) noexcept
+        // their load hold (ImportedModule::HeldOnlyBy), so that PruneReplaced frees their trees: Jinja2's old Template
+        // goes with its module once nothing refers to them, while a module shared for the module's life kept one per
+        // source change (docs/tasks/0528). A module ends with what its top level imported (`imports`), as a group:
+        // but what is still the latest of its name, or another module outside the group imported, which stays shared
+        // with what it imported (0541). A module another one imported, or that `isKept` names, ends only with its
+        // importer. `forget` is told of each module that ends, and of each staying one that no module imports any
+        // more, before it ends. Called when the outermost call of a module returned, before PruneReplaced and while
+        // the call's collector notes the values that may hold themselves
+        template<typename IsKept, typename Forget>
+        void EndReplacedSharedModules(ModuleImports& imports, const IsKept& isKept, const Forget& forget) noexcept
         {
             if (!HasReplaced() || m_loaded->sharedModules.empty())
             {
                 return;
             }
-            auto& loaded = *m_loaded;
-            // The results a name, a statement or nothing but `replaced` holds
-            const auto isLive = [&loaded](const LoadTemplateResult* result) {
-                return std::any_of(loaded.byName.begin(), loaded.byName.end(), [result](const auto& entry) { return entry.second.latest == result || &entry.second.first == result; })
-                       || std::any_of(loaded.bySite.begin(), loaded.bySite.end(), [result](const auto& entry) { return entry.second == result; });
-            };
-            auto& shared = loaded.sharedModules;
-            for (auto p = shared.size(); p-- != 0;)
+            // Finding a group allocates; when that fails, the modules stay until a later call
+            try
             {
-                auto* module = shared[p].second;
-                if (isLive(shared[p].first) || isKeptOrKeeps(module) || module->HoldsTemplateHandles() || !module->HeldOnlyByItself())
+                // A pass goes on where it was: a group that ended took entries before and after it. Another pass only when
+                // one ended, which may have left a module it shared unimported
+                auto& shared = m_loaded->sharedModules;
+                SharedResults results;
+                for (bool ended = true; ended;)
                 {
-                    continue;
-                }
-                auto owned = std::find_if(loaded.modules.begin(), loaded.modules.end(), [module](const auto& entry) { return entry.get() == module; });
-                if (owned == loaded.modules.end())
-                {
-                    continue;
-                }
-                // Its values may hold themselves: the call's collector frees those cycles. Noting them allocates; when
-                // that fails, the module stays until a later call
-                try
-                {
-                    for (const auto& [name, value] : module->Names())
+                    ended = false;
+                    results.clear();
+                    for (const auto& [result, module] : shared)
                     {
-                        CycleCollector::NoteStore(value);
+                        results.emplace(module, result);
+                    }
+                    for (auto p = shared.size(); p-- != 0;)
+                    {
+                        if (EndReplacedSharedGroup(shared[p], imports, results, isKept, forget))
+                        {
+                            ended = true;
+                            p = std::min(p + 1, shared.size());
+                        }
                     }
                 }
-                catch (const std::bad_alloc&)
-                {
-                    continue;
-                }
-                shared.erase(shared.begin() + static_cast<std::ptrdiff_t>(p));
-                // Freed uncounted, as PruneReplaced frees the tree: the module was made by an earlier call
-                const UncountedMemoryScope uncounted;
-                loaded.modules.erase(owned);
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the comment above says what is kept
+            {
             }
         }
 
@@ -1868,6 +1930,188 @@ private:
             // `trees` has the rendered template (SharedTemplates)
             bool ownsHost = false;
         };
+        // The results a name, a statement or nothing but `replaced` holds
+        [[nodiscard]] bool IsLiveLoad(const LoadTemplateResult* result) const
+        {
+            const auto& loaded = *m_loaded;
+            return std::any_of(loaded.byName.begin(), loaded.byName.end(), [result](const auto& entry) { return entry.second.latest == result || &entry.second.first == result; })
+                   || std::any_of(loaded.bySite.begin(), loaded.bySite.end(), [result](const auto& entry) { return entry.second == result; });
+        }
+        // EndReplacedSharedModules for the group of `root`, a shared module: whether it ended. Throws std::bad_alloc
+        template<typename IsKept, typename Forget>
+        bool EndReplacedSharedGroup(const std::pair<const LoadTemplateResult*, ImportedModule*> root, ModuleImports& imports, const SharedResults& results, const IsKept& isKept, const Forget& forget)
+        {
+            if (imports.ImportersOf(root.second) != 0 || IsLiveLoad(root.first) || isKept(root.second) || root.second->HoldsTemplateHandles())
+            {
+                return false;
+            }
+            const auto group = GroupOf(root.second, imports);
+            const auto stays = StayingIn(group, imports, results);
+            ImportedModule::Group ending;
+            ImportedModule::Group staying;
+            for (std::size_t i = 0; i != group.size(); ++i)
+            {
+                (stays[i] ? staying : ending).push_back(group[i]);
+            }
+            if (stays[0] || std::any_of(ending.begin(), ending.end(), [](const ImportedModule* module) { return module->HoldsTemplateHandles(); })
+                || !ImportedModule::HeldOnlyBy(ending, staying) || !ImportedModule::TreesHeldOnlyBy(LoadsOf(ending), m_loaded->modules))
+            {
+                return false;
+            }
+            // Their values may hold themselves: the call's collector frees those cycles. Noting them allocates; when
+            // that fails, the modules stay until a later call
+            for (const auto* module : ending)
+            {
+                for (const auto& [name, value] : module->Names())
+                {
+                    CycleCollector::NoteStore(value);
+                }
+            }
+            EndGroup(ending, staying, imports, forget);
+            return true;
+        }
+        // The loads that hold each tree of `modules`: PruneReplaced may have let go of a replaced one. Throws std::bad_alloc
+        ImportedModule::TreeLoads LoadsOf(const ImportedModule::Group& modules) const
+        {
+            const auto& loaded = *m_loaded;
+            ImportedModule::TreeLoads loads;
+            for (const auto* module : modules)
+            {
+                const void* tree = module->Tree();
+                if (std::any_of(loads.begin(), loads.end(), [tree](const auto& entry) { return entry.first == tree; }))
+                {
+                    continue;
+                }
+                const auto holds = [tree](const LoadTemplateResult& result) { return TemplateOf(result) == tree; };
+                // `latest` is `first` or one of `replaced`
+                auto count = static_cast<long>(std::count_if(loaded.replaced.begin(), loaded.replaced.end(), holds));
+                for (const auto& [name, entry] : loaded.byName)
+                {
+                    count += holds(entry.first) ? 1 : 0;
+                }
+                loads.emplace_back(tree, count);
+            }
+            return loads;
+        }
+        // The template of `result`, which a module's SetTreeOwner keeps; null when it failed
+        static const void* TemplateOf(const LoadTemplateResult& result)
+        {
+            return std::visit(
+                [](const auto& loaded) -> const void* {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                    {
+                        return nullptr;
+                    }
+                    else
+                    {
+                        return loaded ? static_cast<const void*>(loaded.value().get()) : nullptr;
+                    }
+                },
+                result);
+        }
+        // `root` and what its top level imported, transitively. Throws std::bad_alloc
+        static ImportedModule::Group GroupOf(const ImportedModule* root, const ModuleImports& imports)
+        {
+            ImportedModule::Group group;
+            group.push_back(root);
+            for (std::size_t i = 0; i != group.size(); ++i)
+            {
+                if (const auto* imported = imports.Of(group[i]))
+                {
+                    for (const auto* module : *imported)
+                    {
+                        if (std::find(group.begin(), group.end(), module) == group.end())
+                        {
+                            group.push_back(module);
+                        }
+                    }
+                }
+            }
+            return group;
+        }
+        // Which of `group` stay: a module whose load is still the latest of its name, which a later import shares, one
+        // a module outside the group imported, and what those imported. Throws std::bad_alloc
+        SmallVector<bool, 8> StayingIn(const ImportedModule::Group& group, const ModuleImports& imports, const SharedResults& results) const
+        {
+            const auto indexOf = [&group](const ImportedModule* module) { return static_cast<std::size_t>(std::find(group.begin(), group.end(), module) - group.begin()); };
+            // The importers each member has in the group
+            SmallVector<unsigned, 8> inGroup(group.size(), 0U);
+            for (const auto* importer : group)
+            {
+                if (const auto* imported = imports.Of(importer))
+                {
+                    for (const auto* module : *imported)
+                    {
+                        ++inGroup[indexOf(module)];
+                    }
+                }
+            }
+            SmallVector<bool, 8> stays(group.size(), false);
+            for (std::size_t i = 1; i != group.size(); ++i)
+            {
+                const auto result = results.find(group[i]);
+                stays[i] = imports.ImportersOf(group[i]) != inGroup[i] || (result != results.end() && IsLiveLoad(result->second));
+            }
+            SpreadStaying(group, imports, stays);
+            return stays;
+        }
+        // Marks what a staying member of `group` imported as staying too, transitively
+        static void SpreadStaying(const ImportedModule::Group& group, const ModuleImports& imports, SmallVector<bool, 8>& stays) noexcept
+        {
+            const auto indexOf = [&group](const ImportedModule* module) { return static_cast<std::size_t>(std::find(group.begin(), group.end(), module) - group.begin()); };
+            for (bool changed = true; changed;)
+            {
+                changed = false;
+                for (std::size_t i = 0; i != group.size(); ++i)
+                {
+                    const auto* imported = stays[i] ? imports.Of(group[i]) : nullptr;
+                    if (!imported)
+                    {
+                        continue;
+                    }
+                    for (const auto* module : *imported)
+                    {
+                        changed = changed || !stays[indexOf(module)];
+                        stays[indexOf(module)] = true;
+                    }
+                }
+            }
+        }
+        // Ends the modules `ending`, telling `forget`, and lets go of the imports they took part in: a staying module
+        // that nothing imports any more is forgotten too
+        template<typename Forget>
+        void EndGroup(const ImportedModule::Group& ending, const ImportedModule::Group& staying, ModuleImports& imports, const Forget& forget) noexcept
+        {
+            const auto isEnding = [&ending](const ImportedModule* module) { return std::find(ending.begin(), ending.end(), module) != ending.end(); };
+            std::for_each(ending.begin(), ending.end(), forget);
+            for (const auto* module : ending)
+            {
+                imports.Erase(module);
+            }
+            for (const auto* module : staying)
+            {
+                if (imports.ImportersOf(module) == 0)
+                {
+                    forget(module);
+                }
+            }
+            auto& loaded = *m_loaded;
+            loaded.sharedModules.erase(std::remove_if(loaded.sharedModules.begin(), loaded.sharedModules.end(), [&isEnding](const auto& entry) { return isEnding(entry.second); }),
+                                       loaded.sharedModules.end());
+            // Freed uncounted, as PruneReplaced frees the tree: the modules were made by an earlier call. The newest
+            // first, as a render ends them
+            const UncountedMemoryScope uncounted;
+            auto& modules = loaded.modules;
+            for (auto p = modules.size(); p-- != 0;)
+            {
+                if (isEnding(modules[p].get()))
+                {
+                    modules[p].reset();
+                }
+            }
+            modules.erase(std::remove(modules.begin(), modules.end(), nullptr), modules.end());
+        }
+
         struct LoadedTemplates
         {
             LoadedTemplates() = default;

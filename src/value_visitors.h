@@ -154,8 +154,8 @@ struct RecursiveUnwrapper
     {
         return arg.View();
     }
-    // An integer outside int64 is visited as its decimal form (docs/tasks/0270)
-    static BigIntView UnwrapRecursive(const BigIntHandle& arg, const ValueObject* /*owner*/) noexcept { return BigIntView{ arg.object->Decimal() }; }
+    // An integer outside int64 is visited as a view of its object (docs/tasks/0270)
+    static BigIntView UnwrapRecursive(const BigIntHandle& arg, const ValueObject* /*owner*/) noexcept { return BigIntView{ *arg.object }; }
     static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
     static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner, arg.isHost); }
     template<typename T>
@@ -1229,7 +1229,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         case jinja2::UnaryExpression::LogicalNot:
             return false;
         case jinja2::UnaryExpression::UnaryPlus:
-            return MakeBigIntValue(val.decimal);
+            return BigIntValue(val);
         case jinja2::UnaryExpression::UnaryMinus:
             return NegateBigInt(val);
         }
@@ -1269,7 +1269,7 @@ InternalValue HostOperand(const T& val)
     }
     else if constexpr (std::is_same_v<T, BigIntView>)
     {
-        return MakeBigIntValue(val.decimal);
+        return BigIntValue(val);
     }
     else if constexpr (IsStringType_v<T>)
     {
@@ -1387,7 +1387,12 @@ struct BinaryMathOperation : BaseVisitor<>
     {
         if constexpr (std::is_same_v<T, MapRef>)
         {
-            if (!val.GetObjectClass() && !val.GetHostObject())
+            if (const auto* hostObject = val.GetHostObject())
+            {
+                // A host's dict or other iterable: the items it iterates, as Python's `-` reads them
+                return hostObject->Iterate();
+            }
+            if (!val.GetObjectClass())
             {
                 return ListAdapter::CreateAdapter(val.GetKeyValues());
             }
@@ -1594,7 +1599,12 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if (val.IsHost())
             {
-                return host::AsSequence(*val.GetHostObject());
+                if (auto sequence = host::AsSequence(*val.GetHostObject()))
+                {
+                    return sequence;
+                }
+                // A host's dict_keys or dict_items takes the operations of the engine's own view (`-`)
+                return host::AsSetView(*val.GetHostObject());
             }
         }
         return std::nullopt;

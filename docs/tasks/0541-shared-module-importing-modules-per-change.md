@@ -1,10 +1,10 @@
 ---
-status: open
-pr:
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/972
 priority: low
 area: robustness
 depends: [0528]
-touches: [src/template_impl.h, src/template_module.cpp, test/allocation_failure_test.cpp]
+touches: [src/template_impl.h, src/template_module.cpp, src/statements.cpp, src/statements.h, test/allocation_failure_test.cpp, test/template_module_test.cpp]
 ---
 # A replaced shared module that imported modules at its top level stays for the module's life
 
@@ -23,3 +23,18 @@ shared helper whose load is still the latest of its name, so a later import shar
 
 **Done when** `ModuleCallTest.EveryUseChangingSourceStaysFlat` has a row whose `lib` imports a helper (with and
 without context, `import` and `from`) and it stays flat, clean under address+undefined.
+
+**Resolution.** The module's callback notes which shared module's top level imported which module, added or shared
+(`Callback::imports`, from `LeaveSharedModule`; a shared hit is noted by `FindModule`). `EndReplacedSharedModules`
+starts from a replaced shared module no other module imported and takes its group: it and what it imported,
+transitively. A member whose load is still the latest of its name, or that a module outside the group imported, stays
+shared with what it imported; the rest end together when `ImportedModule::HeldOnlyBy` finds every object of theirs
+(names, the importer's names a module imported with context sees, the `import ... as` objects) held only among them,
+or held by a staying member and not a macro of an ending one, and each of their trees held only by the loads that still hold it (a call whose
+group check failed to allocate lets PruneReplaced drop a replaced one), the modules made from it and their macros. The edges are indexed by importer, with a count of importers per module, and the loads are
+counted only for a group whose objects passed, so that a call's check costs about what 0528's did when many replaced
+modules stay held. Ending forgets the modules in `kept`, and a staying module that nothing imports any
+more becomes a candidate of its own. Rows in `ModuleCallTest.EveryUseChangingSourceStaysFlat` (import and from,
+with and without context, a helper that changes or stays, nested imports, two modules sharing a helper, a diamond,
+100 names), `ModuleCallTest.ReplacedGroupsEndUnderInjection` and
+`TemplateModuleChangingSourceTest.StoredMacroOfAnImportingModuleSeesItsHelper`.

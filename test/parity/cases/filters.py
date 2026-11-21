@@ -506,4 +506,6 @@ CASES = [
     ("range_truncate_killwords", "{{ range(300)|truncate(255, True) }}"),
     # task 0434: lists and tuples of the context (host objects through the Python module) wrap as pformat does
     ("pprint_wraps_context_list", "{{ xs|pprint }}|{{ t|pprint }}", {"ctx": {"xs": list(range(30)), "t": [list(range(25)), {"a": "w" * 80}]}}),
+    # task 0563: a dictsort or items pair is a tuple, with tuple's methods
+    ("dictsort_pair_methods", "{{ ({'a': 1}|dictsort|first).index('a') }}|{{ ({'a': 1}|dictsort|first).count(1) }}|{{ ({'a': 1}|items|first).index(1) }}"),
 ]

@@ -1,3 +1,6 @@
+#include "../src/big_int.h"
+#include "../src/contracts.h"
+#include "../src/internal_value.h"
 #include "big_int_toy_backend.h"
 #include "gtest/gtest.h"
 
@@ -754,6 +757,43 @@ TEST(BigIntTest, FromDigitsAndToDigitsRejectBadInput)
     EXPECT_THROW(BigInt::FromDigits(std::string(315653, '9'), 10, false), std::length_error);
     EXPECT_THROW(static_cast<void>(BigInt(5).ToDigits(1)), std::invalid_argument);
     EXPECT_THROW(static_cast<void>(BigInt(5).ToDigits(37)), std::invalid_argument);
+}
+
+// A view of a value reads its object, and the value made back from it shares that object rather
+// than copying the digits (docs/tasks/0543 P1a): unary +, a dict key, abs() of a positive integer
+TEST(BigIntView, ValueOfAViewSharesTheObject)
+{
+    const auto value = jinja2::MakeBigIntValue("123456789012345678901234567890");
+    ASSERT_TRUE(jinja2::AsBigInt(value).has_value());
+    const auto view = jinja2::AsBigInt(value).value();
+    ASSERT_NE(nullptr, view.Object());
+    EXPECT_EQ("123456789012345678901234567890", view.InlineDecimal());
+    const auto copy = jinja2::BigIntValue(view);
+    ASSERT_TRUE(jinja2::AsBigInt(copy).has_value());
+    EXPECT_EQ(view.Object(), jinja2::AsBigInt(copy).value().Object());
+
+    const std::string text = "-98765432109876543210";
+    const auto textView = jinja2::BigIntView::FromText(text);
+    EXPECT_EQ(nullptr, textView.Object());
+    EXPECT_EQ(-1, textView.Sign());
+    const auto made = jinja2::BigIntValue(textView);
+    ASSERT_TRUE(jinja2::AsBigInt(made).has_value());
+    const auto madeView = jinja2::AsBigInt(made).value();
+    EXPECT_NE(nullptr, madeView.Object());
+    EXPECT_EQ(text, madeView.InlineDecimal());
+}
+
+// A view of text has no object, so it may never be a huge integer: its precondition caps it at
+// MaxIntStrDigits digits (docs/tasks/0543 B2)
+TEST(BigIntView, TextViewIsCappedAtTheStrDigitLimit)
+{
+    const std::string atLimit = "-" + std::string(jinja2::MaxIntStrDigits, '9');
+    EXPECT_NO_THROW(static_cast<void>(jinja2::BigIntView::FromText(atLimit)));
+    if constexpr (jinja2::detail::ContractChecks >= 1)
+    {
+        const std::string past(jinja2::MaxIntStrDigits + 1, '9');
+        EXPECT_THROW(static_cast<void>(jinja2::BigIntView::FromText(past)), jinja2::detail::ContractViolation);
+    }
 }
 
 // Task 0287: a power-of-two literal at the bit cap converts in well under a second in Release

@@ -231,10 +231,11 @@ class SandboxedEnvironment(Environment):
             return
         self._check_native_hooks()
 
-    def _check_native_hooks(self) -> None:
+    def _check_native_hooks(self) -> bool:
         """Refuses what the engine would ignore and Jinja2 would run: the environment's operator interception
         and its call, getattr and getitem. Run at each entry into the code of a template of this engine
-        (a render, a module, a macro of one), whatever the environment now routes to."""
+        (a render, a module, a macro of one), whatever the environment now routes to. Gives
+        :meth:`_sandbox_judges_public_names`, which the engine's sandbox policy reads for that entry."""
         if self.intercepted_binops or self.intercepted_unops:
             raise UnsupportedError(
                 "jinja2cpp does not support intercepted_binops and intercepted_unops of the sandbox yet (docs/python.md)"
@@ -248,6 +249,7 @@ class SandboxedEnvironment(Environment):
                     f"jinja2cpp does not support an overridden {name}() of the sandbox yet; override is_safe_attribute or "
                     "is_safe_callable (docs/python.md)"
                 )
+        return self._sandbox_judges_public_names()
 
     def from_string(self, source: t.Any, globals: t.Optional[t.Mapping[str, t.Any]] = None, template_class: t.Any = None) -> t.Any:
         self._check_interception()
@@ -339,6 +341,13 @@ class SandboxedEnvironment(Environment):
         if self.is_safe_attribute(obj, attribute, value):
             return value
         return self.unsafe_undefined(obj, attribute)
+
+    def _sandbox_native_attribute(self, obj: t.Any, attribute: str, value: t.Any) -> t.Optional[t.Tuple[t.Any]]:
+        """The same checkpoint for an attribute of one of the engine's own values (`obj` stands for it): ``None`` when the
+        engine reads the attribute itself, else ``(replacement,)``: what ``unsafe_undefined`` gave, whatever it is."""
+        if self.wrap_str_format(value) is not None or self.is_safe_attribute(obj, attribute, value):
+            return None
+        return (self.unsafe_undefined(obj, attribute),)
 
     def _sandbox_judges_public_names(self) -> bool:
         """Whether the engine asks `is_safe_attribute` about the public names of its own values too: only when

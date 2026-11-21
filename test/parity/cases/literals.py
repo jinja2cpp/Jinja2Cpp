@@ -11,6 +11,15 @@ CASES = [
     ("int_zero_forms", "{{ 0_0 }}|{{ 00 }}|{{ 0_1.5 }}|{{ 01.5 }}"),
     ("int_after_float_overflow", "{{ 'T' if 1e400 > 0 else 'F' }}{{ 4611686018427387904 + 1 }}"),
     ("int_big", "{{ 12345678901234567890 }}"),
+    # Jinja2's code generator writes every constant that survives folding with repr(), so one past
+    # CPython's 4300-digit limit fails the compile even where it never renders; one that folds
+    # away loads (docs/tasks/0564). 0x and 3571 f's is 4300 digits, 3572 f's is 4302
+    ("int_hex_at_str_digit_limit", "{{ (0x" + "f" * 3571 + ")|string|length }}"),
+    ("int_hex_past_str_digit_limit", "{{ 0x" + "f" * 3572 + " }}"),
+    ("int_hex_past_str_digit_limit_unrendered", "{% if false %}{{ 0x" + "f" * 3572 + " }}{% endif %}b"),
+    ("int_hex_past_str_digit_limit_set", "{% set x = 0x" + "f" * 3572 + " %}b"),
+    ("int_hex_past_str_digit_limit_folded", "{{ (0x" + "f" * 3572 + ") is odd }}"),
+    ("int_filter_past_str_digit_limit_folded_set", "{% set x = ('f' * 3600)|int(base=16) %}b"),
     ("float", "{{ 1.5 }}"),
     ("float_whole", "{{ 2.0 }}"),
     ("float_exponent", "{{ 1e3 }}"),

@@ -6661,6 +6661,678 @@
     "type": "TypeError",
     "message": "str.mro() takes no arguments (1 given)"
    }
+  },
+  {
+   "id": "operators.indent_dict_keys",
+   "template": "{{ d.keys() | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'dict_keys' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_dict_values",
+   "template": "{{ d.values() | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'dict_values' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_dict_items",
+   "template": "{{ d.items() | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'dict_items' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_dict",
+   "template": "{{ d | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'dict' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_int",
+   "template": "{{ 1 | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'int' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_float",
+   "template": "{{ 1.5 | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'float' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_bool",
+   "template": "{{ true | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'bool' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_list",
+   "template": "{{ [1, 2] | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'list' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "operators.indent_tuple",
+   "template": "{{ (1, 2) | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate tuple (not \"str\") to tuple"
+   }
+  },
+  {
+   "id": "operators.indent_range",
+   "template": "{{ range(3) | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'range' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_set",
+   "template": "{{ (d.keys() - []) | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'set' and 'str'"
+   }
+  },
+  {
+   "id": "operators.indent_mapping_proxy",
+   "template": "{{ d.keys().mapping | indent }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'mappingproxy' and 'str'"
+   }
+  },
+  {
+   "id": "operators.dict_random",
+   "template": "{{ d | random }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "0"
+   }
+  },
+  {
+   "id": "operators.dict_random_key_zero",
+   "template": "{{ {0: 'z'} | random }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "z"
+  },
+  {
+   "id": "operators.dict_random_empty",
+   "template": "{{ {} | random }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": ""
+  },
+  {
+   "id": "operators.mapping_proxy_pprint_wide_cycle",
+   "template": "{% set p = {} %}{% do p.update({'p': p.keys().mapping, 'k': 'x' * 80}) %}{% set t = (p | pprint).split('<Recursion on mappingproxy with id=') %}{{ t | length }}|{{ t[0] }}|{{ t[1][-1] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "2|{'k': 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',\n 'p': mappingproxy({'k': 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',\n                    'p': |}"
+  },
+  {
+   "id": "operators.dict_view_pprint_cycle",
+   "template": "{% set e = {'a': 1} %}{% set v = e.values() %}{% do e.update({'v': v}) %}{{ e | pprint }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'a': 1, 'v': dict_values([1, ...])}"
+  },
+  {
+   "id": "operators.dict_keys_pprint_cycle",
+   "template": "{% set e = {'a': 1} %}{% set v = e.keys() %}{% do e.update({'v': v}) %}{{ e | pprint }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'a': 1, 'v': dict_keys(['a', 'v'])}"
+  },
+  {
+   "id": "operators.dict_items_pprint_cycle",
+   "template": "{% set e = {'a': 1} %}{% set v = e.items() %}{% do e.update({'v': v}) %}{{ e | pprint }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'a': 1, 'v': dict_items([('a', 1), ('v', ...)])}"
+  },
+  {
+   "id": "operators.class_call_markup_encoding",
+   "template": "{{ ('a'|safe).__class__('x', encoding='utf-8') }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "decoding str is not supported"
+   }
+  },
+  {
+   "id": "operators.class_call_markup_encoding_errors",
+   "template": "{{ ('a'|safe).__class__('x', 'utf-8') }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "decoding str is not supported"
+   }
+  },
+  {
+   "id": "operators.class_method_mro_name",
+   "template": "{{ (1).__class__.mro.__name__ }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "mro"
+  },
+  {
+   "id": "operators.range_class_mro",
+   "template": "{{ range.mro() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "[<class 'range'>, <class 'object'>]"
+  },
+  {
+   "id": "operators.dict_view_lazy_pipeline_grow",
+   "template": "{% set e = {'a': 1} %}{% for k in e.keys() | map('upper') %}{% do e.update({'b': 2}) %}{{ k }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "dictionary changed size during iteration"
+   }
+  },
+  {
+   "id": "operators.dict_items_filter_grow",
+   "template": "{% set e = {'a': 1} %}{% for k, v in e | items %}{% do e.update({'b': 2}) %}{{ k }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "dictionary changed size during iteration"
+   }
+  },
+  {
+   "id": "operators.mapping_proxy_loop_grow",
+   "template": "{% set e = {'a': 1} %}{% set p = e.keys().mapping %}{% for k in p %}{% do e.update({'b': 2}) %}{{ k }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "dictionary changed size during iteration"
+   }
   }
  ]
 }

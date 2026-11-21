@@ -598,6 +598,26 @@ std::string PyHost::Html() const
     return Utf8(Steal(PyObject_CallMethod(m_object, "__html__", nullptr)));
 }
 
+std::optional<std::string> PyHost::HtmlFormat(std::string_view spec) const
+{
+    if (m_kind != Kind::Other)
+    {
+        return std::nullopt;
+    }
+    if (PyObject_HasAttrString(m_object, "__html_format__") == 0 && !IsMarkupLike())
+    {
+        return std::nullopt;
+    }
+    // markupsafe's own formatter, so that its order (__html_format__, then __html__ without a spec) and its errors are
+    // the ones Markup.format has
+    static PyObject* const formatter = [] {
+        const auto markupsafe = nb::module_::import_("markupsafe");
+        return markupsafe.attr("EscapeFormatter")(markupsafe.attr("escape")).release().ptr();
+    }();
+    const auto text = Steal(PyUnicode_FromStringAndSize(spec.data(), static_cast<Py_ssize_t>(spec.size())));
+    return Utf8(Steal(PyObject_CallMethod(formatter, "format_field", "OO", m_object, text.ptr())));
+}
+
 bool PyHost::IsNumber() const
 {
     if (m_kind != Kind::Other)
@@ -690,7 +710,9 @@ namespace
 nb::object StubClass(const char* name)
 {
     // A class of that name, for an object of the engine that has no Python class: loop, a macro, a cycler
-    return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type)));
+    // `function` is a builtin type to object_type_repr ('function object'); the others take the module of the caller
+    const bool builtin = std::string_view(name) == "function";
+    return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), builtin ? "s(O){s:s}" : "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type), "__module__", "builtins"));
 }
 
 nb::object Stub(const char* name)
@@ -706,6 +728,22 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
 {
     if (const auto* list = obj.GetIf<jinja2::GenericList>())
     {
+        // A set and a dict view the template made are Python's own types for the policy (convert.cpp ViewToPython):
+        // an empty one of the type, so that `add` of a set or `isdisjoint` of a view is asked about, not read unasked
+        if (const char* viewClass = list->GetViewClass())
+        {
+            const std::string_view view(viewClass);
+            if (view == "set")
+            {
+                return Steal(PySet_New(nullptr));
+            }
+            if (view == "dict_keys" || view == "dict_values" || view == "dict_items")
+            {
+                const auto source = Steal(PyDict_New());
+                const std::string method(view.substr(5));
+                return Steal(PyObject_CallMethod(source.ptr(), method.c_str(), nullptr));
+            }
+        }
         return list->IsTuple() ? Steal(PyTuple_New(0)) : Steal(PyList_New(0));
     }
     if (obj.GetIf<jinja2::ValuesList>())
@@ -716,6 +754,18 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
     {
         if (const char* objectClass = map->GetObjectClass())
         {
+            // A range and a groupby group have attributes of their own, which the policy judges by name: a real range, and
+            // an object of Jinja2's _GroupTuple class (whose value is None: the engine builds none for the question)
+            if (std::string_view(objectClass) == "range")
+            {
+                return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyRange_Type), "i", 0));
+            }
+            if (std::string_view(objectClass) == "_GroupTuple")
+            {
+                const auto members = Steal(Py_BuildValue("{s:O,s:O}", "grouper", Py_None, "list", Py_None));
+                const auto type = Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O)O", "_GroupTuple", reinterpret_cast<PyObject*>(&PyTuple_Type), members.ptr()));
+                return Steal(PyObject_CallNoArgs(type.ptr()));
+            }
             synthetic = true;
             if (std::string_view(objectClass) == "type")
             {
@@ -772,9 +822,8 @@ bool IsCallableStandIn(const jinja2::Value& obj)
 class PySandboxPolicy final : public jinja2::ISandboxPolicy
 {
 public:
-    PySandboxPolicy(PyObject* environment, bool allNames)
+    explicit PySandboxPolicy(PyObject* environment)
         : m_environment(environment)
-        , m_allNames(allNames)
     {
     }
 
@@ -785,7 +834,7 @@ public:
         // refuses private names and the methods of lists and dicts that change them (the engine does the latter)
         // `mro` is asked too: Jinja2 refuses it of a class, which only the stand-in of a class object shows
         const bool isPrivate = !name.empty() && name[0] == '_';
-        if (!isPrivate && !m_allNames && name != "mro")
+        if (!isPrivate && name != "mro" && !JudgesPublicNames())
         {
             return std::nullopt;
         }
@@ -820,13 +869,13 @@ public:
         {
             owned = nb::steal(value);
         }
-        const auto checked = Steal(PyObject_CallMethod(m_environment, "_sandbox_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
-        auto result = ToEngine(checked);
-        if (jinja2::UndefinedOf(result))
+        // None: the engine reads the attribute itself; else (replacement,), what unsafe_undefined gave, an Undefined or not
+        const auto checked = Steal(PyObject_CallMethod(m_environment, "_sandbox_native_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
+        if (checked.is_none())
         {
-            return result;
+            return std::nullopt;
         }
-        return std::nullopt;
+        return ToEngine(nb::borrow(PyTuple_GetItem(checked.ptr(), 0)));
     }
 
     [[nodiscard]] std::optional<jinja2::Value> Format(const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params) const override
@@ -843,8 +892,18 @@ public:
     }
 
 private:
+    // What the entry into the render found, when this environment is the render's sandbox; else (an engine value of
+    // another environment's render, a call outside a render) Python's answer now: refusing more is the safe error
+    [[nodiscard]] bool JudgesPublicNames() const
+    {
+        if (const auto* render = CurrentRender(); render && render->sandbox == m_environment)
+        {
+            return render->sandboxAllNames;
+        }
+        return SandboxJudgesPublicNames(nb::handle(m_environment));
+    }
+
     PyObject* m_environment;
-    bool m_allNames;
 };
 } // namespace
 
@@ -858,9 +917,9 @@ bool SandboxJudgesPublicNames(nb::handle environment)
     return PyObject_IsTrue(all.ptr()) != 0;
 }
 
-std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames)
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment)
 {
-    return std::make_shared<PySandboxPolicy>(environment.ptr(), allNames);
+    return std::make_shared<PySandboxPolicy>(environment.ptr());
 }
 
 namespace

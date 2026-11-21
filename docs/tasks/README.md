@@ -420,7 +420,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0348](0348-generic-list-shared-accessor.md) | GenericList and GenericMap hold their accessor by a shared pointer | api | medium | done |
 | [0349](0349-ctu-analyzer-on-newest-llvm.md) | Run the cross-TU static analyzer on the newest LLVM and on libstdc++ | ci | low | open |
 | [0350](0350-tla-runs-in-ci.md) | Run the long TLC checks of the cell model in GitHub Actions, and halve the two-thread runs | ci | medium | done |
-| [0351](0351-cell-model-past-the-depth-bound.md) | Check the cell model past its depth bound | robustness | medium | open |
+| [0351](0351-cell-model-past-the-depth-bound.md) | Check the cell model past its depth bound | robustness | medium | done |
 | [0352](0352-python-host-object-seam.md) | Python module P1a: a private host-object seam in the engine | api | medium | done |
 | [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | done |
 | [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | done |
@@ -492,7 +492,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0422](0422-module-call-exports-views.md) | Exports of a running module call keep tuples, keys and lent members | api | low | open |
 | [0423](0423-lent-members-nested.md) | Template callables nested two levels deep in a host call's argument | api | low | open |
 | [0424](0424-host-kept-cycle-leak.md) | A template container that holds itself leaks when a host keeps its export | robustness | low | done |
-| [0425](0425-sandbox-parity-leftovers.md) | Sandbox parity leftovers of 0354 | parity | low | open |
+| [0425](0425-sandbox-parity-leftovers.md) | Sandbox parity leftovers of 0354 | parity | low | done |
 | [0426](0426-sandbox-refused-attribute-cost.md) | Cost of a refused attribute in the sandbox | perf | low | open |
 | [0427](0427-sandbox-policy-and-template-cache.md) | Sandbox policy and the template cache (for 0357) | api | low | done |
 | [0428](0428-python-fallback-leftovers.md) | Python fallback leftovers (from the review of 0354 PR3) | api | low | open |
@@ -502,7 +502,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0432](0432-upstream-suite-error-types-and-messages.md) | Error classes, messages and tracebacks the upstream Jinja2 suite checks | parity | medium | done |
 | [0433](0433-python-template-cache-identity.md) | `get_template` returns a new Template object each time, and template globals of includes | parity | medium | done |
 | [0434](0434-python-values-leftovers-upstream-suite.md) | Values, filters and macros: leftovers the upstream Jinja2 suite found | parity | low | done |
-| [0435](0435-python-environment-policies.md) | `Environment.policies` | parity | low | open |
+| [0435](0435-python-environment-policies.md) | `Environment.policies` | parity | low | done |
 | [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | done |
 | [0437](0437-python-gil-released-render.md) | Render with the GIL released when the data is JSON-like (0248 plan D5, phase 3) | perf | low | open |
 | [0438](0438-sandbox-arms-cold-without-policy.md) | Sandbox checks cost nothing when no policy is installed | perf | low | open |
@@ -602,11 +602,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0538](0538-dict-view-walk-leftovers.md) | What dict views and dict walks still lack after 0523 | parity | low | done |
 | [0539](0539-nested-trees-held-by-kept-closures-and-loops.md) | Kept closures and a dropped recursive loop still hold nested trees after 0521 | robustness | low | done |
 | [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | done |
-| [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | open |
+| [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | done |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | open |
-| [0543](0543-big-int-binary-form-for-huge-values.md) | Keep a binary form for big integers past the decimal string limit | robustness | low | open |
+| [0543](0543-big-int-binary-form-for-huge-values.md) | Keep a binary form for big integers past the decimal string limit | robustness | low | in-progress |
 | [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | done |
-| [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | open |
+| [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | done |
 | [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | done |
 | [0550](0550-recursive-level-failure-loses-top-names.md) | A failure through a nested level of a recursive loop loses the template's top-level names for its closures | parity | low | done |
 | [0551](0551-recursive-closure-earlier-pass-names.md) | A closure of a recursive loop reads a name its last pass did not store from the live frame below | parity | low | done |
@@ -615,6 +615,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0554](0554-fold-check-argument-steps.md) | Tuple-of-slices fold check: candidates inside arguments and literal items | parity | low | open |
 | [0555](0555-strict-fold-errors-outside-tuple-slices.md) | Strict undefined fold errors outside tuple-of-slices templates | parity | low | open |
 | [0556](0556-strict-output-fold-error.md) | Strict output whose fold fails with an error that is no UndefinedError | parity | low | open |
+| [0557](0557-make-module-filter-policies.md) | Macros of a module keep the filter policies of the load | parity | low | open |
 | [0558](0558-python-derived-context-in-loop-bodies.md) | `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context | parity | low | open |
 | [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | open |
 | [0560](0560-ended-block-in-stored-macro-sees-inner-frames.md) | A block in a macro stored by a nested render that failed renders nothing | parity | low | open |
+| [0561](0561-engine-set-hash-index-and-live-loop.md) | The engine's set has no hash index, and a loop over a set changed in its body goes on | robustness | low | open |
+| [0562](0562-pprint-self-containing-container.md) | pprint of a list or dict that contains itself fails with a recursion error | parity | low | open |
+| [0563](0563-key-value-pair-tuple-methods.md) | A dictsort or items pair has no tuple methods | parity | low | open |
+| [0564](0564-reject-constants-past-str-digit-limit.md) | Reject integer constants past 4300 digits that survive folding | parity | low | open |
+| [0565](0565-set-methods-slow-on-msvc-debug.md) | Set methods over a big range are thousands of times slower in MSVC Debug than in a GCC Debug build | performance | medium | open |

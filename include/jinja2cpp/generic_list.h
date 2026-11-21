@@ -174,6 +174,15 @@ struct JINJA2CPP_EXPORT IListItemAccessor : virtual IComparable
     [[nodiscard]] virtual bool IsTuple() const { return false; }
 
     /*!
+     * \brief The Python type of a list that is a view of a dict or a set, null for any other list
+     *
+     * `"dict_keys"`, `"dict_values"`, `"dict_items"` or `"set"`: the engine's own view of a dict or its difference of two, which
+     * a host language may give its own type. The list holds the items as they were when the host got it. The string is valid as long as the
+     * accessor. The default is null.
+     */
+    [[nodiscard]] virtual const char* GetViewClass() const { return nullptr; }
+
+    /*!
      * \brief The list behind this accessor
      *
      * Two accessors that view one list return the same address: an engine list exported twice gives two accessors with
@@ -307,6 +316,9 @@ public:
 
     //! Whether the list is a tuple (\ref IListItemAccessor::IsTuple); false for an invalid list
     [[nodiscard]] bool IsTuple() const { return m_accessor ? m_accessor->IsTuple() : false; }
+
+    //! The Python type of a dict view or set (\ref IListItemAccessor::GetViewClass); null for any other list and for an invalid list
+    [[nodiscard]] const char* GetViewClass() const { return m_accessor ? m_accessor->GetViewClass() : nullptr; }
 
     //! The list's identity (\ref IListItemAccessor::GetIdentity); null for an invalid list
     [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }

@@ -96,10 +96,20 @@ public:
     // A list of what the engine environment templates load from now borrows: a template keeps it, so the callables
     // it was compiled with live while it does, and the environment lets go of one replaced since (docs/tasks/0406)
     [[nodiscard]] const nb::object& BoundObjects() const noexcept { return m_bound; }
-    // A SandboxedEnvironment: whether its hooks (call, getattr, getitem, intercepted operators) are the engine's
-    // are checked again, as at a load, before a template renders or makes a module (an override set after the
-    // load must not be ignored); nothing for another environment
-    void CheckSandboxHooks() const;
+    // What an entry into the code of a template of this engine (a render, a module, a macro of one, a macro a Python
+    // callable got) learns of the environment as it is now
+    struct EntryState
+    {
+        // Whether the sandbox's is_safe_attribute judges the engine's public names too (RenderState::sandboxAllNames)
+        bool sandboxAllNames = false;
+        // env.policies as the engine takes them now, for RenderOptions::filterPolicies of the render: never null
+        std::shared_ptr<const jinja2::FilterPolicies> policies;
+    };
+    // Run at each entry: env.policies is read again (compared with the copy the last entry took; the engine's are
+    // rebuilt when they differ, UnsupportedError for a value it cannot take), and a SandboxedEnvironment's hooks (call, getattr, getitem, intercepted operators) are checked
+    // again, as at a load (an override set after the load must not be ignored), and whether its is_safe_attribute is
+    // Jinja2's is read, for the sandbox policy of every template the entry runs
+    EntryState Enter();
     [[nodiscard]] const nb::object& Globals() const noexcept { return m_globals; }
     // The globals the engine's environment has of its own (ConfigureForChatTemplates' raise_exception
     // and strftime_now), which a render adds below env.globals; null when there are none
@@ -141,16 +151,28 @@ private:
         nb::object bound;
     };
     void ApplyChatTemplates();
+    // env.policies compared with the copy of the last read: the engine's policies (m_policies) rebuilt and written to
+    // the settings of the engine environment when they differ. Raises UnsupportedError for a value the engine cannot take
+    std::shared_ptr<const jinja2::FilterPolicies> RefreshPolicies();
     nb::object MakeTemplate(Loaded tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass);
 
     // Shared with the load in progress (Prepared)
     std::shared_ptr<jinja2::TemplateEnv> m_env;
     // The engine environments before m_env that templates still use (RetireEngine)
     std::vector<Retired> m_retired;
-    // A SandboxedEnvironment, and whether its is_safe_attribute judges the engine's public names (read at each load)
+    // A SandboxedEnvironment
     bool m_sandboxed = false;
-    bool m_sandboxPublicNames = false;
     jinja2::Settings m_settings;
+    // env.policies as the engine takes them (m_settings.filterPolicies, and the i18n trimming in its extensions): shared
+    // with the renders that run with them. m_policiesSnapshot is the copy of the dict they were made from
+    // (jinja2cpp.fallback.native_policies); m_policiesDumps the Python wrapper of json.dumps_function and
+    // json.dumps_kwargs the policies call, kept by the list of every engine environment (Keep) and reported by Traverse
+    std::shared_ptr<const jinja2::FilterPolicies> m_policies = std::make_shared<const jinja2::FilterPolicies>();
+    nb::object m_policiesSnapshot;
+    // Not an owning reference: m_policies owns it (RefreshPolicies), and Traverse reports that one
+    nb::handle m_policiesDumps;
+    // Whether the list m_bound holds the wrapper m_policiesDumps (or an earlier one): a change of it starts a new list
+    bool m_dumpsKept = false;
     nb::object m_globals;
     nb::object m_filters;
     nb::object m_tests;

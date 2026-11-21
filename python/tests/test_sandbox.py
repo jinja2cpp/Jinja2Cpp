@@ -577,6 +577,13 @@ def test_mro_of_a_class_is_refused_as_jinja2_does(source):
         assert ours[0] == "exception" and ours[1] == "SecurityError", source
 
 
+def test_mro_of_the_sandbox_range_is_undefined_as_jinja2s_function_is():
+    # the sandbox's range is safe_range, a function with no mro: the call is an UndefinedError, not a SecurityError
+    ours, theirs = _both("{{ range.mro() }}", {})
+    assert ours == theirs
+    assert ours[0] == "exception" and ours[1] == "UndefinedError"
+
+
 def test_range_is_capped_like_safe_range():
     from jinja2cpp.sandbox import MAX_RANGE
     from jinja2cpp.sandbox import safe_range
@@ -971,23 +978,74 @@ def test_public_names_of_loop_are_not_asked_by_the_default_sandbox():
     assert env.from_string("{% set ns = namespace(a=1) %}{{ ns.a }}").render() == "1"
 
 
+def _called():
+    return "CALLED"
+
+
+def _deny(*args, **kwargs):
+    raise SecurityError("no")
+
+
+ENTRY_POINTS = {
+    "render": lambda t: t.render(),
+    "generate": lambda t: list(t.generate()),
+    "stream": lambda t: t.stream().dump(__import__("io").StringIO()),
+    "make_module": lambda t: t.make_module(),
+    "module": lambda t: t.module,
+}
+
+
+OUTPUT_ENTRY_POINTS = {
+    "render": lambda t: t.render(),
+    "generate": lambda t: "".join(t.generate()),
+    "stream": lambda t: t.stream().dump(__import__("io").StringIO()) or "",
+    "make_module": lambda t: str(t.make_module()),
+    "module": lambda t: str(t.module),
+}
+
+
+@pytest.mark.parametrize("entry", list(OUTPUT_ENTRY_POINTS))
+@pytest.mark.parametrize("loaded_before", [False, True], ids=["load_after", "load_before"])
 @pytest.mark.parametrize("patch_instance", [False, True])
-def test_is_safe_attribute_replaced_after_the_first_load_is_seen_by_the_next_load(patch_instance):
+def test_is_safe_attribute_replaced_after_the_first_load_is_seen_by_the_next_entry(patch_instance, loaded_before, entry):
     class Env(SandboxedEnvironment):
         pass
 
     env = Env()
     source = "{% for i in [1] %}{{ loop.index }}{% endfor %}"
-    assert env.from_string(source).render() == "1"
-
-    def deny_public(obj, attr, value):
-        return attr.startswith("_") is False and False
+    before = env.from_string(source)
+    assert OUTPUT_ENTRY_POINTS["render"](before) == "1"
 
     if patch_instance:
-        env.is_safe_attribute = deny_public
+        env.is_safe_attribute = lambda obj, attr, value: False
     else:
         Env.is_safe_attribute = lambda self, obj, attr, value: False
-    assert env.from_string(source).render() == ""
+    template = before if loaded_before else env.from_string(source)
+    assert OUTPUT_ENTRY_POINTS[entry](template) == ""
+
+
+def test_an_include_loaded_during_the_render_is_asked_the_stricter_question():
+    class Env(SandboxedEnvironment):
+        pass
+
+    env = Env()
+    env.loader = jinja2.DictLoader({"inc": "{% for i in [1] %}{{ loop.index }}{% endfor %}", "main": "{% include 'inc' %}"})
+    main = env.get_template("main")
+    assert main.render() == "1"
+    Env.is_safe_attribute = lambda self, obj, attr, value: False
+    # `inc` is loaded by this render, after the replacement
+    assert env.get_template("main").render() == ""
+    assert main.render() == ""
+    oracle = type("OracleEnv", (j2sandbox.SandboxedEnvironment,), {"is_safe_attribute": lambda self, obj, attr, value: False})(loader=env.loader)
+    assert oracle.get_template("main").render() == ""
+
+
+def test_a_macro_a_python_callable_got_asks_the_stricter_question():
+    env = SandboxedEnvironment()
+    template = env.from_string("{% macro m() %}{% for i in [1] %}{{ loop.index }}{% endfor %}{% endmacro %}{{ call(m) }}")
+    assert template.render(call=lambda f: f()) == "1"
+    env.is_safe_attribute = lambda obj, attr, value: False
+    assert template.render(call=lambda f: f()) == ""
 
 
 ATTR_ITEM_SOURCES = [
@@ -1177,23 +1235,6 @@ def test_attribute_filters_ask_is_safe_attribute_about_loop_namespace_and_macro(
     assert _outcome_of(ours, source) == _outcome_of(oracle, source), source
 
 
-def _called():
-    return "CALLED"
-
-
-def _deny(*args, **kwargs):
-    raise SecurityError("no")
-
-
-ENTRY_POINTS = {
-    "render": lambda t: t.render(),
-    "generate": lambda t: list(t.generate()),
-    "stream": lambda t: t.stream().dump(__import__("io").StringIO()),
-    "make_module": lambda t: t.make_module(),
-    "module": lambda t: t.module,
-}
-
-
 @pytest.mark.parametrize("entry", list(ENTRY_POINTS))
 @pytest.mark.parametrize("hook", ["call", "getattr", "getitem"])
 @pytest.mark.parametrize("where", ["instance", "class"])
@@ -1369,3 +1410,185 @@ def test_a_format_field_that_raises_stop_iteration_is_undefined(source, undefine
         except Exception as error:  # noqa: BLE001 - the class and message are compared
             results.append((type(error).__name__, str(error)))
     assert results[0] == results[1]
+
+
+# --- Leftovers of 0354 (docs/tasks/0425) ----------------------------------------------------
+
+
+def _unsafe_marker(self, obj, attribute):
+    return "UNSAFE"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ [1].__class__ }}",
+        "{{ {'a': 1}.__class__ }}",
+        "{{ 'x'.__class__ }}",
+        "{{ (1).__class__ }}",
+        "{{ none.__class__ }}",
+        "{% for i in [1] %}{{ loop.__class__ }}{% endfor %}",
+        "{% set ns = namespace(a=1) %}{{ ns.__class__ }}",
+        "{% macro m() %}x{% endmacro %}{{ m.__class__ }}",
+        "{% set c = cycler(1, 2) %}{{ c.__class__ }}",
+        "{{ [1]|attr('__class__') }}",
+        "{{ range.__class__ }}",
+        "{{ lipsum.__name__ }}",
+        "{{ lipsum['__name__'] }}",
+        "{{ lipsum|attr('__name__') }}",
+        "{{ [1].__class__ is string }}|{{ [1].__class__|length }}",
+    ],
+)
+@pytest.mark.parametrize("immutable", [False, True], ids=["sandbox", "immutable"])
+def test_an_unsafe_undefined_that_returns_something_else_is_what_the_template_gets(source, immutable):
+    base_ours, base_oracle = (ImmutableSandboxedEnvironment, j2sandbox.ImmutableSandboxedEnvironment) if immutable else (SandboxedEnvironment, j2sandbox.SandboxedEnvironment)
+    ours = type("Marker", (base_ours,), {"unsafe_undefined": _unsafe_marker})()
+    oracle = type("MarkerJ2", (base_oracle,), {"unsafe_undefined": _unsafe_marker})()
+    assert _outcome_of(ours, source) == _outcome_of(oracle, source), source
+    assert _outcome_of(ours, source)[0] == "ok"
+
+
+def test_an_unsafe_undefined_that_returns_a_markup_or_none():
+    for value in (Markup("<b>"), None, 3, ["x"]):
+        attrs = {"unsafe_undefined": lambda self, obj, attribute, value=value: value}
+        ours = type("V", (SandboxedEnvironment,), attrs)(autoescape=True)
+        oracle = type("VJ2", (j2sandbox.SandboxedEnvironment,), attrs)(autoescape=True)
+        for source in ("{{ [1].__class__ }}", "{% for i in [1] %}{{ loop.__class__ }}{% endfor %}"):
+            assert _outcome_of(ours, source) == _outcome_of(oracle, source), (value, source)
+
+
+STRICT_ATTRIBUTE_SOURCES = [
+    "{{ [{'a': 1}]|selectattr('__class__', 'eq', 1)|list }}",
+    "{{ [1]|rejectattr('__class__', 'eq', 1)|list }}",
+    "{{ [1]|map(attribute='__class__')|list }}",
+    "{{ [1]|selectattr('real')|list }}",
+    "{{ [1]|sort(attribute='__class__')|list }}",
+    "{{ lipsum.__name__ }}",
+    "{{ lipsum['__name__'] }}",
+    "{{ lipsum|attr('__name__') }}",
+]
+
+
+@pytest.mark.parametrize("source", STRICT_ATTRIBUTE_SOURCES)
+@pytest.mark.parametrize("strict", [False, True], ids=["default", "strict"])
+def test_attribute_filters_and_the_name_of_lipsum_under_both_undefined_policies(source, strict):
+    ours = SandboxedEnvironment(undefined=jinja2cpp.StrictUndefined if strict else jinja2cpp.Undefined)
+    oracle = j2sandbox.SandboxedEnvironment(undefined=jinja2.StrictUndefined if strict else jinja2.Undefined)
+    assert _outcome_of(ours, source) == _outcome_of(oracle, source), source
+
+
+def _asked(base, source):
+    seen = []
+
+    def is_safe_attribute(self, obj, attr, value):
+        seen.append((type(obj).__name__, attr))
+        return True
+
+    env = type("Recording", (base,), {"is_safe_attribute": is_safe_attribute})()
+    return _outcome_of(env, source), seen
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ [1].count }}",
+        "{{ {'a': 1}.items }}",
+        "{{ 'x'.upper }}",
+        "{% for i in [1] %}{{ loop.index }}{% endfor %}",
+        "{% set ns = namespace(a=1) %}{{ ns.a }}",
+        "{% macro m() %}x{% endmacro %}{{ m.name }}",
+        "{% set c = cycler(1, 2) %}{{ c.current }}",
+        "{{ lipsum.__name__ }}",
+    ],
+)
+def test_a_custom_is_safe_attribute_is_asked_the_same_questions(source):
+    # the objects and names; what it is given as the value is a documented difference for the engine's own values
+    ours = _asked(SandboxedEnvironment, source)
+    oracle = _asked(j2sandbox.SandboxedEnvironment, source)
+    assert ours[1] == oracle[1], source
+    assert ours[0][0] == oracle[0][0]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{% for g in [(1, 2)]|groupby(0) %}{{ g.grouper }}{{ g.list }}{% endfor %}",
+        "{% for g in [(1, 2)]|groupby(0) %}{{ g|attr('grouper') }}{% endfor %}",
+        "{% for g in [(1, 2)]|groupby(0) %}{{ g['list'] }}{% endfor %}",
+        "{% for g in [(1, 2)]|groupby(0) %}{{ g.nope }}{% endfor %}",
+        "{{ [(1, 2)]|groupby(0)|map(attribute='grouper')|list }}",
+        "{{ range(3).start }}|{{ range(3).stop }}|{{ range(3).step }}",
+        "{{ range(3)['stop'] }}",
+        "{{ range(3)|attr('step') }}",
+        "{{ range(3).nope }}",
+    ],
+)
+def test_the_groupby_tuple_and_range_fields_are_asked_of_a_custom_is_safe_attribute(source):
+    # Jinja2 asks ('_GroupTuple', 'grouper') and ('range', 'start'); a name the object does not have is not asked
+    assert _asked(SandboxedEnvironment, source) == _asked(j2sandbox.SandboxedEnvironment, source)
+
+
+@pytest.mark.parametrize("name", ["grouper", "list", "start", "stop", "step"])
+def test_a_custom_is_safe_attribute_can_refuse_the_groupby_tuple_and_range_fields(name):
+    refuse = {"is_safe_attribute": lambda self, obj, attr, value: attr != name}
+    ours = type("Refusing", (SandboxedEnvironment,), refuse)()
+    oracle = type("RefusingJ2", (j2sandbox.SandboxedEnvironment,), refuse)()
+    source = "{% for g in [(1, 2)]|groupby(0) %}[{{ g.grouper }}][{{ g.list }}]{% endfor %}[{{ range(3).start }}{{ range(3).stop }}{{ range(3).step }}]"
+    assert _outcome_of(ours, source) == _outcome_of(oracle, source)
+
+
+@pytest.mark.xfail(strict=True, reason="0425: the engine builds no value for the engine's own loop, cycler, namespace and macro, and gives a stand-in for its containers")
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{% for i in [1] %}{{ loop.index }}{% endfor %}",
+        "{% set ns = namespace(a=1) %}{{ ns.a }}",
+        "{% macro m() %}x{% endmacro %}{{ m.name }}",
+        "{{ lipsum.__name__ }}",
+    ],
+)
+def test_a_custom_is_safe_attribute_is_given_the_value_of_the_attribute(source):
+    values = {}
+    for name, base in (("ours", SandboxedEnvironment), ("oracle", j2sandbox.SandboxedEnvironment)):
+        seen = []
+
+        def is_safe_attribute(self, obj, attr, value, seen=seen):
+            seen.append((attr, value))
+            return True
+
+        env = type("Recording", (base,), {"is_safe_attribute": is_safe_attribute})()
+        env.from_string(source).render()
+        values[name] = seen
+    assert values["ours"] == values["oracle"]
+
+
+SET_METHODS = ["add", "update", "union", "intersection", "difference", "discard", "remove", "pop", "clear", "issubset", "isdisjoint", "copy"]
+VIEW_METHODS = ["isdisjoint", "mapping"]
+
+
+def _asked_by(base, source, **context):
+    seen = []
+
+    class Judge(base):
+        def is_safe_attribute(self, obj, attr, value):
+            seen.append((type(obj).__name__, attr))
+            return not (isinstance(obj, (set, type({}.keys()), type({}.values()), type({}.items()))) and attr in SET_METHODS + VIEW_METHODS)
+
+    return seen, _outcome_of(Judge(), source, **context)
+
+
+@pytest.mark.parametrize("method", SET_METHODS)
+@pytest.mark.parametrize("form", ["{{ st.%s }}", "{{ st|attr('%s') }}", "{{ st['%s'] }}"])
+def test_is_safe_attribute_is_asked_about_the_methods_of_a_set(method, form):
+    source = "{% set st = d.keys() - [] %}" + form % method
+    context = {"d": {"a": 1, "b": 2}}
+    assert _asked_by(SandboxedEnvironment, source, **context) == _asked_by(j2sandbox.SandboxedEnvironment, source, **context)
+
+
+@pytest.mark.parametrize("view", ["keys", "values", "items"])
+@pytest.mark.parametrize("method", VIEW_METHODS)
+@pytest.mark.parametrize("form", ["{{ v.%s }}", "{{ v|attr('%s') }}", "{{ v['%s'] }}"])
+def test_is_safe_attribute_is_asked_about_the_attributes_of_a_dict_view(view, method, form):
+    source = "{% set v = d." + view + "() %}" + form % method
+    context = {"d": {"a": 1, "b": 2}}
+    assert _asked_by(SandboxedEnvironment, source, **context) == _asked_by(j2sandbox.SandboxedEnvironment, source, **context)
