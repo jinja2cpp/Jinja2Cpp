@@ -18,8 +18,9 @@ namespace jinja2
 inline namespace v2
 {
 // Integers outside int64 in their text form (docs/tasks/0270, docs/design/0178-big-integer-plan.md
-// 3.3): the core keeps such an integer as its canonical decimal form and does everything that
-// needs only the representation (printing, comparison, conversion to float and between bases).
+// 3.3): the core keeps such an integer as its canonical decimal form, and a huge one (past
+// HugeBigIntBits) also as binary words (docs/tasks/0543), and does everything that needs only the
+// representation (printing, comparison, conversion to float and between bases, bit operations).
 // Arithmetic that needs a big result raises OverflowError (IntegerOutOfRangeError).
 //
 // Every function here is out of line and off the int64 paths: they run only once a value is big.
@@ -60,14 +61,16 @@ JINJA2CPP_EXPORT std::string_view CheckedDecimal(const BigIntView& val);
 // The same without the sign: the decimal digits of |val|
 JINJA2CPP_EXPORT std::string_view CheckedMagnitude(const BigIntView& val);
 
-// The digits of |val| in a power-of-two base (2 to 32), lower case
+// The digits of |val| in a power-of-two base (2 to 32), lower case; packed from the words of a huge integer
 JINJA2CPP_EXPORT std::string MagnitudeInBase(const BigIntView& val, int base);
 
-// Python's int.bit_length(): the bits of |val|
+// Python's int.bit_length(): the bits of |val|, from the words of a huge integer without converting
 JINJA2CPP_EXPORT size_t BitLength(const BigIntView& val);
+// Python's int.bit_count(): the set bits of |val|
+JINJA2CPP_EXPORT size_t BitCount(const BigIntView& val);
 
 // Three-way comparisons: -1, 0 or 1, and 2 when `right` is NaN (unordered). Python compares
-// an int and a float exactly
+// an int and a float exactly. Two huge integers compare their words
 JINJA2CPP_EXPORT int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept;
 JINJA2CPP_EXPORT int CompareBigIntDouble(const BigIntView& left, double right);
 
@@ -84,6 +87,10 @@ JINJA2CPP_EXPORT InternalValue NegateBigInt(const BigIntView& val);
 // Whether the integer is odd
 inline bool IsOdd(const BigIntView& val) noexcept
 {
+    if (val.IsHuge())
+    {
+        return (val.Words()[0] & 1U) != 0;
+    }
     return ((val.InlineDecimal().back() - '0') & 1) != 0;
 }
 

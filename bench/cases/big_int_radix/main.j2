@@ -1,0 +1,1 @@
+{% set x = ('f' * n)|int(base=16) %}{% for i in range(20) %}{{ x.bit_length() }},{{ x.bit_count() }},{{ '{:x}'.format(x)|length }},{{ x is odd }};{% endfor %}

@@ -43,6 +43,9 @@ CASES = [
     ("dict_items_loop", "{% for k, v in d.items() %}{{ k }}={{ v }};{% endfor %}"),
     ("dict_setdefault", "{{ d.setdefault('z', 9) }}"),
     ("int_method", "{{ (255).bit_length() }}"),
+    # A huge int (past 14285 bits) from a string in the context, so nothing folds it: bit
+    # operations, negation, a dict key and comparisons read its binary form (docs/tasks/0543)
+    ("int_big_binary_form", "{% set h = hs|int(base=16) %}{{ h.bit_length() }}|{{ h.bit_count() }}|{{ '{:x}'.format(h)|length }}|{{ ('%x'|format(-h))[:5] }}|{{ h is odd }}|{{ (-h).bit_length() }}|{{ {h: 1}[-(-h)] }}|{{ h > 1e308 }}|{{ -h < h }}", {"ctx": {"hs": "f" * 3600}}),
     ("float_is_integer", "{{ (2.0).is_integer() }}"),
     ("unknown_method", "{{ s.no_such_method() }}"),
     # More str methods

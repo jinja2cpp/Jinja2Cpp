@@ -48,6 +48,7 @@ constexpr char KindTuple = 't';
 constexpr char KindRange = 'r';
 constexpr char KindString = 's';
 constexpr char KindBigInt = 'b';
+constexpr char KindHugeInt = 'B';
 constexpr char KindObject = 'o';
 constexpr char KindBoundMethod = 'm';
 constexpr char KindMethodCall = 'f';
@@ -134,6 +135,22 @@ void AppendBigInt(std::string& out, std::string_view decimal)
     out.append(decimal);
 }
 
+// A huge integer (docs/tasks/0543): its sign, word count and words, which are its value's alone
+// (the top word is never zero). Equal integers are both huge or both not, so a value has one
+// kind of key: an integer that is not huge, and every whole double, keys by its decimal form
+void AppendHugeInt(std::string& out, const BigIntView& val)
+{
+    const auto words = val.Words();
+    out.push_back(DictKeyMark);
+    out.push_back(KindHugeInt);
+    out.push_back(val.Sign() < 0 ? '-' : '+');
+    AppendBytes(out, static_cast<uint64_t>(words.size()));
+    for (const auto word : words)
+    {
+        AppendBytes(out, word);
+    }
+}
+
 // ObjectKey: the key of an object by its identity, as Python's default __hash__ and __eq__
 // have it. The dict's table of first spellings (TemplateDict::KeyOf) holds the key, which keeps
 // the object, and so its address, alive while the entry is there. An object of the host
@@ -197,6 +214,11 @@ struct KeyTokenBuilder
     }
     const char* operator()(const BigIntView& val) const
     {
+        if (val.IsHuge())
+        {
+            AppendHugeInt(m_out, val);
+            return nullptr;
+        }
         WithDecimal(val, [this](std::string_view decimal) { AppendBigInt(m_out, decimal); });
         return nullptr;
     }

@@ -3538,8 +3538,7 @@ InternalValue IntBitCount(const InternalValue& self, const CallParams& params, R
     CheckArgs(params, "bit_count", 0, 0);
     if (const auto big = AsBigInt(self))
     {
-        const auto bits = MagnitudeInBase(*big, 2);
-        return static_cast<int64_t>(std::count(bits.begin(), bits.end(), '1'));
+        return static_cast<int64_t>(BitCount(*big));
     }
     auto value = IntArg(self, "bit_count");
     uint64_t magnitude = value < 0 ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);

@@ -557,10 +557,14 @@ static_assert(sizeof(ValueStorage) <= 24);
 
 // CPython's limit on converting an integer to or from decimal text (sys.get_int_max_str_digits())
 constexpr size_t MaxIntStrDigits = 4300;
+// The widest integer that is not huge (docs/tasks/0543): a huge integer, of more bits, keeps its
+// magnitude in binary words, as it has more than MaxIntStrDigits digits and so no printable
+// decimal form. At most 14285 bits is at most 4301 digits, and more is always past 4300
+constexpr size_t HugeBigIntBits = 14285;
 
 // What a visitor receives for an integer outside int64 (docs/tasks/0270): a view of a value's
 // BigIntObject, which the value keeps alive, or of decimal text with no object (FromText).
-// Read it only through its accessors: a huge integer (docs/tasks/0543) will keep a binary form
+// Read it only through its accessors: a huge integer (docs/tasks/0543) keeps a binary form
 // and may have no decimal one, so code that needs the decimal of any integer uses WithDecimal
 // (big_int.h)
 class BigIntView
@@ -576,20 +580,27 @@ public:
     // The value's object, which a copy of the integer may share; null for a view of text
     [[nodiscard]] const detail::BigIntObject* Object() const noexcept { return m_object; }
     // -1 or 1: a big integer is never zero
-    [[nodiscard]] int Sign() const noexcept { return m_decimal.front() == '-' ? -1 : 1; }
+    [[nodiscard]] int Sign() const noexcept { return m_negative ? -1 : 1; }
+    // Whether the integer has more than HugeBigIntBits bits, and so binary words; defined after BigIntObject
+    [[nodiscard]] bool IsHuge() const noexcept;
+    // The magnitude of a huge integer in base 2^32, least significant word first, the top word
+    // not zero; empty for an integer that is not huge. Defined after BigIntObject
+    [[nodiscard]] Span<const uint32_t> Words() const noexcept;
     // The canonical decimal form the integer keeps ("-" and digits), for the operations that
     // read the digits of an integer that is not huge
     [[nodiscard]] std::string_view InlineDecimal() const noexcept { return m_decimal; }
 
 private:
-    BigIntView(const detail::BigIntObject* object, std::string_view decimal) noexcept
+    BigIntView(const detail::BigIntObject* object, std::string_view decimal, bool negative) noexcept
         : m_object(object)
         , m_decimal(decimal)
+        , m_negative(negative)
     {
     }
 
     const detail::BigIntObject* m_object;
     std::string_view m_decimal;
+    bool m_negative;
 };
 
 using InternalValueRef = ReferenceWrapper<InternalValue>;
@@ -1252,13 +1263,16 @@ private:
     size_t m_size;
 };
 
-// The object of an integer outside int64: its canonical decimal form ("-" and digits, no
-// leading zero) follows it in the same allocation, as a StringObject's characters do
-// (docs/tasks/0270). Made only by MakeBigIntValue (big_int.h), which keeps a value that fits
-// int64 an int
+// The object of an integer outside int64 (docs/tasks/0270, 0543). Its parts follow it in the
+// same allocation, as a StringObject's characters do: first the binary words of a huge integer
+// (more than HugeBigIntBits bits; none for any other), then its canonical decimal form ("-" and
+// digits, no leading zero). Made only through MakeBigIntValue and the other makers in big_int.h,
+// which keep a value that fits int64 an int and give an integer words exactly when it is huge
 struct BigIntObject final : ValueObject
 {
-    static IntrusivePtr<BigIntObject> Make(std::string_view decimal);
+    // `words` as BigIntView::Words has them, empty unless the integer is huge; `decimal` its
+    // canonical decimal form, whose sign is `negative`
+    static IntrusivePtr<BigIntObject> Make(bool negative, Span<const uint32_t> words, std::string_view decimal);
 
     struct CharCount
     {
@@ -1268,37 +1282,56 @@ struct BigIntObject final : ValueObject
     static void operator delete(void* ptr, CharCount /*chars*/) noexcept { ::operator delete(ptr); }
     static void operator delete(void* ptr) noexcept { ::operator delete(ptr); } // NOLINT(misc-new-delete-overloads)
 
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the object
-    [[nodiscard]] std::string_view Decimal() const noexcept { return { reinterpret_cast<const char*>(this) + sizeof(BigIntObject), m_size }; }
+    [[nodiscard]] bool IsNegative() const noexcept { return m_negative; }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the words follow the object
+    [[nodiscard]] Span<const uint32_t> Words() const noexcept { return { reinterpret_cast<const uint32_t*>(reinterpret_cast<const char*>(this) + sizeof(BigIntObject)), m_words }; }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the words
+    [[nodiscard]] std::string_view Decimal() const noexcept { return { reinterpret_cast<const char*>(this) + sizeof(BigIntObject) + (std::size_t{ m_words } * sizeof(uint32_t)), m_digits }; }
 
     BigIntObject(const BigIntObject&) = delete;
     BigIntObject(BigIntObject&&) = delete;
     BigIntObject& operator=(const BigIntObject&) = delete;
     BigIntObject& operator=(BigIntObject&&) = delete;
-    // Make counted the object and its digits against the render's memory budget (docs/tasks/0478)
+    // Make counted the object, its words and its digits against the render's memory budget (docs/tasks/0478)
     ~BigIntObject() override
     {
         if (IsCharged())
         {
-            ReleaseRenderMemory(Bytes(m_size));
+            ReleaseRenderMemory(Bytes(m_words, m_digits));
         }
     }
 
-    [[nodiscard]] static constexpr std::uint64_t Bytes(size_t digits) noexcept { return std::uint64_t{ sizeof(BigIntObject) } + digits; }
+    [[nodiscard]] static constexpr std::uint64_t Bytes(size_t words, size_t digits) noexcept { return std::uint64_t{ sizeof(BigIntObject) } + (std::uint64_t{ words } * sizeof(uint32_t)) + digits; }
 
 private:
-    explicit BigIntObject(size_t size) noexcept
-        : m_size(size)
+    BigIntObject(uint32_t words, uint32_t digits, bool negative) noexcept
+        : m_words(words)
+        , m_digits(digits)
+        , m_negative(negative)
     {
     }
 
-    size_t m_size;
+    uint32_t m_words;
+    uint32_t m_digits;
+    bool m_negative;
 };
+// The words start right after the object
+static_assert(sizeof(BigIntObject) % alignof(uint32_t) == 0);
 } // namespace detail
 
 inline BigIntView::BigIntView(const detail::BigIntObject& object) noexcept
-    : BigIntView(&object, object.Decimal())
+    : BigIntView(&object, object.Decimal(), object.IsNegative())
 {
+}
+
+inline Span<const uint32_t> BigIntView::Words() const noexcept
+{
+    return m_object ? m_object->Words() : Span<const uint32_t>();
+}
+
+inline bool BigIntView::IsHuge() const noexcept
+{
+    return m_object && !m_object->Words().empty();
 }
 
 namespace detail
