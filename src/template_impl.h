@@ -1636,6 +1636,10 @@ private:
             {
                 return false;
             }
+            catch (...) // NOLINT(bugprone-empty-catch): a vector past its max_size (std::length_error), as out of memory
+            {
+                return false;
+            }
             loaded.storedKept.swap(stay);
             for (auto p = modules.size(); p-- > 0;)
             {

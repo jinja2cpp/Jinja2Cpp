@@ -4413,7 +4413,7 @@ bool ImportedModule::MayBeReached(const std::vector<const ImportedModule*>& cand
         {
             return true;
         }
-        if (module->m_frame.self && detail::InternalValueAccess::Object(*module->m_frame.self) != nullptr)
+        if (module->m_frame.self && detail::InternalValueAccess::Object(*module->m_frame.self))
         {
             return true;
         }
