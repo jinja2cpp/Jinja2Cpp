@@ -668,6 +668,46 @@ TEST(RenderOptionsTest, JsonDumpsResultMustBeAStringAndIsHtmlSafeMarkup)
     EXPECT_FALSE(failed);
 }
 
+TEST(RenderOptionsTest, JsonDumpsResultIsCheckedAgainstTheSequenceCap)
+{
+    TemplateEnv env;
+    env.GetSettings().limits.maxSequenceSize = 10;
+    auto tpl = env.FromString("{{ 1|tojson }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    // Two characters that escape to twelve
+    policies.jsonDumps = UserCallable([](const UserCallableParams&) -> Value { return std::string("<<"); }, {});
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    auto failed = tpl->RenderTo(out, {}, options);
+    ASSERT_FALSE(failed);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, failed.error().GetCode());
+
+    policies.jsonDumps = UserCallable([](const UserCallableParams&) -> Value { return std::string("<"); }, {});
+    options.filterPolicies = PoliciesOf(policies);
+    out.clear();
+    ASSERT_TRUE(tpl->RenderTo(out, {}, options));
+    EXPECT_EQ("\\u003c", out);
+}
+
+TEST(RenderOptionsTest, JsonDumpsTakesAnIndentTheBuiltInWriterRejects)
+{
+    TemplateEnv env;
+    auto tpl = env.FromString("{{ 1|tojson(indent=[]) }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    policies.jsonDumps = UserCallable([](const UserCallableParams& params) -> Value { return std::string(params["indent"].IsList() ? "list" : "other"); }, { ArgInfo{ "obj", true }, ArgInfo{ "indent", false, Value() } });
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    ASSERT_TRUE(tpl->RenderTo(out, {}, options));
+    EXPECT_EQ("list", out);
+    // Without a dumps function json.dumps rejects it
+    out.clear();
+    EXPECT_FALSE(tpl->RenderTo(out, {}));
+}
+
 TEST(RenderOptionsTest, JsonDumpsResultInPromptAutoescapeMode)
 {
     TemplateEnv env;

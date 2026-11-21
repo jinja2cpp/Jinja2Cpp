@@ -1793,8 +1793,11 @@ InternalValue CallJsonDumps(const UserCallable& dumps, const InternalValue& valu
     {
         throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(result) + "' object has no attribute 'replace'");
     }
+    // Each of the four characters becomes a six-character escape: the result is checked against the cap first
+    const auto escapes = static_cast<uint64_t>(std::count_if(text->begin(), text->end(), [](char ch) { return ch == '<' || ch == '>' || ch == '&' || ch == '\''; }));
+    CheckSequenceSize(static_cast<uint64_t>(text->size()) + (5 * escapes), "a JSON document");
     std::string escaped;
-    escaped.reserve(text->size());
+    escaped.reserve(text->size() + (5 * escapes));
     for (const char ch : *text)
     {
         switch (ch)
@@ -1839,9 +1842,9 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     const bool dumpsCalled = m_mode != TransformersJsonMode && policies.jsonDumps.callable;
     bool indentGiven = false;
     auto indentVal = dumpsCalled ? this->GetArgumentValue("indent", context, indentGiven) : this->GetArgumentValue("indent", context);
-    options.indent = JsonIndent(isString ? InternalValue() : indentVal);
     if (m_mode == TransformersJsonMode)
     {
+        options.indent = JsonIndent(isString ? InternalValue() : indentVal);
         // transformers' tojson: json.dumps(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False),
         // a plain string
         options.htmlSafe = false;
@@ -1862,6 +1865,8 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     }
     else
     {
+        // A policy's dumps function takes indent as it is; the built-in writer converts it
+        options.indent = JsonIndent(isString ? InternalValue() : indentVal);
         options.sortKeys = policies.jsonSortKeys;
         options.ensureAscii = policies.jsonEnsureAscii;
         options.separators = policies.jsonSeparators;
