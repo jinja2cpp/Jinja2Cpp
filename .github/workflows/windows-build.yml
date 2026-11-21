@@ -85,11 +85,12 @@ jobs:
       env:
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
         # Only failures in the log, as in linux-build.yml: under -V the output of the later
-        # tests pushed a failing test of jinja2cpp_tests out of the log tail
-        GTEST_BRIEF: 1
+        # tests pushed a failing test of jinja2cpp_tests out of the log tail. Debug lists every test, so
+        # a test that hangs is the last one named when the timeout ends it (train #973)
+        GTEST_BRIEF: ${{ matrix.build-config == 'Debug' && '0' || '1' }}
       run: |
         cd .build
-        ctest -C %INPUT_BUILD_CONFIG% --output-on-failure
+        ctest -C %INPUT_BUILD_CONFIG% --output-on-failure --timeout 2400
 
     # The commit's source archive, built with tests off outside the checkout, installed and
     # used by test/package with MSVC (docs/tasks/0225)
