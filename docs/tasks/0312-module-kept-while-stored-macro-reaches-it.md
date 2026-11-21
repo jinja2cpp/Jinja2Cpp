@@ -47,7 +47,16 @@ with `TemplateExpired` as before; nothing only a dying module holds can keep it,
 (`ModuleCallTest.StoredMacrosStayFlat`, whose rows include a module holding its own macro in a namespace that holds
 itself).
 
+Before the walk, `ImportedModule::MayBeReached` checks whether anything outside the call's modules can hold what
+they made: a closure made after a module's top level ran or below its top-level scope, a `self`, or an `import ... as`
+object or top-level macro held from elsewhere than the modules' own values (or a macro whose body another callable
+shares, `__call__`). When nothing can, and no module is kept so far, they end without a walk. The template module's
+destructor notes the values of the modules that stay with it (`NoteModuleNames`), so that a cycle among a kept or
+shared module's values is freed with it (`ModuleCallTest.KeptModuleGoesWithItsCycles`; the shared case leaked before
+too). A closure reaching a module only through its capture is not seen yet: 0566.
+
 **Cost.** The walk visits what the template module's values reach, on the outermost calls that noted something while
-a module the call made, or one kept so, is a candidate. A module that both keeps a large state and imports with
-context on every call pays a walk of that state per call; Render and calls that import nothing with context pay a flag
-test.
+a module kept so exists or a module the call made may be reached. A module with a large state (the verifier's 20,000
+dicts) that imports with context on every call and stores nothing of it pays a check of the imported module's own
+values (200 calls: 6.3 s before the check in the verifier's ASan probe, 0.4 s with it in an -O1 build without sanitizers, about what 500 calls that import nothing take); one that stores a macro of it on every call, which
+Jinja2 also keeps, pays a walk of the state per call. Render and calls that import nothing with context pay a flag test.

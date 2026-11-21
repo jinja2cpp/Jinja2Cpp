@@ -622,6 +622,12 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             {
             }
         }
+        // So do the values of the modules its calls imported that stay with it: shared ones, and those a stored
+        // closure kept (docs/tasks/0312)
+        if (callback)
+        {
+            callback->NoteModuleNames();
+        }
         // A cycle a call made among the module's values, below a value that is in none, has no
         // note left: the walk reaches it from the module's names
         cycles.WalkFromEveryNote();

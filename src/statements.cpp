@@ -2739,6 +2739,10 @@ ClosureSite::ClosureSite(RenderContext& context, size_t depth)
             m_state = TopLevel;
         }
     }
+    if (m_endsWithCall && (context.m_topLevelRun || m_state != TopLevel))
+    {
+        context.m_madeOtherClosures = true;
+    }
 }
 
 std::shared_ptr<RenderContext> ClosureSite::LiveHome(const ClosureCapture& capture)
@@ -3955,6 +3959,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
             module.Render(*tplPtr);
             return true;
         });
+        module.Context().SetTopLevelRun();
         ImportNames(values, nodes, module, name);
         return;
     }
@@ -4397,6 +4402,55 @@ const ClosureSite* ClosureSiteOfObject(const ValueObject& object)
     return nullptr;
 }
 } // namespace
+
+bool ImportedModule::MayBeReached(const std::vector<const ImportedModule*>& candidates)
+{
+    // The objects the candidates' held values hold, each with the number of those holding it
+    SmallVector<std::pair<const ValueObject*, unsigned>, 16> held;
+    for (const auto* module : candidates)
+    {
+        if (module->m_context.MadeOtherClosures())
+        {
+            return true;
+        }
+        if (module->m_frame.self && detail::InternalValueAccess::Object(*module->m_frame.self) != nullptr)
+        {
+            return true;
+        }
+        module->ForEachHeldValue([&held](const InternalValue& value) {
+            const auto* object = detail::InternalValueAccess::Object(value);
+            if (!object)
+            {
+                return;
+            }
+            if (auto* found = std::find_if(held.begin(), held.end(), [object](const auto& entry) { return entry.first == object; }); found != held.end())
+            {
+                ++found->second;
+                return;
+            }
+            held.emplace_back(object, 1U);
+        });
+    }
+    const auto isCandidateObject = [&candidates](const ValueObject* object) {
+        return std::any_of(candidates.begin(), candidates.end(), [object](const ImportedModule* module) { return detail::InternalValueAccess::Object(module->m_object) == object; });
+    };
+    return std::any_of(held.begin(), held.end(), [&candidates, &isCandidateObject](const auto& entry) {
+        const auto* object = entry.first;
+        const auto* site = ClosureSiteOfObject(*object);
+        const bool ofCandidate = isCandidateObject(object)
+                                 || (site && std::any_of(candidates.begin(), candidates.end(), [site](const ImportedModule* module) { return site->RunsInEndingModule(module->m_context); }));
+        if (!ofCandidate)
+        {
+            return false;
+        }
+        if (object->use_count() != entry.second) // use_count: as in TreeHeldOnlyByModules
+        {
+            return true;
+        }
+        const auto* box = site ? dynamic_cast<const ValueBox<Callable>*>(object) : nullptr;
+        return box && box->Get().SharesBody();
+    });
+}
 
 void ImportedModule::MarkReached(std::vector<const ValueObject*> roots, const std::vector<const ImportedModule*>& candidates, std::vector<bool>& reached)
 {

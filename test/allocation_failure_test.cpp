@@ -791,6 +791,34 @@ TEST_F(ModuleCallTest, StoredMacrosStayFlat)
     }
 }
 
+// A module a stored macro kept goes with the template module, and so do the cycles among its values (docs/tasks/0312,
+// the verifier's F1)
+TEST_F(ModuleCallTest, KeptModuleGoesWithItsCycles)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
+    m_fs = std::make_shared<MemoryFileSystem>();
+    m_env.AddFilesystemHandler(std::string(), m_fs);
+    m_fs->AddFile("own", "{% macro y() %}Y{% endmacro %}{% set k = namespace(f=y, l=[y]) %}{% set k.self = k %}{% set lst = [] %}{% set _ = lst.append(lst) %}");
+    for (const char* body : { "{% import 'own' as o with context %}{% set ns.f = o.y %}{{ ns.f() }}", "{% import 'own' as o %}{% set ns.f = o.y %}{{ ns.f() }}" })
+    {
+        const auto once = [this, body]() {
+            auto module = MakeModule(body, "{% set ns = namespace(f=none) %}");
+            EXPECT_EQ("Y", Call(module.exports["m"])) << body;
+            EXPECT_EQ("Y", Call(module.exports["m"])) << body;
+        };
+        once();
+        const long before = g_live.load(std::memory_order_relaxed);
+        for (int i = 0; i != 50; ++i)
+        {
+            once();
+        }
+        EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
+    }
+}
+
 // With TemplateLookup::EveryUse and no cache every use parses the template again: a reload whose source did not
 // change is dropped, so the module keeps no tree per call (docs/tasks/0313)
 TEST_F(ModuleCallTest, EveryUseReloadsStayFlat)

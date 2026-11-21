@@ -732,6 +732,11 @@ public:
     // What Traverse does not show (a std::function capture, a host's map) is not walked, so a closure only that
     // reaches leaves its module to end. Throws std::bad_alloc
     static void MarkReached(std::vector<const ValueObject*> roots, const std::vector<const ImportedModule*>& candidates, std::vector<bool>& reached);
+    // Whether a value outside `candidates` may reach a closure of one of them, so that MarkReached has to look: one
+    // made a closure that is not a top-level name of its own (MadeOtherClosures), its `self` or `import ... as` object
+    // or a top-level macro of one is held from elsewhere than their held values, or another Callable shares such a
+    // macro's body. False lets them end without a walk of what lives on (docs/tasks/0312). Throws std::bad_alloc
+    [[nodiscard]] static bool MayBeReached(const std::vector<const ImportedModule*>& candidates);
 
 private:
     // Calls `note` with each value whose object the module holds: its `import ... as` object, its names (twice when the

@@ -1547,6 +1547,29 @@ private:
                 invalid.pop_back();
             }
         }
+        // Notes the values of the modules to the collector running on this thread: the template module that owns them
+        // goes, and a cycle among them, which a call made, has no note left (TemplateModuleState's destructor). When
+        // noting one cannot allocate, the cycles not noted leak
+        void NoteModuleNames() const noexcept
+        {
+            if (!m_loaded)
+            {
+                return;
+            }
+            try
+            {
+                for (const auto& module : m_loaded->modules)
+                {
+                    for (const auto& [name, value] : module->Names())
+                    {
+                        CycleCollector::NoteStore(value);
+                    }
+                }
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+            {
+            }
+        }
         // Whether a closure a call stored keeps `module`, a module that call made (EndCall, docs/tasks/0312)
         [[nodiscard]] bool KeptByStoredClosure(const ImportedModule* module) const noexcept
         {
@@ -1586,17 +1609,21 @@ private:
                 {
                     return false;
                 }
-                std::vector<const ValueObject*> roots;
-                addRoots(roots);
-                for (const auto& module : modules)
-                {
-                    if (std::find(candidates.begin(), candidates.end(), module.get()) == candidates.end())
-                    {
-                        module->AppendHeldObjects(roots);
-                    }
-                }
                 reached.assign(candidates.size(), false);
-                ImportedModule::MarkReached(std::move(roots), candidates, reached);
+                // Nothing kept so far, and nothing outside the call's modules holds what they made: they end unwalked
+                if (!loaded.storedKept.empty() || ImportedModule::MayBeReached(candidates))
+                {
+                    std::vector<const ValueObject*> roots;
+                    addRoots(roots);
+                    for (const auto& module : modules)
+                    {
+                        if (std::find(candidates.begin(), candidates.end(), module.get()) == candidates.end())
+                        {
+                            module->AppendHeldObjects(roots);
+                        }
+                    }
+                    ImportedModule::MarkReached(std::move(roots), candidates, reached);
+                }
                 for (std::size_t index = 0; index != candidates.size(); ++index)
                 {
                     if (reached[index])
@@ -1605,7 +1632,7 @@ private:
                     }
                 }
             }
-            catch (...) // NOLINT(bugprone-empty-catch): out of memory; the comment above says what happens
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the comment above says what happens
             {
                 return false;
             }
