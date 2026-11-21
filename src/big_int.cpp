@@ -35,36 +35,6 @@ namespace jinja2
 {
 inline namespace v2
 {
-namespace detail
-{
-IntrusivePtr<BigIntObject> BigIntObject::Make(bool negative, Span<const uint32_t> words, std::string_view decimal)
-{
-    // Huge exactly when it has words, and every integer keeps its decimal form for now (docs/tasks/0543 P1b)
-    JINJA2CPP_EXPECTS(!decimal.empty() && (decimal.front() == '-') == negative);
-    JINJA2CPP_EXPECTS(words.empty() || (words[words.size() - 1] != 0 && words.size() * 32 > HugeBigIntBits));
-    const bool counted = RenderMemoryCounted();
-    if (counted)
-    {
-        ChargeRenderMemory(Bytes(words.size(), decimal.size()));
-    }
-    const auto wordBytes = words.size() * sizeof(uint32_t);
-    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-    IntrusivePtr<BigIntObject> obj(new (CharCount{ wordBytes + decimal.size() }) BigIntObject(static_cast<uint32_t>(words.size()), static_cast<uint32_t>(decimal.size()), negative));
-    if (counted)
-    {
-        obj->MarkCharged();
-    }
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the words and then the digits follow the object
-    auto* const parts = reinterpret_cast<char*>(obj.get()) + sizeof(BigIntObject);
-    if (!words.empty())
-    {
-        std::memcpy(parts, words.data(), wordBytes);
-    }
-    std::copy(decimal.begin(), decimal.end(), parts + wordBytes);
-    return obj;
-}
-} // namespace detail
-
 namespace
 {
 // A magnitude as limbs of a radix of at most 2^32, least significant limb first: the core's only
@@ -665,6 +635,36 @@ bool ExceedsBitCap(std::string_view magnitude)
     throw TemplateRuntimeError("Exceeds the limit (" + std::to_string(MaxIntStrDigits) + " digits) for integer string conversion" + detail + "; use sys.set_int_max_str_digits() to increase the limit");
 }
 } // namespace
+
+namespace detail
+{
+IntrusivePtr<BigIntObject> BigIntObject::Make(bool negative, Span<const uint32_t> words, std::string_view decimal)
+{
+    // Huge exactly when it has words, and every integer keeps its decimal form for now (docs/tasks/0543 P1b)
+    JINJA2CPP_EXPECTS(!decimal.empty() && (decimal.front() == '-') == negative);
+    JINJA2CPP_EXPECTS(words.empty() || (words[words.size() - 1] != 0 && WordsBits(words) > HugeBigIntBits));
+    const bool counted = RenderMemoryCounted();
+    if (counted)
+    {
+        ChargeRenderMemory(Bytes(words.size(), decimal.size()));
+    }
+    const auto wordBytes = words.size() * sizeof(uint32_t);
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
+    IntrusivePtr<BigIntObject> obj(new (CharCount{ wordBytes + decimal.size() }) BigIntObject(static_cast<uint32_t>(words.size()), static_cast<uint32_t>(decimal.size()), negative));
+    if (counted)
+    {
+        obj->MarkCharged();
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the words and then the digits follow the object
+    auto* const parts = reinterpret_cast<char*>(obj.get()) + sizeof(BigIntObject);
+    if (!words.empty())
+    {
+        std::memcpy(parts, words.data(), wordBytes);
+    }
+    std::copy(decimal.begin(), decimal.end(), parts + wordBytes);
+    return obj;
+}
+} // namespace detail
 
 namespace
 {
