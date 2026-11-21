@@ -726,6 +726,9 @@ public:
     [[nodiscard]] const void* Tree() const noexcept { return m_treeOwner.get(); }
     // Appends the objects the module holds (ForEachHeldValue), where a walk from it starts. Throws std::bad_alloc
     void AppendHeldObjects(std::vector<const ValueObject*>& objects) const;
+    // Notes the values the module holds, its names and the importer's names it sees, to the collector running on this
+    // thread, which frees a cycle among them once the module goes (docs/tasks/0312). Throws std::bad_alloc
+    void NoteHeldValues() const;
     // Sets reached[i] for each of `candidates`, modules that end with the host's call that made them, that a closure
     // found from `roots` through ValueObject::Traverse runs in, and the walk goes on from what such a module holds: a
     // value that outlives the call keeps it, as Jinja2 keeps a module while a stored macro reaches it (docs/tasks/0312).

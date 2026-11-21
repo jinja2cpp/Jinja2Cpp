@@ -4376,6 +4376,11 @@ void ImportedModule::AppendHeldObjects(std::vector<const ValueObject*>& objects)
     });
 }
 
+void ImportedModule::NoteHeldValues() const
+{
+    ForEachHeldValue([](const InternalValue& value) { CycleCollector::NoteStore(value); });
+}
+
 namespace
 {
 // The site of the closure `object` is, when it is one: a macro or a caller, super() or a block of `self`

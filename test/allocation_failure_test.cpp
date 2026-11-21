@@ -767,7 +767,8 @@ TEST_F(ModuleCallTest, StoredMacrosStayFlat)
     // Fails in a loop and a `with` after storing its macro, with a list holding itself (Codex review of #977)
     m_fs->AddFile("half", "{% set _l = [] %}{% set _ = _l.append(_l) %}{% macro g() %}G{% endmacro %}{% set ns.f = g %}"
                           "{% for i in [1] %}{% set _m = [] %}{% set _ = _m.append(_m) %}{% with w = 2 %}{{ 1 // 0 }}{% endwith %}{% endfor %}");
-    for (const char* body : { "{% import 'half' as h with context %}", "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}",
+    for (const char* body : { "{% import 'half' as h with context %}",
+                              "{% set loc = [] %}{% set _ = loc.append(loc) %}{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}", "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}",
                               "{% import 'lib' as l with context %}{% set ns.l = [l] %}{% set ns.d = {'f': l.x} %}{{ ns.l[0].x() }}",
                               "{% import 'both' as b with context %}{% set ns.f = b.z %}{{ ns.f() }}",
                               "{% import 'own' as o with context %}{% set f = o.y %}{% set ns.n = ns.n + 1 %}{{ f() }}",
@@ -807,7 +808,9 @@ TEST_F(ModuleCallTest, KeptModuleGoesWithItsCycles)
     m_fs->AddFile("own", "{% macro y() %}Y{% endmacro %}{% set k = namespace(f=y, l=[y]) %}{% set k.self = k %}{% set lst = [] %}{% set _ = lst.append(lst) %}");
     m_fs->AddFile("half", "{% set _l = [] %}{% set _ = _l.append(_l) %}{% macro y() %}Y{% endmacro %}{% set ns.f = y %}"
                           "{% for i in [1] %}{% with w = 2 %}{{ 1 // 0 }}{% endwith %}{% endfor %}");
-    for (const char* body : { "{% import 'own' as o with context %}{% set ns.f = o.y %}{{ ns.f() }}", "{% import 'own' as o %}{% set ns.f = o.y %}{{ ns.f() }}" })
+    // A cycle among the call's own values, which the module it imports with context sees (Codex review of #977)
+    for (const char* body : { "{% import 'own' as o with context %}{% set ns.f = o.y %}{{ ns.f() }}", "{% import 'own' as o %}{% set ns.f = o.y %}{{ ns.f() }}",
+                              "{% set loc = [] %}{% set _ = loc.append(loc) %}{% import 'own' as o with context %}{% set ns.f = o.y %}{{ ns.f() }}" })
     {
         const auto once = [this, body]() {
             auto module = MakeModule(body, "{% set ns = namespace(f=none) %}");

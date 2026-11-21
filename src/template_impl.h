@@ -1551,7 +1551,7 @@ private:
                 invalid.pop_back();
             }
         }
-        // Notes the values of the modules to the collector running on this thread: the template module that owns them
+        // Notes the values of the modules, and the importer's names each sees, to the collector running on this thread: the template module that owns them
         // goes, and a cycle among them, which a call made, has no note left (TemplateModuleState's destructor). When
         // noting one cannot allocate, the cycles not noted leak
         void NoteModuleNames() const noexcept
@@ -1564,10 +1564,7 @@ private:
             {
                 for (const auto& module : m_loaded->modules)
                 {
-                    for (const auto& [name, value] : module->Names())
-                    {
-                        CycleCollector::NoteStore(value);
-                    }
+                    module->NoteHeldValues();
                 }
             }
             catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
@@ -1684,10 +1681,8 @@ private:
         {
             try
             {
-                for (const auto& [name, value] : module->Names())
-                {
-                    CycleCollector::NoteStore(value);
-                }
+                // The importer's names it sees too: a call's own values, which it may keep past the call (Codex review of #977)
+                module->NoteHeldValues();
             }
             catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
             {
