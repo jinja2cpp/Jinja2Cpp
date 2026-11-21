@@ -624,3 +624,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0563](0563-key-value-pair-tuple-methods.md) | A dictsort or items pair has no tuple methods | parity | low | open |
 | [0564](0564-reject-constants-past-str-digit-limit.md) | Reject integer constants past 4300 digits that survive folding | parity | low | open |
 | [0565](0565-set-methods-slow-on-msvc-debug.md) | Set methods over a big range are thousands of times slower in MSVC Debug than in a GCC Debug build | performance | medium | open |
+| [0566](0566-huge-host-big-int-converts-per-access.md) | Stop converting a huge host BigInt on every access | robustness | low | open |
