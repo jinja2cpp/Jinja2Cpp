@@ -54,7 +54,7 @@ object or top-level macro held from elsewhere than the modules' own values (or a
 shares, `__call__`). When nothing can, and no module is kept so far, they end without a walk. The template module's
 destructor notes the values of the modules that stay with it (`NoteModuleNames`), so that a cycle among a kept or
 shared module's values is freed with it (`ModuleCallTest.KeptModuleGoesWithItsCycles`; the shared case leaked before
-too). A closure reaching a module only through its capture is not seen yet: 0566.
+too). A closure reaching a module only through its capture is not seen yet: 0567.
 
 **Cost.** The walk visits what the template module's values reach, on the outermost calls that noted something while
 a module kept so exists or a module the call made may be reached. A module with a large state (the verifier's 20,000
