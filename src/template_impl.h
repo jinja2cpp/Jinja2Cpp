@@ -1528,75 +1528,12 @@ private:
             {
                 return;
             }
-            auto& modules = loaded.modules;
-            const auto& shared = loaded.sharedModules;
-            const auto endsWithCall = [&shared, &isKept](const ImportedModule* module) {
-                return std::none_of(shared.begin(), shared.end(), [module](const auto& entry) { return entry.second == module; }) && !isKept(module);
-            };
-            // The modules that may end: the call's and, for the outermost call, those a stored closure kept
-            std::vector<const ImportedModule*> candidates;
-            std::vector<bool> reached;
-            bool walked = false;
-            if (outermost && loaded.mayHaveStored)
+            if (!outermost || !loaded.mayHaveStored || !EndUnreached(mark, isKept, addRoots))
             {
-                loaded.mayHaveStored = false;
-                try
-                {
-                    candidates = loaded.storedKept;
-                    for (auto p = mark.modules; p != modules.size(); ++p)
-                    {
-                        if (endsWithCall(modules[p].get()))
-                        {
-                            candidates.push_back(modules[p].get());
-                        }
-                    }
-                    if (!candidates.empty())
-                    {
-                        std::vector<const ValueObject*> roots;
-                        addRoots(roots);
-                        for (const auto& module : modules)
-                        {
-                            if (std::find(candidates.begin(), candidates.end(), module.get()) == candidates.end())
-                            {
-                                module->AppendHeldObjects(roots);
-                            }
-                        }
-                        reached.assign(candidates.size(), false);
-                        ImportedModule::MarkReached(std::move(roots), candidates, reached);
-                        loaded.storedKept.reserve(candidates.size());
-                        walked = true;
-                    }
-                }
-                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): the modules kept so far stay, the call's end
-                {
-                }
-            }
-            if (walked)
-            {
-                // The ones reached stay, the others end, the newest first, as a render ends them
-                loaded.storedKept.clear();
-                for (std::size_t index = 0; index != candidates.size(); ++index)
-                {
-                    if (reached[index])
-                    {
-                        loaded.storedKept.push_back(candidates[index]);
-                    }
-                }
-                for (auto p = modules.size(); p-- > 0;)
-                {
-                    const auto found = std::find(candidates.begin(), candidates.end(), modules[p].get());
-                    if (found != candidates.end() && !reached[static_cast<std::size_t>(found - candidates.begin())])
-                    {
-                        EndModule(modules[p]);
-                    }
-                }
-                modules.erase(std::remove(modules.begin(), modules.end(), nullptr), modules.end());
-            }
-            else
-            {
+                auto& modules = loaded.modules;
                 for (auto p = modules.size(); p-- > mark.modules;)
                 {
-                    if (endsWithCall(modules[p].get()) && std::find(loaded.storedKept.begin(), loaded.storedKept.end(), modules[p].get()) == loaded.storedKept.end())
+                    if (EndsWithCall(modules[p].get(), isKept) && !KeptByStoredClosure(modules[p].get()))
                     {
                         EndModule(modules[p]);
                     }
@@ -1616,6 +1553,74 @@ private:
             return m_loaded && std::find(m_loaded->storedKept.begin(), m_loaded->storedKept.end(), module) != m_loaded->storedKept.end();
         }
 
+        // Whether `module`, one a host's call made, ends with a call: neither shared nor `isKept` (EndCall)
+        template<typename IsKept>
+        [[nodiscard]] bool EndsWithCall(const ImportedModule* module, const IsKept& isKept) const noexcept
+        {
+            const auto& shared = m_loaded->sharedModules;
+            return std::none_of(shared.begin(), shared.end(), [module](const auto& entry) { return entry.second == module; }) && !isKept(module);
+        }
+        // The walk of EndCall: ends the modules the call that took `mark` made, and those a stored closure kept, that no
+        // closure found from what lives on runs in, the newest first, as a render ends them. False, ending nothing, when
+        // there are none or the walk failed (out of memory): the modules kept so far stay then
+        template<typename IsKept, typename AddRoots>
+        bool EndUnreached(const CallMark& mark, const IsKept& isKept, const AddRoots& addRoots) noexcept
+        {
+            auto& loaded = *m_loaded;
+            loaded.mayHaveStored = false;
+            auto& modules = loaded.modules;
+            std::vector<const ImportedModule*> candidates;
+            std::vector<bool> reached;
+            std::vector<const ImportedModule*> stay;
+            try
+            {
+                candidates = loaded.storedKept;
+                for (auto p = mark.modules; p != modules.size(); ++p)
+                {
+                    if (EndsWithCall(modules[p].get(), isKept))
+                    {
+                        candidates.push_back(modules[p].get());
+                    }
+                }
+                if (candidates.empty())
+                {
+                    return false;
+                }
+                std::vector<const ValueObject*> roots;
+                addRoots(roots);
+                for (const auto& module : modules)
+                {
+                    if (std::find(candidates.begin(), candidates.end(), module.get()) == candidates.end())
+                    {
+                        module->AppendHeldObjects(roots);
+                    }
+                }
+                reached.assign(candidates.size(), false);
+                ImportedModule::MarkReached(std::move(roots), candidates, reached);
+                for (std::size_t index = 0; index != candidates.size(); ++index)
+                {
+                    if (reached[index])
+                    {
+                        stay.push_back(candidates[index]);
+                    }
+                }
+            }
+            catch (...) // NOLINT(bugprone-empty-catch): out of memory; the comment above says what happens
+            {
+                return false;
+            }
+            loaded.storedKept.swap(stay);
+            for (auto p = modules.size(); p-- > 0;)
+            {
+                const auto found = std::find(candidates.begin(), candidates.end(), modules[p].get());
+                if (found != candidates.end() && !reached[static_cast<std::size_t>(found - candidates.begin())])
+                {
+                    EndModule(modules[p]);
+                }
+            }
+            modules.erase(std::remove(modules.begin(), modules.end(), nullptr), modules.end());
+            return true;
+        }
         // Ends `module`, which a host's call made (EndCall). Its values may hold themselves: the call's collector frees
         // those cycles. Noting them allocates; when that fails, the rest of the module's cycles leak
         static void EndModule(std::unique_ptr<ImportedModule>& module) noexcept
