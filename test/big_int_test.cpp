@@ -1,5 +1,6 @@
 #include "../src/big_int.h"
 #include "../src/contracts.h"
+#include "../src/internal_value.h"
 #include "big_int_toy_backend.h"
 #include "gtest/gtest.h"
 
@@ -766,24 +767,23 @@ TEST(BigIntTest, FromDigitsAndToDigitsRejectBadInput)
 TEST(BigIntView, ValueOfAViewSharesTheObject)
 {
     const auto value = jinja2::MakeBigIntValue("123456789012345678901234567890");
-    const auto view = jinja2::AsBigInt(value);
-    ASSERT_TRUE(view.has_value());
-    ASSERT_NE(nullptr, view->Object());
-    EXPECT_EQ("123456789012345678901234567890", view->InlineDecimal());
-    const auto copy = jinja2::BigIntValue(*view);
-    const auto copied = jinja2::AsBigInt(copy);
-    ASSERT_TRUE(copied.has_value());
-    EXPECT_EQ(view->Object(), copied->Object());
+    ASSERT_TRUE(jinja2::AsBigInt(value).has_value());
+    const auto view = jinja2::AsBigInt(value).value();
+    ASSERT_NE(nullptr, view.Object());
+    EXPECT_EQ("123456789012345678901234567890", view.InlineDecimal());
+    const auto copy = jinja2::BigIntValue(view);
+    ASSERT_TRUE(jinja2::AsBigInt(copy).has_value());
+    EXPECT_EQ(view.Object(), jinja2::AsBigInt(copy).value().Object());
 
     const std::string text = "-98765432109876543210";
     const auto textView = jinja2::BigIntView::FromText(text);
     EXPECT_EQ(nullptr, textView.Object());
     EXPECT_EQ(-1, textView.Sign());
     const auto made = jinja2::BigIntValue(textView);
-    const auto madeView = jinja2::AsBigInt(made);
-    ASSERT_TRUE(madeView.has_value());
-    EXPECT_NE(nullptr, madeView->Object());
-    EXPECT_EQ(text, madeView->InlineDecimal());
+    ASSERT_TRUE(jinja2::AsBigInt(made).has_value());
+    const auto madeView = jinja2::AsBigInt(made).value();
+    EXPECT_NE(nullptr, madeView.Object());
+    EXPECT_EQ(text, madeView.InlineDecimal());
 }
 
 // A view of text has no object, so it may never be a huge integer: its precondition caps it at
