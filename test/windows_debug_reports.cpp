@@ -10,7 +10,8 @@ namespace
 {
 [[maybe_unused]] const bool g_reportsOnStderr = [] {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-    for (const int type : { _CRT_WARN, _CRT_ERROR, _CRT_ASSERT })
+    const int types[] = { _CRT_WARN, _CRT_ERROR, _CRT_ASSERT };
+    for (const int type : types)
     {
         _CrtSetReportMode(type, _CRTDBG_MODE_FILE);
         _CrtSetReportFile(type, _CRTDBG_FILE_STDERR);
