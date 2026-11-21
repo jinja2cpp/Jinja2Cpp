@@ -254,6 +254,7 @@ const BigIntCase BigIntCases[] = {
     { "{% set h = hs|int(base=16) %}{{ (h|abs) == h }}|{{ ((-h)|abs) == h }}|{{ h == hbig }}|{{ h != hbig }}|{{ -h == -hbig }}|{{ -h < h }}|{{ {h: 1}[hbig] }}|{{ {hbig: 1}[-(-h)] }}|{{ h in [hbig] }}|{{ [h, hbig]|unique|list|length }}", "True|True|True|False|True|True|1|1|True|1", Expect::Python },
     { "{% set h = hs|int(base=16) %}{{ h > big }}|{{ big < h }}|{{ -h < nbig }}|{{ h > 1e308 }}|{{ -h < -1e308 }}|{{ h < inf }}|{{ h > nan }}|{{ h == 1e308 }}", "True|True|True|True|True|True|False|False", Expect::Python },
     { "{{ (p14284|int(base=2))|string|length }}|{{ (p14285|int(base=2)).bit_length() }}|{{ (p14285m1|int(base=2)).bit_count() }}|{{ (p14285m1|int(base=2)) is odd }}|{{ (p14285|int(base=2)) is odd }}|{{ (p14285|int(base=2)) > (p14285m1|int(base=2)) }}", "4300|14286|14285|True|False|True", Expect::Python },
+    { "{% set h = hs|int(base=16) %}{{ (o8|int(base=8)) == h }}|{{ (o32|int(base=32)) == h }}|{{ (o4|int(base=4)) == h }}|{{ (o32|int(base=32)).bit_count() }}|{{ ('-' ~ hs)|int(base=16) == -h }}|{{ (('-' ~ hs)|int(base=16)).bit_length() }}|{{ (h|round(-5)).bit_length() }}|{{ (h|round(-5)) > h }}", "True|True|True|14400|True|14400|14400|False", Expect::Python },
     { "{{ (p14285m1|int(base=2))|string }}", nullptr, Expect::Python },
     { "{{ (p14285|int(base=2))|string }}", nullptr, Expect::Python },
     { "{{ hs|int(base=16) }}", nullptr, Expect::Python },
@@ -269,7 +270,7 @@ ValuesMap BigIntParams()
     BigInt nbig;
     BigInt::TryParse("-18446744073709551615", nbig);
     const std::string hs(3600, 'f');
-    return { { "big", std::numeric_limits<uint64_t>::max() }, { "nbig", nbig }, { "nan", std::nan("") }, { "inf", HUGE_VAL }, { "small", BigInt(5) }, { "hs", hs }, { "hbig", BigInt::FromDigits(hs, 16, false) }, { "p14284", "1" + std::string(14284, '0') }, { "p14285m1", std::string(14285, '1') }, { "p14285", "1" + std::string(14285, '0') } };
+    return { { "big", std::numeric_limits<uint64_t>::max() }, { "nbig", nbig }, { "nan", std::nan("") }, { "inf", HUGE_VAL }, { "small", BigInt(5) }, { "hs", hs }, { "hbig", BigInt::FromDigits(hs, 16, false) }, { "o8", BigInt::FromDigits(hs, 16, false).ToDigits(8) }, { "o32", BigInt::FromDigits(hs, 16, false).ToDigits(32) }, { "o4", BigInt::FromDigits(hs, 16, false).ToDigits(4) }, { "p14284", "1" + std::string(14284, '0') }, { "p14285m1", std::string(14285, '1') }, { "p14285", "1" + std::string(14285, '0') } };
 }
 
 template<typename CharT>

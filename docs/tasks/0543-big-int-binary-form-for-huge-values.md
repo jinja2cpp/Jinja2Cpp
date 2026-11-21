@@ -59,3 +59,7 @@ cache; phases P1a, P1b, P2, P4; the parity rejection of surviving constants is 0
   of 3): building `('f' * 262144)|int(base=16)` takes about 150 ms (the decimal form, which P2
   drops); after it, `bit_length`, `bit_count` and `'{:x}'.format(x)|length` together take about
   1 ms per iteration, where each was one 100 ms conversion before.
+  A host `BigInt` past 4300 digits now converts to words each time it becomes a template value
+  (plan Q8): once per render for a parameter, but on every access for an item of a host
+  container (118 ms per access at 262144 bits, ASan build). Neither P2 nor P4 removes that:
+  task 0566.
