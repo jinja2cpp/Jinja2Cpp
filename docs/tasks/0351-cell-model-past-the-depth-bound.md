@@ -4,7 +4,7 @@ pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/969
 priority: medium
 area: robustness
 depends: [0338, 0350]
-touches: [tla/check.py, tla/README.md, .github/workflows/tla-model.yml]
+touches: [tla/check.py, tla/README.md, tla/CellProtocol.tla, .github/workflows/tla-model.yml]
 ---
 # Check the cell model past its depth bound
 
@@ -57,10 +57,14 @@ constants, and the weekly job runs the exhaustive and simulation kinds.
   bounds of `module-0332`, `module-generic` and `render` did not finish in 30 minutes and stay
   depth-bounded only.
 - `--simulate SECONDS --depth N --seed S`: TLC's random simulation with the guard off, pass
-  runs by default. Measured on mutants: it finds 14 of 16 mutants tried (F1, the loop and sort
-  counterexamples among them) within 78 s, and misses the two hand-off mutants
-  (`render-links-unowned`, `module-links-unowned`) even with 300 s, so it complements the exhaustive runs and does not
-  replace them.
+  runs by default. Measured on mutants: it finds all 17 mutants tried (F1, the loop and sort
+  counterexamples among them) within 78 s. It is a sample, so it complements the exhaustive
+  runs and does not replace them.
+- Finding, fixed here: since 0346 (`FixSnapshotLinks`) `OwningLink` made every link outside a
+  snapshot owning, so `drop-without-source-check`, `module-links-unowned` and
+  `render-links-unowned` no longer found counterexamples and `render-handoff-pin-on-attach`
+  did not test 0340 option (a). The `rest` shard's first full run since then timed out on it.
+  The snapshot term now covers a global's adapter only; all four behave as intended again.
 - The weekly job has two more shards, `exhaustive` and `simulate` (each pass run 15 minutes,
   40 states); the `rest` shard keeps the depth-bounded pass, mutant and finding runs.
 - The README states per run whether it is depth-bounded (the Results table) or exhaustive (the

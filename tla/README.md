@@ -390,12 +390,24 @@ measured on mutants (120 s each, depth 40):
 
 | Mutant | Found by simulation |
 |---|---|
-| `f1-nested-export`, `no-sort-refetch`, `no-call-pin`, `no-call-pin-nested`, `call-id-wrap-no-pin`, `no-freeze`, `no-read-only-export`, `global-items-listed`, `no-global-outer-cell`, `non-atomic-link`, `partial-pin`, `epoch-wrap`, `no-generic-owner` | yes, in 0 to 4 s |
+| `f1-nested-export`, `no-sort-refetch`, `no-call-pin`, `no-call-pin-nested`, `call-id-wrap-no-pin`, `no-freeze`, `no-read-only-export`, `global-items-listed`, `no-global-outer-cell`, `non-atomic-link`, `partial-pin`, `epoch-wrap`, `no-generic-owner`, `render-links-unowned`, `module-links-unowned`, `drop-without-source-check` | yes, in 0 to 4 s |
 | `no-enum-refetch` (the deep loop counterexample, about 14 steps) | yes, in 78 s |
-| `render-links-unowned`, `module-links-unowned` (a hand-off on the other thread at one point of the call) | no, also at depth 16 with 300 s |
 
-So simulation finds deep defects that most interleavings reach, and misses ones that need one
-narrow interleaving; those are what the exhaustive and depth-bounded runs are for.
+Every mutant tried is found. Simulation is still a sample: a pass is no proof, which is what the
+exhaustive and depth-bounded runs are for.
+
+**Finding: three mutants had stopped testing anything (fixed in #969).** Since 0346
+(3e77ce78, `FixSnapshotLinks`), `OwningLink` made the link of every adapter outside a
+snapshot owning, not only a global's, so turning off `FixLinksOwn` changed nothing:
+`drop-without-source-check`, `module-links-unowned` and `render-links-unowned` found no
+counterexample, and `render-handoff-pin-on-attach` passed with owning links rather than with
+0340 option (a). Nobody saw it: the weekly runs on master after 0346 were cancelled or skipped,
+and the first full `rest` shard since then (on #969) ran into its time limit on
+`render-links-unowned`, whose level-12 space is large once it has no counterexample.
+Simulation pointed at it too: it "missed" exactly those mutants. The snapshot term now applies
+to a global's (held) adapter only, as its comment said. That changes no run with `FixLinksOwn`
+on, the C++; the three mutants find their counterexamples again in 2 to 49 seconds, and
+`render-handoff-pin-on-attach` still passes (2,932,238 states), now on option (a) itself.
 
 ## Past the bounds: depth, sizes and Apalache (task 0338, step F)
 

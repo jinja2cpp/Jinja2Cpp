@@ -238,7 +238,9 @@ Snap(t, d, done) ==
 OwningLink(a) == LET c == ad[a].cell
                  IN cl[c].frozen \/ (FixModuleLinksOwn /\ cl[c].reg = ModReg)
                     \/ (FixLinksOwn /\ ~ad[a].held)
-                    \/ (FixSnapshotLinks /\ ~ad[a].snap)
+                    \* Only a global's (held) adapter: the others are FixLinksOwn's, so its
+                    \* mutants keep testing unowned links (task 0351 found them subsumed)
+                    \/ (FixSnapshotLinks /\ ad[a].held /\ ~ad[a].snap)
 
 \* @type: (<<Str, Int>>) => Set(<<Str, Int>>);
 Succ(n) ==
