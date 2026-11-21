@@ -809,6 +809,72 @@ TEST_F(TemplateModuleChangingSourceTest, StoredMacroOfASharedModuleSeesItsNames)
                              "{% set v = 'V3' %}{% macro mk(ns) %}{% macro y() %}Y3{{ v }}{% endmacro %}{% set ns.f = y %}{% endmacro %}" }));
 }
 
+// The same for a module whose top level imports a helper, which goes with it (docs/tasks/0541): what a call stored of
+// either still runs with its names, while the helper changes too or stays shared
+TEST_F(TemplateModuleChangingSourceTest, StoredMacroOfAnImportingModuleSeesItsHelper)
+{
+    struct Row
+    {
+        const char* importer;
+        const char* store;
+    };
+    for (const auto& [importer, store] : { Row{ "{% import 'helper' as h %}", "l.x" }, Row{ "{% from 'helper' import y %}", "l.x" },
+                                           Row{ "{% import 'helper' as h with context %}", "l.x" }, Row{ "{% import 'helper' as h %}{% set hy = h.y %}", "l.hy" },
+                                           Row{ "{% import 'helper' as h %}", "l" } })
+    {
+        const std::string uses = std::string(importer).find("from") != std::string::npos ? "{{ y() }}" : "{{ h.y() }}";
+        const std::string call = std::string(store) == "l" ? "ns.f.x()" : "ns.f()";
+        std::string source = "{% set ns = namespace(f=none, n=0) %}{% macro m() %}[{% if ns.f %}{{ ";
+        source += call;
+        source += " }}{% endif %}]{% import 'lib' as l %}{% if ns.n == 0 %}{% set ns.f = ";
+        source += store;
+        source += " %}{% endif %}{% set ns.n = ns.n + 1 %}{{ l.x() }}{% endmacro %}";
+        auto module = Make(source);
+        for (const bool helperChanges : { true, false })
+        {
+            std::vector<std::string> results;
+            for (int i = 1; i != 5; ++i)
+            {
+                const auto n = std::to_string(i);
+                std::string helper = "{% set hv = 'H";
+                helper += helperChanges ? n : "0";
+                helper += "' %}{% macro y() %}{{ hv }}{% endmacro %}";
+                AddFile("helper", helper);
+                std::string lib = importer;
+                lib += "{% set v = 'V";
+                lib += n;
+                lib += "' %}{% macro x() %}{{ v }}";
+                lib += uses;
+                lib += "{% endmacro %}";
+                AddFile("lib", lib);
+                try
+                {
+                    results.push_back(Call(module.exports["m"]).AsString());
+                }
+                catch (const jinja2::BadResultAccess<>& failure)
+                {
+                    results.push_back("error: " + failure.error().ToString());
+                }
+            }
+            const bool helperOnly = std::string(store) == "l.hy";
+            const std::string first = helperOnly ? "H1" : "V1H1";
+            const auto h = [helperChanges](int i) { return "H" + std::to_string(helperChanges ? i : 0); };
+            if (!helperChanges)
+            {
+                // Stored by the first loop already
+                const std::string kept = helperOnly ? "H1" : "V1H1";
+                EXPECT_EQ((std::vector<std::string>{ "[" + kept + "]V1" + h(1), "[" + kept + "]V2" + h(2), "[" + kept + "]V3" + h(3), "[" + kept + "]V4" + h(4) }), results)
+                    << importer << store;
+            }
+            else
+            {
+                EXPECT_EQ((std::vector<std::string>{ "[]V1" + h(1), "[" + first + "]V2" + h(2), "[" + first + "]V3" + h(3), "[" + first + "]V4" + h(4) }), results)
+                    << importer << store;
+            }
+        }
+    }
+}
+
 // A `super` of a block with no parent block, stored and called then and by later calls, fails naming the block,
 // as Jinja2's undefined does, while the module frees the tree it was taken in (docs/tasks/0503)
 TEST_F(TemplateModuleChangingSourceTest, StoredSuperWithNoParentNamesItsBlock)
