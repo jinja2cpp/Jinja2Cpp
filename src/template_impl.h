@@ -614,6 +614,8 @@ public:
         bool* pieceIsMarkup = nullptr;
         // The stack of a render whose sink may suspend it (RenderOptions::suspension), or null
         const RenderSuspension* suspension = nullptr;
+        // The filter policies of the render (RenderOptions::filterPolicies), or null to keep the template's
+        const FilterPolicies* filterPolicies = nullptr;
     };
 
     // The same with the public options: their globals, lent for the render and kept by any value a
@@ -880,6 +882,7 @@ public:
                     heldPiece = outStream.WriteEachPiece(hooks->pieceIsMarkup);
                     eachPieceScope.emplace();
                 }
+                callback.SetFilterPolicies(hooks->filterPolicies);
                 if (hooks->generationSpans)
                 {
                     tracker.root = &outStream;

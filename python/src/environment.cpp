@@ -24,6 +24,7 @@
 #include <iterator>
 #include <memory>
 #include <new>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -740,6 +741,11 @@ void PyEnvironment::Rebuild()
             Keep(*object);
         }
     }
+    m_dumpsKept = m_policiesDumps.is_valid();
+    if (m_dumpsKept)
+    {
+        Keep(m_policiesDumps);
+    }
     if (PyCallable_Check(m_autoescape.ptr()) != 0)
     {
         Keep(m_autoescape);
@@ -766,8 +772,7 @@ void PyEnvironment::Rebuild()
     m_sandboxed = sandboxed;
     if (sandboxed)
     {
-        m_sandboxPublicNames = SandboxJudgesPublicNames(nb::find(this));
-        settings.sandboxPolicy = MakePythonSandboxPolicy(nb::find(this), m_sandboxPublicNames);
+        settings.sandboxPolicy = MakePythonSandboxPolicy(nb::find(this));
     }
     m_env->SetSettings(settings);
     if (m_chatTemplates)
@@ -930,35 +935,135 @@ void PyEnvironment::SetGettextGlobals(nb::handle callables)
     }
 }
 
-void PyEnvironment::CheckSandboxHooks() const
+std::shared_ptr<const jinja2::FilterPolicies> PyEnvironment::RefreshPolicies()
 {
-    if (!m_sandboxed)
+    const auto self = nb::find(this);
+    PyObject* const raw = PyObject_GetAttrString(self.ptr(), "policies");
+    if (!raw)
     {
-        return;
+        // A bare _jinja2cpp.Environment has none: Jinja2's defaults, which the engine's are
+        if (!PyErr_ExceptionMatches(PyExc_AttributeError))
+        {
+            throw nb::python_error();
+        }
+        PyErr_Clear();
+        return m_policies;
     }
-    CheckNativeSandboxHooks(nb::find(this).ptr());
+    const auto current = nb::steal(raw);
+    if (m_policiesSnapshot.is_valid())
+    {
+        const int same = PyObject_RichCompareBool(m_policiesSnapshot.ptr(), current.ptr(), Py_EQ);
+        if (same < 0)
+        {
+            throw nb::python_error();
+        }
+        if (same == 1)
+        {
+            return m_policies;
+        }
+    }
+    const auto converted = nb::module_::import_("jinja2cpp.fallback").attr("native_policies")(current);
+    if (!converted[2].is_none())
+    {
+        // Set after a template loaded natively (a load that sees it goes to Jinja2): the template cannot honour it
+        const auto error = nb::module_::import_("jinja2cpp.exceptions").attr("UnsupportedError")(nb::object(converted[2]));
+        PyErr_SetObject(error.type().ptr(), error.ptr());
+        throw nb::python_error();
+    }
+    const nb::dict fields = nb::borrow<nb::dict>(nb::object(converted[1]));
+    const auto field = [&fields](const char* key) -> nb::object { return fields[key]; };
+    const auto optionalText = [](const nb::object& value) -> std::optional<std::string> {
+        return value.is_none() ? std::nullopt : std::optional<std::string>(Utf8(value));
+    };
+    auto policies = std::make_unique<jinja2::FilterPolicies>();
+    policies->urlizeRel = Utf8(field("rel"));
+    policies->urlizeTarget = optionalText(field("target"));
+    for (const auto scheme : field("schemes"))
+    {
+        policies->urlizeExtraSchemes.push_back(Utf8(scheme));
+    }
+    policies->truncateLeeway = nb::cast<std::int64_t>(field("leeway"));
+    policies->jsonSortKeys = Truth(field("sort_keys"));
+    policies->jsonEnsureAscii = Truth(field("ensure_ascii"));
+    policies->jsonIndent = optionalText(field("indent"));
+    if (const auto separators = field("separators"); !separators.is_none())
+    {
+        policies->jsonSeparators = std::make_pair(Utf8(nb::object(separators[0])), Utf8(nb::object(separators[1])));
+    }
+    const auto dumps = field("dumps");
+    if (!dumps.is_none())
+    {
+        policies->jsonDumps = BorrowedCallable(dumps);
+    }
+    const bool trimmed = Truth(field("trimmed"));
+    m_policiesSnapshot = nb::object(converted[0]);
+    // The policies own the wrapper of json.dumps_function while a render holds them (the callable only borrows it); the
+    // environment's reference is the one Traverse reports. The list of the engine environment keeps it for the
+    // templates loaded with it, which a new one drops: Prepared builds one that holds only the current wrapper
+    const bool listHoldsDumps = m_dumpsKept;
+    if (dumps.is_none())
+    {
+        m_policies = std::move(policies);
+        m_policiesDumps = nb::handle();
+    }
+    else
+    {
+        PyObject* const owned = dumps.inc_ref().ptr();
+        m_policies = std::shared_ptr<const jinja2::FilterPolicies>(policies.release(), [owned](const jinja2::FilterPolicies* released) {
+            const nb::gil_scoped_acquire gil;
+            Py_DECREF(owned);
+            delete released;
+        });
+        m_policiesDumps = dumps;
+    }
+    if (m_env && (listHoldsDumps || !dumps.is_none()))
+    {
+        if (listHoldsDumps)
+        {
+            // The templates loaded before keep the list that holds the wrapper they use; the next load rebuilds the
+            // engine environment, so that a replaced wrapper does not stay for the life of this one
+            RetireEngine();
+        }
+        else
+        {
+            Keep(dumps);
+            m_dumpsKept = true;
+        }
+    }
+    m_settings.filterPolicies = *m_policies;
+    m_settings.extensions.i18nTrimmed = trimmed;
+    if (m_env)
+    {
+        // A template keeps the policies it was loaded with (MakeModule's macros use them); the next loads take these
+        m_env->ModifySettings([&](jinja2::Settings& settings) {
+            settings.filterPolicies = *m_policies;
+            settings.extensions.i18nTrimmed = trimmed;
+        });
+    }
+    return m_policies;
+}
+
+PyEnvironment::EntryState PyEnvironment::Enter()
+{
+    EntryState state;
+    state.policies = RefreshPolicies();
+    if (m_sandboxed)
+    {
+        state.sandboxAllNames = CheckNativeSandboxHooks(nb::find(this).ptr());
+    }
+    return state;
 }
 
 PyEnvironment::Engine PyEnvironment::Prepared()
 {
     CheckAlive();
+    // The policies a template loads with, which a MakeModule of it keeps
+    RefreshPolicies();
     if (!m_env)
     {
         Rebuild();
     }
     SyncJoinPath();
-    if (m_sandboxed)
-    {
-        // is_safe_attribute may have been replaced since the last load, on the class or the instance
-        const auto self = nb::find(this);
-        if (const bool judges = SandboxJudgesPublicNames(self); judges != m_sandboxPublicNames)
-        {
-            m_sandboxPublicNames = judges;
-            // A template keeps the policy it was loaded with; the next loads take this one
-            auto policy = MakePythonSandboxPolicy(self, judges);
-            m_env->ModifySettings([&policy](jinja2::Settings& settings) { settings.sandboxPolicy = std::move(policy); });
-        }
-    }
     // A template binds the filters and tests when it loads, as in Jinja2
     auto filters = Entries(m_filters, "filters");
     auto tests = Entries(m_tests, "tests");
@@ -1143,10 +1248,11 @@ nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::
 
 int PyEnvironment::Traverse(visitproc visit, void* arg) const
 {
-    for (const auto* object : { &m_globals, &m_filters, &m_tests, &m_loader, &m_undefined, &m_finalize, &m_autoescape, &m_extensions, &m_options })
+    for (const auto* object : { &m_globals, &m_filters, &m_tests, &m_loader, &m_undefined, &m_finalize, &m_autoescape, &m_extensions, &m_options, &m_policiesSnapshot })
     {
         Py_VISIT(object->ptr());
     }
+    Py_VISIT(m_policiesDumps.ptr());
     Py_VISIT(m_bound.ptr());
     Py_VISIT(m_engineGlobalsBound.ptr());
     Py_VISIT(m_chatClock.ptr());
@@ -1185,6 +1291,9 @@ void PyEnvironment::Clear() noexcept
     m_loader = nb::none();
     m_undefined = nb::none();
     m_finalize = nb::none();
+    m_policiesSnapshot = nb::object();
+    m_policiesDumps = nb::handle();
+    m_policies.reset();
     m_autoescape = nb::none();
     m_extensions = nb::none();
     m_options = nb::none();
@@ -1229,7 +1338,7 @@ void PyTemplate::RenderWith(Target& target, const nb::args& args, const nb::kwar
 {
     ++g_renders;
     auto& env = LiveEnvironment();
-    env.CheckSandboxHooks();
+    const auto entry = env.Enter();
     // dict(*args, **kwargs), as Jinja2's render
     jinja2::ValuesMap params;
     jinja2::RenderOptions options;
@@ -1257,6 +1366,7 @@ void PyTemplate::RenderWith(Target& target, const nb::args& args, const nb::kwar
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
     InitRenderState(state, m_environment);
+    state.sandboxAllNames = entry.sandboxAllNames;
     state.templateGlobals = m_globals.ptr();
     state.maxSequenceSize = env.MaxSequenceSize();
     // The globals: the environment's, then the template's over them
@@ -1270,6 +1380,7 @@ void PyTemplate::RenderWith(Target& target, const nb::args& args, const nb::kwar
         AddGlobals(*globals, m_globals, state.sandbox != nullptr, held);
     }
     options.globals = std::move(globals);
+    options.filterPolicies = entry.policies;
     options.poll = RenderPoll();
     if (pieces)
     {

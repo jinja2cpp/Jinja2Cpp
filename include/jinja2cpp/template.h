@@ -18,6 +18,7 @@
 #endif
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iosfwd>
 #include <memory>
@@ -74,6 +75,53 @@ struct RenderSuspension
     //! Its size in bytes; 0 when the render runs on its thread's own stack
     std::size_t stackSize = 0;
 };
+
+/*!
+ * \brief Defaults of the filters Jinja2 reads from `Environment.policies` (\ref Settings::filterPolicies, \ref RenderOptions::filterPolicies)
+ *
+ * Each field is what a filter uses when its own argument is not given (or is None). They are read
+ * when the filter runs, not when the template is loaded, so a render may replace them
+ * (\ref RenderOptions::filterPolicies). Jinja2's `compiler.ascii_str` has no counterpart.
+ */
+struct FilterPolicies
+{
+    /*!
+     * Words merged into the `rel` of every link `urlize` makes, space separated (Jinja2 `urlize.rel`,
+     * "noopener" by default). Empty is Jinja2's None: only the filter's `rel` argument and `nofollow` add words.
+     */
+    std::string urlizeRel = "noopener";
+    //! The `target` of `urlize` links when its `target` argument is None or not given (Jinja2 `urlize.target`); unset adds none
+    std::optional<std::string> urlizeTarget;
+    //! The extra URL schemes of `urlize` when its `extra_schemes` argument is None or not given (Jinja2 `urlize.extra_schemes`),
+    //! checked as the argument is. An explicit empty list as the argument is not None and replaces them
+    std::vector<std::string> urlizeExtraSchemes;
+    //! The `leeway` of `truncate` when its argument is None or not given (Jinja2 `truncate.leeway`); a negative one fails
+    //! the filter as a negative `leeway` argument does
+    std::int64_t truncateLeeway = 5;
+    //! `sort_keys` of the `tojson` filter's JSON (Jinja2 `json.dumps_kwargs`)
+    bool jsonSortKeys = true;
+    //! `ensure_ascii` of the `tojson` filter's JSON
+    bool jsonEnsureAscii = true;
+    //! `indent` of the `tojson` filter's JSON, as the text of one level; the filter's own `indent` argument overrides it
+    std::optional<std::string> jsonIndent;
+    //! `separators` of the `tojson` filter's JSON, (item separator, key separator); unset is `", "` and `": "`, or `","` and `": "`
+    //! with an indent, as Python's `json.dumps`
+    std::optional<std::pair<std::string, std::string>> jsonSeparators;
+    /*!
+     * Jinja2's `json.dumps_function`: when set, `tojson` calls it instead of the built-in serializer with the value as its first
+     * positional argument and an `indent` keyword argument only when the filter was given one. It must return a string, or
+     * the filter fails; the result is then made HTML-safe and marked safe as `tojson`'s own is. The JSON options above
+     * do not apply to it.
+     */
+    UserCallable jsonDumps;
+};
+
+//! Field by field; two unset \ref FilterPolicies::jsonDumps callables are equal
+JINJA2CPP_EXPORT bool operator==(const FilterPolicies& lhs, const FilterPolicies& rhs);
+inline bool operator!=(const FilterPolicies& lhs, const FilterPolicies& rhs)
+{
+    return !(lhs == rhs);
+}
 
 /*!
  * \brief What a render takes besides its params (\ref BasicTemplate::RenderTo)
@@ -171,6 +219,12 @@ struct RenderOptions
      * - The pointee must live through the call.
      */
     const RenderSuspension* suspension = nullptr;
+    /*!
+     * The filter policies of this render instead of \ref Settings::filterPolicies: the template and every template it
+     * includes, imports or extends use these. Null, the default, keeps the template's. Shared, as a callable
+     * (\ref FilterPolicies::jsonDumps) that a value keeps stays valid after the render.
+     */
+    std::shared_ptr<const FilterPolicies> filterPolicies;
 };
 
 /*!

@@ -239,21 +239,26 @@ def test_template_constructor():
     assert isinstance(Sub(UNPARSABLE), Sub) and Sub(UNPARSABLE).render() == UNPARSABLE_RESULT
 
 
-def test_policies_send_templates_to_jinja2():
+def test_policies_the_engine_takes_stay_native_and_the_others_go_to_jinja2():
     env = jinja2cpp.Environment()
     assert env.policies == jinja2.defaults.DEFAULT_POLICIES
     before = jinja2cpp.stats()["loads_fallback"]
     env.policies["truncate.leeway"] = 0
+    env.policies["no.such.policy"] = 1
     template = env.from_string("{{ x|truncate(8) }}")
     expected = jinja2.Environment()
     expected.policies["truncate.leeway"] = 0
     assert template.render(x="abcdefghijkl") == expected.from_string("{{ x|truncate(8) }}").render(x="abcdefghijkl")
+    assert jinja2cpp.stats()["loads_fallback"] == before
+    # a value the engine cannot take (a float leeway) is Jinja2's
+    env.policies["truncate.leeway"] = 2.5
+    template = env.from_string("{{ x|truncate(8) }}")
+    expected.policies["truncate.leeway"] = 2.5
+    assert template.render(x="abcdefghijkl") == expected.from_string("{{ x|truncate(8) }}").render(x="abcdefghijkl")
     assert jinja2cpp.stats()["loads_fallback"] == before + 1
-    env.policies["no.such.policy"] = 1
-    assert env.from_string("{{ 1 }}").render() == "1"
     env2 = jinja2cpp.Environment(fallback="never")
-    env2.policies["x.y"] = 1
-    with pytest.raises(jinja2cpp.UnsupportedError, match="env.policies"):
+    env2.policies["truncate.leeway"] = 2.5
+    with pytest.raises(jinja2cpp.UnsupportedError, match="truncate.leeway"):
         env2.from_string("{{ 1 }}")
 
 
@@ -600,7 +605,7 @@ def test_without_jinja2_tier_b_raises_unsupported():
                 pass
             else:
                 raise SystemExit("no error")
-        env.policies["x.y"] = 1
+        env.policies["urlize.rel"] = 5
         try:
             env.from_string("x")
         except jinja2cpp.UnsupportedError:

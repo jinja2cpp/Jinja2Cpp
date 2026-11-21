@@ -43,6 +43,10 @@ template that works in Jinja2 from working here (Jinja2 3.1.6):
    `('a'|safe).__class__`) renders where Python raises `decoding str is not supported`. `(1).__class__.mro.__name__` is
    empty (Python `mro`). An `int()`/`float()` error quotes the whole text, as Python does; a cap would be kinder to logs.
 
+**Done so far** (the Python module): item 2 (engine views and sets reach Python as their types, snapshots; a host dict's
+views have the engine's set operators; a host mappingproxy prints and refuses `tojson` as Python's), the host dict in
+item 4 (`d | random`), and the sandbox `range.mro()` of item 5.
+
 **Proposal.** 1: the indent filter reports a non-string the way Python's `+=` does. 2: a host view type in the module
 (python/src) that hands Python a real view or set of the engine's items, and the engine's set operators for a host
 view, read through its items. 4: the random filter of a dict as of its mappingproxy; the wide pprint path takes the
@@ -54,3 +58,20 @@ Markup's `encoding` refuses a str base.
 
 **Done when** the module-divergences lines above are gone, items 4-7 have corpus cases that match or are recorded deliberate, the set methods have corpus cases that match in narrow and
 wide runs, and `d.keys() | indent` reports Python's message.
+
+**Decisions (2026-11-20, batch 11 C).** Public API: `IListItemAccessor::GetViewClass()` (virtual, default null)
+and `GenericList::GetViewClass()` in jinja2cpp/generic_list.h, so a host learns that a lent list is a
+`dict_keys`, `dict_values`, `dict_items` or `set` (as `IsTuple`, `GetObjectClass` do). Additive; adding a virtual
+to `IListItemAccessor` changes its vtable, accepted while the G1 freeze is postponed. Item 1 already matched
+(cases added). Item 5's `range.mro()` matches in a plain environment (the oracle's `range` is the builtin class);
+in the module's sandbox it is `safe_range`'s UndefinedError. Deliberate lines (tag 0545): sets changed in a loop
+over them (follow-up 0561), an entry erased and re-added on every pass, and the lazy pipelines and mappingproxy
+loops that walk a snapshot.
+
+**Verifier round 1 (2026-11-20).** Public API: `IHostObject::HtmlFormat(spec)` (virtual, default nullopt), what
+`Markup.format` makes of a field with `__html_format__` or `__html__` as markupsafe's EscapeFormatter has it; the
+Python module asks markupsafe's own formatter, so the order and the ValueError for a spec are Jinja2's. Additive
+(a vtable change, as `GetViewClass`). Set methods count the hash tables they build against `maxRenderMemory` for the
+call. Not fixed: `{{ l|pprint }}` of a list that holds itself fails with the recursion limit, where Python prints
+`[<Recursion on list with id=...>]` (pprint's `_safe_repr`, not the `[...]` of `repr`); the output carries the
+object's address, so no corpus case can match it.

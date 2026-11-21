@@ -509,8 +509,7 @@ def delegate_for(env: t.Any) -> t.Any:
 # What is outside the subset
 # ---------------------------------------------------------------------------------------------
 
-#: Jinja2's default policies (jinja2.defaults.DEFAULT_POLICIES): the engine implements none of them,
-#: so a changed or added entry is a reason to use Jinja2
+#: Jinja2's default policies (jinja2.defaults.DEFAULT_POLICIES)
 DEFAULT_POLICIES: t.Dict[str, t.Any] = {
     "compiler.ascii_str": True,
     "urlize.rel": "noopener",
@@ -523,12 +522,117 @@ DEFAULT_POLICIES: t.Dict[str, t.Any] = {
 }
 
 
-def policies_reason(policies: t.Mapping[str, t.Any]) -> t.Optional[str]:
-    if policies != DEFAULT_POLICIES:
-        extra = sorted(k for k in policies if k not in DEFAULT_POLICIES)
-        changed = sorted(k for k in policies if k in DEFAULT_POLICIES and policies[k] != DEFAULT_POLICIES[k])
-        return "env.policies with " + ", ".join(repr(k) for k in extra + changed)
-    return None
+class _Unconvertible(Exception):
+    """A policy value the engine cannot take as it is (native_policies)."""
+
+
+def _snapshot(value: t.Any) -> t.Any:
+    """A copy of the plain containers of a policy value, to notice an in-place edit later."""
+    kind = type(value)
+    if kind is dict:
+        return {k: _snapshot(v) for k, v in value.items()}
+    if kind is list:
+        return [_snapshot(v) for v in value]
+    if kind is set:
+        return set(value)
+    return value
+
+
+def _policy(policies: t.Mapping[str, t.Any], key: str) -> t.Any:
+    try:
+        return policies[key]
+    except KeyError:
+        raise _Unconvertible(f"env.policies has no {key!r}") from None
+
+
+def _text(key: str, value: t.Any) -> str:
+    if not isinstance(value, str):
+        raise _Unconvertible(f"env.policies[{key!r}] is {type(value).__name__}, not str")
+    return str(value)
+
+
+def _json_dumps_policy(function: t.Any, kwargs: t.Any) -> t.Dict[str, t.Any]:
+    """The native fields of json.dumps_function and json.dumps_kwargs, or a wrapper of the call Jinja2 makes."""
+    if not isinstance(kwargs, dict):
+        raise _Unconvertible("env.policies['json.dumps_kwargs'] is not a dict")
+    if function is not None and not callable(function):
+        raise _Unconvertible("env.policies['json.dumps_function'] is not callable")
+    native: t.Dict[str, t.Any] = {"sort_keys": False, "ensure_ascii": True, "indent": None, "separators": None, "dumps": None}
+    plain = function is None and all(isinstance(k, str) for k in kwargs) and set(kwargs) <= {"sort_keys", "ensure_ascii", "indent", "separators"}
+    if plain:
+        try:
+            native["sort_keys"] = bool(kwargs.get("sort_keys", False))
+            native["ensure_ascii"] = bool(kwargs.get("ensure_ascii", True))
+            indent = kwargs.get("indent")
+            if isinstance(indent, int):  # bool too: json.dumps takes ' ' * indent
+                indent = " " * indent
+            elif indent is not None and not isinstance(indent, str):
+                plain = False
+            native["indent"] = indent
+            separators = kwargs.get("separators")
+            if separators is not None:
+                if isinstance(separators, (tuple, list)) and len(separators) == 2 and all(isinstance(x, str) for x in separators):
+                    native["separators"] = (str(separators[0]), str(separators[1]))
+                else:
+                    plain = False
+        except Exception:
+            plain = False
+    if plain:
+        return native
+    import json
+
+    dumps = json.dumps if function is None else function
+    frozen = _snapshot(kwargs)
+
+    def wrapper(value: t.Any, **extra: t.Any) -> t.Any:
+        # htmlsafe_json_dumps(value, dumps=dumps, **{**kwargs, indent}) of Jinja2's tojson
+        return dumps(value, **{**frozen, **extra})
+
+    native["dumps"] = wrapper
+    return native
+
+
+def native_policies(policies: t.Any) -> t.Tuple[t.Any, t.Optional[t.Dict[str, t.Any]], t.Optional[str]]:
+    """What the engine takes of ``env.policies`` (python/src/environment.cpp, PyEnvironment::Enter): a copy of them to
+    compare the next time, the values as native fields, and why not (the policy key and what is wrong) when the engine
+    cannot take them. The fallback to Jinja2 is for the last case only."""
+    if not isinstance(policies, dict):
+        return None, None, f"env.policies is {type(policies).__name__}, not a dict"
+    snapshot = {k: _snapshot(v) for k, v in policies.items()}
+    try:
+        rel = _policy(policies, "urlize.rel")
+        target = _policy(policies, "urlize.target")
+        schemes = _policy(policies, "urlize.extra_schemes")
+        leeway = _policy(policies, "truncate.leeway")
+        trimmed = _policy(policies, "ext.i18n.trimmed")
+        fields: t.Dict[str, t.Any] = {"rel": _text("urlize.rel", rel) if rel else ""}
+        if target:
+            if type(target) is not str:
+                raise _Unconvertible(f"env.policies['urlize.target'] is {type(target).__name__}, not str")
+            fields["target"] = target
+        else:
+            fields["target"] = None
+        if schemes:
+            if iter(schemes) is schemes:
+                raise _Unconvertible("env.policies['urlize.extra_schemes'] is an iterator, which only one render could read")
+            fields["schemes"] = [_text("urlize.extra_schemes", x) for x in schemes]
+        else:
+            fields["schemes"] = []
+        if not isinstance(leeway, int) or not -(2**63) <= leeway < 2**63:
+            raise _Unconvertible(f"env.policies['truncate.leeway'] is not an int that fits 64 bits: {leeway!r}")
+        fields["leeway"] = int(leeway)
+        fields["trimmed"] = bool(trimmed)
+        fields.update(_json_dumps_policy(_policy(policies, "json.dumps_function"), _policy(policies, "json.dumps_kwargs")))
+    except _Unconvertible as error:
+        return snapshot, None, str(error)
+    except Exception as error:  # e.g. a policy value whose truthiness or iteration raises
+        return snapshot, None, f"env.policies cannot be read: {error!r}"
+    return snapshot, fields, None
+
+
+def policies_reason(policies: t.Any) -> t.Optional[str]:
+    """Why an environment with these policies needs Jinja2 (Tier B), or None: a value the engine cannot take."""
+    return native_policies(policies)[2]
 
 
 def options_reason(env_class: type, options: t.Mapping[str, t.Any]) -> t.Optional[str]:

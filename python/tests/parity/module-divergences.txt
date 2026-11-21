@@ -2,14 +2,6 @@
 # (python/tests/test_parity_corpus.py, docs/tasks/0355). Same format as test/parity/divergences:
 #   <case id> <kind> <task> <reason>
 # The kind is the module's outcome (match where the C++ suite has a listed divergence).
-operators.dict_view_subset rejects 0381 a host dict's dict_keys has no ordering in the engine (host objects support only ==)
 subscripts.tuple_of_slices_strict_conditional_branch match 0527 the module falls back to Jinja2 for the template the engine cannot parse
-operators.dict_view_mapping_proxy_repr output 0545 a host dict's dict_keys.mapping is Python's mappingproxy, which pprint gets as a host object
-operators.dict_view_mapping_proxy_tojson accepts 0545 a host dict's mappingproxy is a mapping to tojson
-operators.dict_view_set_sub rejects 0545 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
-operators.dict_view_set_rsub rejects 0545 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
-operators.dict_view_set_loop rejects 0545 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
-operators.set_in_set rejects 0545 the engine has no `-` for a host dict's dict_keys (host objects support only ==)
-operators.mapping_proxy_random accepts 0545 a host dict's mappingproxy is a mapping to random
 subscripts.tuple_of_slices_strict_generator_filters match 0536 the module falls back to Jinja2 for the template the engine rejects (strict generator filters, a deliberate divergence of the engine)
 subscripts.tuple_of_slices_strict_output_fold_error_unrendered match 0556 the module falls back to Jinja2 for the template the engine rejects

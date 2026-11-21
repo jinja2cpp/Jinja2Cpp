@@ -70,6 +70,7 @@ public:
     [[nodiscard]] bool IsTuple() const override;
     [[nodiscard]] bool IsMarkupLike() const override;
     [[nodiscard]] std::string Html() const override;
+    [[nodiscard]] std::optional<std::string> HtmlFormat(std::string_view spec) const override;
     [[nodiscard]] bool IsNumber() const override;
     [[nodiscard]] std::optional<jinja2::Value> ToInt() const override;
     [[nodiscard]] std::optional<jinja2::Value> ToFloat() const override;
@@ -93,11 +94,12 @@ private:
 const PyHost* AsPyHost(const jinja2::Value& value);
 
 // Whether the sandboxed environment judges the public names of the engine's values too (its is_safe_attribute is not
-// Jinja2's): read again at each load, as the method may be replaced after the first
+// Jinja2's), asked of Python now
 bool SandboxJudgesPublicNames(nb::handle environment);
 // The sandbox policy the engine asks for the values it makes (Settings::sandboxPolicy) in the renders of the
-// SandboxedEnvironment `environment`, which it borrows
-std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames);
+// SandboxedEnvironment `environment`, which it borrows. Whether it judges public names is what the render's last entry
+// found (RenderState::sandboxAllNames); a render of another environment asks Python at each question
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment);
 
 // Calls `callable` with the engine's arguments (ArgInfo::VarArgs and ArgInfo::VarKwArgs), as a template calls it
 jinja2::Value CallPython(PyObject* callable, const jinja2::UserCallableParams& params);

@@ -37,14 +37,10 @@ test_ext.py::TestInternationalization::test_extract                             
 test_ext.py::TestInternationalization::test_extract_context                            unsupported babel_extract (message extraction)
 test_ext.py::TestInternationalization::test_extract_trimmed                            unsupported babel_extract (message extraction)
 test_ext.py::TestInternationalization::test_extract_trimmed_option                     unsupported babel_extract (message extraction)
-test_ext.py::TestInternationalization::test_trimmed_policy                             divergence  0435 the ext.i18n.trimmed policy
-test_ext.py::TestInternationalization::test_trimmed_policy_override                    divergence  0435 the ext.i18n.trimmed policy
 test_ext.py::TestNewstyleInternationalization::test_num_called_num                     unsupported Environment.compile
 test_ext.py::TestScope::test_basic_scope_behavior                                      extension   a custom Extension
 test_filters.py::TestFilter::test_filter_calling                                       unsupported Environment.call_filter
-test_filters.py::TestFilter::test_json_dump                                            divergence  0435 the json.dumps_function and json.dumps_kwargs policies
 test_filters.py::TestFilter::test_random                                               deliberate  0434 random uses the engine's own generator, which Python's random.seed does not reach
-test_filters.py::TestFilter::test_urlize_rel_policy                                    divergence  0435 the urlize.rel policy
 test_idtracking.py                                                                     internals   the compiler's symbol tracking
 test_lexnparse.py::TestLexer::test_lineno_with_strip                                   internals   Environment.lex
 test_lexnparse.py::TestLexer::test_operators                                           internals   jinja2.lexer.operators

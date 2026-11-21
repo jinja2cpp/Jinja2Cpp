@@ -72,6 +72,20 @@ Value PolicyValue(const InternalValue& obj)
     {
         return Value(GenericMap(std::make_shared<const CallableStandIn>(StandInClass(*callable, obj))));
     }
+    // A groupby group and a range have attributes of their own (grouper, list; start, stop, step) that the policy is asked
+    // about, as Jinja2's is_safe_attribute is for _GroupTuple and range: stand-ins of those classes, whose attributes the
+    // policy judges by name (docs/tasks/0425)
+    if (const auto list = AsList(obj))
+    {
+        if (list->GetFieldNames())
+        {
+            return Value(GenericMap(std::make_shared<const CallableStandIn>("_GroupTuple")));
+        }
+        if (list->GetRangeInfo())
+        {
+            return Value(GenericMap(std::make_shared<const CallableStandIn>("range")));
+        }
+    }
     return ToHostValue(obj);
 }
 

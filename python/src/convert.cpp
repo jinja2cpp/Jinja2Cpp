@@ -1,6 +1,7 @@
 #include "convert.h"
 
 #include "adapters.h"
+#include "environment.h"
 #include "errors.h"
 
 #include <jinja2cpp/big_int.h>
@@ -241,6 +242,20 @@ Value UndefinedToEngine(PyObject* object)
     {
         description.hint = Utf8(hint);
     }
+    // An undefined that names the object it is missing from (the sandbox's range.mro): its message says so
+    if (description.hint.empty())
+    {
+        const auto obj = attr("_undefined_obj");
+        const auto owner = nb::steal(obj.is_valid() && !obj.is_none() ? PyObject_GetAttrString(reinterpret_cast<PyObject*>(Py_TYPE(obj.ptr())), "__name__") : nullptr);
+        if (!owner)
+        {
+            PyErr_Clear();
+        }
+        else if (const auto message = attr("_undefined_message"); PyUnicode_Check(message.ptr()) && Utf8(owner) != "MissingType")
+        {
+            description.hint = Utf8(message);
+        }
+    }
     // Jinja2's unsafe_undefined: exc is a SecurityError class
     if (const auto exc = attr("_undefined_exception"); PyType_Check(exc.ptr()))
     {
@@ -362,6 +377,59 @@ nb::object BigIntToPython(const jinja2::BigInt& big)
     return result;
 }
 
+// A dict view or set of the engine as the Python type it is (docs/tasks/0545): a snapshot of the items, in the order
+// they had, so that type(), `-`, repr, pprint and tojson are Python's own. A view of a set of items Python cannot hash
+// stays the list
+nb::object ViewToPython(const nb::list& items, std::string_view viewClass)
+{
+    if (viewClass == "set")
+    {
+        if (auto set = nb::steal(PySet_New(items.ptr())))
+        {
+            return set;
+        }
+        PyErr_Clear();
+        return items;
+    }
+    auto source = nb::steal(PyDict_New());
+    const Py_ssize_t count = PyList_Size(items.ptr());
+    for (Py_ssize_t idx = 0; idx != count; ++idx)
+    {
+        PyObject* item = PyList_GetItem(items.ptr(), idx);
+        int status = 0;
+        if (viewClass == "dict_keys")
+        {
+            status = PyDict_SetItem(source.ptr(), item, Py_None);
+        }
+        else if (viewClass == "dict_values")
+        {
+            const auto key = nb::steal(PyLong_FromSsize_t(idx));
+            status = PyDict_SetItem(source.ptr(), key.ptr(), item);
+        }
+        else if (PyTuple_Check(item) && PyTuple_Size(item) == 2)
+        {
+            status = PyDict_SetItem(source.ptr(), PyTuple_GetItem(item, 0), PyTuple_GetItem(item, 1));
+        }
+        else
+        {
+            status = -1;
+        }
+        if (status < 0)
+        {
+            PyErr_Clear();
+            return items;
+        }
+    }
+    const char* method = viewClass == "dict_keys" ? "keys" : viewClass == "dict_values" ? "values"
+                                                                                        : "items";
+    auto view = nb::steal(PyObject_CallMethod(source.ptr(), method, nullptr));
+    if (!view)
+    {
+        throw nb::python_error();
+    }
+    return view;
+}
+
 template<typename List>
 nb::object ItemsToPython(const List& list, bool isTuple, const void* identity, Memo& memo)
 {
@@ -394,6 +462,18 @@ nb::object ItemsToPython(const List& list, bool isTuple, const void* identity, M
     {
         CheckSequenceSize(++count);
         items.append(ToPythonImpl(item, memo));
+    }
+    if constexpr (std::is_same_v<List, jinja2::GenericList>)
+    {
+        if (const char* viewClass = list.GetViewClass())
+        {
+            auto view = ViewToPython(items, viewClass);
+            if (identity)
+            {
+                memo.seen[identity] = view;
+            }
+            return view;
+        }
     }
     if (isTuple)
     {
@@ -695,13 +775,19 @@ std::shared_ptr<CallLease> LeaseScope::Current()
     return scope->m_lease;
 }
 
-void CheckNativeSandboxHooks(PyObject* sandbox)
+bool CheckNativeSandboxHooks(PyObject* sandbox)
 {
     const auto checked = nb::steal(PyObject_CallMethod(sandbox, "_check_native_hooks", nullptr));
     if (!checked)
     {
         throw nb::python_error();
     }
+    const int truth = PyObject_IsTrue(checked.ptr());
+    if (truth < 0)
+    {
+        throw nb::python_error();
+    }
+    return truth != 0;
 }
 
 TemplateValue::TemplateValue(jinja2::Value value)
@@ -766,11 +852,11 @@ namespace
 
 nb::object TemplateValue::Call(nb::args args, nb::kwargs kwargs) const
 {
-    if (const auto* render = CurrentRender(); render && render->sandbox)
+    if (auto* render = CurrentRender(); render && render->sandbox)
     {
         // A macro or caller a Python callable got runs template code the environment's hooks may have been
         // overridden for since the template loaded
-        CheckNativeSandboxHooks(render->sandbox);
+        render->sandboxAllNames = nb::cast<PyEnvironment&>(nb::handle(render->sandbox)).Enter().sandboxAllNames;
     }
     const auto& value = Value();
     const auto* callable = value.GetIf<jinja2::UserCallable>();

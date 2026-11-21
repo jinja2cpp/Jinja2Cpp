@@ -3,6 +3,7 @@
 #include <jinja2cpp/big_int.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/prompt.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -597,3 +598,292 @@ TEST_P(RenderOptionsNestedTest, ARenderACallableStartsIsPolledToo)
 }
 
 INSTANTIATE_TEST_SUITE_P(BigIntBackend, RenderOptionsNestedTest, ::testing::Bool());
+
+// Filter policies (docs/tasks/0435): Settings::filterPolicies and RenderOptions::filterPolicies
+namespace
+{
+std::shared_ptr<const FilterPolicies> PoliciesOf(FilterPolicies policies)
+{
+    return std::make_shared<const FilterPolicies>(std::move(policies));
+}
+
+// What a Python `json.dumps_function` would see: the value and, only when given, the indent
+UserCallable RecordingDumps()
+{
+    auto dumps = [](const UserCallableParams& params) -> Value {
+        const Value indent = params["indent"];
+        const Value obj = params["obj"];
+        // A wide template passes its strings wide; these are ASCII
+        std::string text = "?";
+        if (const auto* narrow = obj.GetIf<std::string_view>())
+        {
+            text = std::string(*narrow);
+        }
+        else if (const auto* wide = obj.GetIf<std::wstring_view>())
+        {
+            text.assign(wide->begin(), wide->end());
+        }
+        else if (const auto* owned = obj.GetIf<std::string>())
+        {
+            text = *owned;
+        }
+        else if (const auto* wideOwned = obj.GetIf<std::wstring>())
+        {
+            text.assign(wideOwned->begin(), wideOwned->end());
+        }
+        const std::string given = indent.IsString() ? "indent=" + indent.AsString() : "indent given";
+        return text + "/" + (indent.IsNone() ? "no indent" : given);
+    };
+    return UserCallable(dumps, { ArgInfo{ "obj", true }, ArgInfo{ "indent", false, Value() } });
+}
+} // namespace
+
+TEST(RenderOptionsTest, FilterPoliciesReplaceTheTemplatesForTheRenderItsIncludesAndImports)
+{
+    TemplateEnv env;
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("lib.j2tpl", "{% macro cut() %}{{ 'abcdefghijk'|truncate(10) }}{% endmacro %}");
+    fs->AddFile("part.j2tpl", "<{{ 'abcdefghijk'|truncate(10) }}>");
+    env.AddFilesystemHandler(std::string(), fs);
+    auto tpl = env.FromString("{{ 'abcdefghijk'|truncate(10) }} {% import 'lib.j2tpl' as lib %}{{ lib.cut() }} {% include 'part.j2tpl' %}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    // Jinja2's leeway of 5 keeps a string of 11
+    EXPECT_EQ("abcdefghijk abcdefghijk <abcdefghijk>", tpl->RenderAsString({}).value());
+
+    FilterPolicies strict;
+    strict.truncateLeeway = 0;
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(strict);
+    std::string out;
+    ASSERT_TRUE(tpl->RenderTo(out, {}, options));
+    EXPECT_EQ("abcdefg... abcdefg... <abcdefg...>", out);
+    // Only for that render
+    EXPECT_EQ("abcdefghijk abcdefghijk <abcdefghijk>", tpl->RenderAsString({}).value());
+    // The argument still wins
+    auto argument = env.FromString("{{ 'abcdefghijk'|truncate(10, leeway=1) }}");
+    ASSERT_TRUE(argument);
+    out.clear();
+    ASSERT_TRUE(argument->RenderTo(out, {}, options));
+    EXPECT_EQ("abcdefghijk", out);
+}
+
+TEST(RenderOptionsTest, NoFilterPoliciesKeepTheTemplatesOwn)
+{
+    TemplateEnv env;
+    env.GetSettings().filterPolicies.truncateLeeway = 0;
+    env.GetSettings().filterPolicies.urlizeRel = "";
+    auto tpl = env.FromString("{{ 'abcdefghijk'|truncate(10) }} {{ 'http://example.com'|urlize }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    const std::string own = "abcdefg... <a href=\"http://example.com\">http://example.com</a>";
+    EXPECT_EQ(own, tpl->RenderAsString({}).value());
+    std::string out;
+    ASSERT_TRUE(tpl->RenderTo(out, {}, RenderOptions{}));
+    EXPECT_EQ(own, out);
+
+    // A template made with other settings keeps them
+    FilterPolicies defaults;
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(defaults);
+    out.clear();
+    ASSERT_TRUE(tpl->RenderTo(out, {}, options));
+    EXPECT_EQ("abcdefghijk <a href=\"http://example.com\" rel=\"noopener\">http://example.com</a>", out);
+}
+
+TEST(RenderOptionsTest, UrlizeAndTojsonReadThePolicies)
+{
+    TemplateEnv env;
+    auto tpl = env.FromString("{{ 'http://example.com ssh:a'|urlize }}|{{ {'b': 1, 'a': 'é'}|tojson }}|{{ [1]|tojson(1) }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    policies.urlizeRel = "x y";
+    policies.urlizeTarget = "_blank";
+    policies.urlizeExtraSchemes = { "ssh:" };
+    policies.jsonSortKeys = false;
+    policies.jsonEnsureAscii = false;
+    policies.jsonSeparators = std::make_pair(";", "=");
+    policies.jsonIndent = "\t";
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    ASSERT_TRUE(tpl->RenderTo(out, {}, options));
+    EXPECT_EQ("<a href=\"http://example.com\" rel=\"x y\" target=\"_blank\">http://example.com</a> <a href=\"ssh:a\" rel=\"x y\" target=\"_blank\">ssh:a</a>"
+              "|{\n\t\"b\"=1;\n\t\"a\"=\"é\"\n}|[\n 1\n]",
+              out);
+}
+
+TEST(RenderOptionsTest, AnInvalidPolicySchemeAndANegativeLeewayFailTheFilter)
+{
+    TemplateEnv env;
+    auto urlize = env.FromString("{{ 'ssh:a'|urlize }}");
+    auto truncate = env.FromString("{{ 'abc'|truncate(10) }}");
+    ASSERT_TRUE(urlize);
+    ASSERT_TRUE(truncate);
+    FilterPolicies policies;
+    policies.urlizeExtraSchemes = { "ssh" };
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    EXPECT_FALSE(urlize->RenderTo(out, {}, options));
+    // An explicit empty list is not None: the policy's schemes do not apply
+    auto empty = env.FromString("{{ 'ssh:a'|urlize(extra_schemes=[]) }}");
+    ASSERT_TRUE(empty);
+    out.clear();
+    ASSERT_TRUE(empty->RenderTo(out, {}, options));
+    EXPECT_EQ("ssh:a", out);
+
+    policies = FilterPolicies{};
+    policies.truncateLeeway = -1;
+    options.filterPolicies = PoliciesOf(policies);
+    out.clear();
+    EXPECT_FALSE(truncate->RenderTo(out, {}, options));
+}
+
+TEST(RenderOptionsTest, JsonDumpsGetsTheValueAndTheIndentOnlyWhenGiven)
+{
+    TemplateEnv env;
+    auto tpl = env.FromString("{{ 'x'|tojson }};{{ 'y'|tojson(2) }};{{ 'z'|tojson(none) }};{{ 'w'|tojson('ab') }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    policies.jsonDumps = RecordingDumps();
+    // The native options do not apply to it
+    policies.jsonIndent = "  ";
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    ASSERT_TRUE(tpl->RenderTo(out, {}, options));
+    EXPECT_EQ("x/no indent;y/indent given;z/no indent;w/indent=ab", out);
+}
+
+TEST(RenderOptionsTest, JsonDumpsResultMustBeAStringAndIsHtmlSafeMarkup)
+{
+    TemplateEnv env;
+    env.GetSettings().autoescape = true;
+    auto tpl = env.FromString("{{ v|tojson }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    policies.jsonDumps = UserCallable([](const UserCallableParams&) -> Value { return std::string("<\"a\" & 'b'>"); }, {});
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    ASSERT_TRUE(tpl->RenderTo(out, { { "v", 1 } }, options)) << out;
+    // htmlsafe_json_dumps escapes <, >, & and '; the result is Markup, so autoescape leaves the quotes
+    EXPECT_EQ("\\u003c\"a\" \\u0026 \\u0027b\\u0027\\u003e", out);
+
+    policies.jsonDumps = UserCallable([](const UserCallableParams&) -> Value { return 42; }, {});
+    options.filterPolicies = PoliciesOf(policies);
+    out.clear();
+    auto failed = tpl->RenderTo(out, { { "v", 1 } }, options);
+    EXPECT_FALSE(failed);
+}
+
+TEST(RenderOptionsTest, JsonDumpsResultIsCheckedAgainstTheSequenceCap)
+{
+    TemplateEnv env;
+    env.GetSettings().limits.maxSequenceSize = 10;
+    auto tpl = env.FromString("{{ 1|tojson }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    // Two characters that escape to twelve
+    policies.jsonDumps = UserCallable([](const UserCallableParams&) -> Value { return std::string("<<"); }, {});
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    auto failed = tpl->RenderTo(out, {}, options);
+    ASSERT_FALSE(failed);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, failed.error().GetCode());
+
+    policies.jsonDumps = UserCallable([](const UserCallableParams&) -> Value { return std::string("<"); }, {});
+    options.filterPolicies = PoliciesOf(policies);
+    out.clear();
+    ASSERT_TRUE(tpl->RenderTo(out, {}, options));
+    EXPECT_EQ("\\u003c", out);
+}
+
+TEST(RenderOptionsTest, JsonDumpsTakesAnIndentTheBuiltInWriterRejects)
+{
+    TemplateEnv env;
+    auto tpl = env.FromString("{{ 1|tojson(indent=[]) }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    policies.jsonDumps = UserCallable([](const UserCallableParams& params) -> Value { return std::string(params["indent"].IsList() ? "list" : "other"); }, { ArgInfo{ "obj", true }, ArgInfo{ "indent", false, Value() } });
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    ASSERT_TRUE(tpl->RenderTo(out, {}, options));
+    EXPECT_EQ("list", out);
+    // Without a dumps function json.dumps rejects it
+    out.clear();
+    EXPECT_FALSE(tpl->RenderTo(out, {}));
+}
+
+TEST(RenderOptionsTest, JsonDumpsResultInPromptAutoescapeMode)
+{
+    TemplateEnv env;
+    env.GetSettings().autoescape = true;
+    env.GetSettings().autoescapeMode = AutoescapeMode::Prompt;
+    env.GetSettings().promptEscaper = PromptEscaper({ { "<s>" }, {} });
+    auto tpl = env.FromString("{{ v|tojson }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    policies.jsonDumps = UserCallable([](const UserCallableParams&) -> Value { return std::string("<s>[1]"); }, {});
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::string out;
+    ASSERT_TRUE(tpl->RenderTo(out, { { "v", 1 } }, options)) << out;
+    EXPECT_EQ("\\u003cs\\u003e[1]", out);
+}
+
+TEST(RenderOptionsTest, FilterPoliciesWorkForWideTemplates)
+{
+    TemplateEnv env;
+    auto tpl = env.FromString(L"{{ 'abcdefghijk'|truncate(10) }}|{{ 'http://example.com'|urlize }}|{{ v|tojson }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies policies;
+    policies.truncateLeeway = 0;
+    policies.urlizeRel = "";
+    policies.urlizeTarget = "_blank";
+    policies.jsonDumps = RecordingDumps();
+    RenderOptions options;
+    options.filterPolicies = PoliciesOf(policies);
+    std::wstring out;
+    auto wideResult = tpl->RenderTo(out, { { "v", std::wstring(L"s") } }, options);
+    ASSERT_TRUE(wideResult) << wideResult.error().ToString();
+    EXPECT_EQ(L"abcdefg...|<a href=\"http://example.com\" target=\"_blank\">http://example.com</a>|s/no indent", out);
+}
+
+TEST(TemplateEnvTest, SettingsEqualityCoversTheFilterPoliciesAndTheTransDefault)
+{
+    Settings a;
+    Settings b;
+    b.extensions.i18nTrimmed = true;
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.urlizeRel = "";
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.urlizeTarget = "_blank";
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.urlizeExtraSchemes = { "ssh:" };
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.truncateLeeway = 0;
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.jsonSortKeys = false;
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.jsonEnsureAscii = false;
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.jsonIndent = "";
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.jsonSeparators = std::make_pair(",", ":");
+    EXPECT_TRUE(a != b);
+    b = a;
+    b.filterPolicies.jsonDumps = RecordingDumps();
+    EXPECT_TRUE(a != b);
+    a.filterPolicies.jsonDumps = b.filterPolicies.jsonDumps;
+    EXPECT_TRUE(a == b);
+}

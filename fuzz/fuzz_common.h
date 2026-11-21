@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace jinja2_fuzz
 {
@@ -183,13 +184,31 @@ constexpr std::uint8_t Oldstyle = 0x01;
 // Two bits: 0 no install, 1-3 null translations installed with GettextStyle FollowLoad, Oldstyle or Newstyle
 constexpr std::uint8_t InstallShift = 1;
 constexpr std::uint8_t InstallMask = 0x06;
-constexpr std::uint8_t Mask = Oldstyle | InstallMask;
+// Settings::Extensions::i18nTrimmed on: `{% trans %}` trims its text unless the block says notrimmed
+constexpr std::uint8_t Trimmed = 0x08;
+// Non-default Settings::filterPolicies: urlize's rel, target and schemes, truncate's leeway and tojson's JSON options
+constexpr std::uint8_t Policies = 0x10;
+constexpr std::uint8_t Mask = Oldstyle | InstallMask | Trimmed | Policies;
 } // namespace gettext_bits
 
 // Applies the gettext bits: the setting, then the install, whose fixed style the setting does not change
 inline void ApplyGettextBits(jinja2::TemplateEnv& env, std::uint8_t bits)
 {
-    env.GetSettings().extensions.i18nNewstyle = (bits & gettext_bits::Oldstyle) == 0;
+    auto& settings = env.GetSettings();
+    settings.extensions.i18nNewstyle = (bits & gettext_bits::Oldstyle) == 0;
+    settings.extensions.i18nTrimmed = (bits & gettext_bits::Trimmed) != 0;
+    if ((bits & gettext_bits::Policies) != 0)
+    {
+        auto& policies = settings.filterPolicies;
+        policies.urlizeRel = "x y";
+        policies.urlizeTarget = "_blank";
+        policies.urlizeExtraSchemes = { "ssh:", "tel:" };
+        policies.truncateLeeway = 0;
+        policies.jsonSortKeys = false;
+        policies.jsonEnsureAscii = false;
+        policies.jsonIndent = "  ";
+        policies.jsonSeparators = std::make_pair(std::string(","), std::string(":"));
+    }
     static constexpr jinja2::GettextStyle styles[] = { jinja2::GettextStyle::FollowLoad, jinja2::GettextStyle::Oldstyle, jinja2::GettextStyle::Newstyle };
     const auto install = static_cast<unsigned>(bits & gettext_bits::InstallMask) >> gettext_bits::InstallShift;
     if (install != 0)

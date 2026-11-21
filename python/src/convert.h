@@ -27,6 +27,9 @@ struct RenderState
     // The environment when it is sandboxed (SandboxOf), whose is_safe_attribute and is_safe_callable the
     // render asks for every attribute and call of a Python object (0354, the plan's D8); null for any other
     PyObject* sandbox = nullptr;
+    // Whether the sandbox's is_safe_attribute judges the engine's public names too, as the last entry into the
+    // template's code found it (PyEnvironment::Enter); read by the sandbox policy while this render runs
+    bool sandboxAllNames = false;
     // The environment's Limits::maxSequenceSize (0 for the engine's built-in cap), which the sandbox's
     // formatter checks the strings it builds against (_check_sequence_size)
     std::uint64_t maxSequenceSize = 0;
@@ -71,8 +74,9 @@ private:
 };
 
 // Runs the sandbox environment's `_check_native_hooks` (jinja2cpp/sandbox.py): an override of call, getattr or getitem
-// set after a template loaded is refused at each entry into the template's code, as at a load
-void CheckNativeSandboxHooks(PyObject* sandbox);
+// set after a template loaded is refused at each entry into the template's code, as at a load. Gives whether its
+// is_safe_attribute judges the engine's public names too (_sandbox_judges_public_names)
+bool CheckNativeSandboxHooks(PyObject* sandbox);
 
 // What a Python call the engine makes was handed besides its arguments: the template's context and the call site,
 // valid for the duration of the call only (UserCallableParams::context). A pass_context argument reads them while

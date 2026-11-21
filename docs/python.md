@@ -231,7 +231,7 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 | A custom `Extension` class (not `do`, `loopcontrols`, `i18n`), a dotted name of one | the environment is a Jinja2 environment |
 | `enable_async=True`, `render_async`, `generate_async` | the environment is a Jinja2 environment; on a native template `render_async` is Jinja2's (it raises as Jinja2 does without `enable_async`), and `generate_async` streams the engine's lazy render (Differences, 0461) |
 | `context_class`, `code_generator_class` of your own on an `Environment` subclass | the environment is a Jinja2 environment |
-| `env.policies` with a key Jinja2C++ has no equivalent for or a changed value (it has none) | the templates loaded from then on are Jinja2's |
+| `env.policies` with a value the engine cannot take (a number for `urlize.rel`, a one-shot iterator for `urlize.extra_schemes`, a missing key, a `json.dumps_kwargs` that is not a dict); `urlize`, `truncate`, `tojson` and `{% trans %}` read the others natively (0435) | the templates loaded from then on are Jinja2's; one set after a native load raises `UnsupportedError` naming the key when the template renders |
 | `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
 | `compile_expression`, `lex`, `preprocess`, `compile` | called on a Jinja2 environment of the same configuration |
 | `Template.blocks`, `new_context`, `root_render_func` | read from the template loaded by Jinja2 from the same source or name |
@@ -451,6 +451,18 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 
 ## Differences from Jinja2
 
+- `env.policies` is read at each render (`urlize.rel`, `urlize.target`, `urlize.extra_schemes`, `truncate.leeway`,
+  `json.dumps_function`, `json.dumps_kwargs`) and compared with a copy, so an in-place edit counts; `ext.i18n.trimmed` is read
+  when a template loads, as Jinja2 reads it when it compiles `{% trans %}`. `compiler.ascii_str` and unknown keys are ignored,
+  as Jinja2 3 does. The macros of `t.module` and `make_module` keep the policies of the load of their template (Jinja2's read
+  the environment's at each call, 0435). A filter whose arguments are all constants (`{{ 'abcdefghijk'|truncate(10) }}`,
+  `{{ {'a': 1}|tojson }}`) follows a policy changed after the load, where Jinja2 folds it to its value when it compiles the
+  template; the engine does not fold. Only the current `json.dumps_function` is kept: a template loaded under an earlier one
+  keeps it for as long as the template lives, and a replaced one is released with the last template that used it.
+- The policies and the `dumps` function are read from Python into the engine at each entry: `render`, `generate`, `module`
+  and a macro handed to Python. A change that Python code makes during a render (a callable that edits `env.policies`, a
+  `dumps` function that replaces itself, a macro called back from Python in a plain `Environment`) applies from the next
+  entry, where Jinja2 applies it at the next filter call.
 - Template errors that Jinja2 raises as Python's own exceptions (`ZeroDivisionError`,
   `TypeError` from an operator) are `TemplateRuntimeError` with the same message, except where the engine
   names the class: `%` formatting (also of `format` and newstyle `gettext`) raises `ValueError`,
@@ -485,6 +497,13 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   list, dict, Markup or callable) stays itself in the module (attributes and methods are Python's), but a list or dict read off it and exported with `{% set %}` arrives as `{}`, and `dictsort` entries as `{key, value}` dicts. The params of a module are
   copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
   globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`) (0411).
+- A dict view (`keys()`, `values()`, `items()`) or a set (`d.keys() - []`) of the engine reaches a Python callable as a real
+  `dict_keys`, `dict_values`, `dict_items` or `set`, a snapshot of its items at the call (a set of items Python cannot hash
+  stays a list); its `.mapping` is then a snapshot dict, whose values are `None` for `dict_keys` and the item positions for
+  `dict_values`. A host dict's own views have the engine's set operators (`-` on either side, `<`, `<=`, `>`, `>=` with another
+  view) over the items they give at that moment, and their `.mapping` is Python's mappingproxy, which `pprint` prints as
+  `mappingproxy({...})` and `tojson` refuses. `d | random` of a host dict indexes it as `random.choice` does (`KeyError: 0`
+  unless it has the key 0) (0545).
 - `env.parse` is a full load: it also reports what the compile reports (an unknown filter or test
   raises `TemplateAssertionError`), and returns an opaque object that only `jinja2cpp.meta`
   takes, not Jinja2's node tree. `find_referenced_templates` gives the names of the tags in
@@ -531,7 +550,9 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `UnsupportedError` (Jinja2's `test_binary_operator_intercepting` and
   `test_unary_operator_intercepting` are `xfail`). A public name of the engine's own values
   (`s.upper`, `d.items`) is asked of `is_safe_attribute` only when the subclass overrides it,
-  the immutable form's refusal of the engine's list and dict methods is the engine's own, a
+  the immutable form's refusal of the engine's list and dict methods is the engine's own (it also refuses a set's
+  `intersection_update`, which Jinja2 3.1.6's `_mutable_spec` leaves out of its `MutableSet` list, so that the
+  immutable form there lets it change the set; the engine fails closed on purpose, 0545), a
   bound method of the engine's values (`s.upper`) has `__self__` (the string, which Jinja2's
   sandbox refuses as a private name; it hands the template nothing it did not hold), a dict key named like an
   attribute (`{'__class__': 1}.__class__`) reads the key, `f.__call__` of a macro or global
@@ -542,9 +563,8 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   does (a subclass that calls `super()` is refused too); override `is_safe_attribute` or
   `is_safe_callable`. A subclass whose `is_safe_attribute` is not Jinja2's is also asked about the
   public names of `loop`, `cycler`, a namespace and a macro (with `None` as the value, as the engine
-  builds none for the question); that is read again at each load, so a method replaced on the class
-  or the instance between loads counts for the templates loaded after it, not for those already
-  loaded. The groupby tuple's `grouper` and `list` are not asked (0425).
+  builds none for the question; the object is an empty one of its type for the engine's lists and dicts, 0425); that is read again at each render, module or macro call, so a method replaced
+  on the class or the instance counts for the templates loaded before it too. The groupby tuple's `grouper` and `list` and a range's `start`, `stop` and `step` are asked as Jinja2 asks them (`_GroupTuple`, `range`), with `None` as the value (0425).
   `str.format`, `format_map` and `Markup.format` go through Jinja2's `SandboxedFormatter`; a field's
   width or precision, and the text the fields write together, are checked against the render's
   sequence cap (64 MiB or `Limits.max_sequence_size`) before Python builds the string, and fail with

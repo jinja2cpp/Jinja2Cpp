@@ -70,10 +70,10 @@ DELIMITER_SHIFT = 4  # fuzz_common.h settings_byte
 WIDE = 0x80
 # The bytes before the template, and whether the target reads the wide bit
 PREFIXES = {"untrusted": (1, True), "host": (1, True), "loader": (2, False), "alloc_failure": (3, False)}
-# fuzz_common.h gettext_bits: oldstyle, then two bits of install style. The loader target reads them above its
+# fuzz_common.h gettext_bits: oldstyle, two bits of install style, i18nTrimmed and non-default filter policies. The loader target reads them above its
 # `confined` bit, the allocation-failure target reads its spare wide bit as oldstyle with a FollowLoad install
 GETTEXT_OLDSTYLE = 0x01
-GETTEXT_MASK = 0x07
+GETTEXT_MASK = 0x1F
 I18N_MARKERS = (b"trans", b"gettext", b"_(")
 
 

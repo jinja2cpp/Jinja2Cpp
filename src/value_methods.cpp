@@ -1991,7 +1991,7 @@ struct StrOps
     static std::optional<std::pair<Str, bool>> HostFormat(const InternalValue& value, View spec, RenderContext& context)
     {
         const auto* host = GetHostObject(value);
-        if (!host || host->IsMarkupLike() || context.GetSandboxPolicy())
+        if (!host || context.GetSandboxPolicy())
         {
             return std::nullopt;
         }
@@ -2049,6 +2049,17 @@ struct StrOps
         {
             expanded = Build(field.spec, params, numbering, context, escape, depth - 1);
             spec = expanded;
+        }
+        if (escape && !context.GetSandboxPolicy())
+        {
+            // An object with __html_format__ or __html__ formats itself as markupsafe's EscapeFormatter has it
+            if (const auto* host = GetHostObject(value))
+            {
+                if (auto html = host->HtmlFormat(ConvertString<std::string>(std::basic_string<CharT>(spec))))
+                {
+                    return ConvertString<Str>(*html);
+                }
+            }
         }
         if (auto hosted = HostFormat(value, spec, context))
         {
@@ -3138,6 +3149,341 @@ const MethodInfo DictViewMethods[] = {
     { "isdisjoint", DictViewIsDisjoint, false },
 };
 
+// ---------------------------------------------------------------------------------------
+// set (docs/tasks/0545): a set keeps its items in a list, unique by their hash tokens (MakeDictKey), in the
+// order they came. A method that changes it changes that list, as a list's do; Python's order is its hash
+// table's, which no template can rely on
+
+// The hash table a set method builds of the items it reads lives for the call only and is no value the render
+// counts, so each of its entries is charged to the render's memory budget (maxRenderMemory) and given back when the
+// call ends: `s.issubset(range(3000000))` fails with the limit as any other big allocation does
+class SetScratch
+{
+public:
+    SetScratch() = default;
+    SetScratch(const SetScratch&) = delete;
+    SetScratch& operator=(const SetScratch&) = delete;
+    ~SetScratch() { ReleaseRenderMemory(m_charged); }
+    // One more entry of a table that is being built
+    void Entry()
+    {
+        constexpr std::uint64_t bytes = sizeof(InternalDict::value_type) + (2 * sizeof(void*));
+        ChargeRenderMemory(bytes);
+        m_charged += bytes;
+    }
+
+private:
+    std::uint64_t m_charged = 0;
+};
+
+// The items of `range` by their hash tokens; an unhashable item is Python's TypeError
+template<typename Range>
+InternalDict SetEntries(const Range& range, SetScratch& scratch)
+{
+    InternalDict entries;
+    for (const auto& item : range)
+    {
+        const char* unhashable = nullptr;
+        auto token = MakeDictKey(item, &unhashable);
+        if (!token)
+        {
+            ThrowUnhashable(unhashable);
+        }
+        if (entries.try_emplace(std::move(*token), item).second)
+        {
+            scratch.Entry();
+            CheckSequenceSize(uint64_t{ entries.size() }, "a set");
+        }
+    }
+    return entries;
+}
+
+// The items of the iterable a set method takes (a string's characters, a dict's keys), hashed
+InternalDict SetArgumentEntries(const InternalValue& arg, SetScratch& scratch)
+{
+    bool isConverted = false;
+    const auto other = ConvertToList(arg, isConverted, false);
+    if (!isConverted)
+    {
+        Raise("'" + TypeName(arg) + "' object is not iterable");
+    }
+    return SetEntries(other, scratch);
+}
+
+InternalValue MakeSet(const InternalDict& entries)
+{
+    InternalValueList result;
+    ReserveHint(result, entries.size());
+    for (const auto& entry : entries)
+    {
+        result.push_back(entry.second);
+    }
+    return ListAdapter::CreateIterator(std::move(result), IteratorKind::Set);
+}
+
+enum class SetOp : uint8_t
+{
+    Union,
+    Intersection,
+    Difference,
+    SymmetricDifference,
+};
+
+// The items of `source` that are (keepPresent) or are not in `reference`
+InternalDict SetFiltered(const InternalDict& source, const InternalDict& reference, bool keepPresent, SetScratch& scratch)
+{
+    InternalDict kept;
+    for (const auto& entry : source)
+    {
+        if ((reference.find(entry.first) != reference.end()) == keepPresent)
+        {
+            scratch.Entry();
+            kept.try_emplace(entry.first, entry.second);
+        }
+    }
+    return kept;
+}
+
+// The items of `other` added to `entries`
+void SetUnionInto(InternalDict& entries, const InternalDict& other, SetScratch& scratch)
+{
+    for (const auto& item : other)
+    {
+        if (entries.try_emplace(item.first, item.second).second)
+        {
+            scratch.Entry();
+            CheckSequenceSize(uint64_t{ entries.size() }, "a set");
+        }
+    }
+}
+
+// The items of `entries` that `other` has. They come from the argument, as Python's do (2.0 for 2), unless it is a set
+// larger than the receiver
+InternalDict SetIntersection(const InternalDict& entries, const InternalDict& other, const InternalValue& arg, SetScratch& scratch)
+{
+    const auto list = AsList(arg);
+    const bool fromReceiver = list && list->GetIteratorKind() == IteratorKind::Set && other.size() > entries.size();
+    InternalDict kept;
+    for (const auto& entry : entries)
+    {
+        if (const auto found = other.find(entry.first); found != other.end())
+        {
+            scratch.Entry();
+            kept.try_emplace(entry.first, fromReceiver ? entry.second : found->second);
+        }
+    }
+    return kept;
+}
+
+// The items that only one of `entries` and `other` has
+InternalDict SetSymmetricDifference(const InternalDict& entries, const InternalDict& other, SetScratch& scratch)
+{
+    auto result = SetFiltered(entries, other, false, scratch);
+    for (const auto& item : SetFiltered(other, entries, false, scratch))
+    {
+        scratch.Entry();
+        result.try_emplace(item.first, item.second);
+    }
+    CheckSequenceSize(uint64_t{ result.size() }, "a set");
+    return result;
+}
+
+// The set `op` makes of the receiver and the iterables of the call; every argument is read before anything is made
+InternalDict SetCombine(SetOp op, const InternalValue& self, const CallParams& params, SetScratch& scratch)
+{
+    auto entries = SetEntries(ListOf(self), scratch);
+    for (const auto& arg : params.posParams)
+    {
+        const auto other = SetArgumentEntries(arg, scratch);
+        switch (op)
+        {
+        case SetOp::Union:
+            SetUnionInto(entries, other, scratch);
+            break;
+        case SetOp::Intersection:
+            entries = SetIntersection(entries, other, arg, scratch);
+            break;
+        case SetOp::Difference:
+            entries = SetFiltered(entries, other, false, scratch);
+            break;
+        case SetOp::SymmetricDifference:
+            entries = SetSymmetricDifference(entries, other, scratch);
+            break;
+        }
+    }
+    return entries;
+}
+
+template<SetOp op>
+InternalValue SetCombined(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    constexpr const char* names[] = { "union", "intersection", "difference", "symmetric_difference" };
+    constexpr bool single = op == SetOp::SymmetricDifference;
+    CheckArgs(params, names[static_cast<size_t>(op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
+    SetScratch scratch;
+    return MakeSet(SetCombine(op, self, params, scratch));
+}
+
+// The receiver's items become `entries`, which SetCombine made from them
+InternalValue SetReplace(const InternalValue& self, const InternalDict& entries, SetScratch& scratch)
+{
+    const auto before = SetEntries(ListOf(self), scratch);
+    auto& items = MutableItems(self);
+    ReserveCounted(items, entries.size());
+    for (const auto& entry : before)
+    {
+        if (entries.find(entry.first) == entries.end())
+        {
+            CycleCollector::NoteDropped(entry.second);
+        }
+    }
+    for (const auto& entry : entries)
+    {
+        if (before.find(entry.first) == before.end())
+        {
+            NoteContainerStore(self, entry.second);
+        }
+    }
+    items.clear();
+    for (const auto& entry : entries)
+    {
+        items.push_back(entry.second);
+    }
+    return InternalValue(NoneValue());
+}
+
+template<SetOp op>
+InternalValue SetCombinedUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    constexpr const char* names[] = { "update", "intersection_update", "difference_update", "symmetric_difference_update" };
+    constexpr bool single = op == SetOp::SymmetricDifference;
+    CheckArgs(params, names[static_cast<size_t>(op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
+    SetScratch scratch;
+    return SetReplace(self, SetCombine(op, self, params, scratch), scratch);
+}
+
+InternalValue SetIsSubset(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "issubset", 1, 1);
+    SetScratch scratch;
+    const auto other = SetArgumentEntries(params.posParams[0], scratch);
+    const auto entries = SetEntries(ListOf(self), scratch);
+    return std::all_of(entries.begin(), entries.end(), [&other](const auto& entry) { return other.find(entry.first) != other.end(); });
+}
+
+InternalValue SetIsSuperset(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "issuperset", 1, 1);
+    SetScratch scratch;
+    const auto other = SetArgumentEntries(params.posParams[0], scratch);
+    const auto entries = SetEntries(ListOf(self), scratch);
+    return std::all_of(other.begin(), other.end(), [&entries](const auto& entry) { return entries.find(entry.first) != entries.end(); });
+}
+
+InternalValue SetCopy(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "copy", 0, 0);
+    return ListAdapter::CreateIterator(ListOf(self).ToValueList(), IteratorKind::Set);
+}
+
+// The item equal to `item` (Python's ==, as the set's hash tokens find equal ones), or the end
+InternalValueList::iterator SetFind(InternalValueList& items, const InternalValue& item)
+{
+    return std::find_if(items.begin(), items.end(), [&item](const InternalValue& other) { return ItemEquals(other, item); });
+}
+
+InternalValue SetAdd(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "add", 1, 1);
+    CheckHashable(params.posParams[0]);
+    auto& items = MutableItems(self);
+    if (SetFind(items, params.posParams[0]) == items.end())
+    {
+        CheckSequenceSize(uint64_t{ items.size() } + 1, "a set");
+        ReserveCounted(items, items.size() + 1);
+        NoteContainerStore(self, params.posParams[0]);
+        items.push_back(params.posParams[0]);
+    }
+    return InternalValue(NoneValue());
+}
+
+InternalValue SetRemoveItem(const InternalValue& self, const CallParams& params, bool mustExist)
+{
+    CheckHashable(params.posParams[0]);
+    auto& items = MutableItems(self);
+    const auto found = SetFind(items, params.posParams[0]);
+    if (found == items.end())
+    {
+        if (mustExist)
+        {
+            ThrowKeyError(params.posParams[0]);
+        }
+    }
+    else
+    {
+        CycleCollector::NoteDropped(*found);
+        items.erase(found);
+    }
+    return InternalValue(NoneValue());
+}
+
+InternalValue SetRemove(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "remove", 1, 1);
+    return SetRemoveItem(self, params, true);
+}
+
+InternalValue SetDiscard(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "discard", 1, 1);
+    return SetRemoveItem(self, params, false);
+}
+
+InternalValue SetPop(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "pop", 0, 0);
+    auto& items = MutableItems(self);
+    if (items.empty())
+    {
+        ThrowKeyError(InternalValue(std::string("pop from an empty set")));
+    }
+    CycleCollector::NoteDropped(items.front());
+    auto result = std::move(items.front());
+    items.erase(items.begin());
+    return result;
+}
+
+InternalValue SetClear(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "clear", 0, 0);
+    auto& items = MutableItems(self);
+    NoteDroppedItems(items);
+    items.clear();
+    return InternalValue(NoneValue());
+}
+
+// The methods of a set: those of the views, and Python's others. `intersection_update` is unsafe in an immutable
+// sandbox, where Jinja2's own list of the methods that change a set leaves it out (docs/tasks/0545)
+const MethodInfo SetMethods[] = {
+    { "isdisjoint", DictViewIsDisjoint, false },
+    { "union", SetCombined<SetOp::Union>, false },
+    { "intersection", SetCombined<SetOp::Intersection>, false },
+    { "difference", SetCombined<SetOp::Difference>, false },
+    { "symmetric_difference", SetCombined<SetOp::SymmetricDifference>, false },
+    { "issubset", SetIsSubset, false },
+    { "issuperset", SetIsSuperset, false },
+    { "copy", SetCopy, false },
+    { "add", SetAdd, true },
+    { "remove", SetRemove, true },
+    { "discard", SetDiscard, true },
+    { "pop", SetPop, true },
+    { "clear", SetClear, true },
+    { "update", SetCombinedUpdate<SetOp::Union>, true },
+    { "intersection_update", SetCombinedUpdate<SetOp::Intersection>, true },
+    { "difference_update", SetCombinedUpdate<SetOp::Difference>, true },
+    { "symmetric_difference_update", SetCombinedUpdate<SetOp::SymmetricDifference>, true },
+};
+
 const MethodInfo DictMethods[] = {
     { "keys", DictKeys, false },
     { "values", DictValues, false },
@@ -3360,6 +3706,10 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
             // An iterator (a lazy filter's generator) has none of a list's methods (docs/tasks/0383)
             if (const auto kind = list->GetIteratorKind(); kind != IteratorKind::None)
             {
+                if (kind == IteratorKind::Set)
+                {
+                    return FindIn(SetMethods, name);
+                }
                 return IsSetKind(kind) ? FindIn(DictViewMethods, name) : nullptr;
             }
             return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
@@ -3408,6 +3758,7 @@ bool IsMethodName(std::string_view name)
         add(ListMethods);
         add(DictMethods);
         add(DictViewMethods);
+        add(SetMethods);
         add(IntMethods);
         add(FloatMethods);
         // The data attributes take the same getattr path
@@ -3585,6 +3936,15 @@ std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context,
     {
         return SandboxedNativeAttribute(context, obj, name);
     }
+    // The data attributes of a list the engine reads itself: a groupby group's `grouper` and `list`, a range's
+    // `start`, `stop` and `step` (docs/tasks/0425)
+    if (const auto list = AsList(obj))
+    {
+        const auto* fields = list->GetFieldNames();
+        const bool isRangeField = name == "start" || name == "stop" || name == "step";
+        const bool isData = fields ? std::find(fields->begin(), fields->end(), name) != fields->end() : isRangeField && list->IsRange();
+        return isData ? SandboxedNativeAttribute(context, obj, name) : std::nullopt;
+    }
     return std::nullopt;
 }
 
@@ -3665,9 +4025,31 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
 
 bool IsMutatingName(std::string_view name)
 {
-    const auto* listMethod = FindIn(ListMethods, name);
-    const auto* dictMethod = FindIn(DictMethods, name);
-    return (listMethod != nullptr && listMethod->isMutating) || (dictMethod != nullptr && dictMethod->isMutating);
+    // Asked at each method call: the names that change a list, a dict or a set, in short lists by length, so most
+    // names (items, get, upper, ...) are ruled out by their length or a compare or two
+    static constexpr std::size_t maxLength = 32;
+    static const auto names = [] {
+        std::array<std::vector<std::string_view>, maxLength + 1> result;
+        auto add = [&result](const auto& table) {
+            for (const auto& method : table)
+            {
+                if (method.isMutating && method.name.size() <= maxLength)
+                {
+                    result[method.name.size()].push_back(method.name);
+                }
+            }
+        };
+        add(ListMethods);
+        add(DictMethods);
+        add(SetMethods);
+        return result;
+    }();
+    if (name.size() > maxLength)
+    {
+        return false;
+    }
+    const auto& sameLength = names[name.size()];
+    return std::find(sameLength.begin(), sameLength.end(), name) != sameLength.end();
 }
 
 void NoteContainerStore(const InternalValue& container, const InternalValue& item)
@@ -3798,6 +4180,12 @@ InternalValue MakeMutable(const InternalValue& value)
     }
     // Nor is a mappingproxy, which has only the dict's reading methods (docs/tasks/0523)
     if (auto map = AsMap(value); map && map->GetProxiedMapping())
+    {
+        return value;
+    }
+    // Nor an object that keeps its attributes as a map (loop, cycler, joiner): a copy would be a dict that
+    // takes the dict methods the object lacks (docs/tasks/0425)
+    if (auto map = AsMap(value); map && map->GetObjectClass())
     {
         return value;
     }

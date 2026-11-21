@@ -249,6 +249,11 @@ std::string IHostObject::Html() const
     return Str();
 }
 
+std::optional<std::string> IHostObject::HtmlFormat(std::string_view /*spec*/) const
+{
+    return std::nullopt;
+}
+
 bool IHostObject::IsNumber() const
 {
     return false;
@@ -483,6 +488,7 @@ public:
     [[nodiscard]] bool IsTuple() const override { return m_object->IsTuple(); }
     [[nodiscard]] bool IsMarkupLike() const override { return m_object->IsMarkupLike(); }
     [[nodiscard]] std::string Html() const override { return m_object->Html(); }
+    [[nodiscard]] std::optional<std::string> HtmlFormat(std::string_view spec) const override { return m_object->HtmlFormat(spec); }
     [[nodiscard]] bool IsNumber() const override { return m_object->IsNumber(); }
     [[nodiscard]] std::optional<InternalValue> ToInt() const override { return ToEngine(m_object->ToInt()); }
     [[nodiscard]] std::optional<InternalValue> ToFloat() const override { return ToEngine(m_object->ToFloat()); }
