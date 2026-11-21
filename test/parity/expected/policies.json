@@ -1,0 +1,830 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "policies",
+ "cases": [
+  {
+   "id": "policies.urlize_default",
+   "template": "{{ 'see http://example.com/c now'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {},
+   "templates": {},
+   "output": "see <a href=\"http://example.com/c\" rel=\"noopener\">http://example.com/c</a> now"
+  },
+  {
+   "id": "policies.urlize_rel_none",
+   "template": "{{ 'see http://example.com/c now'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.rel": null
+    }
+   },
+   "templates": {},
+   "output": "see <a href=\"http://example.com/c\">http://example.com/c</a> now"
+  },
+  {
+   "id": "policies.urlize_rel_words",
+   "template": "{{ 'see http://example.com/c now'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.rel": "x y"
+    }
+   },
+   "templates": {},
+   "output": "see <a href=\"http://example.com/c\" rel=\"x y\">http://example.com/c</a> now"
+  },
+  {
+   "id": "policies.urlize_rel_words_nofollow",
+   "template": "{{ 'http://example.com'|urlize(nofollow=true) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.rel": "x y"
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://example.com\" rel=\"nofollow x y\">http://example.com</a>"
+  },
+  {
+   "id": "policies.urlize_rel_none_nofollow",
+   "template": "{{ 'http://example.com'|urlize(nofollow=true) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.rel": null
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://example.com\" rel=\"nofollow\">http://example.com</a>"
+  },
+  {
+   "id": "policies.urlize_rel_argument",
+   "template": "{{ 'http://example.com'|urlize(rel='z x') }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.rel": "x y"
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://example.com\" rel=\"x y z\">http://example.com</a>"
+  },
+  {
+   "id": "policies.urlize_rel_argument_none_policy",
+   "template": "{{ 'http://example.com'|urlize(rel='z') }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.rel": null
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://example.com\" rel=\"z\">http://example.com</a>"
+  },
+  {
+   "id": "policies.urlize_rel_empty_policy",
+   "template": "{{ 'see http://example.com/c now'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.rel": ""
+    }
+   },
+   "templates": {},
+   "output": "see <a href=\"http://example.com/c\">http://example.com/c</a> now"
+  },
+  {
+   "id": "policies.urlize_target_policy",
+   "template": "{{ 'see http://example.com/c now'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.target": "_blank"
+    }
+   },
+   "templates": {},
+   "output": "see <a href=\"http://example.com/c\" rel=\"noopener\" target=\"_blank\">http://example.com/c</a> now"
+  },
+  {
+   "id": "policies.urlize_target_argument",
+   "template": "{{ 'http://example.com'|urlize(target='_top') }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.target": "_blank"
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://example.com\" rel=\"noopener\" target=\"_top\">http://example.com</a>"
+  },
+  {
+   "id": "policies.urlize_target_argument_none",
+   "template": "{{ 'http://example.com'|urlize(target=none) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.target": "_blank"
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://example.com\" rel=\"noopener\" target=\"_blank\">http://example.com</a>"
+  },
+  {
+   "id": "policies.urlize_target_escaped",
+   "template": "{{ 'see http://example.com/c now'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.target": "a\"b"
+    }
+   },
+   "templates": {},
+   "output": "see <a href=\"http://example.com/c\" rel=\"noopener\" target=\"a&#34;b\">http://example.com/c</a> now"
+  },
+  {
+   "id": "policies.urlize_target_argument_undefined",
+   "template": "{{ 'http://a.com ssh:b'|urlize(target=nope) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.target": "_x",
+     "urlize.extra_schemes": [
+      "ssh:"
+     ]
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://a.com\" rel=\"noopener\">http://a.com</a> <a href=\"ssh:b\" rel=\"noopener\">ssh:b</a>"
+  },
+  {
+   "id": "policies.urlize_schemes_argument_undefined",
+   "template": "{{ 'http://a.com ssh:b'|urlize(extra_schemes=nope) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.target": "_x",
+     "urlize.extra_schemes": [
+      "ssh:"
+     ]
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"http://a.com\" rel=\"noopener\" target=\"_x\">http://a.com</a> ssh:b"
+  },
+  {
+   "id": "policies.urlize_schemes_default",
+   "template": "{{ 'ssh:a@b tel:123 http://example.com'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {},
+   "templates": {},
+   "output": "ssh:a@b tel:123 <a href=\"http://example.com\" rel=\"noopener\">http://example.com</a>"
+  },
+  {
+   "id": "policies.urlize_schemes_policy",
+   "template": "{{ 'ssh:a@b tel:123 http://example.com'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.extra_schemes": [
+      "ssh:",
+      "tel:"
+     ]
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"ssh:a@b\" rel=\"noopener\">ssh:a@b</a> <a href=\"tel:123\" rel=\"noopener\">tel:123</a> <a href=\"http://example.com\" rel=\"noopener\">http://example.com</a>"
+  },
+  {
+   "id": "policies.urlize_schemes_argument",
+   "template": "{{ 'ssh:a@b tel:123'|urlize(extra_schemes=['tel:']) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.extra_schemes": [
+      "ssh:"
+     ]
+    }
+   },
+   "templates": {},
+   "output": "ssh:a@b <a href=\"tel:123\" rel=\"noopener\">tel:123</a>"
+  },
+  {
+   "id": "policies.urlize_schemes_argument_none",
+   "template": "{{ 'ssh:a@b tel:123'|urlize(extra_schemes=none) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.extra_schemes": [
+      "ssh:"
+     ]
+    }
+   },
+   "templates": {},
+   "output": "<a href=\"ssh:a@b\" rel=\"noopener\">ssh:a@b</a> tel:123"
+  },
+  {
+   "id": "policies.urlize_schemes_argument_empty_list",
+   "template": "{{ 'ssh:a@b tel:123'|urlize(extra_schemes=[]) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.extra_schemes": [
+      "ssh:"
+     ]
+    }
+   },
+   "templates": {},
+   "output": "ssh:a@b tel:123"
+  },
+  {
+   "id": "policies.urlize_schemes_policy_string",
+   "template": "{{ 'ssh:a@b tel:123 http://example.com'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.extra_schemes": "ab"
+    }
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "FilterArgumentError",
+    "message": "'a' is not a valid URI scheme prefix."
+   }
+  },
+  {
+   "id": "policies.urlize_schemes_policy_invalid",
+   "template": "{{ 'ssh:a@b tel:123 http://example.com'|urlize }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "urlize.extra_schemes": [
+      "1x"
+     ]
+    }
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "FilterArgumentError",
+    "message": "'1x' is not a valid URI scheme prefix."
+   }
+  },
+  {
+   "id": "policies.truncate_default",
+   "template": "{{ s|truncate(10) }}|{{ 'abcdefghijk'|truncate(10) }}|{{ 'abcdefghijklmnop'|truncate(10) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {},
+   "templates": {},
+   "output": "xxxxxxx...|abcdefghijk|abcdefg..."
+  },
+  {
+   "id": "policies.truncate_leeway_0",
+   "template": "{{ s|truncate(10) }}|{{ 'abcdefghijk'|truncate(10) }}|{{ 'abcdefghijklmnop'|truncate(10) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "truncate.leeway": 0
+    }
+   },
+   "templates": {},
+   "output": "xxxxxxx...|abcdefg...|abcdefg..."
+  },
+  {
+   "id": "policies.truncate_leeway_1",
+   "template": "{{ s|truncate(10) }}|{{ 'abcdefghijk'|truncate(10) }}|{{ 'abcdefghijklmnop'|truncate(10) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "truncate.leeway": 1
+    }
+   },
+   "templates": {},
+   "output": "xxxxxxx...|abcdefghijk|abcdefg..."
+  },
+  {
+   "id": "policies.truncate_leeway_large",
+   "template": "{{ s|truncate(10) }}|{{ 'abcdefghijk'|truncate(10) }}|{{ 'abcdefghijklmnop'|truncate(10) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "truncate.leeway": 100
+    }
+   },
+   "templates": {},
+   "output": "xxxxxxxxxxxxxxxxxxxx|abcdefghijk|abcdefghijklmnop"
+  },
+  {
+   "id": "policies.truncate_leeway_negative",
+   "template": "{{ s|truncate(10) }}|{{ 'abcdefghijk'|truncate(10) }}|{{ 'abcdefghijklmnop'|truncate(10) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "truncate.leeway": -1
+    }
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AssertionError",
+    "message": "expected leeway >= 0, got -1"
+   }
+  },
+  {
+   "id": "policies.truncate_leeway_argument_none",
+   "template": "{{ 'abcdefghijklmnop'|truncate(10, leeway=none) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "truncate.leeway": 0
+    }
+   },
+   "templates": {},
+   "output": "abcdefg..."
+  },
+  {
+   "id": "policies.truncate_leeway_argument_undefined",
+   "template": "{{ 'abcdefghijklmnop'|truncate(10, leeway=nope) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "truncate.leeway": 0
+    }
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "policies.truncate_leeway_argument_wins",
+   "template": "{{ 'abcdefghijklmnop'|truncate(10, leeway=9) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "truncate.leeway": 0
+    }
+   },
+   "templates": {},
+   "output": "abcdefghijklmnop"
+  },
+  {
+   "id": "policies.tojson_default",
+   "template": "{{ {'b': 1, 'a': ['<é>', 2]}|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {},
+   "templates": {},
+   "output": "{\"a\": [\"\\u003c\\u00e9\\u003e\", 2], \"b\": 1}"
+  },
+  {
+   "id": "policies.tojson_kwargs_empty",
+   "template": "{{ {'b': 1, 'a': ['<é>', 2]}|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {}
+    }
+   },
+   "templates": {},
+   "output": "{\"b\": 1, \"a\": [\"\\u003c\\u00e9\\u003e\", 2]}"
+  },
+  {
+   "id": "policies.tojson_kwargs_sort_keys",
+   "template": "{{ {'b': 1, 'a': ['<é>', 2]}|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "sort_keys": true
+     }
+    }
+   },
+   "templates": {},
+   "output": "{\"a\": [\"\\u003c\\u00e9\\u003e\", 2], \"b\": 1}"
+  },
+  {
+   "id": "policies.tojson_kwargs_indent_2",
+   "template": "{{ {'b': 1, 'a': ['<é>', 2]}|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "sort_keys": true,
+      "indent": 2
+     }
+    }
+   },
+   "templates": {},
+   "output": "{\n  \"a\": [\n    \"\\u003c\\u00e9\\u003e\",\n    2\n  ],\n  \"b\": 1\n}"
+  },
+  {
+   "id": "policies.tojson_kwargs_indent_text",
+   "template": "{{ {'b': 1, 'a': ['<é>', 2]}|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "indent": "\t"
+     }
+    }
+   },
+   "templates": {},
+   "output": "{\n\t\"b\": 1,\n\t\"a\": [\n\t\t\"\\u003c\\u00e9\\u003e\",\n\t\t2\n\t]\n}"
+  },
+  {
+   "id": "policies.tojson_kwargs_indent_filter_wins",
+   "template": "{{ {'b': 1, 'a': [1, 2]}|tojson(4) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "indent": 2
+     }
+    }
+   },
+   "templates": {},
+   "output": "{\n    \"b\": 1,\n    \"a\": [\n        1,\n        2\n    ]\n}"
+  },
+  {
+   "id": "policies.tojson_kwargs_indent_filter_none",
+   "template": "{{ {'b': 1, 'a': [1, 2]}|tojson(none) }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "indent": 2
+     }
+    }
+   },
+   "templates": {},
+   "output": "{\n  \"b\": 1,\n  \"a\": [\n    1,\n    2\n  ]\n}"
+  },
+  {
+   "id": "policies.tojson_kwargs_ensure_ascii_false",
+   "template": "{{ {'b': 1, 'a': ['<é>', 2]}|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "ensure_ascii": false,
+      "sort_keys": true
+     }
+    }
+   },
+   "templates": {},
+   "output": "{\"a\": [\"\\u003cé\\u003e\", 2], \"b\": 1}"
+  },
+  {
+   "id": "policies.tojson_kwargs_separators",
+   "template": "{{ {'b': 1, 'a': ['<é>', 2]}|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "separators": [
+       ";",
+       "="
+      ]
+     }
+    }
+   },
+   "templates": {},
+   "output": "{\"b\"=1;\"a\"=[\"\\u003c\\u00e9\\u003e\";2]}"
+  },
+  {
+   "id": "policies.tojson_kwargs_separators_indent",
+   "template": "{{ {'b': 1, 'a': ['<é>', 2]}|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "separators": [
+       ",",
+       ":"
+      ],
+      "indent": 1
+     }
+    }
+   },
+   "templates": {},
+   "output": "{\n \"b\":1,\n \"a\":[\n  \"\\u003c\\u00e9\\u003e\",\n  2\n ]\n}"
+  },
+  {
+   "id": "policies.tojson_kwargs_string_value",
+   "template": "{{ s|tojson }}{{ 'é<'|tojson }}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "policies": {
+     "json.dumps_kwargs": {
+      "ensure_ascii": false
+     }
+    }
+   },
+   "templates": {},
+   "output": "\"xxxxxxxxxxxxxxxxxxxx\"\"é\\u003c\""
+  },
+  {
+   "id": "policies.trans_default",
+   "template": "{% trans %}  a\n   b  \n c {% endtrans %}|{% trans notrimmed %}  a\n   b  \n c {% endtrans %}|{% trans trimmed %}  a\n   b  \n c {% endtrans %}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {},
+   "output": "  a\n   b  \n c |  a\n   b  \n c |a b c"
+  },
+  {
+   "id": "policies.trans_trimmed_policy",
+   "template": "{% trans %}  a\n   b  \n c {% endtrans %}|{% trans notrimmed %}  a\n   b  \n c {% endtrans %}|{% trans trimmed %}  a\n   b  \n c {% endtrans %}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "policies": {
+     "ext.i18n.trimmed": true
+    }
+   },
+   "templates": {},
+   "output": "a b c|  a\n   b  \n c |a b c"
+  },
+  {
+   "id": "policies.trans_trimmed_policy_plural",
+   "template": "{% trans n=2 %}  {{ n }}\n item{% pluralize %}\n {{ n }} items {% endtrans %}",
+   "context": {
+    "d": {
+     "b": 1,
+     "a": "<é>"
+    },
+    "s": "xxxxxxxxxxxxxxxxxxxx"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "policies": {
+     "ext.i18n.trimmed": true
+    }
+   },
+   "templates": {},
+   "output": "2 items"
+  }
+ ]
+}

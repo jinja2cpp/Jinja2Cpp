@@ -1751,6 +1751,12 @@ public:
         const auto list = m_identity ? std::nullopt : AsList(m_container);
         return list && list->IsTuple();
     }
+    // A dict view or set the template made stays one for the host (GenericList::GetViewClass)
+    [[nodiscard]] const char* GetViewClass() const override
+    {
+        const auto list = m_identity ? std::nullopt : AsList(m_container);
+        return list ? DictViewTypeName(list->GetIteratorKind()) : nullptr;
+    }
 
 private:
     [[nodiscard]] const InternalValueList* Items() const
@@ -4192,6 +4198,33 @@ private:
     GenericList m_items;
 };
 
+// A dict view or set of the engine as the host reads it: the list CreateGenericList gives, marked with the view's
+// Python type (IListItemAccessor::GetViewClass). The items, the size and the identity are the list's
+class ViewExportView final : public IListItemAccessor
+{
+public:
+    ViewExportView(GenericList items, const char* viewClass)
+        : m_items(std::move(items))
+        , m_viewClass(viewClass)
+    {
+    }
+
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return m_items.GetAccessor()->GetIndexer(); }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return m_items.GetAccessor()->CreateEnumerator(); }
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items.GetSize(); }
+    [[nodiscard]] const char* GetViewClass() const override { return m_viewClass; }
+    [[nodiscard]] const void* GetIdentity() const override { return m_items.GetIdentity(); }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const ViewExportView*>(&other);
+        return view != nullptr && m_viewClass == view->m_viewClass && m_items.GetAccessor()->IsEqual(*view->m_items.GetAccessor());
+    }
+
+private:
+    GenericList m_items;
+    const char* m_viewClass;
+};
+
 // The public map of a template dict with keys that are not all strings: the string keyed copy
 // (SharedDictAdapter::CreateSnapshot) for GetKeys and the lookups, and the entries under their own keys for
 // GetItems. The identity is the dict's
@@ -5464,7 +5497,7 @@ std::optional<InternalValue> ClassObjectAttribute(const InternalValue& value, st
     });
     // Printed as Python's <built-in method mro of type object at 0x...>
     mro.SetBoundMethod(nullptr, "mro");
-    mro.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__self__", value } }));
+    mro.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__self__", value }, { "__name__", InternalValue(std::string("mro")) }, { "__qualname__", InternalValue(std::string(name) + ".mro") } }));
     return InternalValue(std::move(mro));
 }
 
@@ -5529,6 +5562,11 @@ struct OutputValueConvertor
         if (adapter.IsTuple())
         {
             return result_t(GenericList(std::make_shared<const TupleExportView>(adapter.CreateGenericList())));
+        }
+        // A dict view or a set is marked with its Python type, which a host language may give its own type
+        if (const char* viewClass = DictViewTypeName(adapter.GetIteratorKind()))
+        {
+            return result_t(GenericList(std::make_shared<const ViewExportView>(adapter.CreateGenericList(), viewClass)));
         }
         return result_t(adapter.CreateGenericList());
     }
@@ -6038,6 +6076,7 @@ public:
     }
     [[nodiscard]] std::optional<size_t> GetSize() const override { return m_inner.GetSize(); }
     [[nodiscard]] bool IsTuple() const override { return m_inner.IsTuple(); }
+    [[nodiscard]] const char* GetViewClass() const override { return m_inner.GetViewClass(); }
     [[nodiscard]] const void* GetIdentity() const override { return m_inner.GetIdentity(); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {

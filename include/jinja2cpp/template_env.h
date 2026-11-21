@@ -125,6 +125,9 @@ struct Settings
         //! formats the translation itself, `gettext(message) % variables` (Markup under autoescape); its `%` is not doubled
         //! when the message names no variable. Read when a template is loaded, as the other settings are
         bool i18nNewstyle = true;
+        //! The default of `{% trans %}` blocks that have no `trimmed` or `notrimmed` modifier (Jinja2 `ext.i18n.trimmed` policy):
+        //! on, the whitespace around the message's lines is trimmed as `trimmed` does. Read when a template is loaded
+        bool i18nTrimmed = false;
     };
 
     //! Enables blocks trimming the same way as it does python Jinja2 engine
@@ -193,7 +196,8 @@ struct Settings
     //! With this flag such names are looked up when they run instead
     bool userCallablesAsFilters = false;
     //! Makes the methods that change a list or dict in place (`append`, `pop`, `update`, `clear`, ...) unsafe
-    //! attributes, as Jinja2's `ImmutableSandboxedEnvironment` does: calling one fails with ErrorCode::SecurityError.
+    //! attributes, as Jinja2's `ImmutableSandboxedEnvironment` does: calling one fails with ErrorCode::SecurityError. A set's
+    //! `intersection_update` is refused too, which Jinja2 3.1.6's list of the methods that change a set leaves out (it fails closed).
     //! Off by default
     bool immutableContainers = false;
     //! A sandbox for the engine's values (\ref ISandboxPolicy, jinja2cpp/sandbox_policy.h). Unset by default. Compared
@@ -254,6 +258,9 @@ struct Settings
     };
     //! Bounds on Load and Render; none but the depth limits by default
     Limits limits;
+    //! What the filters `urlize`, `truncate` and `tojson` use when their arguments do not say (Jinja2 `Environment.policies`),
+    //! and \ref RenderOptions::filterPolicies can replace for one render. Read when a filter runs
+    FilterPolicies filterPolicies;
 };
 
 //! Limits for templates a host's users write, anchored on Jinja2's `SandboxedEnvironment`: `range()` of at most

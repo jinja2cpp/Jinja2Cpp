@@ -84,15 +84,15 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
-                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox, lLimits] = lhs;
+                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox, lLimits, lFilterPolicies] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
-                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox, rLimits] = rhs;
-    const auto& [lDo, lLoopControls, lI18n, lI18nNewstyle] = lExt;
-    const auto& [rDo, rLoopControls, rI18n, rI18nNewstyle] = rExt;
+                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox, rLimits, rFilterPolicies] = rhs;
+    const auto& [lDo, lLoopControls, lI18n, lI18nNewstyle, lI18nTrimmed] = lExt;
+    const auto& [rDo, rLoopControls, rI18n, rI18nNewstyle, rI18nTrimmed] = rExt;
 
     // The flags and numbers first, then the strings
-    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lI18nNewstyle, lKeepNl, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox)
-        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rI18nNewstyle, rKeepNl, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox))
+    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lI18nNewstyle, lI18nTrimmed, lKeepNl, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox)
+        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rI18nNewstyle, rI18nTrimmed, rKeepNl, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox))
     {
         return false;
     }
@@ -110,7 +110,22 @@ bool operator==(const Settings& lhs, const Settings& rhs)
         return false;
     }
     // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
-    return lFinalize.callable || rFinalize.callable ? lFinalize.IsEqual(rFinalize) : true;
+    if (lFinalize.callable || rFinalize.callable ? !lFinalize.IsEqual(rFinalize) : false)
+    {
+        return false;
+    }
+    return lFilterPolicies == rFilterPolicies;
+}
+
+bool operator==(const FilterPolicies& lhs, const FilterPolicies& rhs)
+{
+    if (std::tie(lhs.urlizeRel, lhs.urlizeTarget, lhs.urlizeExtraSchemes, lhs.truncateLeeway, lhs.jsonSortKeys, lhs.jsonEnsureAscii, lhs.jsonIndent, lhs.jsonSeparators)
+        != std::tie(rhs.urlizeRel, rhs.urlizeTarget, rhs.urlizeExtraSchemes, rhs.truncateLeeway, rhs.jsonSortKeys, rhs.jsonEnsureAscii, rhs.jsonIndent, rhs.jsonSeparators))
+    {
+        return false;
+    }
+    // As Settings::finalize: two unset callables are equal
+    return lhs.jsonDumps.callable || rhs.jsonDumps.callable ? lhs.jsonDumps.IsEqual(rhs.jsonDumps) : true;
 }
 
 namespace

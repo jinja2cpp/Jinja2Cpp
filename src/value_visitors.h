@@ -1387,7 +1387,12 @@ struct BinaryMathOperation : BaseVisitor<>
     {
         if constexpr (std::is_same_v<T, MapRef>)
         {
-            if (!val.GetObjectClass() && !val.GetHostObject())
+            if (const auto* hostObject = val.GetHostObject())
+            {
+                // A host's dict or other iterable: the items it iterates, as Python's `-` reads them
+                return hostObject->Iterate();
+            }
+            if (!val.GetObjectClass())
             {
                 return ListAdapter::CreateAdapter(val.GetKeyValues());
             }
@@ -1594,7 +1599,12 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if (val.IsHost())
             {
-                return host::AsSequence(*val.GetHostObject());
+                if (auto sequence = host::AsSequence(*val.GetHostObject()))
+                {
+                    return sequence;
+                }
+                // A host's dict_keys or dict_items takes the operations of the engine's own view (`-`)
+                return host::AsSetView(*val.GetHostObject());
             }
         }
         return std::nullopt;

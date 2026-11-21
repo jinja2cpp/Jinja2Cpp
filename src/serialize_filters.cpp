@@ -20,6 +20,7 @@
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
@@ -45,6 +46,18 @@ inline namespace v2
 {
 namespace filters
 {
+// A host's mappingproxy (a Python module's `dict.keys().mapping`): a mapping to the engine, but a proxy to pprint and
+// tojson, as for the engine's own (docs/tasks/0545)
+namespace
+{
+bool IsHostMappingProxy(const MapRef& map)
+{
+    const auto* host = map.GetHostObject();
+    return host != nullptr && std::strcmp(host->TypeName(), "mappingproxy") == 0;
+}
+} // namespace
+
+
 struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
     using BaseVisitor::operator();
@@ -136,7 +149,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         CheckStack();
         if (auto list = AsList(val))
         {
-            if (list->GetRangeInfo())
+            // A dict view has a size, and may hold the dict that holds it
+            if (list->GetRangeInfo() || IsViewKind(list->GetIteratorKind()))
             {
                 return false;
             }
@@ -216,51 +230,74 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return hostItems ? std::optional<ListRef>(hostItems->Ref()) : AsList(val);
     }
 
-    void FormatTo(std::string& out, const InternalValue& val, int64_t indent, int64_t allowance, int level) const
+    static bool IsViewKind(IteratorKind kind) { return IsSetKind(kind) || kind == IteratorKind::DictValues; }
+
+    // The identity and Python class name of a container pprint breaks over lines and tracks in its context: a dict, a
+    // mappingproxy, a list or a tuple. Null for any other value
+    static const void* ContainerIdentity(const InternalValue& val, const char*& typeName)
+    {
+        if (const auto map = AsMap(val); map && !map->GetObjectClass() && !map->IsHost())
+        {
+            typeName = map->GetProxiedMapping() ? "mappingproxy" : "dict";
+            return map->GetIdentity();
+        }
+        if (const auto list = AsList(val); list && !list->GetRangeInfo() && list->GetIteratorKind() == IteratorKind::None && !GetHostObject(val))
+        {
+            typeName = list->IsTuple() ? "tuple" : "list";
+            return list->GetIdentity();
+        }
+        return nullptr;
+    }
+
+    // `fresh`: val is a copy Python makes (the dict a mappingproxy prints), which no context holds
+    void FormatTo(std::string& out, const InternalValue& val, int64_t indent, int64_t allowance, int level, bool fresh = false) const
     {
         CheckStack();
+        const char* typeName = nullptr;
+        const void* identity = fresh ? nullptr : ContainerIdentity(val, typeName);
+        if (identity != nullptr && std::find(m_stack.begin(), m_stack.end(), identity) != m_stack.end())
+        {
+            Write(out, fmt::format("<Recursion on {} with id={}>", typeName, reinterpret_cast<std::uintptr_t>(identity)));
+            return;
+        }
         // Markup has a repr of its own, which pprint does not break
         if (val.IsMarkup() || ReprWidthAtMost(val, Width - indent - allowance) <= Width - indent - allowance)
         {
             Write(out, Print(val, m_context));
             return;
         }
+        // pprint's context: the containers it is breaking over lines, whose reference in itself prints as a recursion
+        struct StackEntry
+        {
+            std::vector<const void*>& stack;
+            bool pushed;
+            StackEntry(std::vector<const void*>& stackRef, const void* id)
+                : stack(stackRef)
+                , pushed(id != nullptr)
+            {
+                if (pushed)
+                {
+                    stack.push_back(id);
+                }
+            }
+            StackEntry(const StackEntry&) = delete;
+            StackEntry& operator=(const StackEntry&) = delete;
+            ~StackEntry()
+            {
+                if (pushed)
+                {
+                    stack.pop_back();
+                }
+            }
+        } const stackEntry(m_stack, identity);
         std::optional<ListAdapter> hostItems;
         if (auto list = ListOf(val, hostItems))
         {
-            if (list->GetRangeInfo())
-            {
-                Write(out, Print(val, m_context));
-                return;
-            }
-            const bool isTuple = list->IsTuple();
-            // A host's iteration may not know its size: its len() does
-            const auto size = hostItems ? GetHostObject(val)->Len() : list->GetSize();
-            std::string_view end = isTuple ? (size == 1 ? ",)" : ")") : "]";
-            out += isTuple ? '(' : '[';
-            FormatItems(out, *list, indent, allowance + static_cast<int64_t>(end.size()), level + 1);
-            out += end;
+            FormatListTo(out, val, *list, hostItems.has_value(), indent, allowance, level);
         }
         else if (auto map = AsMap(val))
         {
-            if (map->GetObjectClass())
-            {
-                Write(out, Print(val, m_context));
-                return;
-            }
-            // pprint's _pprint_mappingproxy (docs/tasks/0523)
-            if (const auto* proxied = map->GetProxiedMapping())
-            {
-                out += "mappingproxy(";
-                FormatTo(out, *proxied, indent + 13, allowance + 1, level);
-                out += ')';
-                return;
-            }
-            auto entries = map->GetEntries();
-            SortEntriesByKey(entries);
-            out += '{';
-            FormatDictItems(out, entries, indent, allowance + 1, level + 1);
-            out += '}';
+            FormatMapTo(out, val, *map, indent, allowance, level);
         }
         else if (const auto* pair = GetIf<KeyValuePair>(&val))
         {
@@ -283,6 +320,72 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
     }
 
+    // A list, tuple, dict view or set of `val` too wide for a line; `isHost`: the list is a host's, whose len() is asked
+    void FormatListTo(std::string& out, const InternalValue& val, const ListRef& list, bool isHost, int64_t indent, int64_t allowance, int level) const
+    {
+        if (list.GetRangeInfo())
+        {
+            Write(out, Print(val, m_context));
+            return;
+        }
+        if (const auto kind = list.GetIteratorKind(); IsViewKind(kind))
+        {
+            // pprint has no layout for a dict view: its repr stays on one line. A set breaks as a list does, in braces and
+            // sorted (_pprint_set, docs/tasks/0545)
+            if (kind != IteratorKind::Set)
+            {
+                Write(out, Print(val, m_context));
+                return;
+            }
+            std::vector<InternalValue> sorted(list.begin(), list.end());
+            StableSortValues(sorted.begin(), sorted.end(), [](const InternalValue& left, const InternalValue& right) { return SafeKeyLess(left, right); });
+            out += '{';
+            FormatItems(out, sorted, indent, allowance + 1, level + 1);
+            out += '}';
+            return;
+        }
+        const bool isTuple = list.IsTuple();
+        // A host's iteration may not know its size: its len() does
+        const auto size = isHost ? GetHostObject(val)->Len() : list.GetSize();
+        std::string_view end = isTuple ? (size == 1 ? ",)" : ")") : "]";
+        out += isTuple ? '(' : '[';
+        FormatItems(out, list, indent, allowance + static_cast<int64_t>(end.size()), level + 1);
+        out += end;
+    }
+
+    // A dict, a mappingproxy or an object of `val` too wide for a line
+    void FormatMapTo(std::string& out, const InternalValue& val, const MapRef& map, int64_t indent, int64_t allowance, int level) const
+    {
+        if (map.GetObjectClass())
+        {
+            Write(out, Print(val, m_context));
+            return;
+        }
+        // A host's mappingproxy breaks as the engine's own does, over its entries
+        if (IsHostMappingProxy(map))
+        {
+            auto entries = map.GetEntries();
+            SortEntriesByKey(entries);
+            out += "mappingproxy({";
+            FormatDictItems(out, entries, indent + 13, allowance + 2, level + 1);
+            out += "})";
+            return;
+        }
+        // pprint's _pprint_mappingproxy (docs/tasks/0523)
+        if (const auto* proxied = map.GetProxiedMapping())
+        {
+            out += "mappingproxy(";
+            FormatTo(out, *proxied, indent + 13, allowance + 1, level, true);
+            out += ')';
+            return;
+        }
+        auto entries = map.GetEntries();
+        SortEntriesByKey(entries);
+        out += '{';
+        FormatDictItems(out, entries, indent, allowance + 1, level + 1);
+        out += '}';
+    }
+
     // The width of the one-line repr of val, or more than limit once it is known to exceed it:
     // every level of a nested value asks, so it must not print the whole value each time
     [[nodiscard]] int64_t ReprWidthAtMost(const InternalValue& val, int64_t limit) const
@@ -293,12 +396,14 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             return limit + 1;
         }
         std::optional<ListAdapter> hostItems;
-        if (auto list = ListOf(val, hostItems); list && !list->GetRangeInfo())
+        // A dict view or set is measured by its repr, as pprint's _safe_repr takes it: it may hold the dict that holds it,
+        // which the repr prints as `...` where a walk of its items would not end
+        if (auto list = ListOf(val, hostItems); list && !list->GetRangeInfo() && !IsViewKind(list->GetIteratorKind()))
         {
             return ItemsWidthAtMost(*list, limit);
         }
         // A mappingproxy is measured by its repr, as pprint's _safe_repr takes it (docs/tasks/0538)
-        if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping())
+        if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping() && !IsHostMappingProxy(*map))
         {
             return EntriesWidthAtMost(map->GetEntries(), limit);
         }
@@ -606,7 +711,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
         // mappingproxy({...}) (docs/tasks/0523): pprint's _safe_repr takes its repr, in the dict's order, and a
         // reference cycle through it prints {...} (docs/tasks/0538)
-        if (map.GetProxiedMapping())
+        if (map.GetProxiedMapping() || IsHostMappingProxy(map))
         {
             visitors::ValueRenderer<char>(str, true)(map);
             return str;
@@ -691,6 +796,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     std::string operator()(const BigIntView& val) const { return std::string(CheckedDecimal(val)); }
 
     const RenderContext* m_context;
+    // The containers FormatTo is breaking over lines
+    mutable std::vector<const void*> m_stack;
 };
 
 PrettyPrint::PrettyPrint(const FilterParams& params)
@@ -1086,7 +1193,7 @@ private:
                 throw TemplateRuntimeError("Object of type "s + objectClass + " is not JSON serializable");
             }
             // Nor is a mappingproxy a dict to it (docs/tasks/0523)
-            if (map->GetProxiedMapping())
+            if (map->GetProxiedMapping() || IsHostMappingProxy(*map))
             {
                 throw TemplateRuntimeError("Object of type mappingproxy is not JSON serializable");
             }
@@ -1662,6 +1769,59 @@ std::optional<std::pair<std::string, std::string>> JsonSeparators(const Internal
     return std::make_pair(std::move(*item), std::move(*key));
 }
 
+// htmlsafe_json_dumps(value, dumps=policy): dumps(value[, indent=indent]) must be a str, whose <, >, & and ' become
+// \u escapes. `indent` is null when the filter was not given one
+InternalValue CallJsonDumps(const UserCallable& dumps, const InternalValue& value, const InternalValue* indent, RenderContext& context)
+{
+    const InternalValue callable = visitors::InputValueConvertor::ConvertUserCallable(dumps);
+    CallParams params;
+    params.posParams.push_back(value);
+    if (indent)
+    {
+        params.kwParams["indent"] = *indent;
+    }
+    const InternalValue result = GetIf<Callable>(&callable)->GetExpressionCallable()(params, context);
+    std::optional<std::string> text = GetAsSameString(std::string(), result);
+    if (!text)
+    {
+        if (auto wide = GetAsSameString(std::wstring(), result))
+        {
+            text = ConvertString<std::string>(*wide);
+        }
+    }
+    if (!text)
+    {
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::AttributeError, "'"s + Apply<visitors::PythonTypeNameGetter>(result) + "' object has no attribute 'replace'");
+    }
+    // Each of the four characters becomes a six-character escape: the result is checked against the cap first
+    const auto escapes = static_cast<uint64_t>(std::count_if(text->begin(), text->end(), [](char ch) { return ch == '<' || ch == '>' || ch == '&' || ch == '\''; }));
+    CheckSequenceSize(static_cast<uint64_t>(text->size()) + (5 * escapes), "a JSON document");
+    std::string escaped;
+    escaped.reserve(text->size() + (5 * escapes));
+    for (const char ch : *text)
+    {
+        switch (ch)
+        {
+        case '<':
+            escaped += "\\u003c";
+            break;
+        case '>':
+            escaped += "\\u003e";
+            break;
+        case '&':
+            escaped += "\\u0026";
+            break;
+        case '\'':
+            escaped += "\\u0027";
+            break;
+        default:
+            escaped.push_back(ch);
+            break;
+        }
+    }
+    return InternalValue(escaped);
+}
+
 } // namespace
 
 InternalValue Serialize::Filter(const InternalValue& value, RenderContext& context)
@@ -1676,10 +1836,15 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     const bool isString = IsStringValue(value) || GetAsSameString(std::string(), value);
     JsonOptions options;
     // The argument is still evaluated: a failing or host-callable indent runs as in Python
-    auto indentVal = this->GetArgumentValue("indent", context);
-    options.indent = JsonIndent(isString ? InternalValue() : indentVal);
+    // Whether it was passed matters to a policy's dumps function only, so the lookup that tells is made for that
+    auto* callback = context.GetRendererCallback();
+    const FilterPolicies& policies = callback->GetFilterPolicies();
+    const bool dumpsCalled = m_mode != TransformersJsonMode && policies.jsonDumps.callable;
+    bool indentGiven = false;
+    auto indentVal = dumpsCalled ? this->GetArgumentValue("indent", context, indentGiven) : this->GetArgumentValue("indent", context);
     if (m_mode == TransformersJsonMode)
     {
+        options.indent = JsonIndent(isString ? InternalValue() : indentVal);
         // transformers' tojson: json.dumps(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False),
         // a plain string
         options.htmlSafe = false;
@@ -1691,10 +1856,27 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     }
 
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
-    // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both)
-    InternalValue resultVal = PythonJsonWriter(context, std::move(options)).Write(value);
+    // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both). The json.dumps
+    // policies are the defaults (docs/tasks/0435)
+    InternalValue resultVal;
+    if (dumpsCalled)
+    {
+        resultVal = CallJsonDumps(policies.jsonDumps, value, IsArgumentSet(indentVal, indentGiven) ? &indentVal : nullptr, context);
+    }
+    else
+    {
+        // A policy's dumps function takes indent as it is; the built-in writer converts it
+        options.indent = JsonIndent(isString ? InternalValue() : indentVal);
+        options.sortKeys = policies.jsonSortKeys;
+        options.ensureAscii = policies.jsonEnsureAscii;
+        options.separators = policies.jsonSeparators;
+        if (!options.indent && IsEmpty(indentVal))
+        {
+            options.indent = policies.jsonIndent;
+        }
+        resultVal = PythonJsonWriter(context, std::move(options)).Write(value);
+    }
     // tojson output is always Markup: safe for HTML, so in prompt mode it is neutralized first (docs/tasks/0358)
-    auto* callback = context.GetRendererCallback();
     if (const auto* prompt = callback->GetPromptEscaper())
     {
         return detail::PromptEscape(resultVal, *prompt, callback);

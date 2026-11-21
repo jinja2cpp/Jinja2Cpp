@@ -3,6 +3,7 @@
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "python_format.h"
@@ -1281,6 +1282,56 @@ InternalValue ConstructUndefined(std::string_view className, const CallParams& p
     ThrowTypeError("cannot create '" + cls + "' instances");
 }
 
+// Markup(base, encoding) with an encoding other than None is str()'s, and the engine has no bytes to decode
+[[noreturn]] void RefuseMarkupEncoding(const CallParams& params, const InternalValue& encoding)
+{
+    if (!IsStringValue(encoding))
+    {
+        ThrowTypeError(std::string("str() argument 'encoding' must be str, not ") + Apply<visitors::PythonTypeNameGetter>(encoding));
+    }
+    if (params.posParams.empty() || IsStringValue(params.posParams.front()))
+    {
+        ThrowTypeError("decoding str is not supported");
+    }
+    // An object with __html__ is its markup, a str
+    if (const auto* host = GetHostObject(params.posParams.front()); !host || !host->IsMarkupLike())
+    {
+        ThrowTypeError(std::string("decoding to str: need a bytes-like object, ") + Apply<visitors::PythonTypeNameGetter>(params.posParams.front()) + " found");
+    }
+    ThrowTypeError("decoding str is not supported");
+}
+
+InternalValue ConstructMarkup(const CallParams& params, RenderContext& context)
+{
+    // Markup.__new__(cls, base='', encoding=None, errors='strict'): `base` is positional only
+    for (const auto& kw : params.kwParams)
+    {
+        if (kw.first != "encoding" && kw.first != "errors")
+        {
+            ThrowTypeError("Markup.__new__() got an unexpected keyword argument '" + kw.first + "'");
+        }
+    }
+    CheckClassArguments("Markup", params, 3);
+    // An encoding other than None is str()'s: the engine has no bytes, so a base is never decodable
+    const InternalValue* encoding = params.posParams.size() > 1 ? &params.posParams[1] : nullptr;
+    for (const auto& kw : params.kwParams)
+    {
+        if (kw.first == "encoding")
+        {
+            if (encoding)
+            {
+                ThrowTypeError("Markup.__new__() got multiple values for argument 'encoding'");
+            }
+            encoding = &kw.second;
+        }
+    }
+    if (encoding && !encoding->IsNone())
+    {
+        RefuseMarkupEncoding(params, *encoding);
+    }
+    return params.posParams.empty() ? InternalValue(std::string()).SetMarkup() : ApplyBuiltinFilter("safe", CallParams(), params.posParams.front(), context);
+}
+
 bool IsUndefinedClass(std::string_view className)
 {
     return className == "Undefined" || className == "StrictUndefined" || className == "ChainableUndefined" || className == "DebugUndefined";
@@ -1323,16 +1374,7 @@ InternalValue CallPythonClass(std::string_view className, const CallParams& para
     }
     if (className == "Markup")
     {
-        // Markup.__new__(cls, base='', encoding=None, errors='strict'): `base` is positional only
-        for (const auto& kw : params.kwParams)
-        {
-            if (kw.first != "encoding" && kw.first != "errors")
-            {
-                ThrowTypeError("Markup.__new__() got an unexpected keyword argument '" + kw.first + "'");
-            }
-        }
-        CheckClassArguments("Markup", params, 1);
-        return params.posParams.empty() ? InternalValue(std::string()).SetMarkup() : ApplyBuiltinFilter("safe", CallParams(), params.posParams.front(), context);
+        return ConstructMarkup(params, context);
     }
     if (IsUndefinedClass(className))
     {

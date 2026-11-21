@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace jinja2
@@ -121,6 +122,9 @@ public:
     // autoescape, and is `escaped`
     [[nodiscard]] virtual bool IsMarkupLike() const { return false; }
     [[nodiscard]] virtual std::string Html() const { return Str(); }
+    // What Markup.format makes of the object as a field with `spec` (EscapeFormatter.format_field of an object with
+    // __html_format__ or __html__): the escaped text, or nullopt for an object with neither
+    [[nodiscard]] virtual std::optional<std::string> HtmlFormat(std::string_view /*spec*/) const { return std::nullopt; }
     // isinstance(x, numbers.Number); int(x) and float(x) (nullopt: the object has no such value)
     [[nodiscard]] virtual bool IsNumber() const { return false; }
     [[nodiscard]] virtual std::optional<InternalValue> ToInt() const { return std::nullopt; }
@@ -191,6 +195,9 @@ ListAdapter Reversed(const IEngineHostObject& host);
 // A list or tuple (IsSequence) as a list of the engine, marked as a tuple for a tuple; nullopt
 // for every other object
 std::optional<ListAdapter> AsSequence(const IEngineHostObject& host);
+// A host's dict_keys or dict_items as the engine's view of that kind, a snapshot of the items Iterate gives, which has the
+// set operations of the engine's own view (`-`, ordering); nullopt for every other object (docs/tasks/0545)
+std::optional<ListAdapter> AsSetView(const IEngineHostObject& host);
 // x == other by Python's rules: left.__eq__, then right.__eq__, then identity. Null hosts
 // stand for operands that are no host objects
 bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue);

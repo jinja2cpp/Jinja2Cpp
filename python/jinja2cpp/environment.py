@@ -642,7 +642,8 @@ class Environment(_jinja2cpp.Environment):
 
     @property
     def policies(self) -> t.Dict[str, t.Any]:
-        """Jinja2's policies. The engine implements none of them: a changed or added entry sends templates to Jinja2."""
+        """Jinja2's policies, read at each render (the engine implements urlize, truncate, tojson and the i18n trimming); a
+        value it cannot take (a callable for a string, say) sends the templates loaded from then on to Jinja2."""
         delegate = self.__dict__.get("_delegate")
         if delegate is not None:
             return t.cast(t.Dict[str, t.Any], delegate.env.policies)
@@ -680,7 +681,7 @@ class Environment(_jinja2cpp.Environment):
         return fallback.fallback_template(self, jt, template_class, source)
 
     def _uses_jinja2(self) -> bool:
-        return "_delegate" in self.__dict__ or self.policies != fallback.DEFAULT_POLICIES
+        return "_delegate" in self.__dict__ or fallback.policies_reason(self.policies) is not None
 
     def from_string(self, source: t.Any, globals: t.Optional[t.Mapping[str, t.Any]] = None, template_class: t.Optional[t.Type[Template]] = None) -> Template:
         """Load a template from a source string without using ``loader``."""

@@ -1472,11 +1472,11 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 throw TemplateRuntimeError("'"s + view + "' object is not subscriptable");
             }
         }
-        // random.choice of a mappingproxy reads it at a random index below its len(): that key's value, or a
+        // random.choice of a dict or mappingproxy reads it at a random index below its len(): that key's value, or a
         // KeyError (docs/tasks/0538)
         if (m_mode == RandomMode)
         {
-            if (const auto proxy = AsMap(baseVal); proxy && proxy->GetProxiedMapping() && proxy->GetSize() != 0)
+            if (const auto proxy = AsMap(baseVal); proxy && !proxy->GetObjectClass() && !proxy->IsHost() && proxy->GetSize() != 0)
             {
                 std::random_device rd;
                 std::mt19937 gen(rd());
@@ -1493,6 +1493,20 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         // at the subscript, as the engine's own view does (docs/tasks/0496)
         if (const auto* host = m_mode == RandomMode ? GetHostObject(baseVal) : nullptr)
         {
+            // A host mapping (a Python dict or mappingproxy) is indexed at a random position below its len(), as the
+            // engine's own dict is: that key's value, or a KeyError (docs/tasks/0545)
+            if (const size_t length = host->Len().value_or(0); host->IsMapping() && length != 0)
+            {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<size_t> dis(0, length - 1);
+                const InternalValue index(static_cast<int64_t>(dis(gen)));
+                if (auto found = host->GetItem(index))
+                {
+                    return KeepMarkup(baseVal, WithParent(baseVal, std::move(*found)));
+                }
+                methods::ThrowKeyError(index);
+            }
             if (!host->IsMapping() && host->Len().value_or(0) != 0 && !host->GetAttr("__getitem__"))
             {
                 throw TemplateRuntimeError("'"s + host->TypeName() + "' object is not subscriptable");

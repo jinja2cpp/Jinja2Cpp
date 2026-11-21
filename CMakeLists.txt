@@ -664,6 +664,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/v1_names_test.cpp
         test/value_deep_test.cpp
         test/value_ptr_test.cpp
+        test/windows_debug_reports.cpp
         test/parity/parity_test.cpp
     )
     if (JINJA2CPP_WITH_CHAT_TEMPLATES)

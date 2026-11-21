@@ -2390,7 +2390,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
 
     AddTransMessageNames(m_nodes, m_names, trans);
 
-    if (trans.trimmed.value_or(false))
+    if (trans.trimmed.value_or(m_settings.extensions.i18nTrimmed))
     {
         TrimTransMessages(trans);
     }
