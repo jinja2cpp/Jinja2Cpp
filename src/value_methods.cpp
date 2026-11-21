@@ -1361,8 +1361,7 @@ struct StrOps
         std::string digits;
         if (base == 10)
         {
-            CheckedDecimal(val);
-            digits = std::string(val.Magnitude());
+            digits = std::string(CheckedMagnitude(val));
         }
         else
         {

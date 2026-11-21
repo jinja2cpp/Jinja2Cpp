@@ -555,15 +555,41 @@ static_assert(std::is_trivially_copyable_v<ValueStorage>, "copying a value must 
 static_assert(sizeof(ValueStorage) <= 24);
 } // namespace detail
 
-// What a visitor receives for an integer outside int64 (docs/tasks/0270): its canonical
-// decimal form, which the value (or the host BigInt read in place) keeps alive
-struct BigIntView
-{
-    std::string_view decimal;
+// CPython's limit on converting an integer to or from decimal text (sys.get_int_max_str_digits())
+constexpr size_t MaxIntStrDigits = 4300;
 
+// What a visitor receives for an integer outside int64 (docs/tasks/0270): a view of a value's
+// BigIntObject, which the value keeps alive, or of decimal text with no object (FromText).
+// Read it only through its accessors: a huge integer (docs/tasks/0543) will keep a binary form
+// and may have no decimal one, so code that needs the decimal of any integer uses WithDecimal
+// (big_int.h)
+class BigIntView
+{
+public:
+    // A view of a value's object; defined after BigIntObject
+    explicit BigIntView(const detail::BigIntObject& object) noexcept;
+    // A view of decimal text ("-" and digits, no leading zero, outside int64) that the caller
+    // keeps alive, with no object. Never a huge integer: a precondition caps it at
+    // MaxIntStrDigits digits (docs/tasks/0543 B2)
+    [[nodiscard]] JINJA2CPP_EXPORT static BigIntView FromText(std::string_view decimal);
+
+    // The value's object, which a copy of the integer may share; null for a view of text
+    [[nodiscard]] const detail::BigIntObject* Object() const noexcept { return m_object; }
     // -1 or 1: a big integer is never zero
-    [[nodiscard]] int Sign() const noexcept { return decimal.front() == '-' ? -1 : 1; }
-    [[nodiscard]] std::string_view Magnitude() const noexcept { return Sign() < 0 ? decimal.substr(1) : decimal; }
+    [[nodiscard]] int Sign() const noexcept { return m_decimal.front() == '-' ? -1 : 1; }
+    // The canonical decimal form the integer keeps ("-" and digits), for the operations that
+    // read the digits of an integer that is not huge
+    [[nodiscard]] std::string_view InlineDecimal() const noexcept { return m_decimal; }
+
+private:
+    BigIntView(const detail::BigIntObject* object, std::string_view decimal) noexcept
+        : m_object(object)
+        , m_decimal(decimal)
+    {
+    }
+
+    const detail::BigIntObject* m_object;
+    std::string_view m_decimal;
 };
 
 using InternalValueRef = ReferenceWrapper<InternalValue>;
@@ -1268,7 +1294,15 @@ private:
 
     size_t m_size;
 };
+} // namespace detail
 
+inline BigIntView::BigIntView(const detail::BigIntObject& object) noexcept
+    : BigIntView(&object, object.Decimal())
+{
+}
+
+namespace detail
+{
 // The index of T among the alternatives of ValueStorage
 template<typename T, typename Variant>
 struct AlternativeIndex;
@@ -2106,7 +2140,7 @@ inline std::optional<BigIntView> AsBigInt(const InternalValue& val)
 {
     if (const auto* big = std::get_if<detail::BigIntHandle>(&detail::InternalValueAccess::Data(val)))
     {
-        return BigIntView{ big->object->Decimal() };
+        return BigIntView{ *big->object };
     }
     return std::nullopt;
 }

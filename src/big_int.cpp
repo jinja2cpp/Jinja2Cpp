@@ -1,5 +1,6 @@
 #include "big_int.h"
 
+#include "contracts.h"
 #include "decimal_number.h"
 #include "engine_errors.h"
 #include "internal_value.h"
@@ -526,6 +527,49 @@ bool IsPowerOfTwo(int base)
     return (base & (base - 1)) == 0;
 }
 
+// The bits of a magnitude given in decimal: 0 for 0
+size_t MagnitudeBits(std::string_view magnitude)
+{
+    const auto words = BinaryWords(magnitude);
+    return words.empty() ? 0 : ((words.size() - 1) * 32) + WordBits(words.back());
+}
+
+// The digits of a magnitude given in decimal, in a power-of-two base (2 to 32), lower case
+std::string MagnitudeDigits(std::string_view magnitude, int base)
+{
+    const auto words = BinaryWords(magnitude);
+    if (words.empty())
+    {
+        return "0";
+    }
+    const auto bitsPerDigit = WordBits(static_cast<uint32_t>(base)) - 1;
+    const auto totalBits = ((words.size() - 1) * 32) + WordBits(words.back());
+    const auto count = (totalBits + bitsPerDigit - 1) / bitsPerDigit;
+    const auto mask = static_cast<uint64_t>(base - 1);
+    std::string result(count, '0');
+    // Digit `idx` from the least significant end holds the bits from idx * bitsPerDigit up
+    for (size_t idx = 0; idx != count; ++idx)
+    {
+        const auto bit = idx * bitsPerDigit;
+        const auto word = bit / 32;
+        const auto shift = bit % 32;
+        uint64_t window = uint64_t{ words[word] } >> shift;
+        if (shift + bitsPerDigit > 32 && word + 1 < words.size())
+        {
+            window |= uint64_t{ words[word + 1] } << (32 - shift);
+        }
+        result[count - 1 - idx] = "0123456789abcdefghijklmnopqrstuvwxyz"[window & mask];
+    }
+    return result;
+}
+
+// The digits of a view's decimal form without its sign
+std::string_view InlineMagnitude(const BigIntView& val) noexcept
+{
+    const auto decimal = val.InlineDecimal();
+    return val.Sign() < 0 ? decimal.substr(1) : decimal;
+}
+
 // Whether a magnitude of `digits` decimal digits has more than MaxBigIntBits bits
 bool ExceedsBitCap(std::string_view magnitude)
 {
@@ -538,7 +582,7 @@ bool ExceedsBitCap(std::string_view magnitude)
     {
         return true;
     }
-    return BitLength(BigIntView{ magnitude }) > MaxBigIntBits;
+    return MagnitudeBits(magnitude) > MaxBigIntBits;
 }
 
 [[noreturn]] void ThrowTooManyBits()
@@ -587,6 +631,25 @@ InternalValue MakeBigInt(std::string_view decimal, bool withinBitCap)
 InternalValue MakeBigIntValue(std::string_view decimal)
 {
     return MakeBigInt(decimal, false);
+}
+
+BigIntView BigIntView::FromText(std::string_view decimal)
+{
+    // At most MaxIntStrDigits digits is fewer than 14285 bits: never huge (docs/tasks/0543 B2)
+    JINJA2CPP_EXPECTS(!decimal.empty() && decimal.size() - (decimal.front() == '-' ? 1 : 0) <= MaxIntStrDigits);
+    return BigIntView(nullptr, decimal);
+}
+
+InternalValue BigIntValue(const BigIntView& val)
+{
+    if (const auto* obj = val.Object())
+    {
+        InternalValue result;
+        detail::InternalValueAccess::Data(result) = detail::BigIntHandle{ obj };
+        detail::InternalValueAccess::ObjectPtr(result) = ValueObjectPtr(obj);
+        return result;
+    }
+    return MakeBigIntValue(val.InlineDecimal());
 }
 
 InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative)
@@ -690,7 +753,7 @@ std::string BigInt::ToDigits(int base) const
     }
     if (IsPowerOfTwo(base))
     {
-        return MagnitudeInBase(BigIntView{ magnitude }, base);
+        return MagnitudeDigits(magnitude, base);
     }
     // Limbs of base^k, each k digits
     const auto chunk = DigitChunk(base);
@@ -731,45 +794,27 @@ InternalValue IntegerFromDouble(double val)
 
 std::string_view CheckedDecimal(const BigIntView& val)
 {
-    if (val.Magnitude().size() > MaxIntStrDigits)
+    if (InlineMagnitude(val).size() > MaxIntStrDigits)
     {
         ThrowStrDigits("");
     }
-    return val.decimal;
+    return val.InlineDecimal();
+}
+
+std::string_view CheckedMagnitude(const BigIntView& val)
+{
+    const auto decimal = CheckedDecimal(val);
+    return val.Sign() < 0 ? decimal.substr(1) : decimal;
 }
 
 std::string MagnitudeInBase(const BigIntView& val, int base)
 {
-    const auto words = BinaryWords(val.Magnitude());
-    if (words.empty())
-    {
-        return "0";
-    }
-    const auto bitsPerDigit = WordBits(static_cast<uint32_t>(base)) - 1;
-    const auto totalBits = ((words.size() - 1) * 32) + WordBits(words.back());
-    const auto count = (totalBits + bitsPerDigit - 1) / bitsPerDigit;
-    const auto mask = static_cast<uint64_t>(base - 1);
-    std::string result(count, '0');
-    // Digit `idx` from the least significant end holds the bits from idx * bitsPerDigit up
-    for (size_t idx = 0; idx != count; ++idx)
-    {
-        const auto bit = idx * bitsPerDigit;
-        const auto word = bit / 32;
-        const auto shift = bit % 32;
-        uint64_t window = uint64_t{ words[word] } >> shift;
-        if (shift + bitsPerDigit > 32 && word + 1 < words.size())
-        {
-            window |= uint64_t{ words[word + 1] } << (32 - shift);
-        }
-        result[count - 1 - idx] = "0123456789abcdefghijklmnopqrstuvwxyz"[window & mask];
-    }
-    return result;
+    return MagnitudeDigits(InlineMagnitude(val), base);
 }
 
 size_t BitLength(const BigIntView& val)
 {
-    const auto words = BinaryWords(val.Magnitude());
-    return words.empty() ? 0 : ((words.size() - 1) * 32) + WordBits(words.back());
+    return MagnitudeBits(InlineMagnitude(val));
 }
 
 int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept
@@ -780,8 +825,8 @@ int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept
     {
         return leftSign < rightSign ? -1 : 1;
     }
-    const auto l = left.Magnitude();
-    const auto r = right.Magnitude();
+    const auto l = InlineMagnitude(left);
+    const auto r = InlineMagnitude(right);
     int magnitude = 0;
     if (l.size() != r.size())
     {
@@ -812,15 +857,15 @@ int CompareBigIntDouble(const BigIntView& left, double right)
     }
     // Doubles this large are whole numbers
     const auto text = fmt::format("{:.0f}", right);
-    return CompareBigInts(left, BigIntView{ text });
+    return CompareBigInts(left, BigIntView::FromText(text));
 }
 
 double BigIntToDouble(const BigIntView& val)
 {
     // 10^309 is past the largest double
-    if (val.Magnitude().size() <= 309)
+    if (InlineMagnitude(val).size() <= 309)
     {
-        const auto result = ParseDecimal(val.decimal);
+        const auto result = ParseDecimal(val.InlineDecimal());
         if (result && std::isfinite(*result))
         {
             return *result;
@@ -883,15 +928,17 @@ InternalValue RoundIntegerDecimal(std::string_view decimal, int64_t ndigits)
 
 InternalValue NegateBigInt(const BigIntView& val)
 {
-    if (val.Sign() < 0)
-    {
-        return MakeBigIntValue(val.Magnitude());
-    }
-    std::string negated;
-    negated.reserve(val.decimal.size() + 1);
-    negated.push_back('-');
-    negated.append(val.decimal);
-    return MakeBigIntValue(negated);
+    return WithDecimal(val, [&val](std::string_view decimal) {
+        if (val.Sign() < 0)
+        {
+            return MakeBigIntValue(decimal.substr(1));
+        }
+        std::string negated;
+        negated.reserve(decimal.size() + 1);
+        negated.push_back('-');
+        negated.append(decimal);
+        return MakeBigIntValue(negated);
+    });
 }
 
 void ThrowBigIntArithmetic()
@@ -991,13 +1038,13 @@ void BackendObject::Made(BigIntStatus status)
 
 void Load(const BigIntBackend& backend, BackendObject& obj, const IntOperand& val)
 {
-    if (val.decimal.empty())
+    if (!val.big)
     {
         obj.Made(backend.fromInt64(&backend, obj.Out(), val.small));
     }
     else
     {
-        obj.Made(backend.fromDecimal(&backend, obj.Out(), val.decimal.data(), val.decimal.size()));
+        obj.Made(WithDecimal(*val.big, [&backend, &obj](std::string_view decimal) { return backend.fromDecimal(&backend, obj.Out(), decimal.data(), decimal.size()); }));
     }
 }
 
@@ -1048,21 +1095,21 @@ InternalValue ToValue(const BigIntBackend& backend, const BackendObject& obj)
 
 int Sign(const IntOperand& val) noexcept
 {
-    if (!val.decimal.empty())
+    if (val.big)
     {
-        return val.decimal.front() == '-' ? -1 : 1;
+        return val.big->Sign();
     }
     return val.small < 0 ? -1 : (val.small > 0 ? 1 : 0);
 }
 
 double ToDouble(const IntOperand& val)
 {
-    return val.decimal.empty() ? static_cast<double>(val.small) : BigIntToDouble(BigIntView{ val.decimal });
+    return val.big ? BigIntToDouble(*val.big) : static_cast<double>(val.small);
 }
 
 bool IsOdd(const IntOperand& val) noexcept
 {
-    return val.decimal.empty() ? (val.small & 1) != 0 : IsOdd(BigIntView{ val.decimal });
+    return val.big ? IsOdd(*val.big) : (val.small & 1) != 0;
 }
 
 // a - b < 0 or the like: the floored result from a truncated one. Python's floor division and
@@ -1114,7 +1161,7 @@ InternalValue Power(const BigIntBackend* backend, const IntOperand& base, const 
         }
         return std::pow(ToDouble(base), ToDouble(exp));
     }
-    if (base.decimal.empty() && (base.small == 0 || base.small == 1 || base.small == -1))
+    if (!base.big && (base.small == 0 || base.small == 1 || base.small == -1))
     {
         if (expSign == 0)
         {
@@ -1130,7 +1177,7 @@ InternalValue Power(const BigIntBackend* backend, const IntOperand& base, const 
     BackendObject acc(*backend);
     Load(*backend, acc, base);
     const size_t baseBits = backend->bitLength(backend, acc.Get());
-    if (!exp.decimal.empty() || (baseBits - 1) * static_cast<uint64_t>(exp.small) >= MaxBigIntBits)
+    if (exp.big || (baseBits - 1) * static_cast<uint64_t>(exp.small) >= MaxBigIntBits)
     {
         ThrowTooManyBits();
     }

@@ -2885,7 +2885,7 @@ InternalValue ValueConverter::Abs(const InternalValue& baseVal, RenderContext& c
     }
     if (const auto big = AsBigInt(baseVal))
     {
-        return MakeBigIntValue(big->Magnitude());
+        return big->Sign() < 0 ? NegateBigInt(*big) : BigIntValue(*big);
     }
     if (const auto* dblVal = GetIf<double>(&baseVal))
     {
@@ -2927,7 +2927,7 @@ InternalValue RoundBigInt(const InternalValue& value, const BigIntView& big, con
     }
     if (method == "common")
     {
-        return *precision >= 0 ? value : RoundIntegerDecimal(big.decimal, *precision);
+        return *precision >= 0 ? value : WithDecimal(big, [&precision](std::string_view decimal) { return RoundIntegerDecimal(decimal, *precision); });
     }
     return PythonRoundByMethod(BigIntToDouble(big), true, *precision, method == "ceil");
 }

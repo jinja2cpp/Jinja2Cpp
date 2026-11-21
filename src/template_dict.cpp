@@ -1,5 +1,6 @@
 #include "template_dict.h"
 
+#include "big_int.h"
 #include "contracts.h"
 #include "engine_errors.h"
 #include "host_object.h"
@@ -196,7 +197,7 @@ struct KeyTokenBuilder
     }
     const char* operator()(const BigIntView& val) const
     {
-        AppendBigInt(m_out, val.decimal);
+        WithDecimal(val, [this](std::string_view decimal) { AppendBigInt(m_out, decimal); });
         return nullptr;
     }
     const char* operator()(double val) const

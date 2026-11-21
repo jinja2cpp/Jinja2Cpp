@@ -8,8 +8,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace jinja2
 {
@@ -25,12 +27,25 @@ inline namespace v2
 
 // The widest integer a value may hold, 128 KiB of digits (plan Q6): ResourceLimitExceeded past it
 constexpr size_t MaxBigIntBits = size_t{ 1 } << 20;
-// CPython's limit on converting an integer to or from decimal text (sys.get_int_max_str_digits())
-constexpr size_t MaxIntStrDigits = 4300;
+// MaxIntStrDigits, CPython's limit on converting an integer to or from decimal text, is in
+// internal_value.h, which caps a BigIntView of text at it
 
 // The integer whose canonical decimal form is `decimal` ("-" and digits, no leading zero): an
 // int when it fits int64, else a big integer. Throws ResourceLimitError past MaxBigIntBits
 JINJA2CPP_EXPORT InternalValue MakeBigIntValue(std::string_view decimal);
+
+// The viewed integer as a value: the view's object shared, a new one only for a view of text
+JINJA2CPP_EXPORT InternalValue BigIntValue(const BigIntView& val);
+
+// Calls `fn` with the canonical decimal form of `val` ("-" and digits) and returns its result.
+// The text lives only for the call: a huge integer made from its binary form will have no
+// decimal one and build it for each call (docs/tasks/0543 Q3), so the text cannot escape.
+// Only paths that need every digit use it: a host BigInt, a backend's fromDecimal, round(x, -n)
+template<typename Fn>
+decltype(auto) WithDecimal(const BigIntView& val, Fn&& fn)
+{
+    return std::forward<Fn>(fn)(val.InlineDecimal());
+}
 
 // Python's int(text, base) for digits already checked to be valid in `base` (2-36, no sign, no
 // separators, at least one digit). A base that is not a power of two raises ValueError past
@@ -42,6 +57,8 @@ JINJA2CPP_EXPORT InternalValue IntegerFromDouble(double val);
 
 // The decimal form for str() and repr(): ValueError past MaxIntStrDigits, as CPython raises
 JINJA2CPP_EXPORT std::string_view CheckedDecimal(const BigIntView& val);
+// The same without the sign: the decimal digits of |val|
+JINJA2CPP_EXPORT std::string_view CheckedMagnitude(const BigIntView& val);
 
 // The digits of |val| in a power-of-two base (2 to 32), lower case
 JINJA2CPP_EXPORT std::string MagnitudeInBase(const BigIntView& val, int base);
@@ -67,7 +84,7 @@ JINJA2CPP_EXPORT InternalValue NegateBigInt(const BigIntView& val);
 // Whether the integer is odd
 inline bool IsOdd(const BigIntView& val) noexcept
 {
-    return ((val.decimal.back() - '0') & 1) != 0;
+    return ((val.InlineDecimal().back() - '0') & 1) != 0;
 }
 
 // OverflowError for integer arithmetic whose operand or result is outside int64
@@ -80,7 +97,8 @@ inline bool IsOdd(const BigIntView& val) noexcept
 // Whether the library can use the table: version 1, every field set, the object within the caps
 JINJA2CPP_EXPORT bool IsUsableBigIntBackend(const BigIntBackend& backend) noexcept;
 
-// An integer operand of BigIntBinary: an int64, or a big integer when `decimal` is set
+// An integer operand of BigIntBinary: an int64, or a big integer when `big` is set. The view
+// borrows from the caller's value, which outlives the call
 struct IntOperand
 {
     IntOperand(int64_t val) noexcept // NOLINT(google-explicit-constructor): either kind of integer is an operand
@@ -88,12 +106,12 @@ struct IntOperand
     {
     }
     IntOperand(const BigIntView& val) noexcept // NOLINT(google-explicit-constructor): either kind of integer is an operand
-        : decimal(val.decimal)
+        : big(val)
     {
     }
 
     int64_t small = 0;
-    std::string_view decimal;
+    std::optional<BigIntView> big;
 };
 
 enum class BigIntOp
