@@ -730,18 +730,6 @@ def test_a_one_shot_iterator_of_extra_schemes_goes_to_jinja2():
     assert jinja2cpp.stats()["loads_fallback"] == before + 1
 
 
-def test_the_macros_of_a_module_keep_the_policies_of_the_load():
-    # Jinja2's module macros read the environment's policies at each call; the engine's keep those of the load
-    # (docs/python.md, Differences)
-    env = jinja2cpp.Environment()
-    template = env.from_string("{% macro m(s) %}{{ s|truncate(8) }}{% endmacro %}")
-    module = template.module
-    assert module.m("abcdefghijkl") == "abcdefghijkl"
-    env.policies["truncate.leeway"] = 0
-    assert module.m("abcdefghijkl") == "abcdefghijkl"
-    assert env.from_string("{{ s|truncate(8) }}").render(s="abcdefghijkl") == "abcde..."
-
-
 def test_a_dumps_function_is_collected_with_the_environment():
     class Dumper:
         def __call__(self, value, **kwargs):
@@ -790,3 +778,28 @@ def test_replaced_dumps_functions_are_not_kept():
     env.policies["json.dumps_function"] = None
     gc.collect()
     assert sum(ref() is not None for ref in refs) <= 2
+
+
+def test_a_policy_changed_after_the_module_was_made_applies_to_its_macros():
+    """Jinja2 reads env.policies each time a filter runs, also in a macro of t.module and make_module (0557)."""
+    source = (
+        "{% import 'lib' as lib %}"
+        "{% macro cut(s) %}{{ s|truncate(8) }}|{{ d|tojson }}{% endmacro %}"
+        "{% macro short(s) %}{{ s|truncate(8) }}/{{ lib.cut(s) }}{% endmacro %}"
+        "{% set box = {'cut': cut} %}{{ s|truncate(8) }}"
+    )
+    text = "abcdefghijkl"
+    results = {}
+    for module in (jinja2, jinja2cpp):
+        env = module.Environment(loader=module.DictLoader({"lib": "{% macro cut(s) %}{{ s|truncate(8) }}{% endmacro %}"}))
+        template = env.from_string(source)
+        made = template.make_module({"d": DATA, "s": text})
+        cached = template.module
+        before = (str(made), made.cut(text), made.box["cut"](text), made.short(text), cached.short(text))
+        env.policies["truncate.leeway"] = 0
+        env.policies["json.dumps_kwargs"] = {"indent": 1}
+        after = (str(made), made.cut(text), made.box["cut"](text), made.short(text), cached.short(text))
+        # a module made now renders its top level with them too
+        results[module.__name__] = (before, after, str(template.make_module({"d": DATA, "s": text})))
+    assert results["jinja2cpp"] == results["jinja2"]
+    assert results["jinja2"][0][1] != results["jinja2"][1][1]

@@ -697,6 +697,67 @@ TEST(RenderOptionsTest, NoFilterPoliciesKeepTheTemplatesOwn)
     EXPECT_EQ("abcdefghijk <a href=\"http://example.com\" rel=\"noopener\">http://example.com</a>", out);
 }
 
+// The macros of a module keep the policies of MakeModule, or take a call's own (docs/tasks/0557)
+TEST(RenderOptionsTest, ModuleMacrosUseTheModulesOrTheCallsFilterPolicies)
+{
+    TemplateEnv env;
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("lib.j2tpl", "{% macro cut() %}{{ 'abcdefghijk'|truncate(10) }}{% endmacro %}");
+    env.AddFilesystemHandler(std::string(), fs);
+    auto tpl = env.FromString("{{ 'abcdefghijk'|truncate(10) }}{% import 'lib.j2tpl' as lib %}"
+                              "{% macro cut() %}{{ 'abcdefghijk'|truncate(10) }}/{{ lib.cut() }}{% endmacro %}{% set d = {'f': cut} %}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    FilterPolicies strict;
+    strict.truncateLeeway = 0;
+    const auto strictPolicies = PoliciesOf(strict);
+
+    // Without options the template's own, for the call too
+    auto plain = tpl->MakeModule({}).value();
+    EXPECT_EQ("abcdefghijk", plain.body);
+    const auto& plainCut = plain.exports["cut"].As<UserCallable>();
+    EXPECT_EQ("abcdefghijk/abcdefghijk", plainCut.callable(UserCallableParams{}).AsString());
+    ModuleCallOptions callOptions;
+    callOptions.filterPolicies = strictPolicies;
+    // A call's own, for that call only, also in the module the macro imported
+    EXPECT_EQ("abcdefg.../abcdefg...", CallModuleMacro(plainCut, UserCallableParams{}, callOptions).AsString());
+    EXPECT_EQ("abcdefghijk/abcdefghijk", plainCut.callable(UserCallableParams{}).AsString());
+    // A macro inside an exported dict is one too
+    const auto& inDict = plain.exports["d"].As<ValuesMap>().at("f").As<UserCallable>();
+    EXPECT_EQ("abcdefg.../abcdefg...", CallModuleMacro(inDict, UserCallableParams{}, callOptions).AsString());
+    // Null keeps the module's
+    EXPECT_EQ("abcdefghijk/abcdefghijk", CallModuleMacro(plainCut, UserCallableParams{}, ModuleCallOptions{}).AsString());
+
+    // The module's own, for its top level and its calls
+    RenderOptions options;
+    options.filterPolicies = strictPolicies;
+    auto strictModule = tpl->MakeModule({}, options).value();
+    EXPECT_EQ("abcdefg...", strictModule.body);
+    const auto& strictCut = strictModule.exports["cut"].As<UserCallable>();
+    EXPECT_EQ("abcdefg.../abcdefg...", strictCut.callable(UserCallableParams{}).AsString());
+    callOptions.filterPolicies = PoliciesOf(FilterPolicies{});
+    EXPECT_EQ("abcdefghijk/abcdefghijk", CallModuleMacro(strictCut, UserCallableParams{}, callOptions).AsString());
+    EXPECT_EQ("abcdefg.../abcdefg...", strictCut.callable(UserCallableParams{}).AsString());
+
+    // Another callable is called as it is
+    const UserCallable other([](const UserCallableParams&) -> Value { return std::string("other"); }, {});
+    EXPECT_EQ("other", CallModuleMacro(other, UserCallableParams{}, callOptions).AsString());
+}
+
+TEST(RenderOptionsTest, WideModuleMacrosTakeTheCallsFilterPolicies)
+{
+    TemplateEnv env;
+    TemplateW tpl(&env);
+    ASSERT_TRUE(tpl.Load(L"{% macro cut() %}{{ 'abcdefghijk'|truncate(10) }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    const auto& cut = module.exports["cut"].As<UserCallable>();
+    FilterPolicies strict;
+    strict.truncateLeeway = 0;
+    ModuleCallOptions callOptions;
+    callOptions.filterPolicies = PoliciesOf(strict);
+    EXPECT_EQ(L"abcdefg...", CallModuleMacro(cut, UserCallableParams{}, callOptions).AsWString());
+    EXPECT_EQ(L"abcdefghijk", cut.callable(UserCallableParams{}).AsWString());
+}
+
 TEST(RenderOptionsTest, UrlizeAndTojsonReadThePolicies)
 {
     TemplateEnv env;

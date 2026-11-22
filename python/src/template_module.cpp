@@ -278,9 +278,12 @@ public:
         state.sandbox = SandboxOf(m_environment);
         state.sandboxAllNames = entry.sandboxAllNames;
         const RenderScope scope(state);
+        // env.policies as they are now, as Jinja2 reads them each time a filter runs (docs/tasks/0557)
+        jinja2::ModuleCallOptions callOptions;
+        callOptions.filterPolicies = entry.policies;
         try
         {
-            auto result = ToPython(m_callable.callable(params));
+            auto result = ToPython(jinja2::CallModuleMacro(m_callable, params, callOptions));
             RaiseAbort(state);
             if (autoescape >= 0 && PyUnicode_Check(result.ptr()))
             {
@@ -481,6 +484,8 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         // Polled as a render is, and so are the calls of its macros, which keep the poll: Ctrl-C stops them
         jinja2::RenderOptions options;
         options.poll = RenderPoll();
+        // And env.policies as they are now, which a call of a macro replaces with those of its own entry
+        options.filterPolicies = entry.policies;
         return m_template.MakeModule(values, options);
     }();
     RaiseAbort(state);

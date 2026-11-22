@@ -376,6 +376,35 @@ using TemplateModuleW = BasicTemplateModule<wchar_t>;
 JINJA2CPP_EXPORT ValuesMap MacroAttributes(const UserCallable& callable);
 
 /*!
+ * \brief What one host's call of a module's macro changes (\ref CallModuleMacro)
+ */
+struct ModuleCallOptions
+{
+    /*!
+     * The filter policies of this call instead of the module's: those of \ref RenderOptions::filterPolicies given to
+     * \ref BasicTemplate::MakeModule "MakeModule", else the template's \ref Settings::filterPolicies. The macro and every
+     * template it includes, imports or extends use these, as a render does. Null, the default, keeps the module's. The call
+     * shares them until it returns: Python Jinja2 reads `Environment.policies` each time a filter runs, so a host that
+     * mirrors a changed policy passes the current one to each call
+     */
+    std::shared_ptr<const FilterPolicies> filterPolicies;
+};
+
+/*!
+ * \brief Calls a macro of a module's exports as its `callable` would, with `options` for this call (docs/tasks/0557)
+ *
+ * A callable of \ref BasicTemplateModule::exports, also one inside an exported list or dict or one a macro returned, runs
+ * in its module with the options' filter policies. Any other callable is called as it is, `options` unused. Throws what the
+ * call throws (\ref BadResultAccess "BadResultAccess<CharT>" for a failed macro).
+ *
+ * @param callable A callable of a module's exports
+ * @param params   The call's arguments, as `callable` takes them
+ * @param options  What this call changes
+ * @return What the call returns
+ */
+JINJA2CPP_EXPORT Value CallModuleMacro(const UserCallable& callable, const UserCallableParams& params, const ModuleCallOptions& options);
+
+/*!
  * \brief How Python Jinja2 prints a template callable lent to a host's call (\ref DescribeLentCallable)
  */
 struct LentCallableInfo
@@ -689,7 +718,7 @@ public:
      */
     [[nodiscard]] Result<BasicTemplateModule<CharT>, CharT> MakeModule(const ValuesMap& params = {}) const;
     /*!
-     * \brief \ref MakeModule with the host's globals and poll of \ref RenderOptions
+     * \brief \ref MakeModule with the host's globals, poll and filter policies of \ref RenderOptions
      *
      * `options.globals`, when not null, take the place of the environment's globals for the module: its top level
      * and the calls of its macros see them under `params`. They are copied into the module, as the params are.
@@ -700,10 +729,12 @@ public:
      * error). It is called on the thread of the call and must stay callable while a macro of the module may be.
      * Calls of one module take turns (\ref BasicTemplateModule), and the poll runs inside its call: a poll that
      * waits for another thread calling the same module deadlocks.
+     * `options.filterPolicies`, when not null, take the place of the template's for the module's top level and the
+     * calls of its macros, which share them (\ref CallModuleMacro replaces them for one call).
      * The other options are for a render's output and are ignored.
      *
      * @param params   Set of params which the template's top level and its macros see
-     * @param options  The globals and the poll of the module
+     * @param options  The globals, the poll and the filter policies of the module
      *
      * @return The module, or the error of the render (TemplateNotParsed before a successful Load)
      */

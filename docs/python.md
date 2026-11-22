@@ -454,8 +454,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - `env.policies` is read at each render (`urlize.rel`, `urlize.target`, `urlize.extra_schemes`, `truncate.leeway`,
   `json.dumps_function`, `json.dumps_kwargs`) and compared with a copy, so an in-place edit counts; `ext.i18n.trimmed` is read
   when a template loads, as Jinja2 reads it when it compiles `{% trans %}`. `compiler.ascii_str` and unknown keys are ignored,
-  as Jinja2 3 does. The macros of `t.module` and `make_module` keep the policies of the load of their template (Jinja2's read
-  the environment's at each call, 0435). A filter whose arguments are all constants (`{{ 'abcdefghijk'|truncate(10) }}`,
+  as Jinja2 3 does. A macro of `t.module` or `make_module` reads them at each call from Python (0557). A filter whose arguments are all constants (`{{ 'abcdefghijk'|truncate(10) }}`,
   `{{ {'a': 1}|tojson }}`) follows a policy changed after the load, where Jinja2 folds it to its value when it compiles the
   template; the engine does not fold. Only the current `json.dumps_function` is kept: a template loaded under an earlier one
   keeps it for as long as the template lives, and a replaced one is released with the last template that used it.

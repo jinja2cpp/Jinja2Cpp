@@ -212,6 +212,27 @@ bool IsEntryBinding(const InternalValue& value, std::size_t hash)
     return undefined != nullptr && undefined->atEntry && undefined->entryHash == static_cast<std::uint32_t>(hash);
 }
 
+// Sets the filter policies of a module's call on its callback, and puts back those of the call it runs in
+class PoliciesScope
+{
+public:
+    PoliciesScope(IRendererCallback& callback, const FilterPolicies* policies) noexcept
+        : m_callback(callback)
+        , m_outer(callback.OwnFilterPolicies())
+    {
+        callback.SetFilterPolicies(policies);
+    }
+    ~PoliciesScope() { m_callback.SetFilterPolicies(m_outer); }
+    PoliciesScope(const PoliciesScope&) = delete;
+    PoliciesScope& operator=(const PoliciesScope&) = delete;
+    PoliciesScope(PoliciesScope&&) = delete;
+    PoliciesScope& operator=(PoliciesScope&&) = delete;
+
+private:
+    IRendererCallback& m_callback;
+    const FilterPolicies* m_outer;
+};
+
 // Calls `callable` on `context` as a call expression does (InvokeCallable in
 // expression_evaluator.cpp): a macro's output is Markup when the module autoescapes. A macro
 // renders into `output`, within maxOutputSize when `limitOutput`; `output` stays registered
@@ -694,6 +715,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
 
         callback = std::make_unique<Callback>(impl.get());
         callback->SetGlobals(&globals);
+        callback->SetFilterPolicies(filterPolicies.get());
         module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(), &GetBuiltinGlobals(impl->m_settings->settings.extensions));
 
         OutStream stream(body);
@@ -752,8 +774,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         return BasicErrorInfo<CharT>(std::move(errorData));
     }
 
-    // A host's call of the exported callable `fn`, named `name`, in the module's context
-    Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams)
+    // A host's call of the exported callable `fn`, named `name`, in the module's context, with the filter policies
+    // `policies` (CallModuleMacro) or, when null, the module's
+    Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams, const FilterPolicies* policies = nullptr)
     {
         const std::scoped_lock lock(mutex);
         std::optional<BasicErrorInfo<CharT>> error;
@@ -771,6 +794,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             const HomeCall::Restore restore(module->Context());
             // The host's poll of the module, before the limits, which start counting the steps to it
             const HostPollScope pollScope(Poll());
+            // The call's policies, the outer call's again after it: a host's callable it calls may call the module back
+            const PoliciesScope policiesScope(*callback, policies ? policies : filterPolicies.get());
             // Before the limits, which keep a pointer to it
             std::basic_string<CharT> output;
             const auto limitsScope = MakeLimitsScope();
@@ -878,6 +903,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     std::function<void()> poll;
     // The host's globals in place of the environment's (RenderOptions::globals), or null
     std::shared_ptr<const ValuesMap> hostGlobals;
+    // The host's filter policies of the module's render and of its calls (RenderOptions::filterPolicies), or null for
+    // the template's; a call may pass its own (CallModuleMacro)
+    std::shared_ptr<const FilterPolicies> filterPolicies;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
@@ -909,6 +937,7 @@ struct ModuleCall
     std::string name;
 
     Value operator()(const UserCallableParams& params) const { return state->Call(*GetIf<Callable>(&callable), name, params); }
+    Value Call(const UserCallableParams& params, const FilterPolicies* policies) const { return state->Call(*GetIf<Callable>(&callable), name, params, policies); }
 };
 } // namespace
 
@@ -927,6 +956,21 @@ const Callable* ModuleMacroOf(const UserCallable& callable)
     return call ? GetIf<Callable>(&call->callable) : nullptr;
 }
 } // namespace
+
+Value CallModuleMacro(const UserCallable& callable, const UserCallableParams& params, const ModuleCallOptions& options)
+{
+    // The options' policies stay alive through the call, which points to them
+    const std::shared_ptr<const FilterPolicies> policies = options.filterPolicies;
+    if (const auto* call = callable.callable.target<ModuleCall<char>>())
+    {
+        return call->Call(params, policies.get());
+    }
+    if (const auto* call = callable.callable.target<ModuleCall<wchar_t>>())
+    {
+        return call->Call(params, policies.get());
+    }
+    return callable.callable(params);
+}
 
 ValuesMap MacroAttributes(const UserCallable& callable)
 {
@@ -979,6 +1023,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     {
         state->poll = options->poll;
         state->hostGlobals = options->globals;
+        state->filterPolicies = options->filterPolicies;
     }
     BasicTemplateModule<CharT> result;
     try

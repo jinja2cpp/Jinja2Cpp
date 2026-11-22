@@ -194,6 +194,8 @@ struct IRendererCallback : IComparable
     // template's settings. Asked where a filter runs, never per node
     [[nodiscard]] const FilterPolicies& GetFilterPolicies() const { return m_filterPolicies ? *m_filterPolicies : GetSettings().filterPolicies; }
     void SetFilterPolicies(const FilterPolicies* policies) noexcept { m_filterPolicies = policies; }
+    // The render's own policies (SetFilterPolicies), null for the template's settings
+    [[nodiscard]] const FilterPolicies* OwnFilterPolicies() const noexcept { return m_filterPolicies; }
 
 protected:
     // Called once, when the template's callback is made
