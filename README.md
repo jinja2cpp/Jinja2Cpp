@@ -1,6 +1,6 @@
 # Benchmark trend
 
-Instruction and allocation counts per iteration on master, one record per commit (262 so far, latest [9405efa](https://github.com/jinja2cpp/Jinja2Cpp/commit/9405efa0774d28d005c22e5444b755c121996ac8) on 2026-11-22). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
+Instruction and allocation counts per iteration on master, one record per commit (263 so far, latest [7069341](https://github.com/jinja2cpp/Jinja2Cpp/commit/7069341ab7be663b1ab81b9abb6434f099215afc) on 2026-11-22). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
 
 Memory is the bytes a loaded template keeps for `Load/*` and the peak heap use of one render for `Render/*`; vs first compares with the first record that has it.
 
@@ -30,7 +30,7 @@ Memory is the bytes a loaded template keeps for `Load/*` and the peak heap use o
 | [Render/for_range](#renderfor_range) | 37,183 | 0% | -59.68% | 3 | 0% | -88.89% | 408 | 0% | -73.02% |
 | [Load/hf_deepseek_v31](#loadhf_deepseek_v31) | 384,091 | 0% |  | 54 | 0% |  | 22,032 | 0% | +0.99% |
 | [Render/hf_deepseek_v31](#renderhf_deepseek_v31) | 90,594 | 0% |  | 42 | 0% |  | 2,456 | 0% | -0.97% |
-| [Load/hf_gpt_oss](#loadhf_gpt_oss) | 1,525,960 | +0.02% |  | 282 | 0% |  | 75,016 | +0.02% | +1.07% |
+| [Load/hf_gpt_oss](#loadhf_gpt_oss) | 1,525,960 | 0% |  | 282 | 0% |  | 75,016 | 0% | +1.07% |
 | [Render/hf_gpt_oss](#renderhf_gpt_oss) | 169,375 | 0% |  | 153 | 0% |  | 5,984 | 0% | +21.23% |
 | [Load/hf_mistral_small](#loadhf_mistral_small) | 591,363 | 0% |  | 87 | 0% |  | 33,136 | 0% | +0.61% |
 | [Render/hf_mistral_small](#renderhf_mistral_small) | 140,367 | 0% |  | 97 | 0% |  | 6,096 | 0% | -0.65% |
@@ -81,14 +81,14 @@ Misses per iteration in callgrind's cache model (`count.py --cache-sim`: 32 KB 8
 
 | Benchmark | D1 read misses | vs previous | D1 write misses | vs previous | LL data read misses | vs previous | I1 misses | vs previous |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Load/big_int_radix | 92 | +1.10% | 53 | 0% | 0 |  | 1,991 | 0% |
+| Load/big_int_radix | 92 | 0% | 53 | 0% | 0 |  | 1,991 | 0% |
 | Render/big_int_radix | 774,954 | 0% | 515,277 | 0% | 0 |  | 4,242 | 0% |
 | Load/chat_llama | 770 | 0% | 769 | 0% | 0 |  | 7,968 | 0% |
-| Render/chat_llama | 1,206 | -0.08% | 559 | 0% | 0 |  | 4,328 | 0% |
+| Render/chat_llama | 1,206 | 0% | 559 | 0% | 0 |  | 4,328 | 0% |
 | Load/chat_mistral | 1,119 | 0% | 1,109 | 0% | 0 |  | 8,875 | 0% |
 | Render/chat_mistral | 2,104 | 0% | 675 | 0% | 0 |  | 10,606 | 0% |
-| Load/chat_qwen | 550 | 0% | 658 | +0.15% | 0 |  | 4,799 | 0% |
-| Render/chat_qwen | 1,128 | +0.27% | 439 | 0% | 0 |  | 3,689 | 0% |
+| Load/chat_qwen | 550 | 0% | 658 | 0% | 0 |  | 4,799 | 0% |
+| Render/chat_qwen | 1,128 | 0% | 439 | 0% | 0 |  | 3,689 | 0% |
 | Load/config_file | 197 | 0% | 185 | 0% | 0 |  | 2,861 | 0% |
 | Render/config_file | 6,835 | 0% | 1,882 | 0% | 0 |  | 45,811 | 0% |
 | Load/dict_ops | 26 | 0% | 16 | 0% | 0 |  | 1,388 | 0% |
@@ -105,11 +105,11 @@ Misses per iteration in callgrind's cache model (`count.py --cache-sim`: 32 KB 8
 | Render/for_range | 2 | 0% | 1 | 0% | 0 |  | 134 | 0% |
 | Load/hf_deepseek_v31 | 971 | 0% | 977 | 0% | 0 |  | 6,317 | 0% |
 | Render/hf_deepseek_v31 | 378 | 0% | 89 | 0% | 0 |  | 1,463 | 0% |
-| Load/hf_gpt_oss | 4,732 | -0.04% | 3,415 | -0.06% | 0 |  | 23,291 | 0% |
+| Load/hf_gpt_oss | 4,732 | 0% | 3,415 | 0% | 0 |  | 23,291 | 0% |
 | Render/hf_gpt_oss | 1,309 | 0% | 409 | 0% | 0 |  | 5,101 | 0% |
 | Load/hf_mistral_small | 1,896 | 0% | 1,650 | 0% | 0 |  | 11,576 | 0% |
 | Render/hf_mistral_small | 1,017 | 0% | 324 | 0% | 0 |  | 3,833 | 0% |
-| Load/hf_qwen3 | 1,523 | 0% | 1,315 | -0.08% | 0 |  | 9,480 | -0.01% |
+| Load/hf_qwen3 | 1,523 | 0% | 1,315 | 0% | 0 |  | 9,480 | 0% |
 | Render/hf_qwen3 | 699 | 0% | 230 | 0% | 0 |  | 2,845 | 0% |
 | Load/html_autoescape | 479 | 0% | 547 | 0% | 0 |  | 4,183 | 0% |
 | Render/html_autoescape | 4,781 | 0% | 1,639 | 0% | 0 |  | 36,033 | 0% |
