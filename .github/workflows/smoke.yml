@@ -5,6 +5,8 @@ name: CI-smoke
 # behind a full matrix on every push. Marking the PR ready runs the full matrix; the other build
 # workflows skip drafts (`if: ... !github.event.pull_request.draft`). clang-format, clang-tidy,
 # the parity expectations and the fuzz corpus replay are not gated and run on drafts as well.
+# Their ccache keys are those of the matrix rows with the same flags (master saves them; pull
+# requests only restore), so the smoke builds are warm. Change a key here when the row changes.
 # MSVC is here because it is the largest cause of red pushes that preflight cannot catch.
 # These jobs are not rows of the full matrices: do not rely on them to cover an axis there.
 
@@ -31,7 +33,7 @@ concurrency:
 
 jobs:
   gcc-debug:
-    name: smoke gcc-14 Debug C++20
+    name: smoke gcc-12 Debug C++23
     if: ${{ github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -41,16 +43,16 @@ jobs:
     - name: Install toolchain
       uses: ./.github/actions/install-toolchain
       with:
-        compiler: gcc-14
+        compiler: gcc-12
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: smoke-gcc-14-Debug-20
+        key: linux-gcc-12-Debug-23-OFF-default-none-ON
 
     - name: Configure
       run: |
         cmake -S . -B .build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-          -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_CXX_STANDARD=20 \
+          -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_CXX_STANDARD=23 \
           -DJINJA2CPP_STRICT_WARNINGS=ON "-DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized"
 
     - name: Build
@@ -78,7 +80,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: smoke-sanitizer-clang-18
+        key: sanitizer-clang-18-address+undefined-none-conversion
 
     # The same flags as the clang-18 row of `sanitizers` in linux-build.yml
     - name: Configure
@@ -113,7 +115,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: smoke-windows-msvc-23-Debug
+        key: windows-msvc-23-Debug-FALSE-none
 
     # The same flags as the C++23 Debug /MD static row of windows-build.yml
     - name: Build

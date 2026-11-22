@@ -19,7 +19,7 @@ and the earlier trains of 2026-10, collected for the 2026-11-22 workflow review.
 
 ## Two CI tiers
 
-A draft PR runs the smoke tier only: `smoke.yml` (GCC-14 Debug C++20, Clang-18 ASan+UBSan, MSVC
+A draft PR runs the smoke tier only: `smoke.yml` (GCC-12 Debug C++23, Clang-18 ASan+UBSan, MSVC
 C++23 Debug) plus the ungated clang-format, clang-tidy, parity-expectations and fuzz replay. The
 full matrix, the instruction-count gate, Python, bindings, conan and CodeQL skip drafts and run
 when the PR is marked ready (`ready_for_review`) and on every push after that. Consequences:
