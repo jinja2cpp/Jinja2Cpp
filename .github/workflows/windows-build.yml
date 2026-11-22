@@ -13,6 +13,7 @@ on:
       - '.gitignore'
       - 'LICENSE'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
       - main
@@ -29,13 +30,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # The draft flag keeps the all-skipped run of a draft push from cancelling the full run that
+  # marking the PR ready just started
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.draft }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   windows-msvc-build:
     name: MSVC C++${{ matrix.std }} ${{ matrix.build-config }} runtime=${{ matrix.build-runtime || 'default' }} shared=${{ matrix.build-shared }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: windows-latest
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     # One job per MSVC standard; build type, linkage and CRT rotate across them so each

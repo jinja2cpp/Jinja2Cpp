@@ -10,6 +10,7 @@ name: CI-bindings
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
       - main
@@ -34,7 +35,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # The draft flag keeps the all-skipped run of a draft push from cancelling the full run that
+  # marking the PR ready just started
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.draft }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -47,6 +50,7 @@ jobs:
   sanitizers:
     name: bindings ${{ matrix.sanitizer }} (${{ matrix.compiler }})
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 90
 
     strategy:
@@ -106,6 +110,7 @@ jobs:
   msvc:
     name: bindings MSVC C++17 Release /MT static
     runs-on: windows-latest
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     steps:
@@ -133,6 +138,7 @@ jobs:
   macos:
     name: bindings macos-15 AppleClang C++17 Release
     runs-on: macos-15
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     steps:
@@ -171,6 +177,7 @@ jobs:
   system-deps-and-package:
     name: bindings system Boost and nlohmann_json, package components (gcc-14)
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     steps:

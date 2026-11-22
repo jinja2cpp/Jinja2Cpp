@@ -13,6 +13,7 @@ on:
       - '.gitignore'
       - 'LICENSE'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
       - main
@@ -29,13 +30,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # The draft flag keeps the all-skipped run of a draft push from cancelling the full run that
+  # marking the PR ready just started
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.draft }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   macos-build:
     name: ${{ matrix.os }} AppleClang C++${{ matrix.cxx-standard }} ${{ matrix.build-config }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: ${{ matrix.os }}
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     # Release builds every standard, on two runner images (macos-14 retired 2026-11-02,

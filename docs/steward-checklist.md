@@ -17,6 +17,19 @@ and the earlier trains of 2026-10, collected for the 2026-11-22 workflow review.
 - A single non-overlapping PR on current master may merge directly; its index update then goes in
   a small docs PR. Three or more finals go in one train, one CI run.
 
+## Two CI tiers
+
+A draft PR runs the smoke tier only: `smoke.yml` (GCC-12 Debug C++23, Clang-18 ASan+UBSan, MSVC
+C++23 Debug) plus the ungated clang-format, clang-tidy, parity-expectations and fuzz replay. The
+full matrix, the instruction-count gate, Python, bindings, conan and CodeQL skip drafts and run
+when the PR is marked ready (`ready_for_review`) and on every push after that. Consequences:
+
+- A PR is not final until its full tier is green on the head: the owner marks it ready, waits,
+  and only then reports FINAL. Check the check count (53-64 after ready; about 12 for a draft).
+- Train PRs are opened as drafts and marked ready, which starts the full tier: that is the one
+  CI run the train needs. Do not merge a draft train.
+- The smoke jobs are not rows of the full matrices; when changing an axis, change the matrix.
+
 ## Perf bar (any PR touching `src/` hot paths)
 
 - Run the "instruction counts vs base" job through `perf-track/countjob.sh <job_id>` from the

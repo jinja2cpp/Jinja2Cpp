@@ -13,6 +13,7 @@ on:
       - '.gitignore'
       - 'LICENSE'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
       - main
@@ -29,7 +30,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # The draft flag keeps the all-skipped run of a draft push from cancelling the full run that
+  # marking the PR ready just started
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.draft }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -70,6 +73,7 @@ jobs:
   linux-build:
     name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}${{ matrix.chat == 'OFF' && ' chat=OFF' || '' }}
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     strategy:
@@ -215,6 +219,7 @@ jobs:
   external-deps:
     name: deps=${{ matrix.mode }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }}
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     strategy:
@@ -289,6 +294,7 @@ jobs:
   boost-free:
     name: Boost-free default (gcc-14, tests OFF)
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     steps:
@@ -331,6 +337,7 @@ jobs:
   sanitizers:
     name: ${{ matrix.sanitizer }} (${{ matrix.compiler }})${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 90
 
     strategy:
@@ -398,6 +405,7 @@ jobs:
   debug-containers:
     name: ${{ matrix.stdlib }} debug containers C++${{ matrix.std }} (${{ matrix.compiler }})
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     strategy:
@@ -456,6 +464,7 @@ jobs:
   coverage:
     name: Coverage (gcc-14)
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     steps:
