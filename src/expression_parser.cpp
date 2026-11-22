@@ -1932,7 +1932,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             // past MaxIntStrDigits digits (docs/tasks/0564)
             // Only a built-in filter: Jinja2 calls an environment's filter when it folds, which the engine leaves to
             // the render
-            if (m_chainOperand && (m_strictUndefined || name == "int") && !(m_env && m_env->FindFilter(name)))
+            if (m_chainOperand && (m_strictUndefined || name == "int") && FindRegisteredFilter(name).IsUndefined())
             {
                 NoteWatchedFold(m_chainOperand);
             }
@@ -2847,54 +2847,65 @@ private:
 };
 } // namespace
 
-FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context)
+namespace
 {
-    // The candidates were recorded as their parse ended, so an expression comes after the ones
-    // inside it, which start where it starts or later. Walked outermost first, the candidates
-    // inside one that folds need no evaluation of their own: their subscripts are covered, and
-    // nested brackets do not evaluate the inner levels again and again
-    std::vector<FoldOutcome> outcomes(check.candidates.size(), FoldOutcome::DoesNotFold);
-    FoldEvaluator evaluator(check, context);
-    unsigned foldedFrom = check.to;
-    unsigned outputFoldedFrom = check.to;
-    // That of the candidates that fold or overflow (FoldOutcome::Overflows)
-    unsigned strDigitsFoldedFrom = check.to;
-    for (std::size_t index = check.candidates.size(); index-- != 0;)
+// Where the candidates FoldCheckPasses has walked, outermost first, fold
+class FoldWalk
+{
+public:
+    explicit FoldWalk(const FoldCheck& check)
+        : m_check(check)
+        , m_foldedFrom(check.to)
+        , m_outputFoldedFrom(check.to)
+        , m_strDigitsFoldedFrom(check.to)
     {
-        const auto& candidate = check.candidates[index];
-        // Jinja2's optimizer folds every expression of the tree, and a strict undefined that
-        // fails a fold fails the compile (UndefinedError) where an Impossible would not: under
-        // StrictUndefined each candidate is evaluated, except inside an output that folds,
-        // which the compiler folds whole before the optimizer sees its parts (visit_Output,
-        // docs/tasks/0484)
-        if (candidate.from >= (check.strictUndefined ? outputFoldedFrom : foldedFrom))
-        {
-            evaluator.Skip(index);
-            continue;
-        }
-        outcomes[index] = evaluator.Of(index);
-        const bool fails = outcomes[index] == FoldOutcome::Fails || outcomes[index] == FoldOutcome::Overflows;
-        if (check.strictUndefined && (outcomes[index] == FoldOutcome::FailsLoad || (fails && candidate.failsLoad)))
+    }
+
+    // Jinja2's optimizer folds every expression of the tree, and a strict undefined that fails a fold fails the
+    // compile (UndefinedError) where an Impossible would not: under StrictUndefined each candidate is evaluated,
+    // except inside an output that folds, which the compiler folds whole before the optimizer sees its parts
+    // (visit_Output, docs/tasks/0484)
+    [[nodiscard]] bool Skips(const FoldCandidate& candidate) const { return candidate.from >= (m_check.strictUndefined ? m_outputFoldedFrom : m_foldedFrom); }
+
+    // The candidate's outcome: how the check fails because of it, if it does
+    std::optional<FoldCheckResult> Note(const FoldCandidate& candidate, FoldOutcome outcome)
+    {
+        const bool fails = outcome == FoldOutcome::Fails || outcome == FoldOutcome::Overflows;
+        if (m_check.strictUndefined && (outcome == FoldOutcome::FailsLoad || (fails && candidate.failsLoad)))
         {
             // Around a tuple-slice subscript the undefined is its fold's, reported as the subscript's error
-            return check.to - check.from > check.marks.size() ? FoldCheckResult::Unfolded : FoldCheckResult::Undefined;
+            return m_check.to - m_check.from > m_check.marks.size() ? FoldCheckResult::Unfolded : FoldCheckResult::Undefined;
         }
         // The optimizer folds bottom-up: the value stays in the code unless a candidate around it folds, which,
         // walked outermost first, was seen before it (docs/tasks/0564)
-        if (outcomes[index] == FoldOutcome::FoldsStrDigits && candidate.from < strDigitsFoldedFrom)
+        if (outcome == FoldOutcome::FoldsStrDigits && candidate.from < m_strDigitsFoldedFrom)
         {
             return FoldCheckResult::StrDigits;
         }
-        if (outcomes[index] == FoldOutcome::Folds || outcomes[index] == FoldOutcome::Overflows)
+        if (outcome == FoldOutcome::Folds || outcome == FoldOutcome::Overflows)
         {
-            strDigitsFoldedFrom = candidate.from;
+            m_strDigitsFoldedFrom = candidate.from;
         }
-        if (outcomes[index] == FoldOutcome::Folds)
+        if (outcome == FoldOutcome::Folds)
         {
-            foldedFrom = candidate.from;
-            outputFoldedFrom = candidate.output ? candidate.from : outputFoldedFrom;
+            m_foldedFrom = candidate.from;
+            m_outputFoldedFrom = candidate.output ? candidate.from : m_outputFoldedFrom;
         }
+        return std::nullopt;
     }
+
+private:
+    const FoldCheck& m_check;
+    unsigned m_foldedFrom;
+    unsigned m_outputFoldedFrom;
+    // That of the candidates that fold or overflow (FoldOutcome::Overflows)
+    unsigned m_strDigitsFoldedFrom;
+};
+
+// Whether the outcomes cover the tuple-slice subscripts of the check, and then its FoldMarkKind::StrDigits marks,
+// which a fold that overflows covers too
+FoldCheckResult CoverageOf(const FoldCheck& check, const std::vector<FoldOutcome>& outcomes)
+{
     if (FirstUncovered(check, [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds; }, Needing::TupleSlices) != check.to)
     {
         return FoldCheckResult::Unfolded;
@@ -2905,6 +2916,33 @@ FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context)
     }
     const auto strDigitsFolds = [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds || outcomes[index] == FoldOutcome::Overflows; };
     return FirstUncovered(check, strDigitsFolds, Needing::StrDigits) != check.to ? FoldCheckResult::StrDigits : FoldCheckResult::Passes;
+}
+} // namespace
+
+FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context)
+{
+    // The candidates were recorded as their parse ended, so an expression comes after the ones
+    // inside it, which start where it starts or later. Walked outermost first, the candidates
+    // inside one that folds need no evaluation of their own: their subscripts are covered, and
+    // nested brackets do not evaluate the inner levels again and again
+    std::vector<FoldOutcome> outcomes(check.candidates.size(), FoldOutcome::DoesNotFold);
+    FoldEvaluator evaluator(check, context);
+    FoldWalk walk(check);
+    for (std::size_t index = check.candidates.size(); index-- != 0;)
+    {
+        const auto& candidate = check.candidates[index];
+        if (walk.Skips(candidate))
+        {
+            evaluator.Skip(index);
+            continue;
+        }
+        outcomes[index] = evaluator.Of(index);
+        if (const auto failed = walk.Note(candidate, outcomes[index]))
+        {
+            return *failed;
+        }
+    }
+    return CoverageOf(check, outcomes);
 }
 
 } // namespace v2
