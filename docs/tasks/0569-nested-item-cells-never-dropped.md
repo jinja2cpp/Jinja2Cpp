@@ -23,6 +23,12 @@ call-scoped there (`HasUnheldIdentity`), and the document's own cell keeps it ac
 Pinned by `JsonConformance.ModuleCallsOfAnOwnedDocument` (the expiry rows, skipped for traits without
 an `Identity` hook).
 
+Related gap (verifier of 0402, round 2): for a JSON document the view keeps, a nested value held under
+a name of its own (`{% set a = d.a %}{% set _ = a.append(1) %}`, a loop item, `d.its|first`) keeps a
+call-scoped cell, so its writes do not last across calls where Python's do; writes through the
+document (`d.a.append(1)`) last. Deciding "lent again" for the holders below lets those cells live
+across calls too.
+
 **Proposal.** Recognise the library's own `WithOwner` holders in `AccessorIsLent` (a marker base or a
 holder type the library owns), and decide "lent again" for them by the parent's adapter, which the
 holder keeps; then the rows run for every binding. Check the 0336 model (`FixGenericOwner`) still holds.
