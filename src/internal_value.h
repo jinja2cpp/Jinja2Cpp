@@ -587,7 +587,8 @@ public:
     // not zero; empty for an integer that is not huge. Defined after BigIntObject
     [[nodiscard]] Span<const uint32_t> Words() const noexcept;
     // The canonical decimal form the integer keeps ("-" and digits), for the operations that
-    // read the digits of an integer that is not huge
+    // read the digits of an integer that is not huge; empty for a huge integer made from its
+    // binary form, which keeps none
     [[nodiscard]] std::string_view InlineDecimal() const noexcept { return m_decimal; }
 
 private:
@@ -1266,12 +1267,12 @@ private:
 // The object of an integer outside int64 (docs/tasks/0270, 0543). Its parts follow it in the
 // same allocation, as a StringObject's characters do: first the binary words of a huge integer
 // (more than HugeBigIntBits bits; none for any other), then its canonical decimal form ("-" and
-// digits, no leading zero). Made only through MakeBigIntValue and the other makers in big_int.h,
+// digits, no leading zero), which a huge integer made from its binary form does not keep. Made only through MakeBigIntValue and the other makers in big_int.h,
 // which keep a value that fits int64 an int and give an integer words exactly when it is huge
 struct BigIntObject final : ValueObject
 {
     // `words` as BigIntView::Words has them, empty unless the integer is huge; `decimal` its
-    // canonical decimal form, whose sign is `negative`
+    // canonical decimal form, whose sign is `negative`, or empty for a huge integer
     static IntrusivePtr<BigIntObject> Make(bool negative, Span<const uint32_t> words, std::string_view decimal);
 
     struct CharCount
