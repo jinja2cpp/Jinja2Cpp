@@ -105,6 +105,12 @@ when the PR is marked ready (`ready_for_review`) and on every push after that. C
   lines. `FilesystemHandler` tests need ctest's cwd.
 - GitHub MCP tools disconnect repeatedly: reload with ToolSearch `select:mcp__github__pull_request_read,
   update_pull_request,merge_pull_request,actions_run_trigger` (and `actions_get`).
+- `git clang-format origin/master` can reindent generated files such as
+  `test/parity/expected/*.json`; the "expectations match jinja2" check then fails. After
+  formatting, restore generated files with `git checkout origin/master -- <file>` or regenerate
+  them with `test/parity/generate.py` (#987's one red push).
+- A train of one is normal when master moved under a final PR (#987 after #988): rebuild it on
+  current master so the instruction counts compare against the real base.
 - Task numbers are shared with all threads: check master and open PRs before filing one. #807,
   #284, #199 and #197 are not the steward's; leave them.
 
