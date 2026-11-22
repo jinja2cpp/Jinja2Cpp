@@ -446,7 +446,8 @@ nonstd::expected<Value, ErrorInfo> ToValue(Json&& doc, const JsonCopyLimits& lim
  * \brief A view of `node` that keeps `owner` alive
  *
  * For a subtree of a document held by a shared pointer, or a handle type (`JsonTraits::IsHandle`) whose storage
- * another object owns. Every item the view hands out shares `owner`.
+ * another object owns. Every item the view hands out shares `owner`, which must keep the document alive and
+ * unchanged: a template module keeps the cells of such a view across its calls (IJsonNode::KeepsDocument).
  */
 template<typename Json>
 Value ReflectJson(std::shared_ptr<const void> owner, const Json& node);

@@ -1189,10 +1189,11 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfAnOwnedDocument)
             // A fresh document in each call starts from its own data, also at an address an earlier one had
             EXPECT_EQ("[0]", call("g", { own("[0]") }));
             EXPECT_EQ("[0]", call("g", { own("[0]") }));
-            // A nested value of the document is found again in the next call
+            // A nested value of the document: the write makes the document's own cell, which keeps the nested one
             const jinja2::Value nested = own(R"({"a":[0]})");
             EXPECT_EQ("[0]", call("h", { nested }));
             EXPECT_EQ("[0, 1]", call("h", { nested }));
+            EXPECT_EQ("[0, 1, 1]", call("h", { nested }));
             // The module's own value of the document and the view the host lends again are one object
             const jinja2::Value dict = own(R"({"k":1})");
             EXPECT_EQ("", call("keep", { dict }));
@@ -1201,6 +1202,29 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfAnOwnedDocument)
             EXPECT_EQ("True{'k': 2}{'k': 2}", call("same", { dict }));
             module = tpl.MakeModule({});
             ASSERT_TRUE(!!module) << module.error().ToString();
+        }
+        // A document the host lets go of goes by the end of the next call, and a fresh one per call leaves no cell
+        // behind, also after a write to its nested value (verifier of 0402)
+        std::vector<std::weak_ptr<Json>> gone;
+        for (int n = 0; n != 4; ++n)
+        {
+            for (const char* name : { "g", "h" })
+            {
+                auto doc = std::make_shared<Json>(TypeParam::Parse(name[0] == 'g' ? "[0]" : R"({"a":[0]})"));
+                gone.push_back(doc);
+                const jinja2::Value view = jinja2::Reflect(std::move(doc));
+                EXPECT_EQ("[0]", call(name, { view }));
+            }
+        }
+        EXPECT_EQ("[0]", call("g", { jinja2::Reflect(TypeParam::Parse("[0]")) }));
+        // Traits without an Identity hook key a cell by the view's accessor: a nested item's cell is never dropped yet
+        // (docs/tasks/0569)
+        if constexpr (jinja2::detail::json::HasIdentity<Json>::value)
+        {
+            for (const auto& doc : gone)
+            {
+                EXPECT_TRUE(doc.expired());
+            }
         }
     }
 }

@@ -46,10 +46,16 @@ and the borrowed case is pinned as deliberate by a test.
   `ReflectJson` with an owner). A cell of such a view is not call-scoped (`HasUnheldIdentity` in
   internal_value.cpp): its source keeps the document, and so the address, alive, so it lives
   across calls like any owned data and a view lent again keeps the module's writes, as Python's.
-  The header now also says that the host does not change a shared document while a Value reads it.
+  The header now also says that the host does not change a shared document while a Value reads it,
+  and that `ReflectJson`'s owner must keep the document alive and unchanged.
+- A nested value read through its parent (`d.a`, an aliasing `WithOwner` accessor) keeps a
+  call-scoped cell: `DropUnheld` cannot tell such an accessor lent again, so a non-call-scoped cell
+  of it stayed for the module's life, one per call with fresh documents (verifier round 1). Writes
+  to it still last across calls through the document's own cell, which the write makes and which
+  keeps the nested item. The same leak without node identities is older: task 0569.
 - Tests: `JsonConformance.ModuleCallsOfAnOwnedDocument` (owned, copied and shared documents;
   writes kept across calls, a nested item, `sameas` with the module's value, fresh documents per
-  call); it fails on master. `ModuleCallsOfABorrowedDocument` names option (b) at the borrowed case.
+  call, the documents freed by the next call's end); it fails on master. `ModuleCallsOfABorrowedDocument` names option (b) at the borrowed case.
 - Model: key `J`, `HostChangesJson` and the freeze in `EndModCall` (`FixCallScoped`), invariant
   `CallScopedBounded`; runs `module-json` (pass), `module-json-exhaustive`, and the mutant
   `no-call-scoped-freeze` (`NoForeignCell` in 9 states: the 0212 F1/F2 shape). Exports of a frozen
