@@ -747,6 +747,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     SmallVector<NodeRef<Expression>, 4> concat;
     // Jinja2's optimizer folds each operator node made here too (docs/tasks/0484)
     const unsigned foldFrom = m_tupleSliceSubscripts;
+    // A product whose operands read no name may be a constant (NoteWatchedFold)
+    const unsigned nameReads = m_nameReads;
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
                                                                                                          : ParseUnaryPlusMinus(lexer);
     while (left)
@@ -800,7 +802,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         {
             *left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
             // A product or power of constants may pass MaxIntStrDigits digits (docs/tasks/0564)
-            if ((op.operation == BinaryExpression::Mul || op.operation == BinaryExpression::Pow) && !RepeatsSequence(m_nodes, *left))
+            if ((op.operation == BinaryExpression::Mul || op.operation == BinaryExpression::Pow) && m_nameReads == nameReads && !RepeatsSequence(m_nodes, *left))
             {
                 NoteWatchedFold(*left);
             }
@@ -978,6 +980,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         }
         auto ref = ValueRefExpression::Make(m_nodes, name);
         m_readsName = true;
+        ++m_nameReads;
         m_names.AddUse(ref);
         if (m_names.ReadsOpen())
         {

@@ -404,6 +404,8 @@ private:
     // (PrepareFold) only when it read no name or has such a choice (docs/tasks/0505)
     bool m_readsName = false;
     bool m_foldChoice = false;
+    // The names read so far, which tells whether the operands of an operator read one (ParseBinary)
+    unsigned m_nameReads = 0;
     // What the chain ParseFilterExpression parses filters, in an expression, and
     // m_tupleSliceSubscripts before it (NoteChainStep); null for a filter tag's chain
     NodeRef<Expression> m_chainOperand;
