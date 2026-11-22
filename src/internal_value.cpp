@@ -2170,7 +2170,7 @@ const void* HostIdentity(const IJsonNode* node, const void* accessor, const Cell
 // docs/tasks/0402)
 bool HasUnheldIdentity(const IJsonNode* node) noexcept
 {
-    return node && node->NodeIdentity() && !node->KeepsDocument();
+    return node != nullptr && node->NodeIdentity() != nullptr && !node->KeepsDocument();
 }
 } // namespace
 
