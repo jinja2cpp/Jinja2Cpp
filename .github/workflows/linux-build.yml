@@ -70,6 +70,7 @@ jobs:
   linux-build:
     name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}${{ matrix.chat == 'OFF' && ' chat=OFF' || '' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
@@ -214,6 +215,7 @@ jobs:
   external-deps:
     name: deps=${{ matrix.mode }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
@@ -287,6 +289,7 @@ jobs:
   boost-free:
     name: Boost-free default (gcc-14, tests OFF)
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -328,6 +331,7 @@ jobs:
   sanitizers:
     name: ${{ matrix.sanitizer }} (${{ matrix.compiler }})${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
 
     strategy:
       fail-fast: false
@@ -394,6 +398,7 @@ jobs:
   debug-containers:
     name: ${{ matrix.stdlib }} debug containers C++${{ matrix.std }} (${{ matrix.compiler }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
@@ -451,6 +456,7 @@ jobs:
   coverage:
     name: Coverage (gcc-14)
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

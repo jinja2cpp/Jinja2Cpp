@@ -40,6 +40,7 @@ env:
 jobs:
   plan:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
     steps:

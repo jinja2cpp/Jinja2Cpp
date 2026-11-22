@@ -36,6 +36,7 @@ jobs:
   windows-msvc-build:
     name: MSVC C++${{ matrix.std }} ${{ matrix.build-config }} runtime=${{ matrix.build-runtime || 'default' }} shared=${{ matrix.build-shared }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: windows-latest
+    timeout-minutes: 60
 
     # One job per MSVC standard; build type, linkage and CRT rotate across them so each
     # value is built at least once. JINJA2CPP_BUILD_SHARED=ON forces the /MD runtime
@@ -90,7 +91,8 @@ jobs:
         GTEST_BRIEF: ${{ matrix.build-config == 'Debug' && '0' || '1' }}
       run: |
         cd .build
-        ctest -C %INPUT_BUILD_CONFIG% --output-on-failure --timeout 2400
+        rem 600 s per test: a hang fails in 10 minutes, not 40 (docs/tasks/0565; train #973 held 6 h)
+        ctest -C %INPUT_BUILD_CONFIG% --output-on-failure --timeout 600
 
     # The commit's source archive, built with tests off outside the checkout, installed and
     # used by test/package with MSVC (docs/tasks/0225)
