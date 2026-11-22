@@ -178,7 +178,7 @@ struct JINJA2CPP_EXPORT IJsonNode
      * `std::shared_ptr`, \ref ReflectJson with an owner): \ref NodeIdentity then names the same value for as long as
      * the view lives, so a view the host lends to several calls of a template module keeps the writes made through
      * it (`d.update(...)`, `d.a.append(...)`) across the calls, as Python's dict would; a nested value the module
-     * holds under a name of its own (`{% set a = d.a %}`, a loop item) is written for the call only (docs/tasks/0569).
+     * holds under a name of its own (`{% set a = d.a %}`, a loop item) is written for the call only (docs/tasks/0572).
      * False for a borrowed document (a const reference, a pointer, a handle without an owner), which the
      * host may change or free between two calls: each call then starts from the host's data. A view that does not
      * override it is taken as borrowed.

@@ -55,11 +55,11 @@ and the borrowed case is pinned as deliberate by a test.
   to it still last across calls through the document's own cell, which the write makes and which
   keeps the nested item. Writes to a nested value held under a name of its own (`{% set a = d.a %}`,
   a loop item, `d.its|first`) stay call-scoped, as on master; Python keeps them (verifier round 2,
-  task 0569, which also has the older leak without node identities).
+  task 0572, which also has the older leak without node identities).
 - Known cost, verifier round 2: a cycle through a fresh owned document's cell
   (`d.update(self=d)`) now stays until the module goes, one document per call, where the
   call-scoped freeze used to hand it to the collector. Owned `ValuesMap` arguments already behave
-  so on master (`IsUnheld` counts the cycle's own link); both are task 0570.
+  so on master (`IsUnheld` counts the cycle's own link); both are task 0573.
 - Tests: `JsonConformance.ModuleCallsOfAnOwnedDocument` (owned, copied and shared documents;
   writes kept across calls, a nested item, `sameas` with the module's value, fresh documents per
   call, the documents freed by the next call's end); it fails on master. `ModuleCallsOfABorrowedDocument` names option (b) at the borrowed case.

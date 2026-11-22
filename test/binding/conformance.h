@@ -1218,7 +1218,7 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfAnOwnedDocument)
         }
         EXPECT_EQ("[0]", call("g", { jinja2::Reflect(TypeParam::Parse("[0]")) }));
         // Traits without an Identity hook key a cell by the view's accessor: a nested item's cell is never dropped yet
-        // (docs/tasks/0569)
+        // (docs/tasks/0572)
         if constexpr (jinja2::detail::json::HasIdentity<Json>::value)
         {
             for (const auto& doc : gone)
