@@ -2632,6 +2632,74 @@
    "output": "1"
   },
   {
+   "id": "undefined.strict_fold_list_item_unrendered",
+   "template": "{% if false %}{{ [([]|max) + 1] }}{% endif %}b",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "undefined.strict_fold_output_unrendered",
+   "template": "{% if false %}{{ [1][3] }}{{ ''|first }}{% endif %}b",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "undefined.strict_fold_subscript_or_unrendered",
+   "template": "{% if false %}{{ {}.x or 1 }}{% endif %}b",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'x'"
+   }
+  },
+  {
+   "id": "undefined.strict_fold_default_concat",
+   "template": "{{ ([]|first)|default(1) ~ 1 }}|{{ 'x' if [1][3] is defined else 'y' }}|{{ not [1][4] }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "list object has no element 4"
+   }
+  },
+  {
    "id": "undefined.default_tests_compare",
    "template": "{{ nope in [] }}|{{ nope is sameas nope }}|{{ [nope, 1] | select('equalto', 1) | list }}|{{ nope is eq(1) }}|{{ [nope, 1].count(1) }}|{{ [nope, 1].index(1) }}|{{ nope is iterable }}|{{ nope in {'a': 1}.keys() }}",
    "context": {

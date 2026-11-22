@@ -719,7 +719,12 @@ public:
     [[nodiscard]] const std::vector<FoldCheck>* GetFoldChecks() const { return m_unknown.GetFoldChecks(); }
     // Through ParseErrorsToErrorInfo: a second caller of ParseErrorToErrorInfo changes how GCC
     // inlines Parse, a cost on every Load (PR #865)
-    [[nodiscard]] ErrorInfo GetFoldCheckError(const FoldCheck& check) { return ParseErrorsToErrorInfo(std::vector<ParseError>{ check.error }).error()[0]; }
+    [[nodiscard]] ErrorInfo GetFoldCheckError(const FoldCheck& check, FoldCheckResult result)
+    {
+        const auto& tok = check.error.errorToken;
+        auto error = result == FoldCheckResult::StrDigits ? StrDigitsError(tok) : result == FoldCheckResult::Undefined ? StrictFoldError(tok) : check.error;
+        return ParseErrorsToErrorInfo(std::vector<ParseError>{ std::move(error) }).error()[0];
+    }
 
     // Whether fold candidates hold nodes the tree may not (UnknownCallables::AddFoldNode): only
     // a template with a subscript by a tuple of slices
@@ -2343,7 +2348,9 @@ private:
         errInfoData.srcLoc.fileName = m_templateName;
         OffsetToLinePos(e.errorToken.range.startOffset, errInfoData.srcLoc.line, errInfoData.srcLoc.col);
         errInfoData.locationDescr = GetLocationDescr(errInfoData.srcLoc.line, errInfoData.srcLoc.col);
-        if (e.errorCode == ErrorCode::TemplateSyntaxError || e.errorCode == ErrorCode::TemplateAssertionError)
+        // A ValueError or UndefinedError of Jinja2's compile (StrDigitsError, StrictFoldError) is its message too
+        if (e.errorCode == ErrorCode::TemplateSyntaxError || e.errorCode == ErrorCode::TemplateAssertionError
+            || (e.message && (e.errorCode == ErrorCode::TemplateRuntimeError || e.errorCode == ErrorCode::UndefinedError)))
         {
             // Jinja2's message is all there is to it
             errInfoData.extraParams.emplace_back(ConvertString<string_t>(e.message ? *e.message : std::string()));
