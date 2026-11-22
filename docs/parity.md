@@ -22,13 +22,13 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Nov 2026):
 | calls | 83 | 82 | 1 | 0 | 0 | 0 | 0 | 0 | 0214 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | errors | 129 | 129 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| filters | 464 | 462 | 1 | 1 | 0 | 0 | 0 | 0 | 0101, 0563 |
+| filters | 477 | 473 | 2 | 1 | 1 | 0 | 0 | 0 | 0101, 0571 |
 | fuzz | 34 | 34 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | globals | 105 | 104 | 0 | 1 | 0 | 0 | 0 | 0 | 0178 |
 | i18n | 73 | 73 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | literals | 175 | 172 | 0 | 0 | 3 | 0 | 0 | 0 | 0564 |
 | loader | 253 | 250 | 2 | 0 | 1 | 0 | 0 | 0 | 0165, 0494 |
-| methods | 314 | 308 | 0 | 4 | 2 | 0 | 0 | 0 | 0178, 0403, 0545 |
+| methods | 315 | 309 | 0 | 4 | 2 | 0 | 0 | 0 | 0178, 0403, 0545 |
 | operators | 305 | 299 | 0 | 3 | 3 | 0 | 0 | 0 | 0178, 0545 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 38 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |  |
@@ -40,7 +40,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Nov 2026):
 | tests | 74 | 73 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
 | undefined | 164 | 161 | 0 | 0 | 3 | 0 | 0 | 0 | 0555 |
 | whitespace | 59 | 59 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **3941** | **3902** | **14** | **13** | **12** | **0** | **0** | **0** | |
+| **total** | **3955** | **3914** | **15** | **13** | **13** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment

@@ -620,10 +620,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | open |
 | [0560](0560-ended-block-in-stored-macro-sees-inner-frames.md) | A block in a macro stored by a nested render that failed renders nothing | parity | low | open |
 | [0561](0561-engine-set-hash-index-and-live-loop.md) | The engine's set has no hash index, and a loop over a set changed in its body goes on | robustness | low | open |
-| [0562](0562-pprint-self-containing-container.md) | pprint of a list or dict that contains itself fails with a recursion error | parity | low | open |
-| [0563](0563-key-value-pair-tuple-methods.md) | A dictsort or items pair has no tuple methods | parity | low | open |
+| [0562](0562-pprint-self-containing-container.md) | pprint of a list or dict that contains itself fails with a recursion error | parity | low | done |
+| [0563](0563-key-value-pair-tuple-methods.md) | A dictsort or items pair has no tuple methods | parity | low | done |
 | [0564](0564-reject-constants-past-str-digit-limit.md) | Reject integer constants past 4300 digits that survive folding | parity | low | open |
 | [0565](0565-set-methods-slow-on-msvc-debug.md) | Set methods over a big range are thousands of times slower in MSVC Debug than in a GCC Debug build | performance | medium | open |
 | [0566](0566-huge-host-big-int-converts-per-access.md) | Stop converting a huge host BigInt on every access | robustness | low | open |
 | [0567](0567-stored-closure-reaching-module-through-capture.md) | A stored closure that reaches a call's module only through its capture keeps the module | parity | low | open |
 | [0568](0568-huge-int-index-and-range-bound.md) | Render a huge integer used as a list index or a range() bound as Python does | robustness | low | open |
+| [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | open |

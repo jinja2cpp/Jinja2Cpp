@@ -3,6 +3,7 @@
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
+#include "hash_map.h"
 #include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
@@ -62,8 +63,12 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
     using BaseVisitor::operator();
 
-    explicit PrettyPrinter(const RenderContext* context)
+    // `stack`: the context of the printer this one prints an item for, whose containers print as a recursion in it
+    // `fresh`: the value is a copy Python makes (the dict a mappingproxy prints), which no context holds
+    explicit PrettyPrinter(const RenderContext* context, std::vector<const void*>* stack = nullptr, bool fresh = false)
         : m_context(context)
+        , m_sharedStack(stack)
+        , m_fresh(fresh)
     {
     }
 
@@ -116,14 +121,57 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         entries = std::move(sorted);
     }
 
-    // A value as pprint prints it: Markup as Markup('...')
-    static std::string Print(const InternalValue& val, const RenderContext* context)
+    // A value as pprint prints it (_safe_repr): Markup as Markup('...'), a dict, list or tuple met again inside itself
+    // as <Recursion on list with id=N> (docs/tasks/0562)
+    [[nodiscard]] std::string Print(const InternalValue& val, bool fresh = false) const
     {
         // One Apply call: a second one here moved the inlining of this file's tojson writer (+1% on chat renders)
         const auto hostList = host::ExactListOrTupleValue(val);
-        auto text = Apply<PrettyPrinter>(hostList ? *hostList : val, context);
+        auto text = Apply<PrettyPrinter>(hostList ? *hostList : val, m_context, &Stack(), fresh);
         return val.IsMarkup() && IsStringValue(val) ? "Markup(" + text + ")" : text;
     }
+
+    // pprint's context: the containers being printed or broken over lines, whose reference in itself prints as a recursion
+    [[nodiscard]] std::vector<const void*>& Stack() const { return m_sharedStack ? *m_sharedStack : m_ownStack; }
+
+    [[nodiscard]] bool OnStack(const void* identity) const
+    {
+        const auto& stack = Stack();
+        return identity != nullptr && std::find(stack.begin(), stack.end(), identity) != stack.end();
+    }
+
+    // _recursion: what a container met again inside itself prints
+    static std::string RecursionText(const char* typeName, const void* identity)
+    {
+        return fmt::format("<Recursion on {} with id={}>", typeName, reinterpret_cast<std::uintptr_t>(identity));
+    }
+
+    // A container on the context while it is printed, measured or broken over lines
+    struct StackEntry
+    {
+        std::vector<const void*>& stack;
+        bool pushed;
+        StackEntry(std::vector<const void*>& stackRef, const void* id)
+            : stack(stackRef)
+            , pushed(id != nullptr)
+        {
+            if (pushed)
+            {
+                stack.push_back(id);
+            }
+        }
+        StackEntry(const StackEntry&) = delete;
+        StackEntry& operator=(const StackEntry&) = delete;
+        StackEntry(StackEntry&&) = delete;
+        StackEntry& operator=(StackEntry&&) = delete;
+        ~StackEntry()
+        {
+            if (pushed)
+            {
+                stack.pop_back();
+            }
+        }
+    };
 
     // Python's pprint.pformat: the repr of a value when it fits in 80 columns, else a list,
     // tuple, dict or string broken over lines as pprint.PrettyPrinter._format breaks it
@@ -132,7 +180,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         std::string out;
         // pprint reads each container more than once: a list that can be read only once is
         // read into a copy first, so that the value it prints is the one it measured
-        if (HasSinglePassList(val))
+        detail::FlatSet<const void*> seen;
+        if (HasSinglePassList(val, seen))
         {
             PrettyPrinter(context).FormatTo(out, ReadOnce(val), 0, 0, 0);
         }
@@ -143,8 +192,19 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return out;
     }
 
-    // Whether val holds a list that has no size (a host generator), which reading consumes
-    static bool HasSinglePassList(const InternalValue& val)
+    // Whether a container of this identity is met for the first time; one with none always is
+    static bool FirstVisit(const void* identity, detail::FlatSet<const void*>& seen)
+    {
+        if (!identity)
+        {
+            return true;
+        }
+        return seen.insert(identity).second;
+    }
+
+    // Whether val holds a list that has no size (a host generator), which reading consumes. `seen`: the lists and dicts
+    // already asked, so that a container that holds itself, or is held twice, is walked once (docs/tasks/0562)
+    static bool HasSinglePassList(const InternalValue& val, detail::FlatSet<const void*>& seen)
     {
         CheckStack();
         if (auto list = AsList(val))
@@ -154,16 +214,30 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             {
                 return false;
             }
-            return !list->GetSize() || std::any_of(list->begin(), list->end(), [](const InternalValue& item) { return HasSinglePassList(item); });
+            if (!list->GetSize())
+            {
+                return true;
+            }
+            const auto* identity = list->GetIdentity();
+            if (!FirstVisit(identity, seen))
+            {
+                return false;
+            }
+            return std::any_of(list->begin(), list->end(), [&seen](const InternalValue& item) { return HasSinglePassList(item, seen); });
         }
         if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping())
         {
+            const auto* identity = map->GetIdentity();
+            if (!FirstVisit(identity, seen))
+            {
+                return false;
+            }
             const auto entries = map->GetEntries();
-            return std::any_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return HasSinglePassList(entry.key) || HasSinglePassList(entry.value); });
+            return std::any_of(entries.begin(), entries.end(), [&seen](const KeyValuePair& entry) { return HasSinglePassList(entry.key, seen) || HasSinglePassList(entry.value, seen); });
         }
         if (const auto* pair = GetIf<KeyValuePair>(&val))
         {
-            return HasSinglePassList(pair->key) || HasSinglePassList(pair->value);
+            return HasSinglePassList(pair->key, seen) || HasSinglePassList(pair->value, seen);
         }
         return false;
     }
@@ -255,41 +329,18 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         CheckStack();
         const char* typeName = nullptr;
         const void* identity = fresh ? nullptr : ContainerIdentity(val, typeName);
-        if (identity != nullptr && std::find(m_stack.begin(), m_stack.end(), identity) != m_stack.end())
+        if (OnStack(identity))
         {
-            Write(out, fmt::format("<Recursion on {} with id={}>", typeName, reinterpret_cast<std::uintptr_t>(identity)));
+            Write(out, RecursionText(typeName, identity));
             return;
         }
         // Markup has a repr of its own, which pprint does not break
-        if (val.IsMarkup() || ReprWidthAtMost(val, Width - indent - allowance) <= Width - indent - allowance)
+        if (val.IsMarkup() || ReprWidthAtMost(val, Width - indent - allowance, fresh) <= Width - indent - allowance)
         {
-            Write(out, Print(val, m_context));
+            Write(out, Print(val, fresh));
             return;
         }
-        // pprint's context: the containers it is breaking over lines, whose reference in itself prints as a recursion
-        struct StackEntry
-        {
-            std::vector<const void*>& stack;
-            bool pushed;
-            StackEntry(std::vector<const void*>& stackRef, const void* id)
-                : stack(stackRef)
-                , pushed(id != nullptr)
-            {
-                if (pushed)
-                {
-                    stack.push_back(id);
-                }
-            }
-            StackEntry(const StackEntry&) = delete;
-            StackEntry& operator=(const StackEntry&) = delete;
-            ~StackEntry()
-            {
-                if (pushed)
-                {
-                    stack.pop_back();
-                }
-            }
-        } const stackEntry(m_stack, identity);
+        const StackEntry stackEntry(Stack(), identity);
         std::optional<ListAdapter> hostItems;
         if (auto list = ListOf(val, hostItems))
         {
@@ -316,7 +367,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
         else
         {
-            Write(out, Print(val, m_context));
+            Write(out, Print(val));
         }
     }
 
@@ -325,7 +376,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
         if (list.GetRangeInfo())
         {
-            Write(out, Print(val, m_context));
+            Write(out, Print(val));
             return;
         }
         if (const auto kind = list.GetIteratorKind(); IsViewKind(kind))
@@ -334,7 +385,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             // sorted (_pprint_set, docs/tasks/0545)
             if (kind != IteratorKind::Set)
             {
-                Write(out, Print(val, m_context));
+                Write(out, Print(val));
                 return;
             }
             std::vector<InternalValue> sorted(list.begin(), list.end());
@@ -358,7 +409,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
         if (map.GetObjectClass())
         {
-            Write(out, Print(val, m_context));
+            Write(out, Print(val));
             return;
         }
         // A host's mappingproxy breaks as the engine's own does, over its entries
@@ -388,23 +439,33 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     // The width of the one-line repr of val, or more than limit once it is known to exceed it:
     // every level of a nested value asks, so it must not print the whole value each time
-    [[nodiscard]] int64_t ReprWidthAtMost(const InternalValue& val, int64_t limit) const
+    [[nodiscard]] int64_t ReprWidthAtMost(const InternalValue& val, int64_t limit, bool fresh = false) const
     {
         CheckStack();
         if (limit < 0)
         {
             return limit + 1;
         }
+        // A dict, list or tuple met again inside itself measures as the recursion text it prints (docs/tasks/0562)
+        const char* typeName = nullptr;
+        const void* identity = fresh ? nullptr : ContainerIdentity(val, typeName);
+        // A mappingproxy is measured by its repr even then, as _safe_repr takes it
+        if (OnStack(identity) && std::strcmp(typeName, "mappingproxy") != 0)
+        {
+            return static_cast<int64_t>(RecursionText(typeName, identity).size());
+        }
         std::optional<ListAdapter> hostItems;
         // A dict view or set is measured by its repr, as pprint's _safe_repr takes it: it may hold the dict that holds it,
         // which the repr prints as `...` where a walk of its items would not end
         if (auto list = ListOf(val, hostItems); list && !list->GetRangeInfo() && !IsViewKind(list->GetIteratorKind()))
         {
+            const StackEntry stackEntry(Stack(), identity);
             return ItemsWidthAtMost(*list, limit);
         }
         // A mappingproxy is measured by its repr, as pprint's _safe_repr takes it (docs/tasks/0538)
         if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping() && !IsHostMappingProxy(*map))
         {
+            const StackEntry stackEntry(Stack(), identity);
             return EntriesWidthAtMost(map->GetEntries(), limit);
         }
         if (const auto* pair = GetIf<KeyValuePair>(&val))
@@ -420,7 +481,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             return limit + 1;
         }
-        return static_cast<int64_t>(CodePointCount(std::string_view(Print(val, m_context))));
+        return static_cast<int64_t>(CodePointCount(std::string_view(Print(val))));
     }
 
     // width plus the repr width of item, while width is within limit
@@ -492,7 +553,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         for (size_t idx = 0; idx != entries.size(); ++idx)
         {
             const bool last = idx + 1 == entries.size();
-            const auto key = Print(entries[idx].key, m_context);
+            const auto key = Print(entries[idx].key);
             Write(out, key);
             out += ": ";
             FormatTo(out, entries[idx].value, indent + static_cast<int64_t>(CodePointCount(std::string_view(key))) + 2, last ? allowance : 1, level);
@@ -679,10 +740,16 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             visitors::ValueRenderer<char>(str, true)(list);
             return str;
         }
-        auto os = std::back_inserter(str);
-
         // A tuple prints as Python's: (a, b), and (a,) with one item
         const bool isTuple = list.IsTuple();
+        const void* identity = m_fresh ? nullptr : list.GetIdentity();
+        if (OnStack(identity))
+        {
+            return RecursionText(isTuple ? "tuple" : "list", identity);
+        }
+        const StackEntry stackEntry(Stack(), identity);
+        auto os = std::back_inserter(str);
+
         str += isTuple ? "(" : "[";
         size_t count = 0;
 
@@ -692,7 +759,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             {
                 fmt::format_to(os, ", ");
             }
-            fmt::format_to(os, "{}", Print(v, m_context));
+            fmt::format_to(os, "{}", Print(v));
         }
         str += isTuple ? (count == 1 ? ",)" : ")") : "]";
 
@@ -716,6 +783,12 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             visitors::ValueRenderer<char>(str, true)(map);
             return str;
         }
+        const void* identity = m_fresh || map.IsHost() ? nullptr : map.GetIdentity();
+        if (OnStack(identity))
+        {
+            return RecursionText("dict", identity);
+        }
+        const StackEntry stackEntry(Stack(), identity);
         auto os = std::back_inserter(str);
 
         fmt::format_to(os, "{{");
@@ -736,8 +809,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 fmt::format_to(os, ", ");
             }
 
-            fmt::format_to(os, "{}: ", Print(entry.key, m_context));
-            fmt::format_to(os, "{}", Print(entry.value, m_context));
+            fmt::format_to(os, "{}: ", Print(entry.key));
+            fmt::format_to(os, "{}", Print(entry.value));
         }
 
         fmt::format_to(os, "}}");
@@ -751,8 +824,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         std::string str;
         auto os = std::back_inserter(str);
 
-        fmt::format_to(os, "({}, ", Print(kwPair.key, m_context));
-        fmt::format_to(os, "{})", Print(kwPair.value, m_context));
+        fmt::format_to(os, "({}, ", Print(kwPair.key));
+        fmt::format_to(os, "{})", Print(kwPair.value));
 
         return str;
     }
@@ -796,8 +869,11 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     std::string operator()(const BigIntView& val) const { return std::string(CheckedDecimal(val)); }
 
     const RenderContext* m_context;
-    // The containers FormatTo is breaking over lines
-    mutable std::vector<const void*> m_stack;
+    // The containers this printer is printing, measuring or breaking over lines, unless it shares another's
+    mutable std::vector<const void*> m_ownStack;
+    std::vector<const void*>* m_sharedStack;
+    // The value this printer prints is a copy Python makes, which its context does not hold
+    bool m_fresh;
 };
 
 PrettyPrint::PrettyPrint(const FilterParams& params)
