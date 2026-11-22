@@ -174,9 +174,9 @@ Outside the corpus:
   raw (0362, Ruslan 2026-11-02);
 - borrowed JSON views start fresh in each module call (0402 option b, Ruslan 2026-11-06).
 
-Corpus on master `383aaa5e`: 3756 cases, 3727 match; besides the deliberate and build-conditional lines, 4 are real (0555 ×3 and 0556, strict undefined folds that Jinja2's optimizer runs at compile time). The upstream pallets/jinja suite through
+Corpus on master `fb833ad`: 3941 cases, 3902 match; besides the deliberate and build-conditional lines, 8 are real (0555 ×3 and 0556, strict undefined folds that Jinja2's optimizer runs at compile time; 0563, dictsort/items pair tuple methods; 0564 ×3, int constants past 4300 digits). The upstream pallets/jinja suite through
 the Python module (0355) passes 645 of 856 (#895 closed five more for 0415; 0431-0434 are done).
-Its remaining divergences are filed as 0412 and 0435 (0415, 0433, 0434, 0436, 0456, 0457, 0458, 0476, 0477, 0479, 0505, 0509, 0510 and 0511 are done).
+Its remaining divergence is filed as 0412 (0415, 0435, 0433, 0434, 0436, 0456, 0457, 0458, 0476, 0477, 0479, 0505, 0509, 0510 and 0511 are done).
 
 ## 6. Confirmed facts for this revision
 
