@@ -46,6 +46,7 @@ jobs:
   module:
     name: Python ${{ matrix.python }} module, Debug address+undefined (${{ matrix.compiler }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
@@ -125,6 +126,7 @@ jobs:
   installed:
     name: Python ${{ matrix.python }} module against the installed library (${{ matrix.compiler }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false

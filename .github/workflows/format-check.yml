@@ -17,6 +17,7 @@ jobs:
   clang-format:
     name: clang-format (changed lines)
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
@@ -54,6 +55,7 @@ jobs:
   sbom:
     name: SBOM in sync with the build
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -74,6 +76,7 @@ jobs:
   task-index:
     name: task index (stale index warns, duplicate numbers fail)
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 

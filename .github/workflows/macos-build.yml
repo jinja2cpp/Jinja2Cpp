@@ -36,6 +36,7 @@ jobs:
   macos-build:
     name: ${{ matrix.os }} AppleClang C++${{ matrix.cxx-standard }} ${{ matrix.build-config }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
 
     # Release builds every standard, on two runner images (macos-14 retired 2026-11-02,
     # actions/runner-images#13518; macos-15 and macos-26 remain); one Debug build on macos-15

@@ -47,6 +47,7 @@ jobs:
   sanitizers:
     name: bindings ${{ matrix.sanitizer }} (${{ matrix.compiler }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
 
     strategy:
       fail-fast: false
@@ -105,6 +106,7 @@ jobs:
   msvc:
     name: bindings MSVC C++17 Release /MT static
     runs-on: windows-latest
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -131,6 +133,7 @@ jobs:
   macos:
     name: bindings macos-15 AppleClang C++17 Release
     runs-on: macos-15
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -168,6 +171,7 @@ jobs:
   system-deps-and-package:
     name: bindings system Boost and nlohmann_json, package components (gcc-14)
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -232,6 +236,7 @@ jobs:
     name: bindings clang-tidy (changed lines)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     env:
       CLANG_TIDY_VERSION: 22.1.8
 
