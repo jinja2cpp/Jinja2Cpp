@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/988
 priority: low
 area: parity
 depends: []
@@ -16,3 +17,7 @@ shares: [test/parity/cases/filters.py, test/parity/divergences/filters.txt]
 **Proposal.** Look a KeyValuePair's attributes up in `TupleMethods`, as a two-item tuple, sandbox policy included.
 
 **Done when** the divergence line is gone and the case matches in narrow and wide runs.
+
+**Result.** A KeyValuePair has its own `index` and `count` over (key, value), found through `FindMethod` like a
+tuple's, so the sandbox policy is asked as for any method (`PublicSandboxPolicyTest.PairMethodsAskThePolicy`). Cases
+`filters.dictsort_pair_*` cover the bound method's repr, index ranges and the errors.

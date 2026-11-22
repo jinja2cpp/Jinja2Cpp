@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/988
 priority: low
 area: parity
 depends: [0545]
@@ -20,3 +21,8 @@ mappingproxies and views only.
 before it (as `operators.mapping_proxy_*` recursion cases do).
 
 **Done when** both templates render with Python's text up to the id, in narrow and wide runs.
+
+**Result.** The printer, its measuring pass and the one-line repr share one context: a dict, list or tuple met
+again inside itself prints and measures as `<Recursion on TYPE with id=N>`, and the dict a mappingproxy prints is
+not on it (Python prints a copy). The single-pass-list check before printing walks each container once. Cases
+`filters.pprint_self_*` and `filters.pprint_shared_not_recursive`.

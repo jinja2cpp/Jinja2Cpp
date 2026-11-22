@@ -508,4 +508,19 @@ CASES = [
     ("pprint_wraps_context_list", "{{ xs|pprint }}|{{ t|pprint }}", {"ctx": {"xs": list(range(30)), "t": [list(range(25)), {"a": "w" * 80}]}}),
     # task 0563: a dictsort or items pair is a tuple, with tuple's methods
     ("dictsort_pair_methods", "{{ ({'a': 1}|dictsort|first).index('a') }}|{{ ({'a': 1}|dictsort|first).count(1) }}|{{ ({'a': 1}|items|first).index(1) }}"),
+    ("dictsort_pair_method_repr", "{{ (({'a': 1}|dictsort|first).count|string).split(' at ')[0] }}"),
+    ("dictsort_pair_index_range", "{{ ({'a': 'a'}|items|first).index('a', 1) }}|{{ ({'a': 1}|items|first).index(1, -1) }}"),
+    ("dictsort_pair_index_missing", "{{ ({'a': 1}|items|first).index(2) }}"),
+    ("dictsort_pair_count_no_args", "{{ ({'a': 1}|items|first).count() }}"),
+    # task 0571: tuple index bounds and a bound method's __name__ (seen on dictsort pairs, 0563)
+    ("tuple_index_none_bound", "{{ (1, 2).index(1, none) }}"),
+    ("tuple_index_huge_bound", "{{ (1, 2).index(1, -9999999999999999999) }}|{{ ({'a': 1}|items|first).index(1, -9999999999999999999) }}"),
+    ("bound_method_name", "{{ (1, 2).count.__name__ }}|{{ [1].count.__name__ }}|{{ ({'a': 1}|items|first).index.__name__ }}"),
+    # task 0562: pprint of a dict, list or tuple that holds itself prints Python's recursion text; ids are addresses
+    ("pprint_self_list", "{% set l = [] %}{% do l.append(l) %}{% set t = (l|pprint).split(' with id=') %}{{ t|length }}|{{ t[0] }}|{{ t[1][-2:] }}", {"env": {"extensions": ["do"]}}),
+    ("pprint_self_dict", "{% set d = {} %}{% do d.update({'self': d}) %}{% set t = (d|pprint).split(' with id=') %}{{ t|length }}|{{ t[0] }}|{{ t[1][-2:] }}", {"env": {"extensions": ["do"]}}),
+    ("pprint_self_nested", "{% set l = [1] %}{% do l.append({'l': l}) %}{% set t = ([l, (l,)]|pprint).split(' with id=') %}{{ t|length }}|{{ t[0] }}|{{ t[1][-5:] }}|{{ t[2][-4:] }}", {"env": {"extensions": ["do"]}}),
+    ("pprint_self_wide", "{% set l = ['x' * 80] %}{% do l.append(l) %}{% set d = {'k': 'y' * 80} %}{% do d.update({'d': d}) %}{% set t = ([l, d]|pprint).split(' with id=') %}{{ t|length }}|{{ t[0] }}|{{ t[1][-3:] }}", {"env": {"extensions": ["do"]}}),
+    ("pprint_self_mappingproxy_nested", "{% set d = {'a': 'z' * 80} %}{% set m = d.keys().mapping %}{% do d.update({'x': [m], 'y': {'k': m}}) %}{% set t = (m|pprint).split(' with id=') %}{{ t|length }}|{{ t[0] }}|{{ t[1][-4:] }}", {"env": {"extensions": ["do"]}}),
+    ("pprint_shared_not_recursive", "{% set a = [1] %}{{ [a, a, {'x': a}, (a, a)]|pprint }}"),
 ]
