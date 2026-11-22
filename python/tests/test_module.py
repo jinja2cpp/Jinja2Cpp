@@ -168,8 +168,8 @@ def test_module_params_and_exports_are_copies():
             data["k"].append(3)
             assert mod.d == {"k": [1, 2]}
             data["k"].pop()
-        # The host API has one empty value: an exported Undefined arrives as None (docs/python.md)
-        assert (mod.u is None) if module is jinja2cpp else isinstance(mod.u, jinja2.Undefined)
+        # An exported Undefined is the environment's Undefined (0411)
+        assert isinstance(mod.u, module.Undefined) and not mod.u
 
 
 # jinja2.meta
@@ -391,7 +391,8 @@ def test_python_object_params_keep_attributes_lists_and_methods():
     source = "{% set t = users[0].tags %}{% set called = users[0].m() %}{% macro g(u) %}{{ u.tags|join(',') }}{{ u.m() }}{% endmacro %}{{ users[0].name }}"
     mods = [m.Environment().from_string(source).make_module({"users": [User()]}) for m in (jinja2cpp, jinja2)]
     assert str(mods[0]) == str(mods[1]) == "u"
-    # an exported host list is not readable by the export copy yet (docs/tasks/0411)
+    # a list read off a Python object is that list (0411)
+    assert mods[0].t == mods[1].t == ["a", "b"]
     assert mods[0].called == "called"
     assert mods[0].g(User()) == mods[1].g(User()) == "a,bcalled"
 
@@ -427,3 +428,50 @@ def test_module_macro_attributes():
         for attribute in ("name", "arguments", "catch_kwargs", "catch_varargs", "caller"):
             assert getattr(mine, attribute) == getattr(expected, attribute), (name, attribute)
     assert ours.foo.arguments == ("a", "b")
+
+
+class Tagged:
+    def __init__(self):
+        self.tags = ["a", "b"]
+
+
+def test_module_exports_keep_python_objects():
+    obj = Tagged()
+    source = "{% set o = obj %}{% set tags = obj.tags %}{% set lst = [obj] %}{% set tup = (obj, 1) %}{% set d = {'k': obj} %}"
+    mods = both(source, {"obj": obj})
+    for mod in mods:
+        assert mod.o is obj and mod.tags is obj.tags and mod.lst[0] is obj and mod.tup[0] is obj and mod.d["k"] is obj
+    assert type(mods[0].lst) is type(mods[1].lst) and type(mods[0].tup) is type(mods[1].tup) and type(mods[0].d) is type(mods[1].d)
+
+
+def test_module_exports_undefined():
+    source = "{% set u = nope %}{% set v = [nope, 1] %}"
+    for module in (jinja2cpp, jinja2):
+        mod = module.Environment().from_string(source).make_module()
+        assert type(mod.u) is module.Undefined and str(mod.u) == "" and not mod.u
+        assert type(mod.v[0]) is module.Undefined and mod.v[1] == 1
+        # the environment's class: a strict Undefined is made, and raises where it is used
+        env = module.Environment(undefined=module.StrictUndefined)
+        mod = env.from_string(source).make_module()
+        assert type(mod.u) is module.StrictUndefined
+        with pytest.raises(jinja2.UndefinedError):
+            str(mod.u)
+        with pytest.raises(jinja2.UndefinedError):
+            bool(mod.u)
+
+
+def test_module_exports_tuples_pairs_and_keys():
+    source = "{% set t = (1, 'a', (2, 3)) %}{% set ds = {'b': 1, 'a': 2}|dictsort %}{% set d = {1: 'x', 'k': 2, (1, 2): 3, None: 4} %}{% set e = [] %}{% set one = (1,) %}"
+    ours, theirs = both(source)
+    assert ours.t == theirs.t == (1, "a", (2, 3)) and type(ours.t) is tuple
+    assert ours.ds == theirs.ds == [("a", 2), ("b", 1)] and type(ours.ds) is list and type(ours.ds[0]) is tuple
+    assert ours.d == theirs.d == {1: "x", "k": 2, (1, 2): 3, None: 4}
+    assert list(ours.d) == list(theirs.d)
+    assert ours.e == theirs.e == [] and ours.one == theirs.one == (1,)
+
+
+def test_module_exports_macros_stay_callable_in_tuples_and_keyed_dicts():
+    source = "{% macro m(x) %}<{{ x }}>{% endmacro %}{% set t = (m, 1) %}{% set d = {1: m} %}"
+    ours, theirs = both(source)
+    assert ours.t[0](2) == theirs.t[0](2) == "<2>"
+    assert ours.d[1](3) == theirs.d[1](3) == "<3>"

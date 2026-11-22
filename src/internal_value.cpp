@@ -4198,6 +4198,105 @@ private:
     GenericList m_items;
 };
 
+// A tuple the host owns: the items by value, so nothing of it views the template or its params
+class OwnedTupleList final : public IListItemAccessor
+    , public IIndexBasedAccessor
+{
+public:
+    class Enumerator : public IndexedEnumeratorImpl<Enumerator, OwnedTupleList, Value, IListEnumerator>
+    {
+    public:
+        using BaseClass = IndexedEnumeratorImpl<Enumerator, OwnedTupleList, Value, IListEnumerator>;
+        using BaseClass::BaseClass;
+
+        [[nodiscard]] Value GetCurrent() const override
+        {
+            if (!this->m_list || this->m_curItem >= this->CurrentSize())
+            {
+                return Value();
+            }
+            return this->m_list->GetItemByIndex(static_cast<int64_t>(this->m_curItem));
+        }
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
+        {
+            auto result = MakeEnumerator<Enumerator>(this->m_list);
+            static_cast<Enumerator&>(*result).m_curItem = this->m_curItem;
+            return result;
+        }
+        ListEnumeratorPtr Move() override
+        {
+            auto result = Clone();
+            this->m_list = nullptr;
+            this->m_curItem = BaseClass::InvalidIndex;
+            this->m_maxItems = 0;
+            return result;
+        }
+    };
+
+    explicit OwnedTupleList(ValuesList items)
+        : m_items(std::move(items))
+    {
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items.size(); }
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
+    {
+        return idx < 0 || static_cast<size_t>(idx) >= m_items.size() ? Value() : m_items[static_cast<size_t>(idx)];
+    }
+    [[nodiscard]] bool IsTuple() const override { return true; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* list = dynamic_cast<const OwnedTupleList*>(&other);
+        return list != nullptr && list->m_items == m_items;
+    }
+
+private:
+    ValuesList m_items;
+};
+
+// A dict with keys that are not all strings, which the host owns (MakeOwnedKeyedMap)
+class OwnedKeyedMap final : public IMapItemAccessor
+{
+public:
+    OwnedKeyedMap(GenericMap snapshot, std::vector<std::pair<Value, Value>> items)
+        : m_snapshot(std::move(snapshot))
+        , m_items(std::move(items))
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const override { return m_snapshot.GetAccessor()->GetSize(); }
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override { return m_snapshot.GetAccessor()->Find(name); }
+    [[nodiscard]] bool Contains(std::string_view name) const override { return m_snapshot.GetAccessor()->Contains(name); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_snapshot.GetAccessor()->HasValue(name); }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override { return m_snapshot.GetAccessor()->GetValueByName(name); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_snapshot.GetAccessor()->GetKeys(); }
+    [[nodiscard]] std::vector<std::pair<Value, Value>> GetItems() const override { return m_items; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* map = dynamic_cast<const OwnedKeyedMap*>(&other);
+        return map != nullptr && m_snapshot.GetAccessor()->IsEqual(*map->m_snapshot.GetAccessor());
+    }
+
+private:
+    GenericMap m_snapshot;
+    std::vector<std::pair<Value, Value>> m_items;
+};
+} // namespace
+
+Value MakeOwnedTuple(ValuesList items)
+{
+    return Value(GenericList(std::make_shared<const OwnedTupleList>(std::move(items))));
+}
+
+Value MakeOwnedKeyedMap(ValuesMap snapshot, std::vector<std::pair<Value, Value>> items)
+{
+    return Value(GenericMap(std::make_shared<const OwnedKeyedMap>(CreateMapAdapter(std::move(snapshot)).CreateGenericMap(), std::move(items))));
+}
+
+namespace
+{
 // A dict view or set of the engine as the host reads it: the list CreateGenericList gives, marked with the view's
 // Python type (IListItemAccessor::GetViewClass). The items, the size and the identity are the list's
 class ViewExportView final : public IListItemAccessor

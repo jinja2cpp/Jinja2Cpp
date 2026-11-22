@@ -4,6 +4,8 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/exception.h>
+#include <jinja2cpp/generic_list_iterator.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -140,6 +142,146 @@ TEST_F(TemplateModuleTest, Values)
     EXPECT_TRUE(module.exports["u"].IsNone());
     EXPECT_EQ("x<y", module.exports["blk"].AsString());
     EXPECT_FALSE(module.exports["blk"].IsMarkup());
+}
+
+namespace
+{
+struct ObjectsCase
+{
+    const char* source;
+    // What the export `v` is: u undefined, t tuple, p dictsort pairs, k keyed map
+    char kind;
+};
+
+// clang-format off
+const ObjectsCase objectsCases[] = {
+    { "{% set v = nothing %}", 'u' },
+    { "{% set v = missing %}", 'u' },
+    { "{% set v = (1, 2) %}", 't' },
+    { "{% set v = {'b': 1, 'a': 2}|dictsort %}", 'p' },
+    { "{% set v = {1: 'x', 'k': 2} %}", 'k' },
+};
+// clang-format on
+
+// The items of a list export that is a GenericList
+jinja2::ValuesList ItemsOf(const jinja2::Value& list)
+{
+    if (const auto* values = list.GetIf<jinja2::ValuesList>())
+    {
+        return *values;
+    }
+    jinja2::ValuesList items;
+    const auto* generic = list.GetIf<jinja2::GenericList>();
+    if (generic)
+    {
+        for (const auto& item : *generic)
+        {
+            items.push_back(item);
+        }
+    }
+    return items;
+}
+
+jinja2::ModuleOptions ObjectsOptions()
+{
+    jinja2::ModuleOptions options;
+    options.exports = jinja2::ModuleExports::Objects;
+    return options;
+}
+} // namespace
+
+TEST_F(TemplateModuleTest, ObjectsExports)
+{
+    for (const auto& testCase : objectsCases)
+    {
+        SCOPED_TRACE(testCase.source);
+        auto tpl = Load(testCase.source);
+        auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+        ASSERT_TRUE(!!module) << module.error().ToString();
+        const auto& v = module->exports.at("v");
+        switch (testCase.kind)
+        {
+        case 'u':
+            EXPECT_TRUE(jinja2::UndefinedOf(v).has_value());
+            break;
+        case 't':
+        {
+            const auto* list = v.GetIf<jinja2::GenericList>();
+            ASSERT_NE(nullptr, list);
+            EXPECT_TRUE(list->IsTuple());
+            EXPECT_EQ((jinja2::ValuesList{ int64_t{ 1 }, int64_t{ 2 } }), ItemsOf(v));
+            break;
+        }
+        case 'p':
+        {
+            // A list of tuples, which is a list
+            EXPECT_NE(nullptr, v.GetIf<jinja2::ValuesList>());
+            const auto items = ItemsOf(v);
+            ASSERT_EQ(2u, items.size());
+            const auto* pair = items[0].GetIf<jinja2::GenericList>();
+            ASSERT_NE(nullptr, pair);
+            EXPECT_TRUE(pair->IsTuple());
+            EXPECT_EQ((jinja2::ValuesList{ "a", int64_t{ 2 } }), ItemsOf(items[0]));
+            EXPECT_EQ((jinja2::ValuesList{ "b", int64_t{ 1 } }), ItemsOf(items[1]));
+            break;
+        }
+        case 'k':
+        {
+            const auto* map = v.GetIf<jinja2::GenericMap>();
+            ASSERT_NE(nullptr, map);
+            const auto items = map->GetItems();
+            ASSERT_EQ(2u, items.size());
+            EXPECT_EQ(jinja2::Value(int64_t{ 1 }), items[0].first);
+            EXPECT_EQ(jinja2::Value("x"), items[0].second);
+            EXPECT_EQ(jinja2::Value("k"), items[1].first);
+            // The lookups use the str() spelling
+            EXPECT_EQ(jinja2::Value("x"), map->GetValueByName("1"));
+            EXPECT_EQ(jinja2::Value(int64_t{ 2 }), map->GetValueByName("k"));
+            EXPECT_EQ((std::vector<std::string>{ "1", "k" }), map->GetKeys());
+            break;
+        }
+        default:
+            FAIL();
+        }
+        // The default mode is unchanged
+        auto copies = tpl.MakeModule({}, {}, jinja2::ModuleOptions{});
+        ASSERT_TRUE(!!copies);
+        EXPECT_FALSE(jinja2::UndefinedOf(copies->exports.at("v")).has_value());
+    }
+}
+
+// What leaves in Objects mode owns its strings: a key from the template's source and a name the undefined carries stay valid
+// after the template is loaded with another source and the module's params are gone (ASan checks the views)
+TEST_F(TemplateModuleTest, ObjectsExportsOwnTheirStrings)
+{
+    auto tpl = Load("{% set ds = {'a_key_in_the_source': 'a value in the source'}|dictsort %}{% set u = missing_name_in_source %}{% set t = ('a tuple text', param) %}{% set d = {1: 'k text', 'm': 'v'} %}");
+    auto result = [&] {
+        jinja2::ValuesMap params;
+        params["param"] = std::string("a param text of the host");
+        return tpl.MakeModule(params, {}, ObjectsOptions());
+    }();
+    ASSERT_TRUE(!!result);
+    ASSERT_TRUE(!!tpl.Load("{{ 'another source that replaces the old one, with a text that is much longer than the old one' }}"));
+    auto& exports = result->exports;
+    EXPECT_EQ((jinja2::ValuesList{ "a_key_in_the_source", "a value in the source" }), ItemsOf(ItemsOf(exports.at("ds"))[0]));
+    const auto undefined = jinja2::UndefinedOf(exports.at("u"));
+    ASSERT_TRUE(undefined.has_value());
+    EXPECT_EQ("missing_name_in_source", undefined->name);
+    EXPECT_EQ((jinja2::ValuesList{ "a tuple text", "a param text of the host" }), ItemsOf(exports.at("t")));
+    const auto items = exports.at("d").GetIf<jinja2::GenericMap>()->GetItems();
+    EXPECT_EQ(jinja2::Value("k text"), items[0].second);
+    EXPECT_EQ(jinja2::Value("v"), items[1].second);
+}
+
+TEST_F(TemplateModuleTest, ObjectsExportsWide)
+{
+    jinja2::TemplateW tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load(L"{% set u = nothing %}{% set t = (1, 'w') %}{% set d = {1: 'x'} %}"));
+    auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module);
+    EXPECT_TRUE(jinja2::UndefinedOf(module->exports.at("u")).has_value());
+    EXPECT_TRUE(module->exports.at("t").GetIf<jinja2::GenericList>()->IsTuple());
+    EXPECT_EQ(jinja2::Value(int64_t{ 1 }), module->exports.at("d").GetIf<jinja2::GenericMap>()->GetItems()[0].first);
 }
 
 TEST_F(TemplateModuleTest, MacroCalls)

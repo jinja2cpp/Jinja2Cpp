@@ -104,10 +104,12 @@ public:
     // result, which mostly holds no callable
     using WrapCallable = Value (*)(void* state, const InternalValue& callable, const std::string& name);
 
-    ExportCopier(WrapCallable wrap, void* state, const std::string& name)
+    // `objects`: ModuleExports::Objects, which keeps an undefined value, a tuple and a dict's own keys
+    ExportCopier(WrapCallable wrap, void* state, const std::string& name, bool objects = false)
         : m_wrap(wrap)
         , m_state(state)
         , m_name(name)
+        , m_objects(objects)
     {
     }
 
@@ -120,6 +122,23 @@ public:
         }
         // Nesting comes from the template (a list built in a loop): stop where a render would
         CheckStack();
+        if (m_objects)
+        {
+            // An undefined value the host's own (UndefinedToHost owns its strings), a dictsort pair as the
+            // 2-tuple it is in Python
+            if (const auto* undefined = GetIf<UndefinedValue>(&value))
+            {
+                return UndefinedToHost(*undefined);
+            }
+            if (const auto* pair = GetIf<KeyValuePair>(&value))
+            {
+                ValuesList items;
+                items.reserve(2);
+                items.push_back(Copy(pair->key));
+                items.push_back(Copy(pair->value));
+                return MakeOwnedTuple(std::move(items));
+            }
+        }
         // A string may view the template's source, which a Load replaces, or the module's
         // params: the host gets its own copy, a Markup kept a Markup
         if (auto text = AsStringView<char>(value))
@@ -171,6 +190,10 @@ private:
             return true;
         });
         Leave(identity);
+        if (m_objects && list.IsTuple())
+        {
+            return MakeOwnedTuple(std::move(items));
+        }
         return Value(std::move(items));
     }
 
@@ -188,18 +211,32 @@ private:
         // (docs/tasks/0370), may be larger than the render could have built
         CheckSequenceSize(map.GetSize(), "a dict");
         ValuesMap items;
-        for (const auto& entry : map.GetEntries())
+        const auto entries = map.GetEntries();
+        // Objects keeps the real keys of a dict that has a key that is no string
+        const bool keyed = m_objects && std::any_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return !GetAsSameString(std::string(), entry.key); });
+        std::vector<std::pair<Value, Value>> keyedItems;
+        for (const auto& entry : entries)
         {
             auto key = GetAsSameString(std::string(), entry.key);
-            items[key ? std::move(*key) : DictKeyText(entry.key)] = Copy(entry.value);
+            auto copy = Copy(entry.value);
+            if (keyed)
+            {
+                keyedItems.emplace_back(Copy(entry.key), copy);
+            }
+            items[key ? std::move(*key) : DictKeyText(entry.key)] = std::move(copy);
         }
         Leave(identity);
+        if (keyed)
+        {
+            return MakeOwnedKeyedMap(std::move(items), std::move(keyedItems));
+        }
         return Value(std::move(items));
     }
 
     WrapCallable m_wrap;
     void* m_state;
     const std::string& m_name;
+    bool m_objects;
     // The containers being copied
     std::unordered_set<const void*> m_path;
 };
@@ -827,7 +864,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             {
                 callParams.kwParams[argName] = OwnedArgument(arg);
             }
-            auto result = ExportCopier(&Wrap, this, name).Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
+            auto result = ExportCopier(&Wrap, this, name, exportObjects).Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
             if (impl->m_settings->hasRenderLimits)
             {
                 detail::PollDeadline();
@@ -906,6 +943,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     // The host's filter policies of the module's render and of its calls (RenderOptions::filterPolicies), or null for
     // the template's; a call may pass its own (CallModuleMacro)
     std::shared_ptr<const FilterPolicies> filterPolicies;
+    // ModuleOptions::exports is Objects: what the exports and the results of calls keep of the template's values
+    bool exportObjects = false;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
@@ -1006,7 +1045,7 @@ ValuesMap MacroAttributes(const UserCallable& callable)
 }
 
 template<typename CharT>
-nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl<CharT>::MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params, const RenderOptions* options)
+nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl<CharT>::MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params, const RenderOptions* options, const ModuleOptions* module)
 {
     if (!self->m_renderer)
     {
@@ -1024,6 +1063,10 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
         state->poll = options->poll;
         state->hostGlobals = options->globals;
         state->filterPolicies = options->filterPolicies;
+    }
+    if (module)
+    {
+        state->exportObjects = module->exports == ModuleExports::Objects;
     }
     BasicTemplateModule<CharT> result;
     try
@@ -1051,7 +1094,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
                 continue;
             }
             // Copied within the render's limits, which bound a lazy list read out
-            result.exports[name] = ExportCopier(&TemplateModuleState<CharT>::Wrap, state.get(), name).Copy(*value);
+            result.exports[name] = ExportCopier(&TemplateModuleState<CharT>::Wrap, state.get(), name, state->exportObjects).Copy(*value);
         }
         cycles.Complete();
     }
@@ -1102,10 +1145,12 @@ template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadRepla
 
 template nonstd::expected<BasicTemplateModule<char>, BasicErrorInfo<char>> TemplateImpl<char>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
                                                                                                           const ValuesMap& params,
-                                                                                                          const RenderOptions* options);
+                                                                                                          const RenderOptions* options,
+                                                                                                          const ModuleOptions* module);
 template nonstd::expected<BasicTemplateModule<wchar_t>, BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
                                                                                                                    const ValuesMap& params,
-                                                                                                                   const RenderOptions* options);
+                                                                                                                   const RenderOptions* options,
+                                                                                                                   const ModuleOptions* module);
 
 } // namespace v2
 } // namespace jinja2

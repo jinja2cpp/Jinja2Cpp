@@ -490,12 +490,12 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   it go (0406); a load after a filter or test is replaced or removed reads the loader again.
 - An exported macro of `make_module` and `module` has `name`, `arguments`, `catch_kwargs`, `catch_varargs` and
   `caller` as Jinja2's `Macro` has them (0434).
-- `make_module` and `module` give the exports as Python values the host API can carry: a
-  `namespace` becomes a dict, a `cycler` a dict, a `range` a list, a tuple a list, an `Undefined` is
-  `None`, a dict key that is no str is spelled as `str()` spells it, and a Python object (not a str, number,
-  list, dict, Markup or callable) stays itself in the module (attributes and methods are Python's), but a list or dict read off it and exported with `{% set %}` arrives as `{}`, and `dictsort` entries as `{key, value}` dicts. The params of a module are
+- `make_module` and `module` give the exports as Jinja2 gives them: a Python object, and a list or dict read off one,
+  stay themselves (`module.o is o`), an `Undefined` is the environment's `Undefined` class, a tuple and a `dictsort`
+  entry are tuples, and a dict keeps its own keys (0411). Still different: a `namespace` and a `cycler` are dicts (a
+  `cycler` has no `next()`) and a `range` is a list. The params of a module are
   copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
-  globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`) (0411).
+  globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`).
 - A dict view (`keys()`, `values()`, `items()`) or a set (`d.keys() - []`) of the engine reaches a Python callable as a real
   `dict_keys`, `dict_values`, `dict_items` or `set`, a snapshot of its items at the call (a set of items Python cannot hash
   stays a list); its `.mapping` is then a snapshot dict, whose values are `None` for `dict_keys` and the item positions for

@@ -376,6 +376,32 @@ using TemplateModuleW = BasicTemplateModule<wchar_t>;
 JINJA2CPP_EXPORT ValuesMap MacroAttributes(const UserCallable& callable);
 
 /*!
+ * \brief How a module's exports reach the host (\ref ModuleOptions)
+ */
+enum class ModuleExports
+{
+    //! The default: values the host can copy, as \ref BasicTemplate::MakeModule "MakeModule" gives without options. An
+    //! undefined value is an empty value, a tuple a list, a dictsort pair a map of `key` and `value`, and a dict with
+    //! keys that are not strings a map with their str() spelling
+    Copies,
+    //! The values keep what the template made of them: an undefined value is a \ref MakeUndefined value (\ref UndefinedOf
+    //! describes it), a tuple and a dictsort pair an owned \ref GenericList for which \ref GenericList::IsTuple holds, and a
+    //! dict with keys that are not strings an owned \ref GenericMap whose \ref IMapItemAccessor::GetItems gives the real
+    //! keys (lookups by name use the str() spelling). All of these own their strings and items, as the copies do; the
+    //! rest is as in Copies
+    Objects
+};
+
+/*!
+ * \brief What \ref BasicTemplate::MakeModule "MakeModule" changes in how a module's exports reach the host
+ */
+struct ModuleOptions
+{
+    //! How the exports, and the results of calls of the module's macros, are given to the host
+    ModuleExports exports = ModuleExports::Copies;
+};
+
+/*!
  * \brief What one host's call of a module's macro changes (\ref CallModuleMacro)
  */
 struct ModuleCallOptions
@@ -739,6 +765,20 @@ public:
      * @return The module, or the error of the render (TemplateNotParsed before a successful Load)
      */
     [[nodiscard]] Result<BasicTemplateModule<CharT>, CharT> MakeModule(const ValuesMap& params, const RenderOptions& options) const;
+    /*!
+     * \brief \ref MakeModule with the options of the previous overload and \ref ModuleOptions
+     *
+     * With \ref ModuleExports::Objects the exports, and the results of the calls of the module's macros, keep an undefined
+     * value, a tuple and a dict with keys that are not strings (\ref ModuleExports::Objects). With \ref ModuleExports::Copies
+     * this is the previous overload.
+     *
+     * @param params   Set of params which the template's top level and its macros see
+     * @param options  The globals, the poll and the filter policies of the module
+     * @param module   How the exports reach the host
+     *
+     * @return The module, or the error of the render (TemplateNotParsed before a successful Load)
+     */
+    [[nodiscard]] Result<BasicTemplateModule<CharT>, CharT> MakeModule(const ValuesMap& params, const RenderOptions& options, const ModuleOptions& module) const;
 
     /* !
      * \brief compares to an other object of the same type

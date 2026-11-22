@@ -2607,6 +2607,12 @@ Value IntValue2Value(const InternalValue& val);
 // the global's storage and keeps `owner`, the globals map, alive; a string is copied (docs/tasks/0318)
 InternalValue LendGlobal(const Value& value, const std::shared_ptr<const void>& owner);
 Value OptIntValue2Value(std::optional<InternalValue> val);
+// A tuple the host owns, as the public form of the engine's tuple (IListItemAccessor::IsTuple): it holds `items`, which
+// own their strings, and has an identity of its own
+Value MakeOwnedTuple(ValuesList items);
+// A dict with keys that are not all strings, which the host owns: `snapshot` has the entries under the keys' str()
+// spelling, for the lookups and GetKeys, and `items` under their own keys, for GetItems. It has an identity of its own
+Value MakeOwnedKeyedMap(ValuesMap snapshot, std::vector<std::pair<Value, Value>> items);
 
 } // namespace v2
 } // namespace jinja2

@@ -1,5 +1,6 @@
 // Template.make_module, the macros a module exports, and the meta queries of a template
 // (jinja2.meta): the parts of the Python layer (jinja2cpp/environment.py) that need the engine.
+#include "adapters.h"
 #include "common.h"
 #include "convert.h"
 #include "environment.h"
@@ -9,6 +10,7 @@
 #include <nanobind/stl/string.h>
 
 #include <jinja2cpp/generic_list_iterator.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
@@ -398,7 +400,8 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& bound, c
         {
             result.append(ExportToPython(item, bound, environment, templateGlobals, templateName, name));
         }
-        return result;
+        // A tuple of the template, whose macros stay ModuleMacro as in a list
+        return list->IsTuple() ? nb::steal(PySequence_Tuple(result.ptr())) : nb::object(result);
     }
     if (const auto* map = value.GetIf<jinja2::ValuesMap>())
     {
@@ -411,10 +414,20 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& bound, c
     }
     if (const auto* map = value.GetIf<jinja2::GenericMap>())
     {
-        nb::dict result;
-        for (const auto& [key, item] : *map)
+        // A Python object the template read, and an undefined value, are what they were (ModuleExports::Objects)
+        if (AsPyHost(value) || jinja2::UndefinedOf(value))
         {
-            result[MakeStr(key)] = ExportToPython(item, bound, environment, templateGlobals, templateName, name);
+            return ToPython(value);
+        }
+        // The entries under their own keys: `{1: 'a', '1': 'b'}` stays two entries
+        nb::dict result;
+        for (const auto& [key, item] : map->GetItems())
+        {
+            auto pyKey = ToPython(key);
+            if (PyDict_SetItem(result.ptr(), pyKey.ptr(), ExportToPython(item, bound, environment, templateGlobals, templateName, name).ptr()) != 0)
+            {
+                throw nb::python_error();
+            }
         }
         return result;
     }
@@ -479,6 +492,8 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     state.templateGlobals = m_globals.ptr();
     state.sandbox = SandboxOf(m_environment);
     state.sandboxAllNames = entry.sandboxAllNames;
+    jinja2::TemplateModule module;
+    nb::dict exports;
     auto result = [&] {
         const RenderScope scope(state);
         // Polled as a render is, and so are the calls of its macros, which keep the poll: Ctrl-C stops them
@@ -486,7 +501,20 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         options.poll = RenderPoll();
         // And env.policies as they are now, which a call of a macro replaces with those of its own entry
         options.filterPolicies = entry.policies;
-        return m_template.MakeModule(values, options);
+        // The exports keep what the template made of them: an object of the host, an undefined value, a tuple
+        jinja2::ModuleOptions moduleOptions;
+        moduleOptions.exports = jinja2::ModuleExports::Objects;
+        auto made = m_template.MakeModule(values, options, moduleOptions);
+        // In the scope, which an undefined value needs for its class
+        if (made)
+        {
+            module = std::move(made).value();
+            for (auto& [name, value] : module.exports)
+            {
+                exports[MakeStr(name)] = ExportToPython(value, m_bound, m_environment, m_globals, m_name, name);
+            }
+        }
+        return made;
     }();
     RaiseAbort(state);
     if (!result)
@@ -498,12 +526,6 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         where.syntaxNote = kIncludedSyntaxNote;
         where.render = true;
         RaiseError(result.error(), where);
-    }
-    auto module = std::move(result).value();
-    nb::dict exports;
-    for (auto& [name, value] : module.exports)
-    {
-        exports[MakeStr(name)] = ExportToPython(value, m_bound, m_environment, m_globals, m_name, name);
     }
     return nb::make_tuple(MakeStr(module.body), exports);
 }
