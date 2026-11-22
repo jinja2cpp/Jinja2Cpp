@@ -897,6 +897,13 @@ TEST(BigIntTemplate, StrDigitsConstantsFailTheLoad)
     EXPECT_TRUE(loads("{{ (2 ** 20000) % 7 }}", big_int_toy::Backend()));
     EXPECT_TRUE(loads("{{ false and 2 ** 20000 }}", big_int_toy::Backend()));
     EXPECT_TRUE(loads("{{ 2 ** (small * 4000) }}", big_int_toy::Backend()));
+    // In volatile code Jinja2 folds nothing: a power stays an operator (verifier round 1; a statement's expression
+    // there is docs/tasks/0570)
+    EXPECT_TRUE(loads("{% autoescape x %}{{ [2 ** 20000]|length }}{% if 0 %}{{ 2 ** 20000 }}{% endif %}{% endautoescape %}", big_int_toy::Backend()));
+    // str() of an output refuses the item past the limit whatever the other items are
+    EXPECT_FALSE(loads("{% if false %}{{ [(1).y, " + past + "] }}{% endif %}"));
+    // A filter's value error in an `and` around a watched product is Impossible, not a Load error
+    EXPECT_TRUE(loads("{% set x = 1 %}{% if false %}{{ 2 * 3 and ('abc'|abs or x) }}{% endif %}"));
     EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 

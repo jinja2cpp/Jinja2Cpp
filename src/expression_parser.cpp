@@ -485,7 +485,9 @@ ParseError StrDigitsError(const Token& tok)
 
 void ExpressionParser::AddFoldMark(FoldMarkKind kind)
 {
-    if (!InFoldRoot())
+    // In volatile code Jinja2's optimizer folds nothing (compiler.py optimizeconst): only a literal past the limit
+    // matters there, and no fold takes it away
+    if (!InFoldRoot() || (kind == FoldMarkKind::Watch && m_volatile))
     {
         return;
     }
@@ -2022,20 +2024,32 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
 
 namespace
 {
-// What the code generator makes of a folded value (ReprOf)
+// What the code generator makes of a folded value (ReprOf): flags
 enum class Repr : std::uint8_t
 {
-    Safe,
+    Safe = 0,
     // Jinja2's has_safe_repr refuses it: the optimizer does not fold
-    Unsafe,
-    // It folds, but holds an integer past MaxIntStrDigits digits, whose repr() fails the compile unless a fold
-    // around it takes it away (docs/tasks/0564)
-    StrDigits,
+    Unsafe = 1,
+    // It holds an integer past MaxIntStrDigits digits, whose repr() and str() fail: a non-output fold of it fails
+    // the compile unless a fold around it takes it away (docs/tasks/0564)
+    StrDigits = 2,
+    Both = 3,
 };
+
+Repr operator|(Repr left, Repr right)
+{
+    return static_cast<Repr>(static_cast<std::uint8_t>(left) | static_cast<std::uint8_t>(right));
+}
+
+bool Has(Repr repr, Repr flag)
+{
+    return (static_cast<std::uint8_t>(repr) & static_cast<std::uint8_t>(flag)) != 0;
+}
 
 // Jinja2's has_safe_repr, which the optimizer asks of a folded value before it puts it in the
 // code: None, bools, numbers, strings, and lists, tuples and dicts of them; not an undefined.
-// An Unsafe item makes the whole Unsafe, a StrDigits one StrDigits otherwise
+// Whether an item anywhere in it is past MaxIntStrDigits digits too, which str() of an output refuses
+// whatever the other items are
 Repr ReprOf(const InternalValue& value)
 {
     // Repeated lists share their items, so a small value can have very many: under limits
@@ -2064,8 +2078,8 @@ Repr ReprOf(const InternalValue& value)
         }
         auto repr = Repr::Safe;
         list->ForEach([&repr](const InternalValue& item) {
-            repr = std::max(repr, ReprOf(item));
-            return repr != Repr::Unsafe;
+            repr = repr | ReprOf(item);
+            return repr != Repr::Both;
         });
         return repr;
     }
@@ -2079,8 +2093,8 @@ Repr ReprOf(const InternalValue& value)
         auto repr = Repr::Safe;
         for (const auto& entry : map->GetEntries())
         {
-            repr = std::max({ repr, ReprOf(entry.key), ReprOf(entry.value) });
-            if (repr == Repr::Unsafe)
+            repr = repr | ReprOf(entry.key) | ReprOf(entry.value);
+            if (repr == Repr::Both)
             {
                 break;
             }
@@ -2314,7 +2328,7 @@ private:
         // value as a candidate of its own decides (docs/tasks/0556)
         if (candidate.output)
         {
-            const bool strFails = result.failed || (m_check.strictUndefined && result.undefined) || ReprOfStep(index) == Repr::StrDigits;
+            const bool strFails = result.failed || (m_check.strictUndefined && result.undefined) || Has(ReprOfStep(index), Repr::StrDigits);
             return strFails ? FoldOutcome::DoesNotFold : FoldOutcome::Folds;
         }
         if (result.failed)
@@ -2332,16 +2346,11 @@ private:
 
     static FoldOutcome OutcomeOfRepr(Repr repr)
     {
-        switch (repr)
+        if (Has(repr, Repr::Unsafe))
         {
-        case Repr::Safe:
-            return FoldOutcome::Folds;
-        case Repr::StrDigits:
-            return FoldOutcome::FoldsStrDigits;
-        case Repr::Unsafe:
-            break;
+            return FoldOutcome::DoesNotFold;
         }
-        return FoldOutcome::DoesNotFold;
+        return Has(repr, Repr::StrDigits) ? FoldOutcome::FoldsStrDigits : FoldOutcome::Folds;
     }
 
     // What the code generator makes of the candidate's value; asked only for its own outcome, so that a step a

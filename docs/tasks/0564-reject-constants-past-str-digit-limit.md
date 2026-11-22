@@ -48,3 +48,6 @@ around it folds (`FoldOutcome::FoldsStrDigits`, `Repr::StrDigits`). In a check o
 reaches is Impossible and left to the render, and without a big-integer backend an OverflowError fold takes the
 integer away (Python computes it). `RadixLiteralsAtTheBitCap` reads its cap-sized value from data;
 `BigIntTemplate.StrDigitsConstantsFailTheLoad` pins the boundary rows against Jinja2 3.1.6 on CPython 3.12.
+Verifier round 1 fixes: no watch marks in volatile outputs; an output refuses an item past the limit whatever its
+other items are (Repr flags); TryFoldTruth takes a filter's ErrorInfo. Left: statement expressions in volatile code
+(0570), Load CPU on dead constant code (0569).
