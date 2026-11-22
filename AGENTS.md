@@ -166,8 +166,12 @@ Match any targeted compiler workaround to the documented CI configuration.
   reruns the corpus with `test/parity/update_divergences.py` and regenerates the
   `docs/parity.md` summary; parity PRs never edit that summary. Two PRs that are green
   apart can be red together when one unblocks a case the other listed.
-- Open implementation PRs as drafts and wait for applicable CI before marking them
-  ready. Changes limited to `docs/`, `*.md`, `.claude/`, `scripts/`, `.gitignore` or
+- Open implementation PRs as drafts. CI has two tiers: a draft runs the smoke tier
+  (`.github/workflows/smoke.yml`: GCC Debug, Clang ASan+UBSan, MSVC Debug, plus clang-format,
+  clang-tidy, parity expectations and the fuzz replay), and marking the PR ready runs the full
+  matrix, the instruction-count gate and CodeQL. Mark it ready once the smoke tier is green,
+  then wait for the full tier before reporting it final.
+  Changes limited to `docs/`, `*.md`, `.claude/`, `scripts/`, `.gitignore` or
   `LICENSE` skip the build workflows and CodeQL (`paths-ignore`; only the format check
   runs), so do not claim an unrun matrix passed.
 - PR descriptions explain the problem, resulting behavior, validation and remaining

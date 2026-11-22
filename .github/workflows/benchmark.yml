@@ -30,6 +30,7 @@ on:
       - 'thirdparty/**'
       - '.github/workflows/benchmark.yml'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
       - main
@@ -56,6 +57,7 @@ jobs:
   bench:
     name: Jinja2C++ vs Python Jinja2
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -92,7 +94,7 @@ jobs:
 
   instructions:
     name: instruction counts vs base
-    if: github.event_name == 'pull_request'
+    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

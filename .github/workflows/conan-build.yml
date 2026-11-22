@@ -16,6 +16,7 @@ on:
       - '.gitignore'
       - 'LICENSE'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
       - main
@@ -39,6 +40,7 @@ jobs:
   conan-build:
     name: Conan (gcc-14 C++17 ${{ matrix.build-config }})
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 60
 
     strategy:

@@ -17,6 +17,7 @@ on:
     - cron: '41 2 * * *'
   workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - master
       - main
@@ -43,6 +44,7 @@ jobs:
   clang-analysis:
     name: clang-analysis (LLVM from nixpkgs, report only)
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     timeout-minutes: 150
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

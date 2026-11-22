@@ -1,0 +1,134 @@
+name: CI-smoke
+
+# The smoke tier of a draft pull request (docs/steward-checklist.md, "Two CI tiers"): three
+# builds that find most red pushes in a few minutes, so that parallel threads do not queue
+# behind a full matrix on every push. Marking the PR ready runs the full matrix; the other build
+# workflows skip drafts (`if: ... !github.event.pull_request.draft`). clang-format, clang-tidy,
+# the parity expectations and the fuzz corpus replay are not gated and run on drafts as well.
+# MSVC is here because it is the largest cause of red pushes that preflight cannot catch.
+# These jobs are not rows of the full matrices: do not rely on them to cover an axis there.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - master
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.claude/**'
+      - 'scripts/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gcc-debug:
+    name: smoke gcc-14 Debug C++20
+    if: ${{ github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: gcc-14
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: smoke-gcc-14-Debug-20
+
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+          -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_CXX_STANDARD=20 \
+          -DJINJA2CPP_STRICT_WARNINGS=ON "-DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized"
+
+    - name: Build
+      run: cmake --build .build --parallel
+
+    - name: Test
+      run: ctest --test-dir .build --output-on-failure --timeout 1200
+
+  clang-asan:
+    name: smoke clang-18 address+undefined
+    if: ${{ github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      GTEST_BRIEF: 1
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: clang-18
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: smoke-sanitizer-clang-18
+
+    # The same flags as the clang-18 row of `sanitizers` in linux-build.yml
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_CXX_STANDARD=17 \
+          -DJINJA2CPP_WITH_SANITIZERS=address+undefined \
+          -DJINJA2CPP_SANITIZE_IMPLICIT_CONVERSION=ON \
+          -DJINJA2CPP_CHECK_SLOTS=ON \
+          -DJINJA2CPP_STRICT_WARNINGS=OFF
+
+    - name: Build
+      run: cmake --build .build --parallel
+
+    - name: Test
+      run: ctest --test-dir .build --output-on-failure --timeout 1200
+
+  msvc-debug:
+    name: smoke MSVC C++23 Debug
+    if: ${{ github.event.pull_request.draft }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      with:
+        arch: x64
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: smoke-windows-msvc-23-Debug
+
+    # The same flags as the C++23 Debug /MD static row of windows-build.yml
+    - name: Build
+      shell: cmd
+      run: |
+        mkdir .build
+        cd .build
+        cmake .. -G Ninja -DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DCMAKE_BUILD_TYPE=Debug -DJINJA2CPP_MSVC_RUNTIME_TYPE="/MD" -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_BUILD_SHARED=FALSE -DJINJA2CPP_CXX_STANDARD=23 -DJINJA2CPP_WITH_BIGINT=none
+        cmake --build . --config Debug --parallel
+
+    # Debug lists every test, so a test that hangs is the last one named when the timeout ends it
+    - name: Test
+      shell: cmd
+      env:
+        GTEST_BRIEF: '0'
+      run: |
+        cd .build
+        ctest -C Debug --output-on-failure --timeout 600

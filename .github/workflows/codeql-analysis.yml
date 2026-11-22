@@ -24,6 +24,7 @@ on:
       - '.gitignore'
       - 'LICENSE'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     # The branches below must be a subset of the branches above
     branches: [ master ]
     paths-ignore:
@@ -45,6 +46,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     # Pushes and PRs analyse the library alone (about 5 minutes of queries). The
     # GoogleTest suite multiplies the data-flow work: with it, the shared data-flow
     # stage of the security queries took 105 minutes on master in October 2026 (it
