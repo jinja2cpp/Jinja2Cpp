@@ -1118,7 +1118,14 @@ public:
         // The module lives while this view does: the registry is open
         if (!m_state->dropped->Hand(m_object))
         {
-            CollectDroppedExports(std::vector<InternalValue>{ std::move(m_object) });
+            // Not reached while the registry is open; the destructor does not throw, so the fallback may lose the object (a leak) on bad_alloc
+            try
+            {
+                CollectDroppedExports(std::vector<InternalValue>{ std::move(m_object) });
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+            {
+            }
         }
     }
 

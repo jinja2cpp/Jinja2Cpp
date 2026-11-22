@@ -1,6 +1,9 @@
 """Template.make_module and Template.module: exports, macros, lifetimes, and jinja2.meta."""
 
+import faulthandler
 import gc
+import threading
+import time
 import weakref
 
 import jinja2
@@ -579,3 +582,35 @@ def test_module_macro_result_that_is_an_object():
         mod = module.Environment().from_string(source).make_module()
         first = mod.cyc.next()
         assert first.n == 1 and mod.cyc.next().n == 2 and first.n == 1
+
+
+def test_module_waits_without_the_gil():
+    # A macro that sleeps in a Python callable holds the module; a read or a call from another thread waits for it
+    # with the GIL let go, or the sleeping thread could never take the GIL back
+    source = "{% set ns = namespace(count=0) %}{% macro slow(f) %}{{ f() }}{% endmacro %}{% macro inc() %}{% set ns.count = ns.count + 1 %}{% endmacro %}"
+    mod = jinja2cpp.Environment().from_string(source).make_module()
+    started = threading.Event()
+
+    def pause():
+        started.set()
+        time.sleep(0.5)
+        return ""
+
+    worker = threading.Thread(target=lambda: mod.slow(pause))
+    faulthandler.dump_traceback_later(30, exit=True)
+    try:
+        worker.start()
+        assert started.wait(10)
+        assert mod.ns.count == 0
+        mod.inc()
+        assert mod.ns.count == 1
+        worker.join(10)
+        assert not worker.is_alive()
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+
+
+def test_module_reentered_on_the_same_thread():
+    source = "{% set ns = namespace(count=0) %}{% macro run(f) %}{{ f() }}{% endmacro %}{% macro inc() %}{% set ns.count = ns.count + 1 %}{% endmacro %}"
+    mod = jinja2cpp.Environment().from_string(source).make_module()
+    assert mod.run(lambda: str(mod.ns.count) + (mod.inc() or "") + str(mod.ns.count)) == "01"

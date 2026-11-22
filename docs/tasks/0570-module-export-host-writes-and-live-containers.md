@@ -22,3 +22,6 @@ is one context, so the same exception as live namespaces may apply): a decision 
 
 **Done when** pytest rows compare the cases above with Jinja2, or the ones decided against are listed in
 docs/python.md as deliberate divergences.
+
+**Note.** A `ModuleObject` passed to a render prints as its copy (`{'count': 0}`); Jinja2 prints a namespace as
+`<Namespace {'count': 0}>`. Decide it with the write path.

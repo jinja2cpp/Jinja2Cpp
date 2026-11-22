@@ -743,6 +743,29 @@ TEST(RenderOptionsTest, ModuleMacrosUseTheModulesOrTheCallsFilterPolicies)
     EXPECT_EQ("other", CallModuleMacro(other, UserCallableParams{}, callOptions).AsString());
 }
 
+// A call puts back the policies of the call it runs in: a host callable that calls the module plainly, from inside a call
+// with its own policies, sees the module's, and the macro that called it goes on with its own (docs/tasks/0557)
+TEST(RenderOptionsTest, ModuleMacroCallInsideACallPutsBackThePolicies)
+{
+    TemplateEnv env;
+    auto tpl = env.FromString("{% macro a(f) %}{{ 'abcdefghijk'|truncate(10) }}/{{ f() }}/{{ 'abcdefghijk'|truncate(10) }}{% endmacro %}"
+                              "{% macro b() %}{{ 'abcdefghijk'|truncate(10) }}{% endmacro %}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    auto module = tpl->MakeModule({}).value();
+    const auto& macroA = module.exports["a"].As<UserCallable>();
+    const auto& macroB = module.exports["b"].As<UserCallable>();
+    const UserCallable host([&macroB](const UserCallableParams&) -> Value { return macroB.callable(UserCallableParams{}); }, {});
+    UserCallableParams params;
+    params.extraPosArgs = ValuesList{ Value(host) };
+    FilterPolicies strict;
+    strict.truncateLeeway = 0;
+    ModuleCallOptions callOptions;
+    callOptions.filterPolicies = PoliciesOf(strict);
+    EXPECT_EQ("abcdefg.../abcdefghijk/abcdefg...", CallModuleMacro(macroA, params, callOptions).AsString());
+    // And with the module's own policies throughout
+    EXPECT_EQ("abcdefghijk/abcdefghijk/abcdefghijk", macroA.callable(params).AsString());
+}
+
 TEST(RenderOptionsTest, WideModuleMacrosTakeTheCallsFilterPolicies)
 {
     TemplateEnv env;

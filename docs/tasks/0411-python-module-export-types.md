@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0354, 0284]
@@ -28,3 +28,15 @@ Decide with the 0284 owner whether that is one more option of the public `MakeMo
 **Done when** pytest cases compare `module.ns.count`, `module.cyc.next()`, an exported Python
 object's identity and an exported `Undefined` with Jinja2's, and the docs/python.md paragraph on
 exports is shortened accordingly.
+
+**Resolution.** The option went into the public `MakeModule`: `ModuleOptions::exports` (`ModuleExports::Copies`, the
+default, or `Objects`) and a `MakeModule(params, options, moduleOptions)` overload. `Objects` keeps an undefined value
+(`UndefinedOf`), a tuple and a dictsort pair (an owned `GenericList` with `IsTuple`) and a dict with non-string keys
+(real keys from `GetItems`); a namespace, a cycler and a joiner are live views of the module's own objects, read under
+the module's lock as a macro call does. The Python module asks for `Objects` and wraps a view as `ModuleObject`
+(`module.ns.count`, `module.cyc.next()`, a joiner is callable); a Python object a template read is itself. Python waits
+for a module with the GIL released, one lock per module (`ModuleLock`). Follow-ups: 0569 (`shared=True` and the engine's
+globals), 0570 (writes through a view, live lists and dicts) and 0559 (lent class globals as Python objects). Known
+limits: two modules that store each other's views or macros leak (a cycle across modules is not collected), and two
+modules that call each other through host callables take their locks in opposite orders and can deadlock, as two
+engine modules can.

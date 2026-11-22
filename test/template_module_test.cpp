@@ -266,7 +266,7 @@ TEST_F(TemplateModuleTest, ObjectsExportsOwnTheirStrings)
     EXPECT_EQ((jinja2::ValuesList{ "a_key_in_the_source", "a value in the source" }), ItemsOf(ItemsOf(exports.at("ds"))[0]));
     const auto undefined = jinja2::UndefinedOf(exports.at("u"));
     ASSERT_TRUE(undefined.has_value());
-    EXPECT_EQ("missing_name_in_source", undefined->name);
+    EXPECT_EQ("missing_name_in_source", undefined.value().name);
     EXPECT_EQ((jinja2::ValuesList{ "a tuple text", "a param text of the host" }), ItemsOf(exports.at("t")));
     const auto items = exports.at("d").GetIf<jinja2::GenericMap>()->GetItems();
     EXPECT_EQ(jinja2::Value("k text"), items[0].second);
@@ -1833,6 +1833,49 @@ TEST_F(TemplateModuleTest, ObjectReadFromHostCallableInMacro)
     *ns = module->exports.at("ns");
     EXPECT_EQ("6", Call(module->exports.at("m")).AsString());
     // The host's callable is the module's own: it holds the view that holds the module
+    *ns = jinja2::Value();
+}
+
+// A macro of module B reads a view of module A through a host callable: B's lock is held, A's is taken inside it
+TEST_F(TemplateModuleTest, ViewOfAnotherModuleReadFromAMacro)
+{
+    auto tplA = Load("{% set ns = namespace(count=7) %}{% macro inc() %}{% set ns.count = ns.count + 1 %}{% endmacro %}");
+    auto moduleA = tplA.MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!moduleA);
+    const auto view = moduleA->exports.at("ns");
+    jinja2::ValuesMap params;
+    params["peek"] = jinja2::UserCallable([view](const jinja2::UserCallableParams&) { return Attr(view, "count"); }, {});
+    auto tplB = Load("{% macro m() %}{{ peek() }}{% endmacro %}");
+    auto moduleB = tplB.MakeModule(params, {}, ObjectsOptions());
+    ASSERT_TRUE(!!moduleB);
+    EXPECT_EQ("7", Call(moduleB->exports.at("m")).AsString());
+    Call(moduleA->exports.at("inc"));
+    EXPECT_EQ("8", Call(moduleB->exports.at("m")).AsString());
+}
+
+// A poll that reads a view of its own module, within the call of a macro that the poll interrupts
+TEST_F(TemplateModuleTest, PollReadsAView)
+{
+    auto ns = std::make_shared<jinja2::Value>();
+    int polls = 0;
+    int64_t last = -1;
+    jinja2::RenderOptions options;
+    options.poll = [ns, &polls, &last] {
+        if (const auto* count = Attr(*ns, "count").GetIf<int64_t>())
+        {
+            ++polls;
+            last = *count;
+        }
+    };
+    auto tpl = Load("{% set ns = namespace(count=0) %}{% macro spin() %}{% for i in range(5000) %}{% set ns.count = ns.count + 1 %}{% endfor %}{% endmacro %}");
+    auto module = tpl.MakeModule({}, options, ObjectsOptions());
+    ASSERT_TRUE(!!module);
+    *ns = module->exports.at("ns");
+    Call(module->exports.at("spin"));
+    EXPECT_GT(polls, 0);
+    EXPECT_LE(last, 5000);
+    EXPECT_EQ(jinja2::Value(int64_t{ 5000 }), Attr(*ns, "count"));
+    // The poll holds the view that holds the module
     *ns = jinja2::Value();
 }
 

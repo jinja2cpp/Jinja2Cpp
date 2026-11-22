@@ -393,8 +393,9 @@ enum class ModuleExports
     //! IMapItemAccessor::Find, GetKeys, GetItems, ...) runs in the module, under its lock and limits as a macro call does,
     //! and gives a copy of the attribute. What a macro set is read, and a cycler's `next` and `reset` and a joiner's
     //! `__call__` are macro-like callables of the module that change the object the macros read. A view keeps the module
-    //! alive; it is the object again when passed back as an argument to a macro of the same module (inside a list or dict
-    //! argument a copy of it, and to another module's macro a map to read). A read throws \ref BadResultAccess as a macro
+    //! alive; it is the object again when passed back as an argument to a macro of the same module. Nested in a list or dict
+    //! argument a namespace view becomes a copy, but a cycler or a joiner there is a lent map of the live object; to
+    //! another module's macro a view is a map to read. A read throws \ref BadResultAccess as a macro
     //! call does. The rest is as in Copies
     Objects
 };
