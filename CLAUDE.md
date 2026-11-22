@@ -119,6 +119,19 @@ owner threads always ask for it explicitly:
 - Codex model and effort are set in Codex's own settings, not here; Claude role
   frontmatter does not affect them.
 
+## Merge steward
+
+The steward's checklist (gates, perf bar, train build, traps) is
+[docs/steward-checklist.md](docs/steward-checklist.md); a new steward reads it first, and a
+PR that teaches a trap adds it there.
+
+- **Self-wake.** Whenever the steward ends a turn with a train or PR in CI, it arms a
+  `send_later` wake (30-45 minutes) and re-arms it at each wake until the merge. Waiting on
+  PR events alone left train #980 green for 8.5 hours.
+- **Weekly rotation.** The steward writes its handoff to project memory and resolves every
+  Monday; the coordinator starts a fresh thread. The checklist, not memory prose, carries the
+  traps, so rotation cannot lose them.
+
 ## Batching work
 
 Parallelism comes at three levels; pick the outermost one that fits.
