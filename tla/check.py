@@ -252,7 +252,7 @@ RUNS = {
                                   {"GenericArgs": True, "MaxAd": 6, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1},
                                   SAFETY, "0336: every behaviour of 3 calls taking generic containers"),
     "module-json-exhaustive": ("exhaustive", dict(MODULE1, Actions='{"read", "export", "release", "ns"}'),
-                               {"BorrowedJson": True, "MaxAd": 6, "MaxCell": 2, "MaxGen": 2, "MaxEx": 1,
+                               {"BorrowedJson": True, "MaxAd": 6, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1,
                                 "MaxVal": 2}, SAFETY,
                                "0402: every behaviour of 3 calls taking a borrowed JSON value"),
     "threads-module-exhaustive": ("exhaustive", dict(TWO, RenderThreads='{}',

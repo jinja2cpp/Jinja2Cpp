@@ -22,7 +22,7 @@ python3 tla/check.py --only mixed threads   # ... about 1h40m ...
 python3 tla/check.py --except render mixed threads   # ... and 1h10m
 python3 tla/check.py --only f1-nested-export --traces
 python3 tla/check.py --list
-python3 tla/check.py --kind exhaustive            # past the level bound: about 90 minutes
+python3 tla/check.py --kind exhaustive            # past the level bound: about 95 minutes
 python3 tla/check.py --simulate 900 --depth 40    # random behaviours of each pass run, 15 min each
 ```
 
@@ -368,6 +368,7 @@ slower):
 | `module-exhaustive` | 1 thread: module calls, nested through a callback | 6/2/2/1 | 22,593,199 | 35 | 26 min |
 | `module-0332-exhaustive` | `module-0332`: `keep([x])`, nested writes, `drop` | 6/1/2/1 | 3,167,437 | 27 | 3 min |
 | `module-generic-exhaustive` | `module-generic`: generic containers the host may keep | 6/1/2/1 | 34,093,829 | 31 | 26 min |
+| `module-json-exhaustive` | `module-json`: borrowed JSON the host changes between calls | 6/1/2/1, `MaxVal` 2 | 12,027,701 | 29 | 7 min |
 | `threads-module-exhaustive` | `threads-module`: two threads, module calls only | 6/2/2/1 | 9,181,371 | 33 | 8 min |
 | `threads-module-exhaustive-4` | the same, four calls | 8/1/2/1 | 14,263,417 | 34 | 12 min |
 | `threads-module-kept-exhaustive` | `threads-module-kept`: `keep([x])` handed off | 8/1/2/1 | 15,417,037 | 33 | 10 min |
@@ -375,7 +376,7 @@ slower):
 | `mixed-exhaustive` | `mixed`: renders and module calls on one thread | 4/2/2/1 | 1,389,466 | 29 | 2 min |
 | `threads-exhaustive` | `threads`: two threads, renders and the locked module | 4/1/2/1 | 123,118 | 22 | 10 s |
 
-All nine find no error, with every pass invariant (`WellFormed` included): 88 minutes in all,
+All ten find no error, with every pass invariant (`WellFormed` included): 95 minutes in all,
 one weekly shard.
 
 The depths, 19 to 35 states, are about twice the levels of the depth-bounded runs of the
