@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0543]
 touches: [src/expression_parser.cpp, src/expression_parser.h, test/big_int_test.cpp]
 shares: [test/parity/cases/literals.py, test/parity/divergences/literals.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/987
 ---
 # Reject integer constants past 4300 digits that survive folding
 

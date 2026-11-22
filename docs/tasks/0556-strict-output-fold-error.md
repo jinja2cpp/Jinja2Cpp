@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0546]
 touches: [src/expression_parser.cpp#FoldCheckPasses]
 shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/987
 ---
 # Strict output whose fold fails with an error that is no UndefinedError
 

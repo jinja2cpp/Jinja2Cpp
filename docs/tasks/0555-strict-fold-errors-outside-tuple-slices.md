@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0546]
 touches: [src/expression_parser.cpp#FoldCheckPasses, src/template_impl.h#FailedFold]
 shares: [test/parity/cases/undefined.py, test/parity/divergences/undefined.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/987
 ---
 # Strict undefined fold errors outside tuple-of-slices templates
 
