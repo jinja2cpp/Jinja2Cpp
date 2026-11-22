@@ -904,6 +904,19 @@ TEST(BigIntTemplate, StrDigitsConstantsFailTheLoad)
     EXPECT_FALSE(loads("{% if false %}{{ [(1).y, " + past + "] }}{% endif %}"));
     // A filter's value error in an `and` around a watched product is Impossible, not a Load error
     EXPECT_TRUE(loads("{% set x = 1 %}{% if false %}{{ 2 * 3 and ('abc'|abs or x) }}{% endif %}"));
+    // A step limit that the repr walk of a watched product reaches leaves it unfolded, as one its evaluation reaches
+    // (Codex on #987)
+    TemplateEnv limited;
+    Settings withLimits;
+    withLimits.limits.maxRenderSteps = 1000;
+    limited.SetSettings(withLimits);
+    for (const char* source : { "{% if false %}{% set q = [1] * (100 * 100) %}{% endif %}", "{% if false %}{{ [1] * (100 * 100) }}{% endif %}" })
+    {
+        Template tpl(&limited);
+        const auto loaded = tpl.Load(source);
+        EXPECT_TRUE(loaded.has_value()) << source << ": " << loaded.error().ToString();
+        EXPECT_EQ("", tpl.RenderAsString({}).value());
+    }
     EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 

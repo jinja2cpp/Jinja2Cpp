@@ -2054,7 +2054,8 @@ Repr ReprOf(const InternalValue& value)
 {
     // Repeated lists share their items, so a small value can have very many: under limits
     // each visit is a render step, which bounds the walk (RecursionLimitError near the
-    // stack's end, both failing the Load)
+    // stack's end, failing the Load; a step limit in a check of marks only leaves the value unfolded,
+    // FoldEvaluator::ReprOfValue)
     CheckStack();
     switch (value.Kind())
     {
@@ -2361,7 +2362,7 @@ private:
         auto& summary = step.summary;
         if (!summary.reprKnown)
         {
-            summary.repr = !summary.failed && !step.released ? ReprOf(step.value.value) : Repr::Unsafe;
+            summary.repr = !summary.failed && !step.released ? ReprOfValue(step.value.value) : Repr::Unsafe;
             summary.reprKnown = true;
         }
         return summary.repr;
@@ -2752,7 +2753,7 @@ private:
         }
         if (needsRepr && !step.summary.reprKnown)
         {
-            step.summary.repr = !step.value.failed ? ReprOf(step.value.value) : Repr::Unsafe;
+            step.summary.repr = !step.value.failed ? ReprOfValue(step.value.value) : Repr::Unsafe;
             step.summary.reprKnown = true;
         }
         step.value = FoldValue();
@@ -2825,7 +2826,7 @@ private:
         {
             return FoldOutcome::Fails;
         }
-        return OutcomeOfRepr(ReprOf(value.value));
+        return OutcomeOfRepr(ReprOfValue(value.value));
     }
 
     // TryFoldValue, and in a check of marks only (no tuple-slice subscript) a limit too is Impossible: such a check
@@ -2844,6 +2845,24 @@ private:
         catch (const ResourceLimitError&)
         {
             return FoldValue{ InternalValue(), true };
+        }
+    }
+
+    // ReprOf, whose walk of a repeated list costs a render step an item: in a check of marks only a limit it
+    // reaches leaves the value unfolded, as TryFold does (Codex on #987)
+    Repr ReprOfValue(const InternalValue& value) const
+    {
+        if (!m_limitIsImpossible)
+        {
+            return ReprOf(value);
+        }
+        try
+        {
+            return ReprOf(value);
+        }
+        catch (const ResourceLimitError&)
+        {
+            return Repr::Unsafe;
         }
     }
 
