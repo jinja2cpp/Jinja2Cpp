@@ -722,7 +722,8 @@ public:
     [[nodiscard]] ErrorInfo GetFoldCheckError(const FoldCheck& check, FoldCheckResult result)
     {
         const auto& tok = check.error.errorToken;
-        auto error = result == FoldCheckResult::StrDigits ? StrDigitsError(tok) : result == FoldCheckResult::Undefined ? StrictFoldError(tok) : check.error;
+        auto error = result == FoldCheckResult::StrDigits ? StrDigitsError(tok) : result == FoldCheckResult::Undefined ? StrictFoldError(tok)
+                                                                                                                       : check.error;
         return ParseErrorsToErrorInfo(std::vector<ParseError>{ std::move(error) }).error()[0];
     }
 

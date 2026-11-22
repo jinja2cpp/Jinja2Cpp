@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0543]
@@ -37,3 +37,14 @@ build its cap-sized value from data or through a folding expression.
 **Done when.** The three corpus lines are deleted from `test/parity/divergences/literals.txt`,
 the two loading cases still match, and the cap tests in `test/big_int_test.cpp` still cover the
 2^20-bit limit.
+
+**As built (batch 12 A).** The parser counts an integer literal past 4300 digits as a fold mark with the
+tuple-slice subscripts (`FoldMarkKind::StrDigits`: it needs a fold around it, as a subscript does), and watches
+(`FoldMarkKind::Watch`) the constants whose fold may give one: a literal within 10 digits of the limit, a `*` or
+`**` of constants that repeats no literal sequence, and a built-in `|int` of a constant. The expressions around a
+mark become fold candidates, and the Load's fold check fails with Python's ValueError text
+(`ErrorCode::TemplateRuntimeError`) where a candidate folds to a value holding such an integer and no candidate
+around it folds (`FoldOutcome::FoldsStrDigits`, `Repr::StrDigits`). In a check of marks only, a limit the fold
+reaches is Impossible and left to the render, and without a big-integer backend an OverflowError fold takes the
+integer away (Python computes it). `RadixLiteralsAtTheBitCap` reads its cap-sized value from data;
+`BigIntTemplate.StrDigitsConstantsFailTheLoad` pins the boundary rows against Jinja2 3.1.6 on CPython 3.12.
