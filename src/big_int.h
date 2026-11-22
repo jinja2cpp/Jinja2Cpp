@@ -19,7 +19,8 @@ inline namespace v2
 {
 // Integers outside int64 in their text form (docs/tasks/0270, docs/design/0178-big-integer-plan.md
 // 3.3): the core keeps such an integer as its canonical decimal form, and a huge one (past
-// HugeBigIntBits) also as binary words (docs/tasks/0543), and does everything that needs only the
+// HugeBigIntBits) as binary words, with its decimal form only when it was made from decimal
+// text (docs/tasks/0543), and does everything that needs only the
 // representation (printing, comparison, conversion to float and between bases, bit operations).
 // Arithmetic that needs a big result raises OverflowError (IntegerOutOfRangeError).
 //
@@ -38,13 +39,40 @@ JINJA2CPP_EXPORT InternalValue MakeBigIntValue(std::string_view decimal);
 // The viewed integer as a value: the view's object shared, a new one only for a view of text
 JINJA2CPP_EXPORT InternalValue BigIntValue(const BigIntView& val);
 
+// The canonical decimal form of a huge integer that keeps only its binary words, built for one
+// WithDecimal call. While it lives it counts against the running render's memory budget (its
+// digits and the converter's peak working words, 7 times the input words): ResourceLimitError
+// before converting when they do not fit (docs/tasks/0543 P2)
+class TransientDecimal
+{
+public:
+    JINJA2CPP_EXPORT explicit TransientDecimal(const BigIntView& val);
+    JINJA2CPP_EXPORT ~TransientDecimal();
+    TransientDecimal(const TransientDecimal&) = delete;
+    TransientDecimal(TransientDecimal&&) = delete;
+    TransientDecimal& operator=(const TransientDecimal&) = delete;
+    TransientDecimal& operator=(TransientDecimal&&) = delete;
+
+    [[nodiscard]] std::string_view Text() const noexcept { return m_text; }
+
+private:
+    std::uint64_t m_charged = 0;
+    std::string m_text;
+};
+
 // Calls `fn` with the canonical decimal form of `val` ("-" and digits) and returns its result.
-// The text lives only for the call: a huge integer made from its binary form will have no
-// decimal one and build it for each call (docs/tasks/0543 Q3), so the text cannot escape.
-// Only paths that need every digit use it: a host BigInt, a backend's fromDecimal, round(x, -n)
+// The text lives only for the call: a huge integer made from its binary form has no decimal
+// one and builds it for each call (docs/tasks/0543 Q3, about 0.1 s at MaxBigIntBits), so the
+// text cannot escape. Only paths that need every digit use it: a host BigInt, a backend's
+// fromDecimal, round(x, -n)
 template<typename Fn>
 decltype(auto) WithDecimal(const BigIntView& val, Fn&& fn)
 {
+    if (val.InlineDecimal().empty())
+    {
+        const TransientDecimal decimal(val);
+        return std::forward<Fn>(fn)(decimal.Text());
+    }
     return std::forward<Fn>(fn)(val.InlineDecimal());
 }
 

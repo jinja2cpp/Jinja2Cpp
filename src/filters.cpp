@@ -2927,7 +2927,19 @@ InternalValue RoundBigInt(const InternalValue& value, const BigIntView& big, con
     }
     if (method == "common")
     {
-        return *precision >= 0 ? value : WithDecimal(big, [&precision](std::string_view decimal) { return RoundIntegerDecimal(decimal, *precision); });
+        if (*precision >= 0)
+        {
+            return value;
+        }
+        // A huge integer is below 2^bits, which is below 10^(bits * log10(2) + 1): a unit 10 ** -ndigits
+        // past that is more than twice the value, which rounds to 0 without its decimal form, read
+        // from the words it keeps (docs/tasks/0543 P2). Another rounds its decimal form directly
+        constexpr double log10Of2 = 0.30102999566398120;
+        if (big.IsHuge() && -static_cast<double>(*precision) > (static_cast<double>(BitLength(big)) * log10Of2) + 2)
+        {
+            return int64_t{ 0 };
+        }
+        return WithDecimal(big, [&precision](std::string_view decimal) { return RoundIntegerDecimal(decimal, *precision); });
     }
     return PythonRoundByMethod(BigIntToDouble(big), true, *precision, method == "ceil");
 }

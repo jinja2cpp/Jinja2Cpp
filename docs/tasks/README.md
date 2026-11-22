@@ -358,7 +358,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | done |
 | [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
 | [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | done |
-| [0287](0287-big-int-radix-conversion-cost.md) | Quadratic radix conversion of big integers near the bit cap | robustness | low | open |
+| [0287](0287-big-int-radix-conversion-cost.md) | Quadratic radix conversion of big integers near the bit cap | robustness | low | done |
 | [0288](0288-finalize-autoescape.md) | `finalize` output is not escaped under autoescape | parity | high | done |
 | [0289](0289-flat-concat-chains.md) | `~` chains as one node, as Jinja2's `Concat` | parity | low | done |
 | [0290](0290-codeql-test-suite-cost.md) | Find what in the test suite makes CodeQL's data-flow stage explode | ci | low | open |
@@ -626,3 +626,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0565](0565-set-methods-slow-on-msvc-debug.md) | Set methods over a big range are thousands of times slower in MSVC Debug than in a GCC Debug build | performance | medium | open |
 | [0566](0566-huge-host-big-int-converts-per-access.md) | Stop converting a huge host BigInt on every access | robustness | low | open |
 | [0567](0567-stored-closure-reaching-module-through-capture.md) | A stored closure that reaches a call's module only through its capture keeps the module | parity | low | open |
+| [0568](0568-huge-int-index-and-range-bound.md) | Render a huge integer used as a list index or a range() bound as Python does | robustness | low | open |

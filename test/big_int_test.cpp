@@ -861,7 +861,7 @@ TEST(BigIntView, HugeExactlyPastTheHugeBitWidth)
     EXPECT_EQ(447U, viewOf(at).Words().size());
     EXPECT_EQ(1U << 13, viewOf(at).Words()[446]); // 14285 = 446 * 32 + 13
     const auto belowFromText = jinja2::MakeBigIntValue(viewOf(below).InlineDecimal());
-    const auto atFromText = jinja2::MakeBigIntValue(viewOf(at).InlineDecimal());
+    const auto atFromText = jinja2::WithDecimal(viewOf(at), [](std::string_view decimal) { return jinja2::MakeBigIntValue(decimal); });
     EXPECT_FALSE(viewOf(belowFromText).IsHuge());
     ASSERT_TRUE(viewOf(atFromText).IsHuge());
     EXPECT_TRUE(std::equal(viewOf(at).Words().begin(), viewOf(at).Words().end(), viewOf(atFromText).Words().begin(), viewOf(atFromText).Words().end()));
@@ -869,13 +869,19 @@ TEST(BigIntView, HugeExactlyPastTheHugeBitWidth)
     EXPECT_EQ(1, jinja2::CompareBigInts(viewOf(at), viewOf(below)));
     EXPECT_EQ(-1, jinja2::CompareBigInts(viewOf(below), viewOf(at)));
 
-    // Negation keeps the words and flips the sign of both forms
+    // Negation keeps the words and flips the sign, and of the decimal form when the integer keeps one
     const auto huge = fromHex(std::string(3600, 'f'));
     const auto negated = jinja2::NegateBigInt(viewOf(huge));
     ASSERT_TRUE(viewOf(negated).IsHuge());
     EXPECT_EQ(-1, viewOf(negated).Sign());
-    EXPECT_EQ('-', viewOf(negated).InlineDecimal().front());
-    EXPECT_EQ(viewOf(huge).InlineDecimal(), viewOf(negated).InlineDecimal().substr(1));
+    EXPECT_TRUE(viewOf(negated).InlineDecimal().empty());
+    const auto decimalOf = [](const jinja2::InternalValue& value) { return jinja2::WithDecimal(jinja2::AsBigInt(value).value(), [](std::string_view decimal) { return std::string(decimal); }); };
+    EXPECT_EQ(decimalOf(huge), decimalOf(negated).substr(1));
+    const auto hugeFromText = jinja2::MakeBigIntValue(decimalOf(huge));
+    const auto negatedFromText = jinja2::NegateBigInt(viewOf(hugeFromText));
+    EXPECT_EQ('-', viewOf(negatedFromText).InlineDecimal().front());
+    EXPECT_EQ(viewOf(hugeFromText).InlineDecimal(), viewOf(negatedFromText).InlineDecimal().substr(1));
+    EXPECT_EQ(0, jinja2::CompareBigInts(viewOf(negated), viewOf(negatedFromText)));
     EXPECT_EQ(-1, jinja2::CompareBigInts(viewOf(negated), viewOf(huge)));
     EXPECT_EQ(1, jinja2::CompareBigInts(viewOf(huge), viewOf(negated)));
     EXPECT_EQ(14400U, jinja2::BitLength(viewOf(negated)));
@@ -883,4 +889,76 @@ TEST(BigIntView, HugeExactlyPastTheHugeBitWidth)
     EXPECT_TRUE(jinja2::IsOdd(viewOf(negated)));
     EXPECT_THROW(static_cast<void>(jinja2::CheckedDecimal(viewOf(huge))), std::runtime_error);
     EXPECT_THROW(static_cast<void>(jinja2::BigIntToDouble(viewOf(huge))), std::overflow_error);
+}
+
+// Task 0543 P2: a huge integer made from binary digits keeps only its words, and builds its
+// decimal form for each WithDecimal call, which agrees with the public BigInt's conversion; one
+// made from decimal text keeps that text
+TEST(BigIntView, HugeFromBinaryKeepsNoDecimal)
+{
+    const auto viewOf = [](const jinja2::InternalValue& value) { return jinja2::AsBigInt(value).value(); };
+    const std::string hex = "1" + std::string(3599, '0') + "f";
+    const auto expected = "-" + BigInt::FromDigits(hex, 16, false).ToDigits(10);
+    const auto fromHex = jinja2::IntegerFromDigits(hex, 16, true);
+    ASSERT_TRUE(viewOf(fromHex).IsHuge());
+    EXPECT_TRUE(viewOf(fromHex).InlineDecimal().empty());
+    EXPECT_EQ(expected, jinja2::WithDecimal(viewOf(fromHex), [](std::string_view decimal) { return std::string(decimal); }));
+    EXPECT_TRUE(jinja2::IsOdd(viewOf(fromHex)));
+    EXPECT_EQ(14401U, jinja2::BitLength(viewOf(fromHex)));
+
+    const auto fromText = jinja2::MakeBigIntValue(expected);
+    ASSERT_TRUE(viewOf(fromText).IsHuge());
+    EXPECT_EQ(expected, viewOf(fromText).InlineDecimal());
+    EXPECT_EQ(0, jinja2::CompareBigInts(viewOf(fromHex), viewOf(fromText)));
+
+    // The form made from words and a host BigInt (kept in decimal) are one dict key and equal
+    BigInt hostBig;
+    ASSERT_TRUE(BigInt::TryParse(expected, hostBig));
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% set h = s|int(base=16) %}{{ {h: 1}[t] }}|{{ {t: 2}[h] }}|{{ h == t }}|{{ -(-h) == h }}"));
+    const auto result = tpl.RenderAsString({ { "s", "-" + hex }, { "t", hostBig } });
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("1|2|True|True", result.value());
+    TemplateW wide;
+    ASSERT_TRUE(wide.Load(L"{% set h = s|int(base=16) %}{{ {h: 1}[t] }}|{{ (-h)|abs == -t }}|{{ h|round(-4336) }}|{{ h|round(-10) is odd }}"));
+    const auto wideResult = wide.RenderAsString({ { "s", "-" + hex }, { "t", hostBig } });
+    ASSERT_TRUE(wideResult.has_value()) << wideResult.error().ToString();
+    EXPECT_EQ(L"1|True|0|False", wideResult.value());
+}
+
+// Task 0543 P2: a cap-sized integer from data costs its words, not its decimal form, against the
+// memory budget. Bit operations, negation and the hex digits (128 KB each, then 256 KB) fit in
+// 640 KB; round(x, -1) and leaving the render need the decimal form (about 315 KB of digits and
+// up to 896 KB for the converter's words next to x), which does not. round(x, -n) past the
+// value's digits is 0 without converting
+TEST(BigIntTemplate, HugeFromBinaryBuildsDecimalWithinTheBudget)
+{
+    TemplateEnv env;
+    Settings settings;
+    settings.limits.maxRenderMemory = std::uint64_t{ 640 } * 1024;
+    env.SetSettings(settings);
+    const ValuesMap params{ { "s", std::string(262144, 'f') } };
+    const auto render = [&env, &params](const std::string& source) {
+        Template tpl(&env);
+        const auto loaded = tpl.Load(source);
+        EXPECT_TRUE(loaded.has_value()) << source;
+        return tpl.RenderAsString(params);
+    };
+    const auto ok = render("{% set x = s|int(base=16) %}{% set y = -x %}{{ x.bit_length() }}|{{ x.bit_count() }}|{{ '{:x}'.format(y)|length }}|{{ y is odd }}|{{ y < x }}");
+    ASSERT_TRUE(ok.has_value()) << ok.error().ToString();
+    EXPECT_EQ("1048576|1048576|262145|True|True", ok.value());
+    const auto roundedAway = render("{% set x = s|int(base=16) %}{{ x|round(-315700, 'common') }}|{{ (-x)|round(-400000, 'common') }}|{{ x|round(-9223372036854775807 - 1) }}|{{ (s[:20]|int(base=16))|round(-9223372036854775807 - 1) }}");
+    ASSERT_TRUE(roundedAway.has_value()) << roundedAway.error().ToString();
+    EXPECT_EQ("0|0|0|0", roundedAway.value());
+
+    for (const auto* source : { "{% set x = s|int(base=16) %}{{ (x|round(-1, 'common')) is odd }}", "{{ f(s|int(base=16)) }}" })
+    {
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        auto withHost = params;
+        withHost["f"] = MakeCallable([](const Value& val) { return val.IsBigInt() ? 1 : 0; }, ArgInfo{ "val" });
+        const auto failed = tpl.RenderAsString(withHost);
+        ASSERT_FALSE(failed.has_value()) << source;
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, failed.error().GetCode()) << source << ": " << failed.error().ToString();
+    }
 }
