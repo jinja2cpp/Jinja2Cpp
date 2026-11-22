@@ -1,11 +1,11 @@
 ---
-status: in-progress
-pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/988
+status: done
 priority: low
 area: parity
 depends: []
 touches: [src/value_methods.cpp#FindMethod]
 shares: [test/parity/cases/filters.py, test/parity/divergences/filters.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/988
 ---
 # A dictsort or items pair has no tuple methods
 

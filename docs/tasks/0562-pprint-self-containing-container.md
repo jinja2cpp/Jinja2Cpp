@@ -1,11 +1,11 @@
 ---
-status: in-progress
-pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/988
+status: done
 priority: low
 area: parity
 depends: [0545]
 touches: [src/serialize_filters.cpp#Pprint]
 shares: [test/parity/cases/filters.py]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/988
 ---
 # pprint of a list or dict that contains itself fails with a recursion error
 
