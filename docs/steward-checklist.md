@@ -32,7 +32,7 @@ and the earlier trains of 2026-10, collected for the 2026-11-22 workflow review.
 
 0. `scripts/train.py` does steps 1-4 below: `scripts/train.py --branch <steward-branch> --pr
    N:<owner-branch> ... --done TTTT=N ... [--dry-run]`. It never pushes or merges, and stops
-   with exit 2 on a conflict (resolve, `git commit`, rerun with the same arguments). Parity PRs
+   with exit 2 on a conflict (resolve, `git commit`, rerun with the same arguments plus `--resume`). Parity PRs
    still need the `parity.md` table refresh by hand.
 1. Work on the steward's own branch only; never push to an owner branch, never force-push.
    `git fetch origin master`, `git checkout -B <steward-branch> origin/master`.

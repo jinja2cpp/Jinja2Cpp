@@ -8,14 +8,17 @@ PR and never resolves a conflict: the steward judges conflicts, perf exceptions 
 
 Usage:
   scripts/train.py --branch STEWARD_BRANCH --pr 977:claude/project-thread-x [--pr N:BRANCH ...]
-                   [--done 0312=977 ...] [--remote origin] [--dry-run]
+                   [--done 0312=977 ...] [--remote origin] [--resume] [--dry-run]
 
   --pr N:BRANCH   PR number and owner branch; merged in the order given, as "Merge #N (BRANCH)"
   --done T=N      task number T becomes done and gets `pr:` of PR N (leave multi-phase tasks out)
+  --resume        continue on an existing train branch (after resolving a conflict): keep its
+                  merges and merge current master into it if master moved. Without it the
+                  branch is always reset to current master
   --dry-run       print the plan and change nothing
 
 Exit status: 0 train built; 2 a merge conflicted (tree left conflicted: resolve, `git commit`,
-rerun with the same arguments; PRs already in the branch are skipped); 1 any other error.
+rerun with the same arguments plus --resume; PRs already in the branch are skipped); 1 any other error.
 After 0: push the branch, open the draft train PR, subscribe, and wait for CI.
 """
 import argparse
@@ -82,6 +85,7 @@ def main():
     ap.add_argument("--done", action="append", default=[])
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--session", default="<session>", help="Claude-Session URL for the trailers")
+    ap.add_argument("--resume", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     prs, done = parse_prs(args.pr), parse_done(args.done)
@@ -100,12 +104,20 @@ def main():
             print(f"would set {task} done, pr {url}/pull/{number}")
         print("would run scripts/task_index.py and --check")
         return
-    if git("status", "--porcelain", "--untracked-files=no").stdout.strip() and \
-            git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != args.branch:
-        fail("working tree has changes; commit or stash them first")
+    if git("status", "--porcelain", "--untracked-files=no").stdout.strip():
+        fail("tracked files or the index have changes; commit or stash them first")
     git("fetch", args.remote, "master")
     current = git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-    if current != args.branch:
+    if args.resume:
+        if current != args.branch:
+            fail(f"--resume: check out {args.branch} first (on {current})")
+        if git("merge-base", "--is-ancestor", master, "HEAD", check=False).returncode != 0:
+            merged = git("merge", "--no-ff", "-m", "Merge current master into the train\n\n"
+                         + TRAILERS.format(session=args.session), master, check=False)
+            if merged.returncode != 0:
+                print(merged.stdout + merged.stderr)
+                fail("master conflicts with the train; resolve, `git commit`, rerun with --resume", 2)
+    else:
         git("checkout", "-B", args.branch, master)
     for number, branch in prs:
         git("fetch", "-f", args.remote, branch)
@@ -119,18 +131,19 @@ def main():
             conflicts = git("diff", "--name-only", "--diff-filter=U").stdout.split()
             print(merged.stdout + merged.stderr)
             fail(f"#{number} conflicts in: {', '.join(conflicts) or '(no files; see git status)'}\n"
-                 "Resolve, `git commit`, rerun with the same arguments.", 2)
+                 "Resolve, `git commit`, rerun with the same arguments plus --resume.", 2)
         print(f"#{number}: merged {sha[:9]}")
     if done:
-        changed = [mark_done(task, number, url) for task, number in done.items()]
-        for task in changed:
-            print(f"{task.name}: status done")
+        for task, number in done.items():
+            print(f"{mark_done(task, number, url).name}: status done")
     subprocess.run([sys.executable, str(ROOT / "scripts" / "task_index.py")], cwd=ROOT, check=True)
     subprocess.run([sys.executable, str(ROOT / "scripts" / "task_index.py"), "--check"], cwd=ROOT, check=True)
-    if git("status", "--porcelain", "--untracked-files=no").stdout.strip():
-        git("add", "docs/tasks")
+    changed = git("status", "--porcelain", "--untracked-files=no", "--", "docs/tasks").stdout.split("\n")
+    paths = [line[3:] for line in changed if line.strip()]
+    if paths:
         msg = "Train: mark tasks done, refresh task index\n\n" + TRAILERS.format(session=args.session)
-        git("commit", "-m", msg)
+        git("add", "--", *paths)
+        git("commit", "-m", msg, "--", *paths)
         print("committed task status and index")
     print(f"train branch {args.branch} at {git('rev-parse', '--short', 'HEAD').stdout.strip()}; "
           "next: push, open the draft train PR, subscribe, arm a send_later wake")
