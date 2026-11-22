@@ -475,3 +475,107 @@ def test_module_exports_macros_stay_callable_in_tuples_and_keyed_dicts():
     ours, theirs = both(source)
     assert ours.t[0](2) == theirs.t[0](2) == "<2>"
     assert ours.d[1](3) == theirs.d[1](3) == "<3>"
+
+
+LIVE_SOURCE = (
+    "{% set ns = namespace(count=0) %}{% set cyc = cycler('a', 'b', 'c') %}{% set j = joiner('|') %}"
+    "{% macro inc() %}{% set ns.count = ns.count + 1 %}{{ ns.count }}{% endmacro %}"
+    "{% macro cur() %}{{ cyc.current }}{% endmacro %}{% macro nxt() %}{{ cyc.next() }}{% endmacro %}"
+    "{% macro show(x) %}{{ x.count }}{% endmacro %}{% macro set_on(x) %}{% set x.count = 40 %}{% endmacro %}"
+)
+
+
+def test_module_namespace_is_live():
+    ours, theirs = both(LIVE_SOURCE)
+    for mod in (ours, theirs):
+        assert mod.ns.count == 0
+        assert mod.inc() == "1"
+        assert mod.ns.count == 1
+    assert repr(ours.ns) == repr(theirs.ns) == "<Namespace {'count': 1}>"
+    assert str(ours.ns) == str(theirs.ns)
+    assert hasattr(ours.ns, "count") and not hasattr(ours.ns, "nope") and not hasattr(theirs.ns, "nope")
+    with pytest.raises(AttributeError):
+        ours.ns.nope
+    # what a macro does to the namespace it is passed is done to the module's own
+    for mod in (ours, theirs):
+        assert mod.show(mod.ns) == "1"
+        mod.set_on(mod.ns)
+        assert mod.ns.count == 40
+        assert mod.inc() == "41"
+
+
+def test_module_cycler_is_live():
+    ours, theirs = both(LIVE_SOURCE)
+    for mod in (ours, theirs):
+        assert (mod.cyc.next(), mod.cyc.next(), mod.cyc.current, mod.cyc.pos) == ("a", "b", "c", 2)
+        # the macros read the cycler the host advanced, and the host the one they advanced
+        assert (mod.cur(), mod.nxt(), mod.cyc.current, mod.cyc.pos) == ("c", "c", "a", 0)
+        assert next(mod.cyc) == "a"
+        assert mod.cyc.reset() is None
+        assert mod.cyc.current == "a"
+        assert list(mod.cyc.items) == ["a", "b", "c"]
+        assert (mod.j(), mod.j(), mod.j.sep) == ("", "|", "|")
+
+
+def test_module_objects_reject_what_they_are_not():
+    ours, theirs = both(LIVE_SOURCE)
+    for mod in (ours, theirs):
+        for call in (lambda: mod.ns(), lambda: next(mod.ns), lambda: iter(mod.ns), lambda: next(mod.j), lambda: iter(mod.cyc)):
+            with pytest.raises(TypeError):
+                call()
+
+
+def test_module_object_passed_to_render_and_nested():
+    source = "{% set ns = namespace(inner=namespace(n=1), l=[namespace(k=2)]) %}{% set d = {'o': ns.inner} %}{% macro bump() %}{% set i = ns.inner %}{% set i.n = i.n + 1 %}{% endmacro %}"
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        mod = env.from_string(source).make_module()
+        inner = mod.ns.inner
+        assert inner.n == 1 and mod.ns.l[0].k == 2 and mod.d["o"].n == 1
+        mod.bump()
+        assert inner.n == 2 and mod.d["o"].n == 2
+        assert env.from_string("{{ ns.n }}").render(ns=inner) == "2"
+
+
+def test_module_object_outlives_template_and_environment():
+    env = jinja2cpp.Environment()
+    tpl = env.from_string(LIVE_SOURCE)
+    mod = tpl.make_module()
+    ns, cyc, inc = mod.ns, mod.cyc, mod.inc
+    del tpl, env, mod
+    gc.collect()
+    assert ns.count == 0
+    inc()
+    assert ns.count == 1
+    assert cyc.next() == "a" and cyc.current == "b"
+
+
+def test_module_object_cycle_is_collected():
+    env = jinja2cpp.Environment()
+    mod = env.from_string(LIVE_SOURCE).make_module()
+    ns = mod.ns
+    env.keep = ns  # environment -> object -> environment
+    refs = [weakref.ref(env), weakref.ref(ns)]
+    del env, mod, ns
+    gc.collect()
+    assert refs[0]() is None and refs[1]() is None
+
+
+def test_module_object_holding_itself():
+    source = "{% set ns = namespace(n=1) %}{% set ns.me = ns %}"
+    mod = jinja2cpp.Environment().from_string(source).make_module()
+    me = mod.ns.me
+    assert me.n == 1 and me.me.n == 1
+    # Jinja2's repr stops at the dict that repeats; each read here is a new object, so the repr is cut by the recursion limit
+    with pytest.raises(RecursionError):
+        repr(mod.ns)
+    del me, mod
+    gc.collect()
+
+
+def test_module_macro_result_that_is_an_object():
+    source = "{% set cyc = cycler(namespace(n=1), namespace(n=2)) %}"
+    for module in (jinja2cpp, jinja2):
+        mod = module.Environment().from_string(source).make_module()
+        first = mod.cyc.next()
+        assert first.n == 1 and mod.cyc.next().n == 2 and first.n == 1

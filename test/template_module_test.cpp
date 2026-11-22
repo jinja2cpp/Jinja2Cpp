@@ -1615,3 +1615,256 @@ TEST_F(TemplateModuleTest, AViewOfAModuleCallKeepsItsViewClass)
     Call(module.exports["m"]);
     EXPECT_EQ("dict_keys;dict_values;dict_items;set;-;dict_keys;dict_values;dict_items;set;-;", *seen);
 }
+
+// A namespace, a cycler and a joiner of a module in Objects mode are the module's own objects (docs/tasks/0411): what a macro
+// set is what the host reads, and the host's next() is the cycler the macros read. Expected values are Python Jinja2 3.1.6's:
+// m.ns.count 0 then 1 after m.inc(); m.cyc.next() 'a' 'b', m.cyc.current 'c', a macro's cyc.next() 'c' and then current 'a'
+namespace
+{
+constexpr const char* liveSource = "{% set ns = namespace(count=0) %}{% set cyc = cycler('a', 'b', 'c') %}{% set j = joiner('|') %}"
+                                   "{% macro inc() %}{% set ns.count = ns.count + 1 %}{{ ns.count }}{% endmacro %}"
+                                   "{% macro cur() %}{{ cyc.current }}{% endmacro %}{% macro nxt() %}{{ cyc.next() }}{% endmacro %}"
+                                   "{% macro show(x) %}{{ x.count }}{% endmacro %}{% macro first(l) %}{{ l[0].count }}{% endmacro %}{% macro set_on(x) %}{% set x.count = 40 %}{% endmacro %}";
+
+const jinja2::GenericMap& MapOf(const jinja2::Value& value)
+{
+    const auto* map = value.GetIf<jinja2::GenericMap>();
+    EXPECT_NE(nullptr, map);
+    static const jinja2::GenericMap none;
+    return map ? *map : none;
+}
+
+jinja2::Value Attr(const jinja2::Value& object, const std::string& name)
+{
+    return MapOf(object).GetValueByName(name);
+}
+} // namespace
+
+TEST_F(TemplateModuleTest, ObjectExportsAreLive)
+{
+    auto tpl = Load(liveSource);
+    auto made = tpl.MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!made) << made.error().ToString();
+    auto& exports = made->exports;
+    const auto& ns = exports.at("ns");
+    const auto& cyc = exports.at("cyc");
+    const auto& joiner = exports.at("j");
+    EXPECT_STREQ("Namespace", MapOf(ns).GetObjectClass());
+    EXPECT_STREQ("Cycler", MapOf(cyc).GetObjectClass());
+    EXPECT_STREQ("Joiner", MapOf(joiner).GetObjectClass());
+    EXPECT_EQ(jinja2::Value(int64_t{ 0 }), Attr(ns, "count"));
+    EXPECT_EQ("1", Call(exports.at("inc")).AsString());
+    EXPECT_EQ(jinja2::Value(int64_t{ 1 }), Attr(ns, "count"));
+    EXPECT_EQ((std::vector<std::string>{ "count" }), MapOf(ns).GetKeys());
+    EXPECT_EQ(1u, MapOf(ns).GetSize());
+    EXPECT_TRUE(MapOf(ns).HasValue("count"));
+    EXPECT_FALSE(MapOf(ns).HasValue("other"));
+    EXPECT_FALSE(MapOf(ns).Find("other").has_value());
+    ASSERT_EQ(1u, MapOf(ns).GetItems().size());
+    EXPECT_EQ(jinja2::Value("count"), MapOf(ns).GetItems()[0].first);
+    // The same object each time it is asked for
+    EXPECT_EQ(MapOf(ns).GetIdentity(), MapOf(exports.at("ns")).GetIdentity());
+
+    EXPECT_EQ(jinja2::Value(int64_t{ 0 }), Attr(cyc, "pos"));
+    EXPECT_EQ(jinja2::Value("a"), Call(Attr(cyc, "next")));
+    EXPECT_EQ(jinja2::Value("b"), Call(Attr(cyc, "next")));
+    EXPECT_EQ(jinja2::Value("c"), Attr(cyc, "current"));
+    // The macros read the cycler the host advanced, and the host the one they advanced
+    EXPECT_EQ("c", Call(exports.at("cur")).AsString());
+    EXPECT_EQ("c", Call(exports.at("nxt")).AsString());
+    EXPECT_EQ(jinja2::Value("a"), Attr(cyc, "current"));
+    EXPECT_EQ(jinja2::Value(int64_t{ 0 }), Attr(cyc, "pos"));
+    EXPECT_TRUE(Call(Attr(cyc, "reset")).IsNone());
+    EXPECT_EQ(jinja2::Value("a"), Call(Attr(cyc, "next")));
+    EXPECT_EQ(3u, ItemsOf(Attr(cyc, "items")).size());
+
+    EXPECT_EQ(jinja2::Value(""), Call(Attr(joiner, "__call__")));
+    EXPECT_EQ(jinja2::Value("|"), Call(Attr(joiner, "__call__")));
+
+    // The default mode is unchanged: a copy, which a macro does not change
+    auto copies = tpl.MakeModule();
+    ASSERT_TRUE(!!copies);
+    EXPECT_EQ(nullptr, copies->exports.at("ns").GetIf<jinja2::GenericMap>());
+    EXPECT_NE(nullptr, copies->exports.at("ns").GetIf<jinja2::ValuesMap>());
+    Call(copies->exports.at("inc"));
+    EXPECT_EQ(jinja2::Value(int64_t{ 0 }), copies->exports.at("ns").AsMap().at("count"));
+}
+
+// The view passed back to a macro of its module is the object: the macro reads and writes the module's own namespace
+TEST_F(TemplateModuleTest, ObjectViewPassedBackIsTheObject)
+{
+    auto tpl = Load(liveSource);
+    auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module);
+    auto& exports = module->exports;
+    const auto& ns = exports.at("ns");
+    Call(exports.at("inc"));
+    EXPECT_EQ("1", Call(exports.at("show"), { ns }).AsString());
+    Call(exports.at("set_on"), { ns });
+    EXPECT_EQ(jinja2::Value(int64_t{ 40 }), Attr(ns, "count"));
+    EXPECT_EQ("41", Call(exports.at("inc")).AsString());
+    // In a list the macro may store it is a copy, not a reference that keeps the module alive through itself
+    jinja2::ValuesList wrapped;
+    wrapped.emplace_back(ns);
+    jinja2::ValuesList pos;
+    pos.emplace_back(std::move(wrapped));
+    EXPECT_EQ("41", Call(exports.at("first"), std::move(pos)).AsString());
+    jinja2::ValuesMap kw;
+    kw["x"] = ns;
+    EXPECT_EQ("41", Call(exports.at("show"), {}, kw).AsString());
+}
+
+// The object and its module outlive the template, the module struct and the source (ASan)
+TEST_F(TemplateModuleTest, ObjectExportOutlivesTemplate)
+{
+    jinja2::Value ns;
+    jinja2::Value cyc;
+    jinja2::Value inc;
+    {
+        auto tpl = Load(liveSource);
+        auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+        ASSERT_TRUE(!!module);
+        ns = module->exports.at("ns");
+        cyc = module->exports.at("cyc");
+        inc = module->exports.at("inc");
+        // The source is replaced and the template with its tree goes
+        ASSERT_TRUE(!!tpl.Load("{{ 'another source that replaces the old one, with a text that is much longer than the old one' }}"));
+    }
+    EXPECT_EQ(jinja2::Value(int64_t{ 0 }), Attr(ns, "count"));
+    Call(inc);
+    EXPECT_EQ(jinja2::Value(int64_t{ 1 }), Attr(ns, "count"));
+    EXPECT_EQ(jinja2::Value("a"), Call(Attr(cyc, "next")));
+    EXPECT_EQ(jinja2::Value("b"), Attr(cyc, "current"));
+}
+
+// A nested namespace is an object too, and one a call made stays the module's
+TEST_F(TemplateModuleTest, NestedObjectExports)
+{
+    auto tpl = Load("{% set ns = namespace(inner=namespace(n=1), l=[namespace(k=2)]) %}{% macro bump() %}{% set i = ns.inner %}{% set i.n = i.n + 1 %}{% endmacro %}"
+                    "{% set d = {'o': ns.inner} %}");
+    auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module);
+    const auto inner = Attr(module->exports.at("ns"), "inner");
+    EXPECT_STREQ("Namespace", MapOf(inner).GetObjectClass());
+    EXPECT_EQ(jinja2::Value(int64_t{ 1 }), Attr(inner, "n"));
+    Call(module->exports.at("bump"));
+    EXPECT_EQ(jinja2::Value(int64_t{ 2 }), Attr(inner, "n"));
+    EXPECT_EQ(MapOf(inner).GetIdentity(), MapOf(Attr(module->exports.at("ns"), "inner")).GetIdentity());
+    const auto fromList = ItemsOf(Attr(module->exports.at("ns"), "l"));
+    ASSERT_EQ(1u, fromList.size());
+    EXPECT_EQ(jinja2::Value(int64_t{ 2 }), Attr(fromList[0], "k"));
+    const auto fromDict = module->exports.at("d").AsMap().at("o");
+    EXPECT_EQ(jinja2::Value(int64_t{ 2 }), Attr(fromDict, "n"));
+}
+
+// A namespace that holds itself, read through views and dropped: nothing recurses, and the module frees it (LSan)
+TEST_F(TemplateModuleTest, ObjectExportHoldingItself)
+{
+    auto tpl = Load("{% set ns = namespace(n=1) %}{% set ns.me = ns %}{% macro mk() %}{% set o = namespace(n=2) %}{% set o.me = o %}{{ o.n }}{% endmacro %}");
+    {
+        auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+        ASSERT_TRUE(!!module);
+        for (int i = 0; i != 3; ++i)
+        {
+            auto me = Attr(module->exports.at("ns"), "me");
+            EXPECT_EQ(jinja2::Value(int64_t{ 1 }), Attr(me, "n"));
+            EXPECT_EQ(jinja2::Value(int64_t{ 1 }), Attr(Attr(me, "me"), "n"));
+            EXPECT_EQ(2u, MapOf(me).GetItems().size());
+            EXPECT_EQ("2", Call(module->exports.at("mk")).AsString());
+        }
+    }
+    // The module goes with its last view
+    auto last = [&] {
+        auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+        return Attr(module->exports.at("ns"), "me");
+    }();
+    EXPECT_EQ(jinja2::Value(int64_t{ 1 }), Attr(last, "n"));
+}
+
+// Readers on threads alongside the calls that write: the view takes the module's turn (TSan)
+TEST_F(TemplateModuleTest, ConcurrentObjectReads)
+{
+    auto tpl = Load(liveSource);
+    auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module);
+    auto& exports = module->exports;
+    static constexpr int perThread = 100;
+    std::atomic<bool> failed{ false };
+    std::vector<std::thread> threads;
+    for (int t = 0; t != 2; ++t)
+    {
+        threads.emplace_back([&exports]() {
+            for (int i = 0; i != perThread; ++i)
+            {
+                Call(exports.at("inc"));
+            }
+        });
+        threads.emplace_back([&exports, &failed]() {
+            int64_t last = 0;
+            for (int i = 0; i != perThread; ++i)
+            {
+                const auto count = Attr(exports.at("ns"), "count");
+                const auto* number = count.GetIf<int64_t>();
+                // The count only grows
+                failed = failed || !number || *number < last;
+                last = number ? *number : last;
+                Call(Attr(exports.at("cyc"), "next"));
+                Attr(exports.at("j"), "sep");
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    EXPECT_FALSE(failed);
+    EXPECT_EQ(jinja2::Value(int64_t{ 2 } * perThread), Attr(exports.at("ns"), "count"));
+}
+
+// A host's callable in a macro reads the module's object, within the macro's call (re-entry on the thread)
+TEST_F(TemplateModuleTest, ObjectReadFromHostCallableInMacro)
+{
+    auto ns = std::make_shared<jinja2::Value>();
+    jinja2::ValuesMap params;
+    params["peek"] = jinja2::UserCallable([ns](const jinja2::UserCallableParams&) { return Attr(*ns, "count"); }, {});
+    auto tpl = Load("{% set ns = namespace(count=5) %}{% macro m() %}{% set ns.count = ns.count + 1 %}{{ peek() }}{% endmacro %}");
+    auto module = tpl.MakeModule(params, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module);
+    *ns = module->exports.at("ns");
+    EXPECT_EQ("6", Call(module->exports.at("m")).AsString());
+    // The host's callable is the module's own: it holds the view that holds the module
+    *ns = jinja2::Value();
+}
+
+// A read runs under the module's limits and fails as a call does, with an error; the module goes on
+TEST_F(TemplateModuleTest, ObjectReadFailureIsAnError)
+{
+    jinja2::Settings settings;
+    settings.limits.maxSequenceSize = 4;
+    jinja2::TemplateEnv env;
+    env.SetSettings(settings);
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% set ns = namespace(small={'a': 1}, big={'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': 6}) %}"));
+    auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module);
+    const auto& ns = module->exports.at("ns");
+    EXPECT_THROW(Attr(ns, "big"), jinja2::BadResultAccess<char>);
+    EXPECT_THROW(static_cast<void>(MapOf(ns).GetItems()), jinja2::BadResultAccess<char>);
+    EXPECT_EQ(1u, Attr(ns, "small").AsMap().size());
+}
+
+TEST_F(TemplateModuleTest, ObjectExportsWide)
+{
+    jinja2::TemplateW tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load(L"{% set ns = namespace(count=0) %}{% set cyc = cycler('a', 'b') %}{% macro inc() %}{% set ns.count = ns.count + 1 %}{% endmacro %}"
+                           L"{% macro show(x) %}{{ x.count }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module);
+    auto& exports = module->exports;
+    Call(exports.at("inc"));
+    EXPECT_EQ(jinja2::Value(int64_t{ 1 }), Attr(exports.at("ns"), "count"));
+    EXPECT_EQ(jinja2::Value(std::wstring(L"a")), Call(Attr(exports.at("cyc"), "next")));
+    EXPECT_EQ(jinja2::Value(std::wstring(L"b")), Call(Attr(exports.at("cyc"), "next")));
+    EXPECT_EQ(jinja2::Value(std::wstring(L"a")), Call(Attr(exports.at("cyc"), "next")));
+    EXPECT_EQ(L"1", Call(exports.at("show"), { exports.at("ns") }).AsWString());
+}

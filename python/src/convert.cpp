@@ -1056,6 +1056,11 @@ auto Classify(nb::handle handle, Sink&& sink)
     {
         return sink.Engine(nb::cast<const TemplateValue&>(handle).Value());
     }
+    // A namespace, a cycler or a joiner a module exported goes back as the module's own object (docs/tasks/0411)
+    if (const auto* moduleObject = ModuleObjectValue(handle))
+    {
+        return sink.Engine(*moduleObject);
+    }
     if (IsUndefinedType(Py_TYPE(object)))
     {
         return sink.Engine(UndefinedToEngine(object));

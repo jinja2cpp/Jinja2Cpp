@@ -38,6 +38,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -91,6 +92,38 @@ std::shared_ptr<const ITemplateImpl> TakeTemplateKeptWhileLoading(const ITemplat
 
 namespace
 {
+// A host's live view of an object a module made (ModuleObjectView): what the module's own code needs of it when the host
+// hands it back as an argument
+struct IModuleObjectView
+{
+    IModuleObjectView() = default;
+    IModuleObjectView(const IModuleObjectView&) = delete;
+    IModuleObjectView& operator=(const IModuleObjectView&) = delete;
+    IModuleObjectView(IModuleObjectView&&) = delete;
+    IModuleObjectView& operator=(IModuleObjectView&&) = delete;
+    virtual ~IModuleObjectView() = default;
+
+    // The module the object belongs to (a TemplateModuleState), for comparing only
+    [[nodiscard]] virtual const void* StateId() const noexcept = 0;
+    // The object itself, which the module owns
+    [[nodiscard]] virtual const InternalValue& Object() const noexcept = 0;
+    // The object as a copy, as the exports of the default mode (ModuleExports::Copies) have it, which refers to nothing of
+    // the module but its callables
+    [[nodiscard]] virtual Value Snapshot() const = 0;
+};
+
+// The view `value` is, of an object of the module `self`; null for any other value
+const IModuleObjectView* ModuleViewOf(const Value& value, const void* self)
+{
+    const auto* map = self ? value.GetIf<GenericMap>() : nullptr;
+    if (!map || !map->GetAccessor() || !map->GetObjectClass())
+    {
+        return nullptr;
+    }
+    const auto* view = dynamic_cast<const IModuleObjectView*>(map->GetAccessor());
+    return view && view->StateId() == self ? view : nullptr;
+}
+
 // Copies a value of the module into one the host owns, so that nothing the host keeps refers
 // to the module's context or is changed by a later macro call. Lists, dicts and namespaces are
 // copied item by item; a container that contains itself is cut where it repeats. Objects (a
@@ -103,10 +136,13 @@ public:
     // (TemplateModuleState::Wrap). A plain function: a module call makes a copier for its
     // result, which mostly holds no callable
     using WrapCallable = Value (*)(void* state, const InternalValue& callable, const std::string& name);
+    // What a namespace, cycler or joiner becomes in Objects mode: a live view of it in the module `state` (ModuleObjectView)
+    using WrapObject = Value (*)(void* state, const InternalValue& object, const std::string& name);
 
     // `objects`: ModuleExports::Objects, which keeps an undefined value, a tuple and a dict's own keys
-    ExportCopier(WrapCallable wrap, void* state, const std::string& name, bool objects = false)
+    ExportCopier(WrapCallable wrap, void* state, const std::string& name, bool objects = false, WrapObject wrapObject = nullptr)
         : m_wrap(wrap)
+        , m_wrapObject(wrapObject)
         , m_state(state)
         , m_name(name)
         , m_objects(objects)
@@ -155,6 +191,11 @@ public:
         }
         if (auto map = AsMap(value))
         {
+            // A namespace, a cycler and a joiner stay the module's: the host reads and calls the object itself
+            if (m_objects && m_wrapObject && !map->IsHost() && IsLiveObjectClass(map->GetObjectClass()))
+            {
+                return m_wrapObject(m_state, value, m_name);
+            }
             // A dict, the template's or the host's, or a namespace; not an object
             const bool isDict = map->GetMutableItems() != nullptr || map->IsNamespace() || (!map->HasAttributes() && map->GetObjectClass() == nullptr);
             if (isDict)
@@ -166,6 +207,18 @@ public:
     }
 
 private:
+    // Whether the objects of the Python class `objectClass` (or null) are views in Objects mode. Not `loop` and a module, which
+    // keep the copy of what they were
+    static bool IsLiveObjectClass(const char* objectClass)
+    {
+        if (!objectClass)
+        {
+            return false;
+        }
+        const std::string_view name(objectClass);
+        return name == "Namespace" || name == "Cycler" || name == "Joiner";
+    }
+
     // Starts copying the container `identity`; false when it is being copied already: the copy
     // reached it again
     bool Enter(const void* identity)
@@ -234,6 +287,7 @@ private:
     }
 
     WrapCallable m_wrap;
+    WrapObject m_wrapObject;
     void* m_state;
     const std::string& m_name;
     bool m_objects;
@@ -349,8 +403,14 @@ bool IsCopiedGeneric(const Value& value)
 // With `generic`, a host's GenericList or GenericMap becomes a list or dict of its items too: a render nested in
 // another one, whose values outlive it, may get one that views a container the host frees once the render returns
 // (docs/tasks/0524). Its items are taken once, at most the render's maxSequenceSize of them
-Value OwnedCopy(const Value& value, std::uintptr_t entry, bool generic)
+Value OwnedCopy(const Value& value, std::uintptr_t entry, bool generic, const void* self)
 {
+    // A view of an object of the module in a list or dict that its macro may store: a copy, not a reference that would make
+    // the module hold the view that holds the module
+    if (const auto* view = ModuleViewOf(value, self))
+    {
+        return view->Snapshot();
+    }
     if (const auto* view = value.GetIf<std::string_view>())
     {
         return std::string(*view);
@@ -375,7 +435,7 @@ Value OwnedCopy(const Value& value, std::uintptr_t entry, bool generic)
         for (const auto& item : *list)
         {
             CheckSequenceSize(static_cast<uint64_t>(copy.size()) + 1, "a generic list param");
-            copy.push_back(OwnedCopy(item, entry, generic));
+            copy.push_back(OwnedCopy(item, entry, generic, self));
         }
         return Value(std::move(copy));
     }
@@ -384,7 +444,7 @@ Value OwnedCopy(const Value& value, std::uintptr_t entry, bool generic)
         ValuesMap copy;
         for (const auto& [key, item] : *map)
         {
-            copy.emplace(key, OwnedCopy(item, entry, generic));
+            copy.emplace(key, OwnedCopy(item, entry, generic, self));
         }
         return Value(std::move(copy));
     }
@@ -394,14 +454,14 @@ Value OwnedCopy(const Value& value, std::uintptr_t entry, bool generic)
         copy.reserve(list->size());
         for (const auto& item : *list)
         {
-            copy.push_back(OwnedCopy(item, entry, generic));
+            copy.push_back(OwnedCopy(item, entry, generic, self));
         }
         return Value(std::move(copy));
     }
     ValuesMap copy;
     for (const auto& [key, item] : value.As<ValuesMap>())
     {
-        copy.emplace(key, OwnedCopy(item, entry, generic));
+        copy.emplace(key, OwnedCopy(item, entry, generic, self));
     }
     return Value(std::move(copy));
 }
@@ -410,8 +470,14 @@ Value OwnedCopy(const Value& value, std::uintptr_t entry, bool generic)
 
 // A host Value as a value the module owns: copied and converted by value, so that a module
 // value the macro stores it in (a namespace) never refers to the host's
-InternalValue OwnedArgument(const Value& value, bool generic)
+InternalValue OwnedArgument(const Value& value, bool generic, const void* self)
 {
+    // An object of the module that the host reads through its view is the module's own object once it is an argument:
+    // the macro changes the namespace itself, and what it stores is no view
+    if (const auto* view = ModuleViewOf(value, self))
+    {
+        return view->Object();
+    }
     // A scalar or a host's list or map, converted by value as it is
     const auto& data = value.GetData();
     if (!std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data) && !std::holds_alternative<std::string_view>(data)
@@ -427,7 +493,7 @@ InternalValue OwnedArgument(const Value& value, bool generic)
     Value copy;
     try
     {
-        copy = OwnedCopy(value, entry, generic);
+        copy = OwnedCopy(value, entry, generic, self);
     }
     catch (const RecursionLimitError&)
     {
@@ -437,7 +503,7 @@ InternalValue OwnedArgument(const Value& value, bool generic)
         }
         // Too deep a generic value, a cyclic one most likely (a reflected struct that points back at its parent):
         // the host's view of it, as without a copy, which the host keeps alive (docs/tasks/0524)
-        copy = OwnedCopy(value, entry, false);
+        copy = OwnedCopy(value, entry, false, self);
     }
     return visit(visitors::InputValueConvertor(true, false), copy.GetData());
 }
@@ -448,6 +514,10 @@ struct TemplateModuleState;
 // in its errors: a call of it in the module (ModuleCall). Defined after ModuleCall
 template<typename CharT>
 Value MakeModuleCall(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& callable, const std::string& name);
+// The host's live view of `object`, a namespace, cycler or joiner of the module `state`, exported as `name`
+// (ModuleObjectView). Defined after it
+template<typename CharT>
+Value MakeModuleObject(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& object, const std::string& name);
 
 // The state the exports of one module share: the template and the module's context their calls
 // run in, kept alive by every export (docs/tasks/0284, decision D1)
@@ -811,9 +881,14 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         return BasicErrorInfo<CharT>(std::move(errorData));
     }
 
-    // A host's call of the exported callable `fn`, named `name`, in the module's context, with the filter policies
-    // `policies` (CallModuleMacro) or, when null, the module's
-    Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams, const FilterPolicies* policies = nullptr)
+    // A run in the module for the host: a call of an export (Call) or a read of an object it exports
+    // (ModuleObjectView). Holds the module's lock, as a host's call does, so it may be nested on the same thread (a host's
+    // callable in a macro that reads or calls the module again). `body` gets the output string that the limits keep a
+    // pointer to, and returns what the host gets, converted by the body itself: no view of the module's context, its cells
+    // or the template's source may leave it. A failure is a BadResultAccess naming `name`. `policies` are the filter
+    // policies of this run, or null for the module's
+    template<typename Body>
+    auto Run(const std::string& name, const FilterPolicies* policies, Body&& body) -> std::invoke_result_t<Body, std::basic_string<CharT>&>
     {
         const std::scoped_lock lock(mutex);
         std::optional<BasicErrorInfo<CharT>> error;
@@ -836,35 +911,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // Before the limits, which keep a pointer to it
             std::basic_string<CharT> output;
             const auto limitsScope = MakeLimitsScope();
-            CallParams callParams;
-            if (const auto* posArgs = ucParams.extraPosArgs.GetIf<ValuesList>())
-            {
-                callParams.posParams.reserve(posArgs->size());
-                for (const auto& arg : *posArgs)
-                {
-                    callParams.posParams.push_back(OwnedArgument(arg));
-                }
-            }
-            else if (!ucParams.extraPosArgs.IsNone())
-            {
-                throw TemplateRuntimeError("the positional arguments of a module's macro must be a ValuesList");
-            }
-            if (const auto* kwArgs = ucParams.extraKwArgs.GetIf<ValuesMap>())
-            {
-                for (const auto& [argName, arg] : *kwArgs)
-                {
-                    callParams.kwParams[argName] = OwnedArgument(arg);
-                }
-            }
-            else if (!ucParams.extraKwArgs.IsNone())
-            {
-                throw TemplateRuntimeError("the keyword arguments of a module's macro must be a ValuesMap");
-            }
-            for (const auto& [argName, arg] : ucParams.args)
-            {
-                callParams.kwParams[argName] = OwnedArgument(arg);
-            }
-            auto result = ExportCopier(&Wrap, this, name, exportObjects).Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
+            auto result = std::forward<Body>(body)(output);
             if (impl->m_settings->hasRenderLimits)
             {
                 detail::PollDeadline();
@@ -890,6 +937,46 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         PruneAfterFailedCall();
         throw BadResultAccess<CharT>(std::move(*error));
     }
+
+    // A host's call of the exported callable `fn`, named `name`, in the module's context, with the filter policies
+    // `policies` (CallModuleMacro) or, when null, the module's
+    Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams, const FilterPolicies* policies = nullptr)
+    {
+        return Run(name, policies, [&](std::basic_string<CharT>& output) {
+            CallParams callParams;
+            if (const auto* posArgs = ucParams.extraPosArgs.GetIf<ValuesList>())
+            {
+                callParams.posParams.reserve(posArgs->size());
+                for (const auto& arg : *posArgs)
+                {
+                    callParams.posParams.push_back(OwnedArgument(arg, false, this));
+                }
+            }
+            else if (!ucParams.extraPosArgs.IsNone())
+            {
+                throw TemplateRuntimeError("the positional arguments of a module's macro must be a ValuesList");
+            }
+            if (const auto* kwArgs = ucParams.extraKwArgs.GetIf<ValuesMap>())
+            {
+                for (const auto& [argName, arg] : *kwArgs)
+                {
+                    callParams.kwParams[argName] = OwnedArgument(arg, false, this);
+                }
+            }
+            else if (!ucParams.extraKwArgs.IsNone())
+            {
+                throw TemplateRuntimeError("the keyword arguments of a module's macro must be a ValuesMap");
+            }
+            for (const auto& [argName, arg] : ucParams.args)
+            {
+                callParams.kwParams[argName] = OwnedArgument(arg, false, this);
+            }
+            return MakeCopier(name).Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
+        });
+    }
+
+    // The copier of a run's results, in the module's export mode
+    ExportCopier MakeCopier(const std::string& name) { return ExportCopier(&Wrap, this, name, exportObjects, &WrapObject); }
 
     // A call that failed frees the trees a source change replaced as one that returned does
     // (CallScope), once its error is made (docs/tasks/0503)
@@ -933,6 +1020,12 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     static Value Wrap(void* state, const InternalValue& callable, const std::string& name)
     {
         return MakeModuleCall(static_cast<TemplateModuleState*>(state)->shared_from_this(), callable, name);
+    }
+
+    // A namespace, cycler or joiner of the module found in a value handed to the host (ExportCopier::WrapObject)
+    static Value WrapObject(void* state, const InternalValue& object, const std::string& name)
+    {
+        return MakeModuleObject(static_cast<TemplateModuleState*>(state)->shared_from_this(), object, name);
     }
 
     std::shared_ptr<const Impl> impl;
@@ -984,6 +1077,137 @@ template<typename CharT>
 Value MakeModuleCall(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& callable, const std::string& name)
 {
     return Value(UserCallable(ModuleCall<CharT>{ state, callable, name }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
+}
+
+// A namespace, a cycler or a joiner the module made, as the host sees it in ModuleExports::Objects: the object itself, which
+// the module's macros read and change, not a copy of it (Jinja2's `module.ns.count` is what a macro set last). Each read runs
+// in the module, under its lock and limits, as a call of a macro does, and gives the host a copy (ExportCopier): nothing of
+// the module's context, cells or source leaves it. The methods of a cycler and a joiner are calls in the module. It owns
+// the module, so that the object outlives the template and every other export; the module's own values hold the object,
+// never a view (a view the host hands back as an argument is the object again: OwnedArgument)
+template<typename CharT>
+class ModuleObjectView final : public IMapItemAccessor
+    , public IModuleObjectView
+{
+public:
+    using State = TemplateModuleState<CharT>;
+
+    ModuleObjectView(std::shared_ptr<State> state, InternalValue object, std::string name)
+        : m_state(std::move(state))
+        , m_object(std::move(object))
+        , m_name(std::move(name))
+    {
+        const auto map = AsMap(m_object);
+        m_class = map ? map->GetObjectClass() : nullptr;
+        m_identity = map ? map->GetIdentity() : nullptr;
+    }
+    ModuleObjectView(const ModuleObjectView&) = delete;
+    ModuleObjectView& operator=(const ModuleObjectView&) = delete;
+    ModuleObjectView(ModuleObjectView&&) = delete;
+    ModuleObjectView& operator=(ModuleObjectView&&) = delete;
+    // The object may hold itself (`{% set ns.me = ns %}`) and then nothing else frees it once the module lets go of it: the
+    // module's next call walks from it, or the module when it goes (DroppedExports, docs/tasks/0480). Neither takes the
+    // module's lock here, which a call on another thread may hold
+    ~ModuleObjectView() override
+    {
+        const auto* object = detail::InternalValueAccess::Object(m_object);
+        if (!object || !object->IsTraversable())
+        {
+            return;
+        }
+        // The module lives while this view does: the registry is open
+        if (!m_state->dropped->Hand(m_object))
+        {
+            CollectDroppedExports(std::vector<InternalValue>{ std::move(m_object) });
+        }
+    }
+
+    [[nodiscard]] size_t GetSize() const override
+    {
+        return m_state->Run(m_name, nullptr, [this](auto&) {
+            const auto map = AsMap(m_object);
+            return map ? map->GetSize() : size_t{ 0 };
+        });
+    }
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
+    {
+        return m_state->Run(m_name, nullptr, [this, name](auto&) { return Read(std::string(name)); });
+    }
+    [[nodiscard]] bool Contains(std::string_view name) const override { return HasValue(std::string(name)); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
+    {
+        return m_state->Run(m_name, nullptr, [this, &name](auto&) {
+            const auto map = AsMap(m_object);
+            return map && map->HasValue(name);
+        });
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        return m_state->Run(m_name, nullptr, [this](auto&) { return Keys(); });
+    }
+    [[nodiscard]] std::vector<std::pair<Value, Value>> GetItems() const override
+    {
+        return m_state->Run(m_name, nullptr, [this](auto&) {
+            std::vector<std::pair<Value, Value>> items;
+            for (const auto& key : Keys())
+            {
+                if (auto item = Read(key))
+                {
+                    items.emplace_back(Value(key), std::move(*item));
+                }
+            }
+            return items;
+        });
+    }
+    [[nodiscard]] const void* GetIdentity() const override { return m_identity; }
+    [[nodiscard]] const char* GetObjectClass() const override { return m_class; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const ModuleObjectView*>(&other);
+        return view != nullptr && view->m_state == m_state && view->m_identity == m_identity;
+    }
+
+    [[nodiscard]] const void* StateId() const noexcept override { return m_state.get(); }
+    [[nodiscard]] const InternalValue& Object() const noexcept override { return m_object; }
+    [[nodiscard]] Value Snapshot() const override
+    {
+        return m_state->Run(m_name, nullptr, [this](auto&) { return ExportCopier(&State::Wrap, m_state.get(), m_name, false).Copy(m_object); });
+    }
+
+private:
+    // In a run: the names of the object's attributes
+    [[nodiscard]] std::vector<std::string> Keys() const
+    {
+        const auto map = AsMap(m_object);
+        const auto* accessor = map ? map->GetAccessor() : nullptr;
+        return accessor ? accessor->GetKeys() : std::vector<std::string>();
+    }
+
+    // In a run: the attribute `key` as the host gets it, empty when the object has none. Read as the template's `obj.key`
+    // reads it: a cycler's `pos` and `current` are computed. A method is a call in the module
+    [[nodiscard]] std::optional<Value> Read(const std::string& key) const
+    {
+        const auto map = AsMap(m_object);
+        if (!map || !map->HasValue(key))
+        {
+            return std::nullopt;
+        }
+        const auto item = Subscript(m_object, InternalValue(key), &m_state->module->Context());
+        return m_state->MakeCopier(m_name + "." + key).Copy(item);
+    }
+
+    // The module first, so that the object, whose callables refer to its context, goes before it
+    std::shared_ptr<State> m_state;
+    InternalValue m_object;
+    std::string m_name;
+    const char* m_class = nullptr;
+    const void* m_identity = nullptr;
+};
+
+template<typename CharT>
+Value MakeModuleObject(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& object, const std::string& name)
+{
+    return Value(GenericMap(std::make_shared<ModuleObjectView<CharT>>(state, object, name)));
 }
 
 namespace
@@ -1094,7 +1318,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
                 continue;
             }
             // Copied within the render's limits, which bound a lazy list read out
-            result.exports[name] = ExportCopier(&TemplateModuleState<CharT>::Wrap, state.get(), name, state->exportObjects).Copy(*value);
+            result.exports[name] = state->MakeCopier(name).Copy(*value);
         }
         cycles.Complete();
     }

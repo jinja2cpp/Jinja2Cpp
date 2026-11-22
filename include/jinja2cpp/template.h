@@ -387,8 +387,15 @@ enum class ModuleExports
     //! The values keep what the template made of them: an undefined value is a \ref MakeUndefined value (\ref UndefinedOf
     //! describes it), a tuple and a dictsort pair an owned \ref GenericList for which \ref GenericList::IsTuple holds, and a
     //! dict with keys that are not strings an owned \ref GenericMap whose \ref IMapItemAccessor::GetItems gives the real
-    //! keys (lookups by name use the str() spelling). All of these own their strings and items, as the copies do; the
-    //! rest is as in Copies
+    //! keys (lookups by name use the str() spelling). All of these own their strings and items, as the copies do. A
+    //! namespace, a cycler and a joiner are the module's own objects, not copies: a \ref GenericMap whose
+    //! \ref IMapItemAccessor::GetObjectClass is "Namespace", "Cycler" or "Joiner", of which every read (\ref
+    //! IMapItemAccessor::Find, GetKeys, GetItems, ...) runs in the module, under its lock and limits as a macro call does,
+    //! and gives a copy of the attribute. What a macro set is read, and a cycler's `next` and `reset` and a joiner's
+    //! `__call__` are macro-like callables of the module that change the object the macros read. A view keeps the module
+    //! alive; it is the object again when passed back as an argument to a macro of the same module (inside a list or dict
+    //! argument a copy of it, and to another module's macro a map to read). A read throws \ref BadResultAccess as a macro
+    //! call does. The rest is as in Copies
     Objects
 };
 

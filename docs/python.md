@@ -492,8 +492,14 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `caller` as Jinja2's `Macro` has them (0434).
 - `make_module` and `module` give the exports as Jinja2 gives them: a Python object, and a list or dict read off one,
   stay themselves (`module.o is o`), an `Undefined` is the environment's `Undefined` class, a tuple and a `dictsort`
-  entry are tuples, and a dict keeps its own keys (0411). Still different: a `namespace` and a `cycler` are dicts (a
-  `cycler` has no `next()`) and a `range` is a list. The params of a module are
+  entry are tuples, and a dict keeps its own keys (0411). A `namespace`, a `cycler` and a `joiner` are the module's own
+  objects: `module.ns.count` is what a macro set last, `module.cyc.next()` advances the cycler the macros read, `next(module.cyc)`
+  and `module.j()` work, and `repr(module.ns)` is `<Namespace {'count': 1}>`. They outlive the template, as a macro does. Still
+  different: a `range` is a list; the object is a `ModuleObject`, not a `jinja2.utils.Namespace` (`isinstance` is false, `callable()`
+  is true of every one); the host cannot set an attribute of `module.ns` yet; each read of a nested namespace
+  (`module.ns.inner`) is a new object, though one the module shares; a namespace the module holds itself (`ns.me = ns`)
+  reprs to a `RecursionError` where Jinja2 prints `{...}`; and one passed back to a macro as an argument is the module's object,
+  but inside a list or dict argument it is a copy. The params of a module are
   copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
   globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`).
 - A dict view (`keys()`, `values()`, `items()`) or a set (`d.keys() - []`) of the engine reaches a Python callable as a real
