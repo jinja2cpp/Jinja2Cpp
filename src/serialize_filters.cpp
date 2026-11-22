@@ -449,7 +449,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         // A dict, list or tuple met again inside itself measures as the recursion text it prints (docs/tasks/0562)
         const char* typeName = nullptr;
         const void* identity = fresh ? nullptr : ContainerIdentity(val, typeName);
-        if (OnStack(identity))
+        // A mappingproxy is measured by its repr even then, as _safe_repr takes it
+        if (OnStack(identity) && std::strcmp(typeName, "mappingproxy") != 0)
         {
             return static_cast<int64_t>(RecursionText(typeName, identity).size());
         }
