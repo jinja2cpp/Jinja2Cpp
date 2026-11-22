@@ -17,6 +17,11 @@ view of the module's object, but some reads still differ from Jinja2:
   `m.cyc.next` prints as a module macro.
 - A cycler or joiner inside a list or dict argument of a macro (`m.f([m.cyc])`) reaches the macro as a lent map whose
   `next` is undefined; Jinja2 passes the working object.
+- A C++ host's map of a dict with keys that spell alike (`{1: 'a', '1': 'b'}`): `GetItems()` has both entries but
+  `GetSize()` and `GetKeys()` follow the `str()`-spelled lookup snapshot (1), so `{{ d|length }}` of such an export
+  handed back to a render gives 1 where Jinja2 gives 2. Both `OwnedKeyedMap` (0411) and the render's `DictExportView`
+  (src/internal_value.cpp) keep size equal to the keys, as `TemplateDictTest.PublicMapSpellsKeys` pins; fixing it means
+  deciding that contract (Codex on #993). Python is not affected: it builds a dict from `GetItems()`.
 
 **Not in scope, by the design principle (Ruslan, 2026-10-26: no Python-style shared mutable objects across renders; host
 data immutable, renders independent; parity yields where it conflicts).** These stay deliberate divergences unless
