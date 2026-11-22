@@ -85,7 +85,11 @@ CONSTANTS
     \* @type: Bool;
     AllowModuleNested,
     \* @type: Bool;
-    GenericArgs
+    GenericArgs,
+    \* @type: Bool;
+    FixCallScoped,
+    \* @type: Bool;
+    BorrowedJson
 
 \* @typeAlias: reg = <<Str, Int>>;
 \* @typeAlias: ad = {idn: Str, inc: Int, held: Bool, generic: Bool, cell: Int, seen: Int, alive: Bool};

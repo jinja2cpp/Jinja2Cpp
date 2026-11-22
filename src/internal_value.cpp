@@ -2163,11 +2163,14 @@ const void* HostIdentity(const IJsonNode* node, const void* accessor, const Cell
     return cell && cell->IsFrozen() ? static_cast<const void*>(cell) : identity;
 }
 
-// Whether HostIdentity is the document value's address, which the accessor does not keep alive
-// for a borrowed document (CellLink::Adopt's unheldIdentity)
-bool HasNodeIdentity(const IJsonNode* node) noexcept
+// Whether HostIdentity is the address of a document value that the view does not keep alive: a
+// borrowed document's, which the host may change or free between two calls of a template module
+// (CellLink::Adopt's unheldIdentity). A document the view owns or shares stays at its address while
+// the cell's source lives, so its cell lives across the calls (IJsonNode::KeepsDocument,
+// docs/tasks/0402)
+bool HasUnheldIdentity(const IJsonNode* node) noexcept
 {
-    return node != nullptr && node->NodeIdentity() != nullptr;
+    return node && node->NodeIdentity() && !node->KeepsDocument();
 }
 } // namespace
 
@@ -2402,7 +2405,7 @@ public:
     {
         // A global's data is the host's, whatever holds it
         return m_link.Adopt(CellSource(m_values, self), GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
-                            HasNodeIdentity(m_node));
+                            HasUnheldIdentity(m_node));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     // An enumeration of the list's cell that finds the cell's storage again at each step: a
@@ -4678,7 +4681,7 @@ public:
     {
         // As GenericListAdapter's
         return m_link.Adopt(CellSource(m_values, self), GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
-                            HasNodeIdentity(m_node));
+                            HasUnheldIdentity(m_node));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_node ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }

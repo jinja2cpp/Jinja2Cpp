@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0212]
-touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/cycle_collector.h, tla/CellProtocol.tla, test/binding/conformance.h]
+touches: [include/jinja2cpp/json_adapter.h, src/internal_value.cpp, src/borrowed_cells.h, src/borrowed_cells.cpp, src/cycle_collector.h, tla/CellProtocol.tla, tla/CellTrace.tla, tla/CellApalache.tla, tla/CellInductive.tla, tla/check.py, tla/trace_check.py, tla/README.md, test/binding/conformance.h]
 ---
 # JSON values across the calls of a template module
 
@@ -39,3 +39,20 @@ test that pins the borrowed case's per-call behaviour (with a comment naming thi
 
 **Done when** the model covers the call-scoped freeze, owned documents keep their cells across calls,
 and the borrowed case is pinned as deliberate by a test.
+
+**Result.**
+- `IJsonNode::KeepsDocument()` (additive, `false` unless overridden): the library's views return
+  whether they hold an owner (`Reflect` of an rvalue, of a copied lvalue or of a `shared_ptr`,
+  `ReflectJson` with an owner). A cell of such a view is not call-scoped (`HasUnheldIdentity` in
+  internal_value.cpp): its source keeps the document, and so the address, alive, so it lives
+  across calls like any owned data and a view lent again keeps the module's writes, as Python's.
+  The header now also says that the host does not change a shared document while a Value reads it.
+- Tests: `JsonConformance.ModuleCallsOfAnOwnedDocument` (owned, copied and shared documents;
+  writes kept across calls, a nested item, `sameas` with the module's value, fresh documents per
+  call); it fails on master. `ModuleCallsOfABorrowedDocument` names option (b) at the borrowed case.
+- Model: key `J`, `HostChangesJson` and the freeze in `EndModCall` (`FixCallScoped`), invariant
+  `CallScopedBounded`; runs `module-json` (pass), `module-json-exhaustive`, and the mutant
+  `no-call-scoped-freeze` (`NoForeignCell` in 9 states: the 0212 F1/F2 shape). Exports of a frozen
+  view read that cell (`OfFrozen`), as `HostIdentity` makes the cell their identity.
+- Cell trace: `cfreeze`/`cfrozen` events and `CallFreeze`/`CallFrozen` in CellTrace.tla; the
+  default trace filter adds the JSON module-call tests; trace mutant `call-scoped-stays`.

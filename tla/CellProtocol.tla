@@ -18,6 +18,11 @@
 (*  - Owned data (a module call's argument, a user callable's result) is   *)
 (*    keyed by its address; an address is free again once no adapter of   *)
 (*    the data lives, and its next data has a new incarnation (inc).       *)
+(*  - A borrowed JSON value (J, docs/tasks/0212 and 0402) is keyed by its  *)
+(*    address too, but the host keeps it: between two module calls it may  *)
+(*    change the document there (a new incarnation) while values of the    *)
+(*    old one live. A document the view owns or shares                     *)
+(*    (IJsonNode::KeepsDocument) is owned data: its adapters keep it alive.*)
 (*  - Each FixXxx flag is one fix of #673. FALSE puts back the code as it  *)
 (*    was before that fix.                                                 *)
 (***************************************************************************)
@@ -70,15 +75,19 @@ CONSTANTS
     FixAtomicLink,        \* CellLink::Find/Link: a failed Link leaves the adapter as it was
     FixAtomicPin,         \* PinExports: a failed pin records and marks nothing (without: the cells
                           \* recorded before the failure stay pinned and marked)
+    FixCallScoped,        \* 0212 P3, 0402: at the end of a module's outermost call the cells of borrowed
+                          \* JSON values freeze and leave the registry (BorrowedCells::FreezeCallScoped)
     HostHandoff,          \* the host may hand what it kept to another thread while the call runs
     MaxCallId, MaxEpoch,  \* the call id and the epoch wrap past these (0341, 0342: mutant runs only)
     \* Shapes: inside a module call, keep([x]) (0332) and writes to a nested item (0332). Outside
     \* the contract before FixCallPin; a scope choice after it
     AllowModuleKeepList,
     AllowModuleNested,
-    GenericArgs           \* a module call may take a generic container (0336)
+    GenericArgs,          \* a module call may take a generic container (0336)
+    BorrowedJson          \* a module call may take a borrowed JSON value, J (0402)
 
-Hosts == {"P", "C", "G", "GI"}
+\* J: a borrowed JSON document's value, keyed by its address, which the host may change between calls
+Hosts == {"P", "C", "G", "GI", "J"}
 Keys == Hosts \cup OwnedAddrs
 EMPTY == -1   \* the receiver of a sort while its key calls run
 UNDEF == -2   \* a moved-from item
@@ -109,7 +118,7 @@ VARIABLES
     lag,       \* owned addresses whose data the host let go of since the last DropUnheld: their
                \* cells may stay until the next call's end (RegistryBounded)
     lock,      \* the module's recursive mutex: the thread holding it, or "none"
-    inc,       \* per owned address: the incarnation of the data there
+    inc,       \* per owned address and J: the incarnation of the data there
     fails,     \* allocation failures injected so far
     dirty, dirtyBy, \* a reference was dropped: GC runs next, as the writer dirtyBy (W)
     pendDrop,  \* a module call ended: DropUnheld runs next
@@ -152,7 +161,7 @@ Init ==
     /\ gsnap = [t \in Threads |-> 0] /\ gatt = [t \in Threads |-> FALSE]
     /\ ns = 0 /\ lock = "none"
     /\ hkeep = [o \in OwnedAddrs |-> FALSE] /\ lag = {}
-    /\ inc = [o \in OwnedAddrs |-> 0]
+    /\ inc = [o \in OwnedAddrs \cup {"J"} |-> 0]
     /\ fails = 0
     /\ dirty = FALSE /\ dirtyBy = <<"none", FALSE>> /\ pendDrop = FALSE
     /\ wr = [o \in Objs |-> {}]
@@ -326,8 +335,11 @@ InRender(t) == \E i \in Frames(t) : fr[t][i].kind = "render"
 
 \* A global's adapter of the shared snapshot reads a cell of the render the running one is
 \* nested in (FixShareNested): not another render's, which nests in no other
+\* An adapter of J shows the document the host has there now: a live cell of J must be a copy of that
+\* one (0402), while a frozen one is the generation of an earlier call that a value kept
+StaleInc(a, c) == IF ad[a].idn = "J" THEN ~cl[c].frozen /\ cl[c].inc # inc["J"] ELSE cl[c].inc # ad[a].inc
 Foreign(t, a, c) ==
-    c # 0 /\ (cl[c].idn # ad[a].idn \/ cl[c].inc # ad[a].inc
+    c # 0 /\ (cl[c].idn # ad[a].idn \/ StaleInc(a, c)
               \/ (~cl[c].frozen /\ cl[c].reg # CurReg(t)
                   /\ ~(FixShareNested /\ ad[a].held /\ EnclosingReg(t, cl[c].reg))))
 
@@ -416,7 +428,9 @@ Adopt(t, a, op) ==
         hasChild == ad[a].idn = "P" /\ op # "drop"
         ch == nAd + 1
     IN /\ nCell < MaxCell /\ nGen < MaxGen /\ (hasChild => nAd < MaxAd)
-       /\ cl' = [cl EXCEPT ![c] = [idn |-> ad[a].idn, inc |-> ad[a].inc, reg |-> r, stor |-> g,
+       /\ cl' = [cl EXCEPT ![c] = [idn |-> ad[a].idn, reg |-> r, stor |-> g,
+                                   \* A copy of J copies the document there now
+                                   inc |-> IF ad[a].idn = "J" THEN inc["J"] ELSE ad[a].inc,
                                    retired |-> 0, source |-> a,
                                    \* 0336: a generic container's owner is hidden in a std::function
                                    owned |-> ad[a].idn \in OwnedAddrs /\ (~ad[a].generic \/ FixGenericOwner),
@@ -770,7 +784,10 @@ FreeAddrs == {o \in OwnedAddrs : ~hkeep[o] /\ ~\E a \in AdIds : ad[a].alive /\ a
 \* The pin at a module call's end (FixCallPin): each export of the call records the storage of
 \* every module cell it reaches, found by identity in the registry, never through a link
 RegStor(k) == IF rg[ModReg].tbl[k] # 0 THEN cl[rg[ModReg].tbl[k]].stor ELSE 0
-PinPg(e) == IF ex[e].kind = "live" THEN cl[ex[e].cell].stor ELSE RegStor(ex[e].idn)
+\* A value of a frozen cell (a J view kept from an earlier call, 0402) has the cell as its identity
+\* (HostIdentity): it reads that cell's storage, which nothing writes, and no registry lists it
+OfFrozen(e) == ex[e].cell # 0 /\ cl[ex[e].cell].frozen
+PinPg(e) == IF ex[e].kind = "live" \/ OfFrozen(e) THEN cl[ex[e].cell].stor ELSE RegStor(ex[e].idn)
 PinCg(e) == LET g == PinPg(e) IN
             CASE ~FixPinNested -> -1
               [] g # 0 -> IF st[g].child # 0 THEN RegStor(ad[st[g].child].idn) ELSE 0
@@ -798,18 +815,22 @@ StartModCall(t) ==
     /\ lock \in {"none", t}
     /\ nAd + 2 <= MaxAd
     \* The argument: new data at a free address, a generic container (0336) the host may keep a
-    \* copy of, or (again) the generic container the host kept, lent once more
-    /\ \E o \in OwnedAddrs, gk \in (IF GenericArgs THEN BOOLEAN ELSE {FALSE}), hk \in BOOLEAN :
-        LET again == hkeep[o]
+    \* copy of, or (again) the generic container the host kept, lent once more; or a view of the
+    \* borrowed JSON value J, a new adapter of the document the host has there now (0402)
+    /\ \E o \in OwnedAddrs \cup (IF BorrowedJson THEN {"J"} ELSE {}),
+         gk \in (IF GenericArgs THEN BOOLEAN ELSE {FALSE}), hk \in BOOLEAN :
+        LET json == o = "J"
+            again == ~json /\ hkeep[o]
             a == nAd + 1
             w == nAd + 2
             k == NextCall(rg[ModReg].last)
-            n == IF again THEN inc[o] ELSE inc[o] + 1
-        IN /\ IF again THEN gk /\ ~hk ELSE o \in FreeAddrs /\ (hk => gk)
+            n == IF json \/ again THEN inc[o] ELSE inc[o] + 1
+        IN /\ IF json THEN ~gk /\ ~hk
+              ELSE IF again THEN gk /\ ~hk ELSE o \in FreeAddrs /\ (hk => gk)
            /\ ad' = [ad EXCEPT ![a] = NewAd("P", 0, FALSE),
                                ![w] = [NewAd(o, n, FALSE) EXCEPT !.generic = gk]]
            /\ inc' = [inc EXCEPT ![o] = n]
-           /\ hkeep' = [hkeep EXCEPT ![o] = again \/ hk]
+           /\ hkeep' = IF json THEN hkeep ELSE [hkeep EXCEPT ![o] = again \/ hk]
            /\ nAd' = nAd + 2
            /\ rg' = [rg EXCEPT ![ModReg].last = k, ![ModReg].call = k]
            /\ fr' = [fr EXCEPT ![t] = Append(@, [kind |-> "mod", reg |-> ModReg,
@@ -836,19 +857,33 @@ EndModCall(t) ==
            /\ IF pf THEN (IF FixAtomicPin THEN P = {} ELSE P # TP) ELSE P = TP
            /\ LET late == \E e \in ExIds :
                              /\ ex[e].alive /\ ex[e].thr = t /\ ex[e].depth = d /\ ~ex[e].done
-                             /\ ex[e].kind = "gen"
+                             /\ ex[e].kind = "gen" /\ ~OfFrozen(e)
                              /\ LET c == rg[ModReg].tbl[ex[e].idn]
                                 IN c # 0 /\ VisG(cl[c].stor) # VisG(ex[e].gen)
                    stors == UNION {{PinPg(e), PinCg(e)} : e \in P} \ {0, -1}
                    \* The pinned cells are marked shared: their next write copies (Unshare)
                    marked == IF FixPinMarks
                              THEN {c \in RegCells(ModReg) : cl[c].stor \in stors} ELSE {}
+                   \* 0402: then, at the end of the outermost call, the cells of J freeze and leave
+                   \* the table, as a render's do at its end (FinishSources, FinishFreeze): the host
+                   \* may change the document before the next call. A link to one owns it (frozen)
+                   frozen == IF FixCallScoped /\ ~\E i \in Frames(t) : i < d /\ fr[t][i].kind = "mod"
+                             THEN {c \in RegCells(ModReg) : cl[c].idn = "J"} ELSE {}
                IN /\ ex' = PinExOf(t, d, P)
                   /\ fails' = IF pf THEN fails + 1 ELSE fails
                   /\ flag' = [flag EXCEPT !.late = @ \/ late, !.torn = @ \/ (pf /\ P # {})]
-                  /\ cl' = [c \in CellIds |-> IF c \in marked THEN [cl[c] EXCEPT !.exp = SHARED] ELSE cl[c]]
-                  /\ wr' = Mark(wr, {<<"c", c>> : c \in marked}, t)
-    /\ rg' = [rg EXCEPT ![ModReg].call = IF FixCallRestore THEN Top(t).outer ELSE @]
+                  /\ cl' = [c \in CellIds |->
+                              CASE c \in frozen ->
+                                     [cl[c] EXCEPT !.exp = IF c \in marked THEN SHARED ELSE @,
+                                                   !.frozen = TRUE, !.links = {}, !.inTable = FALSE,
+                                                   !.source = 0]
+                                [] c \in marked -> [cl[c] EXCEPT !.exp = SHARED]
+                                [] OTHER -> cl[c]]
+                  /\ wr' = Mark(wr, {<<"c", c>> : c \in marked \cup frozen}, t)
+                  /\ live' = live - Cardinality(frozen)
+                  /\ epoch' = IF frozen # {} THEN NextEp(epoch) ELSE epoch
+                  /\ rg' = [rg EXCEPT ![ModReg].call = IF FixCallRestore THEN Top(t).outer ELSE @,
+                                      ![ModReg].tbl = IF frozen # {} THEN [@ EXCEPT !["J"] = 0] ELSE @]
     /\ fr' = Pop(t)
     /\ lock' = IF \E i \in Frames(t) : i < Depth(t) /\ fr[t][i].kind = "mod" THEN t ELSE "none"
     \* W(t) of the call, not of its caller: TemplateModuleState::Call holds its lock while the
@@ -856,12 +891,12 @@ EndModCall(t) ==
     \* (Codex review of #688). No other thread steps before that GC: it waits for Idle
     /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ pendDrop' = (DropRule # "none")
-    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, hkeep, lag, inc>>
+    /\ UNCHANGED <<ad, nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, hkeep, lag, inc>>
 
 \* A module stores an argument in its namespace: it lives across calls
 StoreNs(t, a) ==
     /\ "ns" \in Actions
-    /\ CanUse(t, a) /\ Top(t).kind = "mod" /\ ad[a].idn \in OwnedAddrs /\ ns = 0
+    /\ CanUse(t, a) /\ Top(t).kind = "mod" /\ ad[a].idn \in OwnedAddrs \cup {"J"} /\ ns = 0
     /\ ns' = a
     /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, hkeep, lag,
                    lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
@@ -904,6 +939,16 @@ DropUnheld ==
     /\ UNCHANGED <<epoch, ad, nAd, nCell, st, nGen, fr, ex, nEx, gsnap, gatt, ns, hkeep, lock, inc,
                    dirtyBy, wr>>
 
+\* The host changes, or frees and makes again, the borrowed JSON document at J between two module calls
+\* (0212, 0402): the values that still read it see the new one, as a view reads the document in place
+HostChangesJson ==
+    /\ BorrowedJson
+    /\ Idle /\ inc["J"] < MaxVal
+    /\ \A t \in Threads : ~InModule(t)
+    /\ inc' = [inc EXCEPT !["J"] = @ + 1]
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag,
+                   lock, fails, dirty, dirtyBy, pendDrop, wr, flag>>
+
 \* The host lets go of its copy of a generic container (0336)
 HostLetsGo(o) ==
     /\ "hostgen" \in Actions
@@ -937,6 +982,7 @@ Next ==
             \/ Evict(t, a) \/ Forget(t, a)
         \/ "release" \in Actions /\ \E e \in ExIds : Release(t, e)
     \/ \E o \in OwnedAddrs : HostLetsGo(o)
+    \/ HostChangesJson
 
 Spec == Init /\ [][Next]_vars
 
@@ -976,6 +1022,10 @@ RegistryBounded ==
     (Quiet /\ \A t \in Threads : ~InModule(t))
         => Cardinality({o \in OwnedAddrs : rg[ModReg].tbl[o] # 0 /\ ~hkeep[o] /\ ~HeldOut(o)})
                <= (IF ns # 0 THEN 1 ELSE 0)
+
+\* 7. Between module calls the registry keeps no cell of a borrowed JSON value (0212 P3, 0402)
+CallScopedBounded ==
+    (Quiet /\ \A t \in Threads : ~InModule(t)) => rg[ModReg].tbl["J"] = 0
 
 \* Extra: aliases agree (a read never misses its render's cell), no moved-from item is
 \* stored, the live counter matches the tables

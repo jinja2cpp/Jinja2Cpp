@@ -171,6 +171,18 @@ struct JINJA2CPP_EXPORT IJsonNode
      */
     [[nodiscard]] virtual const void* NodeIdentity() const noexcept = 0;
 
+    /*!
+     * \brief Whether this view keeps its document alive and unchanged (docs/tasks/0402)
+     *
+     * True for a document the view owns or shares (\ref Reflect of an rvalue, of a copied non-const lvalue or of a
+     * `std::shared_ptr`, \ref ReflectJson with an owner): \ref NodeIdentity then names the same value for as long as
+     * the view lives, so a template module's value of it keeps its writes across the module's calls, as Python's
+     * dict would. False for a borrowed document (a const reference, a pointer, a handle without an owner), which the
+     * host may change or free between two calls: each call then starts from the host's data. A view that does not
+     * override it is taken as borrowed.
+     */
+    [[nodiscard]] virtual bool KeepsDocument() const noexcept { return false; }
+
 protected:
     IJsonNode() = default;
     IJsonNode(const IJsonNode&) = default;
@@ -576,6 +588,7 @@ public:
     // A null member is none and a missing key undefined, as in Python
     [[nodiscard]] bool EmptyIsNone() const override { return true; }
     [[nodiscard]] const void* NodeIdentity() const noexcept override { return NodeIdentityOf<J>(m_ref.node); }
+    [[nodiscard]] bool KeepsDocument() const noexcept override { return static_cast<bool>(m_ref.owner); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ObjectAccessor*>(&other);
@@ -662,6 +675,7 @@ public:
         return MakeValue<J>(Ref<J>{ Traits<J>::At(m_ref.node, static_cast<std::size_t>(idx)), m_ref.owner });
     }
     [[nodiscard]] const void* NodeIdentity() const noexcept override { return NodeIdentityOf<J>(m_ref.node); }
+    [[nodiscard]] bool KeepsDocument() const noexcept override { return static_cast<bool>(m_ref.owner); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ArrayAccessor*>(&other);
@@ -1072,6 +1086,10 @@ namespace detail
  * (`JsonTraits::IsHandle`) is always borrowed: use \ref ReflectJson to give it an owner. A const document cannot be
  * moved in and `std::shared_ptr<const Json>` is not accepted: reflect it by const reference, or share a non-const one. References and const types
  * are excluded: `Reflector<T&>` and `Reflector<const T&>` route here through `Reflector<T>`.
+ *
+ * In a template module, a view the host lends to several calls keeps the module's writes across them when the view
+ * owns or shares its document (IJsonNode::KeepsDocument), and starts from the host's data in each call when it
+ * borrows it (docs/tasks/0402). The host does not change a shared document while a Value reads it.
  */
 template<typename Json>
 struct Reflector<Json, json::EnableReflector<Json>>
