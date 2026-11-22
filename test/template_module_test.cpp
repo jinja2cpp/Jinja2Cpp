@@ -1854,6 +1854,46 @@ TEST_F(TemplateModuleTest, ViewOfAnotherModuleReadFromAMacro)
 }
 
 // A poll that reads a view of its own module, within the call of a macro that the poll interrupts
+// A thread that waits for another thread's run in the module calls ModuleOptions::waitForTurn with the wait, where a
+// host lets go of a lock the other thread's callables need (Python's GIL); a free module does not call it (docs/tasks/0411)
+TEST_F(TemplateModuleTest, WaitForTurnIsCalledOnlyWhenTheModuleIsBusy)
+{
+    auto tpl = Load("{% set ns = namespace(count=0) %}{% macro slow(f) %}{{ f() }}{% endmacro %}");
+    std::atomic<bool> inside{ false };
+    std::atomic<bool> release{ false };
+    std::atomic<int> waits{ 0 };
+    auto options = ObjectsOptions();
+    options.waitForTurn = [&](const std::function<void()>& wait) {
+        ++waits;
+        release = true;
+        wait();
+    };
+    auto module = tpl.MakeModule({}, {}, options);
+    ASSERT_TRUE(!!module);
+    const auto& exports = module->exports;
+    EXPECT_EQ(jinja2::Value(int64_t{ 0 }), Attr(exports.at("ns"), "count"));
+    EXPECT_EQ(0, waits.load());
+    const jinja2::Value pause = jinja2::UserCallable(
+        [&](const jinja2::UserCallableParams&) -> jinja2::Value {
+            inside = true;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            while (!release && std::chrono::steady_clock::now() < deadline)
+            {
+                std::this_thread::yield();
+            }
+            return std::string();
+        },
+        {});
+    std::thread worker([&exports, &pause]() { Call(exports.at("slow"), { pause }); });
+    while (!inside)
+    {
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(jinja2::Value(int64_t{ 0 }), Attr(exports.at("ns"), "count"));
+    worker.join();
+    EXPECT_EQ(1, waits.load());
+}
+
 TEST_F(TemplateModuleTest, PollReadsAView)
 {
     auto ns = std::make_shared<jinja2::Value>();
@@ -1861,7 +1901,8 @@ TEST_F(TemplateModuleTest, PollReadsAView)
     int64_t last = -1;
     jinja2::RenderOptions options;
     options.poll = [ns, &polls, &last] {
-        if (const auto* count = Attr(*ns, "count").GetIf<int64_t>())
+        const auto current = Attr(*ns, "count");
+        if (const auto* count = current.GetIf<int64_t>())
         {
             ++polls;
             last = *count;

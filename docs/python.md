@@ -499,9 +499,11 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   is true of every one); the host cannot set an attribute of `module.ns` yet; each read of a nested namespace
   (`module.ns.inner`) is a new object, though one the module shares; a namespace the module holds itself (`ns.me = ns`)
   reprs to a `RecursionError` where Jinja2 prints `{...}`; and one passed back to a macro as an argument is the module's object,
-  but inside a list or dict argument it is a copy. The params of a module are
+  but inside a list or dict argument it is a copy (a cycler or joiner there cannot be called). The params of a module are
   copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
   globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`).
+  Calls and reads of one module from several threads take turns, waiting with the GIL released; a Python callable in
+  a macro that joins a thread using the same module, or two modules whose macros call each other from two threads, deadlock (0411).
 - A dict view (`keys()`, `values()`, `items()`) or a set (`d.keys() - []`) of the engine reaches a Python callable as a real
   `dict_keys`, `dict_values`, `dict_items` or `set`, a snapshot of its items at the call (a set of items Python cannot hash
   stays a list); its `.mapping` is then a snapshot dict, whose values are `None` for `dict_keys` and the item positions for

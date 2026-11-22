@@ -407,6 +407,14 @@ struct ModuleOptions
 {
     //! How the exports, and the results of calls of the module's macros, are given to the host
     ModuleExports exports = ModuleExports::Copies;
+    /*!
+     * Called on a thread that has to wait for another thread's call of the module (or a read of one of its live objects)
+     * to end, with the function that waits: a host whose callables need a lock that waiting thread holds (Python's GIL)
+     * lets go of it around `wait()`. Empty, the default, waits as it is. Not called when the module is free or held by
+     * this thread. It must call `wait` at most once; if it returns without calling it the module waits itself, and what
+     * it throws fails the call or the read
+     */
+    std::function<void(const std::function<void()>& wait)> waitForTurn;
 };
 
 /*!

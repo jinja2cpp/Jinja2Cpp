@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
-#include <mutex>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -193,38 +193,27 @@ bool IsEvalContext(nb::handle object)
     return false;
 }
 
-// One lock for every macro and object a module makes (and those made from their results), taken by Python before the
-// engine's own mutex of the module: a thread that waits for the engine's mutex while it holds the GIL would block the
-// thread that holds the mutex and calls a Python callable that wants the GIL. Here the GIL is let go while waiting
-class ModuleLock
+// ModuleOptions::waitForTurn: a thread that waits for another thread's run in the module lets go of the GIL meanwhile,
+// which that thread's Python callables may need. Called on an entry into the engine, which holds the GIL (RenderScope)
+void WaitWithoutGil(const std::function<void()>& wait)
 {
-public:
-    class Guard
+    if (!HoldsGil())
     {
-    public:
-        explicit Guard(ModuleLock& lock)
-            : m_mutex(lock.m_mutex)
-        {
-            if (!m_mutex.try_lock())
-            {
-                PyThreadState* saved = PyEval_SaveThread();
-                m_mutex.lock();
-                PyEval_RestoreThread(saved);
-            }
-        }
-        ~Guard() { m_mutex.unlock(); }
-        Guard(const Guard&) = delete;
-        Guard& operator=(const Guard&) = delete;
-        Guard(Guard&&) = delete;
-        Guard& operator=(Guard&&) = delete;
-
-    private:
-        std::recursive_mutex& m_mutex;
-    };
-
-private:
-    std::recursive_mutex m_mutex;
-};
+        wait();
+        return;
+    }
+    PyThreadState* saved = PyEval_SaveThread();
+    try
+    {
+        wait();
+    }
+    catch (...)
+    {
+        PyEval_RestoreThread(saved);
+        throw;
+    }
+    PyEval_RestoreThread(saved);
+}
 
 // What a macro or an object of a module needs to run in it, as ExportToPython passes it on
 struct ExportContext
@@ -233,7 +222,6 @@ struct ExportContext
     nb::object environment;
     nb::object templateGlobals;
     nb::object templateName;
-    std::shared_ptr<ModuleLock> lock;
 };
 
 nb::object ExportToPython(const jinja2::Value& value, const ExportContext& context, const std::string& name);
@@ -252,7 +240,6 @@ public:
         , m_environment(context.environment)
         , m_templateGlobals(context.templateGlobals)
         , m_templateName(context.templateName)
-        , m_lock(context.lock)
         , m_name(std::move(name))
     {
         // Jinja2's Macro attributes, read once; the macro's own name, not the name it is exported under
@@ -294,7 +281,6 @@ public:
         }
         auto& env = nb::cast<PyEnvironment&>(m_environment);
         env.CheckAlive();
-        const ModuleLock::Guard wait(*m_lock);
         const auto entry = env.Enter();
         // Jinja2's Macro.__call__: an EvalContext as the first argument is not an argument of the macro, and its
         // autoescape decides whether the result is Markup
@@ -363,7 +349,7 @@ public:
         }
     }
 
-    [[nodiscard]] ExportContext Context() const { return ExportContext{ m_bound, m_environment, m_templateGlobals, m_templateName, m_lock }; }
+    [[nodiscard]] ExportContext Context() const { return ExportContext{ m_bound, m_environment, m_templateGlobals, m_templateName }; }
     [[nodiscard]] const std::string& Name() const { return m_name; }
     [[nodiscard]] nb::tuple Arguments() const
     {
@@ -404,7 +390,6 @@ private:
     nb::object m_environment;
     nb::object m_templateGlobals;
     nb::object m_templateName;
-    std::shared_ptr<ModuleLock> m_lock;
     std::string m_name;
     std::vector<std::string> m_arguments;
     bool m_catchKwargs = false;
@@ -437,7 +422,6 @@ public:
         , m_environment(context.environment)
         , m_templateGlobals(context.templateGlobals)
         , m_templateName(context.templateName)
-        , m_lock(context.lock)
         , m_name(std::move(name))
     {
     }
@@ -447,7 +431,7 @@ public:
     ModuleObject& operator=(ModuleObject&&) = delete;
     ~ModuleObject() = default;
 
-    [[nodiscard]] ExportContext Context() const { return ExportContext{ m_bound, m_environment, m_templateGlobals, m_templateName, m_lock }; }
+    [[nodiscard]] ExportContext Context() const { return ExportContext{ m_bound, m_environment, m_templateGlobals, m_templateName }; }
     // The engine's value, which the host API passes back to the module (ToEngine)
     [[nodiscard]] const jinja2::Value& Value() const { return m_value; }
 
@@ -553,7 +537,6 @@ private:
         }
         auto& env = nb::cast<PyEnvironment&>(m_environment);
         env.CheckAlive();
-        const ModuleLock::Guard wait(*m_lock);
         const auto entry = env.Enter();
         RenderState state;
         state.undefinedClass = env.UndefinedClass();
@@ -583,7 +566,6 @@ private:
     nb::object m_environment;
     nb::object m_templateGlobals;
     nb::object m_templateName;
-    std::shared_ptr<ModuleLock> m_lock;
     std::string m_name;
 };
 
@@ -774,12 +756,13 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         // The exports keep what the template made of them: an object of the host, an undefined value, a tuple
         jinja2::ModuleOptions moduleOptions;
         moduleOptions.exports = jinja2::ModuleExports::Objects;
+        moduleOptions.waitForTurn = &WaitWithoutGil;
         auto made = m_template.MakeModule(values, options, moduleOptions);
         // In the scope, which an undefined value needs for its class
         if (made)
         {
             module = std::move(made).value();
-            const ExportContext context{ m_bound, m_environment, m_globals, m_name, std::make_shared<ModuleLock>() };
+            const ExportContext context{ m_bound, m_environment, m_globals, m_name };
             for (auto& [name, value] : module.exports)
             {
                 exports[MakeStr(name)] = ExportToPython(value, context, name);

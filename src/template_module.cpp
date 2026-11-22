@@ -890,7 +890,19 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     template<typename Body>
     auto Run(const std::string& name, const FilterPolicies* policies, Body&& body) -> std::invoke_result_t<Body, std::basic_string<CharT>&>
     {
-        const std::scoped_lock lock(mutex);
+        std::unique_lock<std::recursive_mutex> lock(mutex, std::try_to_lock);
+        if (!lock.owns_lock())
+        {
+            // Another thread runs in the module: the host may let go of what that thread's callables need meanwhile
+            if (waitForTurn)
+            {
+                waitForTurn([&lock] { lock.lock(); });
+            }
+            if (!lock.owns_lock())
+            {
+                lock.lock();
+            }
+        }
         std::optional<BasicErrorInfo<CharT>> error;
         try
         {
@@ -1038,6 +1050,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     std::shared_ptr<const FilterPolicies> filterPolicies;
     // ModuleOptions::exports is Objects: what the exports and the results of calls keep of the template's values
     bool exportObjects = false;
+    // ModuleOptions::waitForTurn: how a thread waits for another thread's run in the module
+    std::function<void(const std::function<void()>&)> waitForTurn;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
@@ -1298,6 +1312,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     if (module)
     {
         state->exportObjects = module->exports == ModuleExports::Objects;
+        state->waitForTurn = module->waitForTurn;
     }
     BasicTemplateModule<CharT> result;
     try

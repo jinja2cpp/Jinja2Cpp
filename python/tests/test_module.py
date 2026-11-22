@@ -606,6 +606,17 @@ def test_module_waits_without_the_gil():
         assert mod.ns.count == 1
         worker.join(10)
         assert not worker.is_alive()
+        # The engine reading a live object handed back to it, in a render and in another module's macro
+        env = jinja2cpp.Environment()
+        other = env.from_string("{% macro peek(v) %}{{ v.count }}{% endmacro %}{% macro first(v) %}{{ v[0].count }}{% endmacro %}").make_module()
+        for read in (lambda: env.from_string("{{ v.count }}").render(v=mod.ns), lambda: other.peek(mod.ns), lambda: other.first([mod.ns])):
+            started.clear()
+            worker = threading.Thread(target=lambda: mod.slow(pause))
+            worker.start()
+            assert started.wait(10)
+            assert read() == "1"
+            worker.join(10)
+        assert not worker.is_alive()
     finally:
         faulthandler.cancel_dump_traceback_later()
 
