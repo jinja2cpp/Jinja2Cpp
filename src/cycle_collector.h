@@ -293,6 +293,8 @@ public:
     static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     // The collector of the render running on this thread, or null
     [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
+    // Whether the render noted anything: a store, a container letting go of a value, a frozen cell (docs/tasks/0312)
+    [[nodiscard]] bool HasNotes() const noexcept { return m_notes != nullptr; }
     // Counts a tree (a template, what a render of it loaded) against this render's memory budget for as long as
     // something owns it: a render started inside this one that shares its snapshot of the globals can store a value
     // of its own in a global this render reads afterwards (docs/tasks/0324, 0463), a macro or `caller` that runs in

@@ -1,10 +1,11 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/jinja2cpp/pull/977
 priority: low
 area: parity
 depends: [0049]
-touches: [src/template_module.cpp, src/template_impl.h]
-shares: [src/render_context.h, src/cycle_collector.cpp]
+touches: [src/template_module.cpp, src/template_impl.h, src/statements.cpp, src/statements.h, test/template_module_test.cpp, test/allocation_failure_test.cpp]
+shares: [src/render_context.h, src/cycle_collector.h]
 ---
 # A macro a module call stores keeps its module, as in Jinja2
 
@@ -24,3 +25,39 @@ module.
 **Done when** `MacroStoredAcrossCallsExpires` prints `AM` for both stores, the 0301
 steady-state test still holds with a macro stored on every call, and Render stays within
 the 0038 gates.
+
+**Resolution (in progress).** Not option C's walk from the noted receivers, which cannot tell a receiver only the ending
+module holds (its own namespace) from one that lives on, nor a refcount from closure to module, which reopens the cycle
+problem. `RendererCallback::EndCall` of the outermost call now decides which modules it ends:
+
+- The candidates are the modules the call made that are neither shared nor imported by a shared one's top level, and
+  those an earlier walk kept (`storedKept`).
+- When a call since the last walk noted something (a store, a container letting go of a value: the collector has
+  notes, `CycleCollector::HasNotes`), `ImportedModule::MarkReached` walks from what lives on, the template module's
+  own values (`AppendHeldObjects` of `TemplateModuleState::module`) and the modules that stay, through
+  `ValueObject::Traverse`. A candidate whose closure it finds (a macro, a caller, `super`, a block of `self`, whose
+  `ClosureSite::RunsInEndingModule` names the candidate's context) stays, and the walk goes on from what that module
+  holds, so that a module it imported with context stays too. The rest end, newest first, as before.
+- Without notes nothing that lives on can have changed: the new modules end and the kept ones stay. A nested call
+  leaves its modules to the outermost call once something was noted, since its caller's frames may hold them.
+- When the walk cannot allocate, the kept modules stay and the call's modules end, as before 0312.
+
+Failure is the safe direction: a closure the walk does not see (behind a `std::function` capture or a host's map, or
+held only by the host, such as a frame copy that `KeptObjects` holds) leaves its module to end, and a call of it fails
+with `TemplateExpired` as before; nothing only a dying module holds can keep it, so a module never stays for nothing
+(`ModuleCallTest.StoredMacrosStayFlat`, whose rows include a module holding its own macro in a namespace that holds
+itself).
+
+Before the walk, `ImportedModule::MayBeReached` checks whether anything outside the call's modules can hold what
+they made: a closure made after a module's top level ran or below its top-level scope, a `self`, or an `import ... as`
+object or top-level macro held from elsewhere than the modules' own values (or a macro whose body another callable
+shares, `__call__`). When nothing can, and no module is kept so far, they end without a walk. The template module's
+destructor notes the values of the modules that stay with it (`NoteModuleNames`), so that a cycle among a kept or
+shared module's values is freed with it (`ModuleCallTest.KeptModuleGoesWithItsCycles`; the shared case leaked before
+too). A closure reaching a module only through its capture is not seen yet: 0567.
+
+**Cost.** The walk visits what the template module's values reach, on the outermost calls that noted something while
+a module kept so exists or a module the call made may be reached. A module with a large state (the verifier's 20,000
+dicts) that imports with context on every call and stores nothing of it pays a check of the imported module's own
+values (200 calls: 6.3 s before the check in the verifier's ASan probe, 0.4 s with it in an -O1 build without sanitizers, about what 500 calls that import nothing take); one that stores a macro of it on every call, which
+Jinja2 also keeps, pays a walk of the state per call. Render and calls that import nothing with context pay a flag test.

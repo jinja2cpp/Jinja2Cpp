@@ -684,7 +684,8 @@ TEST_F(JsonAllocationFailureTest, NlohmannOwnedDocumentDropsWithoutAllocating)
 class ModuleCallTest : public AllocationFailureTest
 {
 protected:
-    jinja2::TemplateModule MakeModule(const std::string& body)
+    // `top`: the template's top level, before the macro `m`
+    jinja2::TemplateModule MakeModule(const std::string& body, const std::string& top = std::string())
     {
         // One file system for every module the test makes: the environment looks a name up in
         // its handlers in order, so that a second one would never be asked for 'lib'
@@ -695,7 +696,7 @@ protected:
         }
         m_fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}");
         m_fs->AddFile("fails", "{% import 'lib' as l with context %}{{ 1 // 0 }}");
-        EXPECT_TRUE(!!m_tpl.Load("{% macro m() %}" + body + "{% endmacro %}"));
+        EXPECT_TRUE(!!m_tpl.Load(top + "{% macro m() %}" + body + "{% endmacro %}"));
         auto module = m_tpl.MakeModule();
         EXPECT_TRUE(!!module);
         return module ? std::move(*module) : jinja2::TemplateModule{};
@@ -749,6 +750,96 @@ TEST_F(ModuleCallTest, CallsStayFlat)
         // Each call kept about 30 allocations before 0301
         EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
     }
+}
+
+// A macro each call stores keeps the module it runs in until a later call replaces it, as in Jinja2 (docs/tasks/0312): the
+// module then ends, and so does one whose macro is stored nowhere that lives on (a list of the module's own, a local)
+TEST_F(ModuleCallTest, StoredMacrosStayFlat)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
+    m_fs = std::make_shared<MemoryFileSystem>();
+    m_env.AddFilesystemHandler(std::string(), m_fs);
+    m_fs->AddFile("own", "{% macro y() %}Y{% endmacro %}{% set keep = namespace(f=y, l=[y]) %}{% set keep.self = keep %}");
+    m_fs->AddFile("both", "{% import 'lib' as l with context %}{% macro z() %}{{ l.x() }}{% endmacro %}");
+    // Fails in a loop and a `with` after storing its macro, with a list holding itself (Codex review of #977)
+    m_fs->AddFile("half", "{% set _l = [] %}{% set _ = _l.append(_l) %}{% macro g() %}G{% endmacro %}{% set ns.f = g %}"
+                          "{% for i in [1] %}{% set _m = [] %}{% set _ = _m.append(_m) %}{% with w = 2 %}{{ 1 // 0 }}{% endwith %}{% endfor %}");
+    for (const char* body : { "{% import 'half' as h with context %}",
+                              "{% set loc = [] %}{% set _ = loc.append(loc) %}{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}", "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}",
+                              "{% import 'lib' as l with context %}{% set ns.l = [l] %}{% set ns.d = {'f': l.x} %}{{ ns.l[0].x() }}",
+                              "{% import 'both' as b with context %}{% set ns.f = b.z %}{{ ns.f() }}",
+                              "{% import 'own' as o with context %}{% set f = o.y %}{% set ns.n = ns.n + 1 %}{{ f() }}",
+                              "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ 1 // 0 }}" })
+    {
+        auto module = MakeModule(body, "{% set ns = namespace(f=none, n=0) %}");
+        const auto& m = module.exports["m"];
+        const auto callMany = [&m](int count) {
+            for (int i = 0; i != count; ++i)
+            {
+                try
+                {
+                    Call(m);
+                }
+                catch (const jinja2::BadResultAccess<>&) // NOLINT(bugprone-empty-catch): the failing case fails every call
+                {
+                }
+            }
+        };
+        callMany(100);
+        const long before = g_live.load(std::memory_order_relaxed);
+        callMany(2000);
+        EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
+    }
+}
+
+// A module a stored macro kept goes with the template module, and so do the cycles among its values (docs/tasks/0312,
+// the verifier's F1)
+TEST_F(ModuleCallTest, KeptModuleGoesWithItsCycles)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
+    m_fs = std::make_shared<MemoryFileSystem>();
+    m_env.AddFilesystemHandler(std::string(), m_fs);
+    m_fs->AddFile("own", "{% macro y() %}Y{% endmacro %}{% set k = namespace(f=y, l=[y]) %}{% set k.self = k %}{% set lst = [] %}{% set _ = lst.append(lst) %}");
+    m_fs->AddFile("half", "{% set _l = [] %}{% set _ = _l.append(_l) %}{% macro y() %}Y{% endmacro %}{% set ns.f = y %}"
+                          "{% for i in [1] %}{% with w = 2 %}{{ 1 // 0 }}{% endwith %}{% endfor %}");
+    // A cycle among the call's own values, which the module it imports with context sees (Codex review of #977)
+    for (const char* body : { "{% import 'own' as o with context %}{% set ns.f = o.y %}{{ ns.f() }}", "{% import 'own' as o %}{% set ns.f = o.y %}{{ ns.f() }}",
+                              "{% set loc = [] %}{% set _ = loc.append(loc) %}{% import 'own' as o with context %}{% set ns.f = o.y %}{{ ns.f() }}" })
+    {
+        const auto once = [this, body]() {
+            auto module = MakeModule(body, "{% set ns = namespace(f=none) %}");
+            EXPECT_EQ("Y", Call(module.exports["m"])) << body;
+            EXPECT_EQ("Y", Call(module.exports["m"])) << body;
+        };
+        once();
+        const long before = g_live.load(std::memory_order_relaxed);
+        for (int i = 0; i != 50; ++i)
+        {
+            once();
+        }
+        EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
+    }
+    // A module whose top level failed after storing its macro, kept for it (Codex review of #977)
+    const auto failed = [this]() {
+        EXPECT_TRUE(!!m_tpl.Load("{% set ns = namespace(f=none) %}{% macro keep() %}{% import 'half' as h with context %}{% endmacro %}{% macro use() %}{{ ns.f() }}{% endmacro %}"));
+        auto module = m_tpl.MakeModule();
+        ASSERT_TRUE(!!module);
+        EXPECT_THROW(Call(module->exports["keep"]), jinja2::BadResultAccess<>);
+        EXPECT_EQ("Y", Call(module->exports["use"]));
+    };
+    failed();
+    const long before = g_live.load(std::memory_order_relaxed);
+    for (int i = 0; i != 50; ++i)
+    {
+        failed();
+    }
+    EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << "failed import";
 }
 
 // With TemplateLookup::EveryUse and no cache every use parses the template again: a reload whose source did not

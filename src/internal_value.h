@@ -2300,6 +2300,8 @@ public:
 
     void SetKeepAlive(std::shared_ptr<const void> keepAlive) { m_keepAlive = std::move(keepAlive); }
     [[nodiscard]] const void* GetKeepAlive() const { return m_keepAlive.get(); }
+    // Whether another Callable shares the body, as `f.__call__` does (docs/tasks/0312)
+    [[nodiscard]] bool SharesBody() const noexcept { return m_callable && m_callable.use_count() != 1; } // use_count: read on the thread that runs the module's calls, which holds its lock
 
     // Attributes visible through `callable.name` (macro.name, macro.arguments, ...)
     void SetAttributes(std::shared_ptr<const InternalValueMap> attributes)
