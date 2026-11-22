@@ -206,6 +206,23 @@ TEST(PublicSandboxPolicyTest, NumberDataAttributesAskThePolicy)
     EXPECT_EQ("5", RenderOrError(plain, "{{ [n]|sum(attribute='real') }}", nullptr, params));
 }
 
+// A dictsort or items pair's tuple methods (0563) ask the policy as a tuple's do
+TEST(PublicSandboxPolicyTest, PairMethodsAskThePolicy)
+{
+    TemplateEnv plain;
+    TemplateEnv env;
+    env.GetSettings().sandboxPolicy = std::make_shared<const RefusingPolicy>();
+    for (const char* source : { "{{ ({'a': 1}|dictsort|first).count is defined }}", "{{ ({'a': 1}|items|first)|attr('index') is defined }}" })
+    {
+        EXPECT_EQ("True", RenderOrError(plain, source)) << source;
+        EXPECT_EQ("False", RenderOrError(env, source)) << source;
+    }
+    ErrorInfo error;
+    const auto text = RenderOrError(env, "{{ ({'a': 1}|dictsort|first).index('a') }}", &error);
+    EXPECT_EQ(ErrorCode::SecurityError, error.GetCode()) << text;
+    EXPECT_EQ("0|1", RenderOrError(plain, "{{ ({'a': 1}|dictsort|first).index('a') }}|{{ ({'a': 1}|items|first).count(1) }}"));
+}
+
 // A template object reaches the policy with its class: `loop` and a namespace as snapshots, a macro and a global
 // function as empty maps of class "Macro" and "function" (0357 S3)
 TEST(PublicSandboxPolicyTest, TemplateObjectsReachThePolicyWithTheirClass)

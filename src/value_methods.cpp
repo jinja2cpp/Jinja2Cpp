@@ -2788,6 +2788,52 @@ const MethodInfo TupleMethods[] = {
     { "count", ListCount, false },
 };
 
+// A dictsort or items pair (a KeyValuePair) is a two-item tuple: its key, then its value (docs/tasks/0563)
+std::array<const InternalValue*, 2> PairItems(const InternalValue& self)
+{
+    const auto* pair = GetIf<KeyValuePair>(&self);
+    if (!pair)
+    {
+        Raise("not a tuple");
+    }
+    return { &pair->key, &pair->value };
+}
+
+InternalValue PairIndex(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "index", 1, 3);
+    const auto items = PairItems(self);
+    const auto start = SliceIndex(Arg(params, 1), items.size(), 0, "index");
+    const auto end = SliceIndex(Arg(params, 2), items.size(), items.size(), "index");
+    for (auto n = start; n < end; ++n)
+    {
+        if (ItemEquals(*items[n], params.posParams[0]))
+        {
+            return static_cast<int64_t>(n);
+        }
+    }
+    Raise("tuple.index(x): x not in tuple");
+}
+
+InternalValue PairCount(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "count", 1, 1);
+    int64_t result = 0;
+    for (const auto* item : PairItems(self))
+    {
+        if (ItemEquals(*item, params.posParams[0]))
+        {
+            ++result;
+        }
+    }
+    return result;
+}
+
+const MethodInfo PairMethods[] = {
+    { "index", PairIndex, false },
+    { "count", PairCount, false },
+};
+
 // ---------------------------------------------------------------------------------------
 // dict
 
@@ -3733,6 +3779,8 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
         return FindIn(IntMethods, name);
     case ValueKind::Double:
         return FindIn(FloatMethods, name);
+    case ValueKind::KeyValuePair:
+        return FindIn(PairMethods, name);
     default:
         return nullptr;
     }
