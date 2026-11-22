@@ -554,19 +554,20 @@ public:
     // Out of line, as Load is: few templates have checks
     JINJA2CPP_NOINLINE std::optional<BasicErrorInfo<CharT>> FailedFoldError(TemplateParser<CharT>& parser, const std::vector<FoldCheck>& checks, const ArenaView& nodes) const
     {
-        if (const auto failed = FailedFold(checks, nodes); failed < checks.size())
+        if (const auto [failed, result] = FailedFold(checks, nodes); failed < checks.size())
         {
-            return parser.GetFoldCheckError(checks[failed]);
+            return parser.GetFoldCheckError(checks[failed], result);
         }
         parser.ReleaseParseState();
         return std::nullopt;
     }
 
-    std::size_t FailedFold(const std::vector<FoldCheck>& checks, const ArenaView& nodes) const
+    // The index of the first of `checks` that fails, and how, or checks.size()
+    std::pair<std::size_t, FoldCheckResult> FailedFold(const std::vector<FoldCheck>& checks, const ArenaView& nodes) const
     {
         if (checks.empty())
         {
-            return 0;
+            return { 0, FoldCheckResult::Unfolded };
         }
         const InternalValueMap noValues;
         // A fold may compute as much as a render: under the template's limits. Inside a render (a host's Load) these
@@ -578,12 +579,12 @@ public:
         context.SetNodes(nodes);
         for (std::size_t index = 0; index != checks.size(); ++index)
         {
-            if (!FoldCheckPasses(checks[index], context))
+            if (const auto result = FoldCheckPasses(checks[index], context); result != FoldCheckResult::Passes)
             {
-                return index;
+                return { index, result };
             }
         }
-        return checks.size();
+        return { checks.size(), FoldCheckResult::Passes };
     }
 
     // BasicTemplate::Load of a template another object may hold: parses into a new template with

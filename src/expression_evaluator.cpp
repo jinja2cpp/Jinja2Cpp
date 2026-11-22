@@ -293,6 +293,15 @@ std::optional<bool> TryFoldTruth(RenderContext& values, NodeRef<Expression> expr
     {
         return std::nullopt;
     }
+    // A filter's value error (`"abc"|abs`), as TryFoldValue and OutputFoldsAt take it
+    catch (const ErrorInfo&)
+    {
+        return std::nullopt;
+    }
+    catch (const ErrorInfoW&)
+    {
+        return std::nullopt;
+    }
 }
 } // namespace
 

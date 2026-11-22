@@ -367,8 +367,9 @@ TEST(BigIntToyBackend, Limits)
     // The cap of 2^20 bits stops `**` before it computes, and a product past it
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ 2 ** 2097152 }}", toy));
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ 3 ** big }}", toy));
-    // Printing more than 4300 digits is Python's ValueError; computing with them is fine
-    EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ 2 ** 20000 }}", toy));
+    // Printing more than 4300 digits is Python's ValueError; computing with them is fine. A constant one fails
+    // the Load (BigIntTemplate.StrDigitsConstantsFailTheLoad), one made from data the render
+    EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ 2 ** (small * 4000) }}", toy));
     EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 
@@ -540,7 +541,7 @@ TEST(BigIntBoost, Limits)
     const auto* boost = BoostCppIntBackend();
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ 2 ** 2097152 }}", boost));
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ 3 ** big }}", boost));
-    EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ 2 ** 20000 }}", boost));
+    EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ 2 ** (small * 4000) }}", boost));
 }
 
 TEST(BigIntBoost, Operations)
@@ -819,9 +820,10 @@ TEST(BigIntView, TextViewIsCappedAtTheStrDigitLimit)
 // is known before converting. The numbers are Python's
 TEST(BigIntTemplate, RadixLiteralsAtTheBitCap)
 {
+    // A constant this wide fails the Load, as Jinja2's repr() of it does (docs/tasks/0564): the value comes from data
     Template tpl;
-    ASSERT_TRUE(tpl.Load("{% set x = 0x" + std::string(262144, 'f') + " %}{% set h = '{:x}'.format(-x) %}{{ x.bit_length() }}|{{ h[:4] }}|{{ h|length }}"));
-    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(tpl.Load("{% set x = s|int(base=16) %}{% set h = '{:x}'.format(-x) %}{{ x.bit_length() }}|{{ h[:4] }}|{{ h|length }}"));
+    const auto result = tpl.RenderAsString({ { "s", std::string(262144, 'f') } });
     ASSERT_TRUE(result.has_value()) << result.error().ToString();
     EXPECT_EQ("1048576|-fff|262145", result.value());
 
@@ -830,8 +832,9 @@ TEST(BigIntTemplate, RadixLiteralsAtTheBitCap)
         const auto loaded = other.Load(source);
         return loaded ? ErrorCode::Unspecified : loaded.error().GetCode();
     };
-    // 1 + 3 * 349525 = 1048576 bits fit; a leading 2 is one bit more
-    EXPECT_EQ(ErrorCode::Unspecified, loadError("{{ 0o1" + std::string(349525, '0') + " }}"));
+    // 1 + 3 * 349525 = 1048576 bits fit, in a fold that takes the literal away; a leading 2 is one bit more
+    EXPECT_EQ(ErrorCode::Unspecified, loadError("{{ (0o1" + std::string(349525, '0') + ") is odd }}"));
+    EXPECT_EQ(ErrorCode::TemplateRuntimeError, loadError("{{ 0o1" + std::string(349525, '0') + " }}"));
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loadError("{{ 0o2" + std::string(349525, '0') + " }}"));
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loadError("{{ 0x1" + std::string(262144, '0') + " }}"));
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loadError("{{ 0b1" + std::string(1048576, '0') + " }}"));
@@ -843,6 +846,78 @@ TEST(BigIntTemplate, RadixLiteralsAtTheBitCap)
     const auto over = wide.RenderAsString({ { "s", "1" + std::string(262144, '0') } });
     ASSERT_FALSE(over.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, over.error().GetCode());
+}
+
+// Task 0564: Jinja2's code generator writes each constant left after its optimizer with repr(), which raises
+// ValueError past 4300 digits, also where the constant never renders; a fold around it takes it away. Expected
+// from Jinja2 3.1.6 on CPython 3.12
+TEST(BigIntTemplate, StrDigitsConstantsFailTheLoad)
+{
+    const std::string past = "0x" + std::string(3572, 'f');
+    const auto loads = [](const std::string& source, const BigIntBackend* backend = nullptr) {
+        TemplateEnv env;
+        env.SetBigIntBackend(backend);
+        Template tpl(&env);
+        const auto loaded = tpl.Load(source);
+        if (!loaded)
+        {
+            EXPECT_EQ(ErrorCode::TemplateRuntimeError, loaded.error().GetCode()) << source.substr(0, 60);
+            EXPECT_NE(std::string::npos, loaded.error().ToString().find("Exceeds the limit (4300 digits) for integer string conversion")) << loaded.error().ToString().substr(0, 200);
+        }
+        return loaded.has_value();
+    };
+    // 3571 f's are 4300 digits, 3572 are 4302; 14285 bits are 4301 digits, with a leading 1 and zeros 4300
+    EXPECT_TRUE(loads("{% set x = 0x" + std::string(3571, 'f') + " %}"));
+    EXPECT_FALSE(loads("{% set x = " + past + " %}"));
+    EXPECT_TRUE(loads("{% set x = 0b1" + std::string(14284, '0') + " %}"));
+    EXPECT_FALSE(loads("{% set x = 0b" + std::string(14285, '1') + " %}"));
+    // Unrendered, in a comparison, a call, a list or a filter argument: no fold takes it away
+    for (const auto& source : { "{% if false %}{{ " + past + " }}{% endif %}", "{{ x == " + past + " }}", "{{ (" + past + ").bit_length() }}",
+                                "{{ [" + past + "] }}", "{{ x|default(" + past + ") }}", "{% macro m() %}{{ -" + past + " }}{% endmacro %}" })
+    {
+        EXPECT_FALSE(loads(source)) << source.substr(0, 60);
+    }
+    // A fold around it takes it away
+    for (const auto& source : { "{{ (" + past + ") is odd }}", "{{ ((" + past + ") is odd) and x }}", "{{ [" + past + "]|length }}", "{{ '%x'|format(" + past + ")|length }}",
+                                "{{ true or " + past + " }}", "{{ (" + past + ") % 7 }}" })
+    {
+        EXPECT_TRUE(loads(source)) << source.substr(0, 60);
+    }
+    // A folded filter or operator gives one: no literal is too long
+    EXPECT_FALSE(loads("{% set x = ('f' * 3600)|int(base=16) %}"));
+    EXPECT_TRUE(loads("{% set x = ('f' * 3571)|int(base=16) %}"));
+    EXPECT_TRUE(loads("{% set x = (('f' * 3600)|int(base=16)) % 10 %}"));
+    // `(2 ** 20000) ~ x` needs a backend to compute the power; without one, it overflows when rendered
+    EXPECT_TRUE(loads("{{ x ~ (2 ** 20000) }}"));
+    EXPECT_FALSE(loads("{{ x ~ (2 ** 20000) }}", big_int_toy::Backend()));
+    EXPECT_FALSE(loads("{{ 2 ** 20000 }}", big_int_toy::Backend()));
+    EXPECT_FALSE(loads("{{ (10 ** 2000) * (10 ** 2400) }}", big_int_toy::Backend()));
+    EXPECT_FALSE(loads("{{ 0x" + std::string(3571, 'f') + " * 16 }}", big_int_toy::Backend()));
+    EXPECT_TRUE(loads("{{ 10 ** 4299 }}", big_int_toy::Backend()));
+    EXPECT_TRUE(loads("{{ (2 ** 20000) % 7 }}", big_int_toy::Backend()));
+    EXPECT_TRUE(loads("{{ false and 2 ** 20000 }}", big_int_toy::Backend()));
+    EXPECT_TRUE(loads("{{ 2 ** (small * 4000) }}", big_int_toy::Backend()));
+    // In volatile code Jinja2 folds nothing: a power stays an operator (verifier round 1; a statement's expression
+    // there is docs/tasks/0570)
+    EXPECT_TRUE(loads("{% autoescape x %}{{ [2 ** 20000]|length }}{% if 0 %}{{ 2 ** 20000 }}{% endif %}{% endautoescape %}", big_int_toy::Backend()));
+    // str() of an output refuses the item past the limit whatever the other items are
+    EXPECT_FALSE(loads("{% if false %}{{ [(1).y, " + past + "] }}{% endif %}"));
+    // A filter's value error in an `and` around a watched product is Impossible, not a Load error
+    EXPECT_TRUE(loads("{% set x = 1 %}{% if false %}{{ 2 * 3 and ('abc'|abs or x) }}{% endif %}"));
+    // A step limit that the repr walk of a watched product reaches leaves it unfolded, as one its evaluation reaches
+    // (Codex on #987)
+    TemplateEnv limited;
+    Settings withLimits;
+    withLimits.limits.maxRenderSteps = 1000;
+    limited.SetSettings(withLimits);
+    for (const char* source : { "{% if false %}{% set q = [1] * (100 * 100) %}{% endif %}", "{% if false %}{{ [1] * (100 * 100) }}{% endif %}" })
+    {
+        Template tpl(&limited);
+        const auto loaded = tpl.Load(source);
+        EXPECT_TRUE(loaded.has_value()) << source << ": " << loaded.error().ToString();
+        EXPECT_EQ("", tpl.RenderAsString({}).value());
+    }
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 
 // Task 0543 P1b: an integer is huge, and keeps binary words, exactly when it has more than

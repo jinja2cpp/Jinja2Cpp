@@ -183,5 +183,11 @@ CASES = [
     ("strict_fold_conditional_test_unrendered", "{% if false %}{{ 1 if []|max else 2 }}{% endif %}b", STRICT),
     ("strict_fold_unfolded_operand_conditional", "{% if false and (([1][:, :] is undefined) or ((\"ab\" if []|max else \"ab\") ~ d)) %}a{% endif %}b", STRICT),
     ("strict_fold_short_circuited_operand", "{{ 1 or ([]|max ~ 1) }}", STRICT),
+    # The engine watches filters and subscripts of constants for them (0555): an item of a literal, an output, a
+    # filter's operand and a test only fold, or fail as Impossible
+    ("strict_fold_list_item_unrendered", "{% if false %}{{ [([]|max) + 1] }}{% endif %}b", STRICT),
+    ("strict_fold_output_unrendered", "{% if false %}{{ [1][3] }}{{ ''|first }}{% endif %}b", STRICT),
+    ("strict_fold_subscript_or_unrendered", "{% if false %}{{ {}.x or 1 }}{% endif %}b", STRICT),
+    ("strict_fold_default_concat", "{{ ([]|first)|default(1) ~ 1 }}|{{ 'x' if [1][3] is defined else 'y' }}|{{ not [1][4] }}", STRICT),
     ("default_tests_compare", "{{ nope in [] }}|{{ nope is sameas nope }}|{{ [nope, 1] | select('equalto', 1) | list }}|{{ nope is eq(1) }}|{{ [nope, 1].count(1) }}|{{ [nope, 1].index(1) }}|{{ nope is iterable }}|{{ nope in {'a': 1}.keys() }}"),
 ]

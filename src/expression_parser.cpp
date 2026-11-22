@@ -142,10 +142,19 @@ InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) co
 
 namespace
 {
-// Whether the candidates of `check` that `counts` (by index) cover each of its subscripts, in
-// one sweep over their ranges
+// Which numbers of a check FirstUncovered looks at
+enum class Needing : std::uint8_t
+{
+    AnyFold,
+    TupleSlices,
+    StrDigits,
+};
+
+// The first number of `check` that needs a fold (a tuple-slice subscript, a FoldMarkKind::StrDigits literal) of
+// those `needing` says and that no candidate `counts` (by index) covers, else check.to; in one sweep over their
+// ranges
 template<typename Counts>
-bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
+unsigned FirstUncovered(const FoldCheck& check, const Counts& counts, Needing needing = Needing::AnyFold)
 {
     std::vector<int> starts(check.to - check.from + 1, 0);
     for (std::size_t index = 0; index != check.candidates.size(); ++index)
@@ -160,16 +169,67 @@ bool CoversEverySubscript(const FoldCheck& check, const Counts& counts)
         }
     }
     int open = 0;
+    auto mark = check.marks.begin();
     for (unsigned subscript = 0; subscript != check.to - check.from; ++subscript)
     {
         open += starts[subscript];
-        if (open <= 0)
+        while (mark != check.marks.end() && mark->number < check.from + subscript)
         {
-            return false;
+            ++mark;
+        }
+        const bool isMark = mark != check.marks.end() && mark->number == check.from + subscript;
+        const bool needed = isMark ? mark->kind == FoldMarkKind::StrDigits && needing != Needing::TupleSlices : needing != Needing::StrDigits;
+        if (open <= 0 && needed)
+        {
+            return check.from + subscript;
         }
     }
-    return true;
+    return check.to;
 }
+
+// The kind of the number `number` of `check`: a tuple-slice subscript unless it is a mark
+bool IsStrDigitsMark(const FoldCheck& check, unsigned number)
+{
+    const auto found = std::lower_bound(check.marks.begin(), check.marks.end(), number, [](const FoldMark& mark, unsigned value) { return mark.number < value; });
+    return found != check.marks.end() && found->number == number && found->kind == FoldMarkKind::StrDigits;
+}
+
+// Whether a big integer has more than MaxIntStrDigits decimal digits, so that CPython's str() and repr() of it
+// fail; `margin` digits fewer for a literal an operator may take past them
+bool PastStrDigits(const BigIntView& value, std::size_t margin = 0)
+{
+    if (value.IsHuge())
+    {
+        return true;
+    }
+    const auto decimal = value.InlineDecimal();
+    return decimal.size() - (value.Sign() < 0 ? 1 : 0) > MaxIntStrDigits - margin;
+}
+
+// Whether the product `node` repeats a literal string, list or tuple: no integer, whose fold is left to the
+// render (`'x' * 32`)
+bool RepeatsSequence(const NodeArena& nodes, NodeRef<Expression> node)
+{
+    const auto binary = nodes.As<BinaryExpression>(node);
+    if (!binary)
+    {
+        return false;
+    }
+    const auto isSequence = [&nodes](NodeRef<Expression> operand) {
+        const auto kind = nodes[operand].GetKind();
+        if (kind == NodeKind::TupleExpr || kind == NodeKind::DictExpr)
+        {
+            return true;
+        }
+        const auto* constant = nodes[operand].GetConstant(nodes);
+        return constant && (constant->Kind() == ValueKind::String || constant->Kind() == ValueKind::List);
+    };
+    return isSequence(nodes[binary].GetLeftExpr()) || isSequence(nodes[binary].GetRightExpr());
+}
+
+// The digits fewer than MaxIntStrDigits from which a literal is watched (FoldMarkKind::Watch): a sum of
+// maxExpressionOperators (491) of them gains at most 3 digits
+constexpr std::size_t StrDigitsMargin = 10;
 
 // Whether Jinja2's as_const of the node turns an exception into Impossible (FoldCandidate::failsLoad).
 // A conditional's as_const lets out what its test's truth raises, which the Load's evaluation
@@ -191,6 +251,10 @@ bool FoldCatchesFailure(const NodeArena& nodes, NodeRef<Expression> node)
     // decides (FoldEvaluator::LetsUndefinedOut, docs/tasks/0546)
     case NodeKind::BinaryExpr:
     case NodeKind::ConcatExpr:
+    // A literal list, tuple or dict fails only where an item's as_const does, which is Impossible: an item that
+    // lets an UndefinedError out failed the compile before, as a candidate of its own (docs/tasks/0555)
+    case NodeKind::TupleExpr:
+    case NodeKind::DictExpr:
         return true;
     case NodeKind::FullExpr:
         return static_cast<bool>(nodes.Get<FullExpressionEvaluator>(node).GetTester());
@@ -255,7 +319,7 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
     // the output's whole value (FoldCheck); printing the strict undefined it folds to fails
     if (m_tupleSliceSubscripts != foldFrom)
     {
-        if (m_strictUndefined && &m_nodes[*evaluator] == &m_nodes[m_tupleSliceValue])
+        if (m_strictUndefined && m_tupleSliceValue && &m_nodes[*evaluator] == &m_nodes[m_tupleSliceValue])
         {
             return MakeParseError(ErrorCode::ExpectedSquareBracket, startTok);
         }
@@ -284,6 +348,7 @@ struct UnknownCallables::FoldState
 {
     std::vector<FoldCheck> checks;
     std::vector<FoldCandidate> candidates;
+    std::vector<FoldMark> marks;
     std::vector<NodeRef<Expression>> nodes;
 };
 
@@ -316,6 +381,11 @@ std::vector<FoldCandidate>& UnknownCallables::FoldCandidates()
     return Fold().candidates;
 }
 
+std::vector<FoldMark>& UnknownCallables::FoldMarks()
+{
+    return Fold().marks;
+}
+
 void UnknownCallables::AddFoldNode(NodeRef<Expression> node)
 {
     Fold().nodes.push_back(node);
@@ -331,6 +401,7 @@ void UnknownCallables::DropFoldCandidates()
     if (m_fold)
     {
         m_fold->candidates.clear();
+        m_fold->marks.clear();
     }
 }
 
@@ -344,7 +415,7 @@ void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from,
     const auto leading = m_strictUndefined && !output ? LeadingOperands(m_nodes, node, fold) : 0;
     if (fold != 0 || leading != 0)
     {
-        m_unknown.FoldCandidates().push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output, output || !FoldCatchesFailure(m_nodes, node), leading });
+        m_unknown.FoldCandidates().push_back(FoldCandidate{ node, from, m_tupleSliceSubscripts, fold, output, !output && !FoldCatchesFailure(m_nodes, node), leading });
         // The tree may not hold it: a filter drops the arguments it does not take
         m_unknown.AddFoldNode(node);
     }
@@ -374,16 +445,75 @@ nonstd::expected<void, ParseError> ExpressionParser::FinishFoldRoot(const Token&
                      candidates.end());
     check.candidates = std::move(candidates);
     candidates.clear();
+    auto& marks = m_unknown.FoldMarks();
+    marks.erase(std::remove_if(marks.begin(), marks.end(), [this, rootFrom](const FoldMark& mark) { return mark.number < rootFrom || mark.number >= m_tupleSliceSubscripts; }),
+                marks.end());
+    check.marks = std::move(marks);
+    marks.clear();
     check.from = rootFrom;
     check.to = m_tupleSliceSubscripts;
-    if (!CoversEverySubscript(check, [](std::size_t /*index*/) { return true; }))
+    if (const auto uncovered = FirstUncovered(check, [](std::size_t /*index*/) { return true; }); uncovered != check.to)
     {
+        if (IsStrDigitsMark(check, uncovered))
+        {
+            return nonstd::make_unexpected(StrDigitsError(tok));
+        }
         return MakeParseError(ErrorCode::ExpectedSquareBracket, tok);
+    }
+    // Only marks that need no fold, and nothing around them that may fold
+    if (check.candidates.empty())
+    {
+        return {};
     }
     check.strictUndefined = m_strictUndefined;
     check.error = ParseError(ErrorCode::ExpectedSquareBracket, tok);
     m_unknown.AddFoldCheck(std::move(check));
     return {};
+}
+
+ParseError StrictFoldError(const Token& tok)
+{
+    return ParseError(ErrorCode::UndefinedError, tok, "a constant expression gives a strict undefined, which bool() or str() refuses where Jinja2 folds it when it compiles the template");
+}
+
+ParseError StrDigitsError(const Token& tok)
+{
+    return ParseError(ErrorCode::TemplateRuntimeError,
+                      tok,
+                      "Exceeds the limit (" + std::to_string(MaxIntStrDigits) + " digits) for integer string conversion; use sys.set_int_max_str_digits() to increase the limit");
+}
+
+void ExpressionParser::AddFoldMark(FoldMarkKind kind)
+{
+    // In volatile code Jinja2's optimizer folds nothing (compiler.py optimizeconst): only a literal past the limit
+    // matters there, and no fold takes it away
+    if (!InFoldRoot() || (kind == FoldMarkKind::Watch && m_volatile))
+    {
+        return;
+    }
+    // The candidates left now are those of another parser's root that failed (ParseSubscript)
+    if (m_tupleSliceSubscripts == 0)
+    {
+        m_unknown.DropFoldCandidates();
+    }
+    m_unknown.FoldMarks().push_back(FoldMark{ m_tupleSliceSubscripts, kind });
+    ++m_tupleSliceSubscripts;
+}
+
+void ExpressionParser::NoteBigIntLiteral(const InternalValue& value)
+{
+    if (const auto view = AsBigInt(value); view && PastStrDigits(*view, StrDigitsMargin))
+    {
+        AddFoldMark(PastStrDigits(*view) ? FoldMarkKind::StrDigits : FoldMarkKind::Watch);
+    }
+}
+
+void ExpressionParser::NoteWatchedFold(NodeRef<Expression> node)
+{
+    if (InFoldRoot() && m_nodes[node].PrepareFold(m_nodes) != 0)
+    {
+        AddFoldMark(FoldMarkKind::Watch);
+    }
 }
 
 bool ExpressionParser::AddOperator()
@@ -619,6 +749,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     SmallVector<NodeRef<Expression>, 4> concat;
     // Jinja2's optimizer folds each operator node made here too (docs/tasks/0484)
     const unsigned foldFrom = m_tupleSliceSubscripts;
+    // A product whose operands read no name may be a constant (NoteWatchedFold)
+    const unsigned nameReads = m_nameReads;
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
                                                                                                          : ParseUnaryPlusMinus(lexer);
     while (left)
@@ -671,6 +803,11 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         else
         {
             *left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
+            // A product or power of constants may pass MaxIntStrDigits digits (docs/tasks/0564)
+            if ((op.operation == BinaryExpression::Mul || op.operation == BinaryExpression::Pow) && m_nameReads == nameReads && !RepeatsSequence(m_nodes, *left))
+            {
+                NoteWatchedFold(*left);
+            }
             NoteFoldCandidate(*left, foldFrom);
         }
     }
@@ -845,6 +982,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         }
         auto ref = ValueRefExpression::Make(m_nodes, name);
         m_readsName = true;
+        ++m_nameReads;
         m_names.AddUse(ref);
         if (m_names.ReadsOpen())
         {
@@ -855,8 +993,13 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
     }
     case Token::IntegerNum:
     case Token::FloatNum:
-        value = MakeConstant(m_nodes, lexer.GetValue(tok));
+    {
+        auto literal = lexer.GetValue(tok);
+        // Past MaxIntStrDigits digits, Jinja2's repr() of it fails the compile unless a fold takes it away
+        NoteIntLiteral(literal);
+        value = MakeConstant(m_nodes, std::move(literal));
         break;
+    }
     case Token::String:
     {
         std::optional<Token> invalid;
@@ -1673,6 +1816,12 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
         subscript = MakeSubscript(valueRef, attrName);
     }
     m_nodes[subscript].AddIndex(m_nodes, indexExpr, std::move(attrName));
+    // A missing item or attribute of a constant is a strict undefined, which bool() and str() refuse where
+    // Jinja2's optimizer folds an `and`, `or`, `~` or conditional around it (docs/tasks/0555)
+    if (m_strictUndefined)
+    {
+        NoteWatchedFold(subscript);
+    }
 
     return subscript;
 }
@@ -1784,6 +1933,14 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             {
                 result = filter;
             }
+            // A filter of a constant may give a strict undefined (`[]|max`, docs/tasks/0555), and `int` an integer
+            // past MaxIntStrDigits digits (docs/tasks/0564)
+            // Only a built-in filter: Jinja2 calls an environment's filter when it folds, which the engine leaves to
+            // the render
+            if (m_chainOperand && (m_strictUndefined || name == "int") && FindRegisteredFilter(name).IsUndefined())
+            {
+                NoteWatchedFold(m_chainOperand);
+            }
 
         } while (lexer.NextToken() == '|');
 
@@ -1867,13 +2024,38 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
 
 namespace
 {
+// What the code generator makes of a folded value (ReprOf): flags
+enum class Repr : std::uint8_t
+{
+    Safe = 0,
+    // Jinja2's has_safe_repr refuses it: the optimizer does not fold
+    Unsafe = 1,
+    // It holds an integer past MaxIntStrDigits digits, whose repr() and str() fail: a non-output fold of it fails
+    // the compile unless a fold around it takes it away (docs/tasks/0564)
+    StrDigits = 2,
+    Both = 3,
+};
+
+Repr operator|(Repr left, Repr right)
+{
+    return static_cast<Repr>(static_cast<std::uint8_t>(left) | static_cast<std::uint8_t>(right));
+}
+
+bool Has(Repr repr, Repr flag)
+{
+    return (static_cast<std::uint8_t>(repr) & static_cast<std::uint8_t>(flag)) != 0;
+}
+
 // Jinja2's has_safe_repr, which the optimizer asks of a folded value before it puts it in the
-// code: None, bools, numbers, strings, and lists, tuples and dicts of them; not an undefined
-bool HasSafeRepr(const InternalValue& value)
+// code: None, bools, numbers, strings, and lists, tuples and dicts of them; not an undefined.
+// Whether an item anywhere in it is past MaxIntStrDigits digits too, which str() of an output refuses
+// whatever the other items are
+Repr ReprOf(const InternalValue& value)
 {
     // Repeated lists share their items, so a small value can have very many: under limits
     // each visit is a render step, which bounds the walk (RecursionLimitError near the
-    // stack's end, both failing the Load)
+    // stack's end, failing the Load; a step limit in a check of marks only leaves the value unfolded,
+    // FoldEvaluator::ReprOfValue)
     CheckStack();
     switch (value.Kind())
     {
@@ -1882,34 +2064,46 @@ bool HasSafeRepr(const InternalValue& value)
     case ValueKind::String:
     case ValueKind::Int:
     case ValueKind::Double:
+        return Repr::Safe;
     case ValueKind::BigInt:
-        return true;
+    {
+        const auto view = AsBigInt(value);
+        return view && PastStrDigits(*view) ? Repr::StrDigits : Repr::Safe;
+    }
     case ValueKind::List:
     {
         const auto list = AsList(value);
         if (!list || list->GetIteratorKind() != IteratorKind::None)
         {
-            return false;
+            return Repr::Unsafe;
         }
-        bool safe = true;
-        list->ForEach([&safe](const InternalValue& item) {
-            safe = HasSafeRepr(item);
-            return safe;
+        auto repr = Repr::Safe;
+        list->ForEach([&repr](const InternalValue& item) {
+            repr = repr | ReprOf(item);
+            return repr != Repr::Both;
         });
-        return safe;
+        return repr;
     }
     case ValueKind::Map:
     {
         const auto map = AsMap(value);
         if (!map || map->IsHost() || map->IsNamespace())
         {
-            return false;
+            return Repr::Unsafe;
         }
-        const auto entries = map->GetEntries();
-        return std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return HasSafeRepr(entry.key) && HasSafeRepr(entry.value); });
+        auto repr = Repr::Safe;
+        for (const auto& entry : map->GetEntries())
+        {
+            repr = repr | ReprOf(entry.key) | ReprOf(entry.value);
+            if (repr == Repr::Both)
+            {
+                break;
+            }
+        }
+        return repr;
     }
     default:
-        return false;
+        return Repr::Unsafe;
     }
 }
 
@@ -1923,6 +2117,12 @@ enum class FoldOutcome : std::uint8_t
     // Its evaluation let out an UndefinedError whatever its kind: the strict undefined a
     // conditional tests (docs/tasks/0527)
     FailsLoad,
+    // It folds to a value with an integer past MaxIntStrDigits digits (Repr::StrDigits): a tuple-slice subscript
+    // in it is folded away, but the compile fails unless a fold around it takes the value away (docs/tasks/0564)
+    FoldsStrDigits,
+    // It failed with an OverflowError of a build without a big-integer backend: Python computes it, and the fold
+    // takes away the integers past MaxIntStrDigits digits in it, though it does not cover a tuple-slice subscript
+    Overflows,
 };
 
 // What a candidate evaluates to, or that the evaluation failed with an error Jinja2's fold
@@ -1932,6 +2132,8 @@ struct FoldValue
 {
     InternalValue value;
     bool failed = false;
+    // It failed with OverflowError (IntegerOutOfRangeError): with no big-integer backend, what Python computes
+    bool overflow = false;
 };
 
 // A filter's value error the render reports as an ErrorInfo (RendererCallback::ThrowRuntimeError): `|abs` of
@@ -1959,7 +2161,7 @@ FoldValue TryFoldValue(Evaluate&& evaluate)
     }
     catch (const IntegerOutOfRangeError&)
     {
-        return FoldValue{ InternalValue(), true };
+        return FoldValue{ InternalValue(), true, true };
     }
     catch (const ErrorInfo& error)
     {
@@ -2015,11 +2217,12 @@ std::optional<bool> FoldedTruth(const FoldValue& value)
 struct FoldSummary
 {
     bool failed = false;
+    bool overflow = false;
     bool undefined = false;
     bool strictUndefined = false;
-    // Whether safeRepr was computed: only for a candidate's own outcome, as HasSafeRepr may walk a large value
+    // Whether repr was computed: only for a candidate's own outcome, as ReprOf may walk a large value
     bool reprKnown = false;
-    bool safeRepr = false;
+    Repr repr = Repr::Unsafe;
     // bool() of it; nothing when that fails
     std::optional<bool> truth;
 };
@@ -2028,6 +2231,7 @@ FoldSummary Summarize(const FoldValue& value)
 {
     FoldSummary summary;
     summary.failed = value.failed;
+    summary.overflow = value.overflow;
     if (!value.failed)
     {
         summary.undefined = value.value.IsUndefined();
@@ -2050,6 +2254,7 @@ public:
         : m_check(check)
         , m_context(context)
         , m_steps(check.candidates.size())
+        , m_limitIsImpossible(check.to - check.from == check.marks.size())
     {
         LinkSteps();
     }
@@ -2119,36 +2324,48 @@ private:
             return FoldOutcome::DoesNotFold;
         }
         const auto& result = SummaryOf(index);
+        // An output folds into str(value). Jinja2's visit_Output catches whatever its as_const or str() raise and
+        // compiles the output unfolded, which its optimizer then folds as any other expression: the output's
+        // value as a candidate of its own decides (docs/tasks/0556)
+        if (candidate.output)
+        {
+            const bool strFails = result.failed || (m_check.strictUndefined && result.undefined) || Has(ReprOfStep(index), Repr::StrDigits);
+            return strFails ? FoldOutcome::DoesNotFold : FoldOutcome::Folds;
+        }
         if (result.failed)
         {
             // An `and`, `or` or `~` lets out only the UndefinedError of its own bool() or str(), or of such an
             // operand's; the failure of any other operand is Impossible to it (docs/tasks/0546)
-            if (m_check.strictUndefined && !candidate.output && LetsUndefinedOut(candidate.node))
+            if (m_check.strictUndefined && LetsUndefinedOut(candidate.node))
             {
                 return FoldOutcome::FailsLoad;
             }
-            return FoldOutcome::Fails;
+            return result.overflow && !detail::t_renderLimits.bigInts ? FoldOutcome::Overflows : FoldOutcome::Fails;
         }
-        // An output folds into str(value), which fails for a strict undefined
-        if (candidate.output)
-        {
-            return m_check.strictUndefined && result.undefined ? FoldOutcome::Fails : FoldOutcome::Folds;
-        }
-        return SafeReprOf(index) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+        return OutcomeOfRepr(ReprOfStep(index));
     }
 
-    // Whether the candidate's value has a safe repr; asked only for its own outcome, so that a step a fold around
-    // it skips is never walked (a released container is kept for this, Release)
-    bool SafeReprOf(std::size_t index)
+    static FoldOutcome OutcomeOfRepr(Repr repr)
+    {
+        if (Has(repr, Repr::Unsafe))
+        {
+            return FoldOutcome::DoesNotFold;
+        }
+        return Has(repr, Repr::StrDigits) ? FoldOutcome::FoldsStrDigits : FoldOutcome::Folds;
+    }
+
+    // What the code generator makes of the candidate's value; asked only for its own outcome, so that a step a
+    // fold around it skips is never walked (a released container is kept for this, Release)
+    Repr ReprOfStep(std::size_t index)
     {
         auto& step = m_steps[index];
         auto& summary = step.summary;
         if (!summary.reprKnown)
         {
-            summary.safeRepr = !summary.failed && !step.released && HasSafeRepr(step.value.value);
+            summary.repr = !summary.failed && !step.released ? ReprOfValue(step.value.value) : Repr::Unsafe;
             summary.reprKnown = true;
         }
-        return summary.safeRepr;
+        return summary.repr;
     }
 
     void LinkSteps()
@@ -2441,7 +2658,7 @@ private:
         {
             return found->second;
         }
-        const auto value = TryFoldValue([this, &nodes, expr] { return nodes[expr].Evaluate(m_context); });
+        const auto value = TryFold([this, &nodes, expr] { return nodes[expr].Evaluate(m_context); });
         return m_operands.emplace(key, Summarize(value)).first->second;
     }
 
@@ -2483,7 +2700,7 @@ private:
             {
                 // The first of the chain, or one whose operand's value is gone (only a candidate already done reads
                 // no value: a safety net)
-                m_steps[step].value = TryFoldValue([this, step] { return m_context.Nodes()[m_check.candidates[step].node].Evaluate(m_context); });
+                m_steps[step].value = TryFold([this, step] { return m_context.Nodes()[m_check.candidates[step].node].Evaluate(m_context); });
             }
             m_steps[step].known = true;
             ReadDone(step);
@@ -2536,7 +2753,7 @@ private:
         }
         if (needsRepr && !step.summary.reprKnown)
         {
-            step.summary.safeRepr = !step.value.failed && HasSafeRepr(step.value.value);
+            step.summary.repr = !step.value.failed ? ReprOfValue(step.value.value) : Repr::Unsafe;
             step.summary.reprKnown = true;
         }
         step.value = FoldValue();
@@ -2556,20 +2773,20 @@ private:
         case StepKind::Filter:
         {
             const auto chain = nodes.Get<FilteredExpression>(node).GetFilter();
-            return TryFoldValue([this, &nodes, chain, &previous] { return nodes[chain].EvaluateLast(previous.value, m_context); });
+            return TryFold([this, &nodes, chain, &previous] { return nodes[chain].EvaluateLast(previous.value, m_context); });
         }
         case StepKind::Binary:
-            return TryFoldValue([this, &nodes, node, &previous] { return nodes.Get<BinaryExpression>(node).EvaluateWithLeft(previous.value, m_context); });
+            return TryFold([this, &nodes, node, &previous] { return nodes.Get<BinaryExpression>(node).EvaluateWithLeft(previous.value, m_context); });
         case StepKind::Unary:
-            return TryFoldValue([&nodes, node, &previous] { return nodes.Get<UnaryExpression>(node).EvaluateWith(previous.value); });
+            return TryFold([&nodes, node, &previous] { return nodes.Get<UnaryExpression>(node).EvaluateWith(previous.value); });
         case StepKind::Subscript:
-            return TryFoldValue([this, &nodes, node, &previous] { return nodes.Get<SubscriptExpression>(node).EvaluateWithValue(previous.value, m_context); });
+            return TryFold([this, &nodes, node, &previous] { return nodes.Get<SubscriptExpression>(node).EvaluateWithValue(previous.value, m_context); });
         case StepKind::Test:
-            return TryFoldValue([this, &nodes, node, &previous] { return nodes.Get<IsExpression>(node).EvaluateWith(previous.value, m_context); });
+            return TryFold([this, &nodes, node, &previous] { return nodes.Get<IsExpression>(node).EvaluateWith(previous.value, m_context); });
         case StepKind::None:
             break;
         }
-        return TryFoldValue([this, &nodes, node] { return nodes[node].Evaluate(m_context); });
+        return TryFold([this, &nodes, node] { return nodes[node].Evaluate(m_context); });
     }
 
     // Jinja2's CondExpr.as_const: the test's as_const, whose truth fails for a strict undefined
@@ -2583,7 +2800,7 @@ private:
         {
             return FoldOutcome::DoesNotFold;
         }
-        const auto test = TryFoldValue([this, &nodes, &conditional] { return nodes[conditional.GetTestExpr()].Evaluate(m_context); });
+        const auto test = TryFold([this, &nodes, &conditional] { return nodes[conditional.GetTestExpr()].Evaluate(m_context); });
         // A failing test or branch is Impossible: what Jinja2 lets out of one is the strict
         // undefined's error of an `and`, `or` or `~` in it, a candidate of its own
         if (test.failed)
@@ -2604,12 +2821,49 @@ private:
         {
             return ConditionalOf(nodes[chained]);
         }
-        const auto value = TryFoldValue([this, &nodes, branch] { return nodes[branch].Evaluate(m_context); });
+        const auto value = TryFold([this, &nodes, branch] { return nodes[branch].Evaluate(m_context); });
         if (value.failed)
         {
             return FoldOutcome::Fails;
         }
-        return HasSafeRepr(value.value) ? FoldOutcome::Folds : FoldOutcome::DoesNotFold;
+        return OutcomeOfRepr(ReprOfValue(value.value));
+    }
+
+    // TryFoldValue, and in a check of marks only (no tuple-slice subscript) a limit too is Impossible: such a check
+    // only watches what its folds give, so a limit the fold reaches is left to the render, as without the check
+    template<typename Evaluate>
+    FoldValue TryFold(Evaluate&& evaluate)
+    {
+        if (!m_limitIsImpossible)
+        {
+            return TryFoldValue(std::forward<Evaluate>(evaluate));
+        }
+        try
+        {
+            return TryFoldValue(std::forward<Evaluate>(evaluate));
+        }
+        catch (const ResourceLimitError&)
+        {
+            return FoldValue{ InternalValue(), true };
+        }
+    }
+
+    // ReprOf, whose walk of a repeated list costs a render step an item: in a check of marks only a limit it
+    // reaches leaves the value unfolded, as TryFold does (Codex on #987)
+    Repr ReprOfValue(const InternalValue& value) const
+    {
+        if (!m_limitIsImpossible)
+        {
+            return ReprOf(value);
+        }
+        try
+        {
+            return ReprOf(value);
+        }
+        catch (const ResourceLimitError&)
+        {
+            return Repr::Unsafe;
+        }
     }
 
     const FoldCheck& m_check;
@@ -2620,10 +2874,83 @@ private:
     // LetsUndefinedOut's answers, and the summaries of the operands it evaluated that are no candidates
     std::unordered_map<const void*, bool> m_letsOut;
     std::unordered_map<const void*, FoldSummary> m_operands;
+    bool m_limitIsImpossible = false;
 };
 } // namespace
 
-bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
+namespace
+{
+// Where the candidates FoldCheckPasses has walked, outermost first, fold
+class FoldWalk
+{
+public:
+    explicit FoldWalk(const FoldCheck& check)
+        : m_check(check)
+        , m_foldedFrom(check.to)
+        , m_outputFoldedFrom(check.to)
+        , m_strDigitsFoldedFrom(check.to)
+    {
+    }
+
+    // Jinja2's optimizer folds every expression of the tree, and a strict undefined that fails a fold fails the
+    // compile (UndefinedError) where an Impossible would not: under StrictUndefined each candidate is evaluated,
+    // except inside an output that folds, which the compiler folds whole before the optimizer sees its parts
+    // (visit_Output, docs/tasks/0484)
+    [[nodiscard]] bool Skips(const FoldCandidate& candidate) const { return candidate.from >= (m_check.strictUndefined ? m_outputFoldedFrom : m_foldedFrom); }
+
+    // The candidate's outcome: how the check fails because of it, if it does
+    std::optional<FoldCheckResult> Note(const FoldCandidate& candidate, FoldOutcome outcome)
+    {
+        const bool fails = outcome == FoldOutcome::Fails || outcome == FoldOutcome::Overflows;
+        if (m_check.strictUndefined && (outcome == FoldOutcome::FailsLoad || (fails && candidate.failsLoad)))
+        {
+            // Around a tuple-slice subscript the undefined is its fold's, reported as the subscript's error
+            return m_check.to - m_check.from > m_check.marks.size() ? FoldCheckResult::Unfolded : FoldCheckResult::Undefined;
+        }
+        // The optimizer folds bottom-up: the value stays in the code unless a candidate around it folds, which,
+        // walked outermost first, was seen before it (docs/tasks/0564)
+        if (outcome == FoldOutcome::FoldsStrDigits && candidate.from < m_strDigitsFoldedFrom)
+        {
+            return FoldCheckResult::StrDigits;
+        }
+        if (outcome == FoldOutcome::Folds || outcome == FoldOutcome::Overflows)
+        {
+            m_strDigitsFoldedFrom = candidate.from;
+        }
+        if (outcome == FoldOutcome::Folds)
+        {
+            m_foldedFrom = candidate.from;
+            m_outputFoldedFrom = candidate.output ? candidate.from : m_outputFoldedFrom;
+        }
+        return std::nullopt;
+    }
+
+private:
+    const FoldCheck& m_check;
+    unsigned m_foldedFrom;
+    unsigned m_outputFoldedFrom;
+    // That of the candidates that fold or overflow (FoldOutcome::Overflows)
+    unsigned m_strDigitsFoldedFrom;
+};
+
+// Whether the outcomes cover the tuple-slice subscripts of the check, and then its FoldMarkKind::StrDigits marks,
+// which a fold that overflows covers too
+FoldCheckResult CoverageOf(const FoldCheck& check, const std::vector<FoldOutcome>& outcomes)
+{
+    if (FirstUncovered(check, [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds; }, Needing::TupleSlices) != check.to)
+    {
+        return FoldCheckResult::Unfolded;
+    }
+    if (check.marks.empty())
+    {
+        return FoldCheckResult::Passes;
+    }
+    const auto strDigitsFolds = [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds || outcomes[index] == FoldOutcome::Overflows; };
+    return FirstUncovered(check, strDigitsFolds, Needing::StrDigits) != check.to ? FoldCheckResult::StrDigits : FoldCheckResult::Passes;
+}
+} // namespace
+
+FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context)
 {
     // The candidates were recorded as their parse ended, so an expression comes after the ones
     // inside it, which start where it starts or later. Walked outermost first, the candidates
@@ -2631,33 +2958,22 @@ bool FoldCheckPasses(const FoldCheck& check, RenderContext& context)
     // nested brackets do not evaluate the inner levels again and again
     std::vector<FoldOutcome> outcomes(check.candidates.size(), FoldOutcome::DoesNotFold);
     FoldEvaluator evaluator(check, context);
-    unsigned foldedFrom = check.to;
-    unsigned outputFoldedFrom = check.to;
+    FoldWalk walk(check);
     for (std::size_t index = check.candidates.size(); index-- != 0;)
     {
         const auto& candidate = check.candidates[index];
-        // Jinja2's optimizer folds every expression of the tree, and a strict undefined that
-        // fails a fold fails the compile (UndefinedError) where an Impossible would not: under
-        // StrictUndefined each candidate is evaluated, except inside an output that folds,
-        // which the compiler folds whole before the optimizer sees its parts (visit_Output,
-        // docs/tasks/0484)
-        if (candidate.from >= (check.strictUndefined ? outputFoldedFrom : foldedFrom))
+        if (walk.Skips(candidate))
         {
             evaluator.Skip(index);
             continue;
         }
         outcomes[index] = evaluator.Of(index);
-        if (check.strictUndefined && (outcomes[index] == FoldOutcome::FailsLoad || (outcomes[index] == FoldOutcome::Fails && candidate.failsLoad)))
+        if (const auto failed = walk.Note(candidate, outcomes[index]))
         {
-            return false;
-        }
-        if (outcomes[index] == FoldOutcome::Folds)
-        {
-            foldedFrom = candidate.from;
-            outputFoldedFrom = candidate.output ? candidate.from : outputFoldedFrom;
+            return *failed;
         }
     }
-    return CoversEverySubscript(check, [&outcomes](std::size_t index) { return outcomes[index] == FoldOutcome::Folds; });
+    return CoverageOf(check, outcomes);
 }
 
 } // namespace v2

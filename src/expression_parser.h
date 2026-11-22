@@ -41,15 +41,37 @@ struct FoldCandidate
     bool output = false;
     // With StrictUndefined, whether its failing evaluation fails the Load: Jinja2's as_const of
     // an arithmetic operator, a comparison, `not`, a subscript, a filter or a test turns the
-    // failure into Impossible, so it only does not fold; that of an output lets the UndefinedError
-    // out (docs/tasks/0484). An `and`, `or`, `~` or conditional lets out only that of its own bool()
-    // or str(), which FoldEvaluator decides (docs/tasks/0527, 0546)
+    // failure into Impossible, so it only does not fold (docs/tasks/0484). An `and`, `or`, `~` or
+    // conditional lets out only that of its own bool() or str(), which FoldEvaluator decides
+    // (docs/tasks/0527, 0546). Never an output's: visit_Output catches what its fold raises and
+    // leaves the value to the optimizer, as a candidate of its own (docs/tasks/0556)
     bool failsLoad = true;
     // With StrictUndefined, not an output's: the operands before the first that does not fold of an `and`, `or`
     // (its left one) or `~`, or a conditional's test. Jinja2's as_const evaluates them in turn, and the strict
     // undefined one of them gives fails the compile in bool() or str() before an operand that does not fold is
     // reached: `[1][:, :] or x`, `[1][:, :] ~ x`, `x if [1][:, :]` (docs/tasks/0536)
     std::uint32_t leadingOperands = 0;
+};
+
+// What the parser counts with the tuple-slice subscripts (ExpressionParser::AddFoldMark): the
+// other constants whose folds decide the compile, numbered with the subscripts so that the
+// expressions around them are candidates too (docs/tasks/0555, 0564)
+enum class FoldMarkKind : std::uint8_t
+{
+    // An integer literal past MaxIntStrDigits digits: the code generator's repr() of it fails the
+    // compile unless a fold around it takes it away, as for a tuple-slice subscript
+    StrDigits,
+    // Needs no fold: a constant whose fold may give an integer past MaxIntStrDigits digits (`*`,
+    // `**`, `|int`, a literal near the limit), or, with StrictUndefined, a strict undefined (a
+    // filter or subscript of a constant). The Load evaluates the candidates around it
+    Watch,
+};
+
+struct FoldMark
+{
+    // Its number among the tuple-slice subscripts
+    unsigned number = 0;
+    FoldMarkKind kind = FoldMarkKind::Watch;
 };
 
 // The subscripts of one top-level expression and where it may fold; the error is the Load's
@@ -59,16 +81,37 @@ struct FoldCheck
     std::vector<FoldCandidate> candidates;
     unsigned from = 0;
     unsigned to = 0;
+    // The numbers in [from, to) that are no tuple-slice subscripts, in order
+    std::vector<FoldMark> marks;
     bool strictUndefined = false;
     ParseError error;
+};
+
+// How a fold check ends (FoldCheckPasses)
+enum class FoldCheckResult : std::uint8_t
+{
+    Passes,
+    // A tuple-slice subscript stays unfolded: the error is the check's
+    Unfolded,
+    // An integer past MaxIntStrDigits digits stays in the compiled code: Jinja2's repr() of it
+    // raises ValueError (docs/tasks/0564)
+    StrDigits,
+    // With StrictUndefined and no tuple-slice subscript: the optimizer's bool() or str() of a
+    // strict undefined raises UndefinedError (docs/tasks/0555)
+    Undefined,
 };
 
 class RenderContext;
 // Whether every subscript of the check is folded away, evaluated in `context`, a context on the
 // sealed tree. With StrictUndefined, Jinja2's fold also fails the Load where its optimizer
 // stringifies or tests the undefined such a subscript gives, so any candidate whose evaluation
-// fails fails the check
-bool FoldCheckPasses(const FoldCheck& check, RenderContext& context);
+// fails fails the check. An integer past MaxIntStrDigits digits that a fold gives and no fold
+// around it takes away fails it too
+FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context);
+// The ValueError CPython's repr() raises for an integer past MaxIntStrDigits digits, at `tok`
+ParseError StrDigitsError(const Token& tok);
+// FoldCheckResult::Undefined's error, at `tok`
+ParseError StrictFoldError(const Token& tok);
 
 // Jinja2 rejects a filter or test it does not know when it compiles the template, except in
 // an `if` statement or an inline if, which leave the check to the call (Frame.soft_frame in
@@ -162,6 +205,8 @@ public:
     [[nodiscard]] const std::vector<FoldCheck>* GetFoldChecks() const { return m_fold ? FoldChecks() : nullptr; }
     // Those of the top-level expression being parsed (ExpressionParser::AddFoldCandidate)
     std::vector<FoldCandidate>& FoldCandidates();
+    // The marks of the top-level expressions being parsed (ExpressionParser::AddFoldMark)
+    std::vector<FoldMark>& FoldMarks();
     void DropFoldCandidates();
     // A fold candidate's node, which the tree may not hold: a step of a filter chain, made only
     // as a candidate, or an argument a filter drops (docs/tasks/0497). Seal checks them as roots
@@ -316,6 +361,22 @@ private:
     // At the end of ParseFullExpression, when its value made tuple-slice subscripts: the value
     // is a candidate, and a top-level expression's check is made (out of line: few do)
     nonstd::expected<void, ParseError> NoteFullExpressionFold(NodeRef<Expression> result, unsigned from, const Token& tok);
+    // Counts a constant that is no tuple-slice subscript with them (FoldMark), where the parse is
+    // in a top-level expression: the expressions around it become candidates. Out of line: rare
+    void AddFoldMark(FoldMarkKind kind);
+    // AddFoldMark for an integer literal: past MaxIntStrDigits digits, or near them, where an
+    // operator may take it past. Most literals are small: inline, a test of its kind
+    void NoteIntLiteral(const InternalValue& value)
+    {
+        if (value.Kind() == ValueKind::BigInt)
+        {
+            NoteBigIntLiteral(value);
+        }
+    }
+    void NoteBigIntLiteral(const InternalValue& value);
+    // AddFoldMark for an operator, filter or subscript `node` that may give what a mark watches,
+    // if it may fold at all
+    void NoteWatchedFold(NodeRef<Expression> node);
     // Counts one more chained operator; false past Settings::Limits::maxExpressionOperators
     bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
@@ -343,6 +404,8 @@ private:
     // (PrepareFold) only when it read no name or has such a choice (docs/tasks/0505)
     bool m_readsName = false;
     bool m_foldChoice = false;
+    // The names read so far, which tells whether the operands of an operator read one (ParseBinary)
+    unsigned m_nameReads = 0;
     // What the chain ParseFilterExpression parses filters, in an expression, and
     // m_tupleSliceSubscripts before it (NoteChainStep); null for a filter tag's chain
     NodeRef<Expression> m_chainOperand;
