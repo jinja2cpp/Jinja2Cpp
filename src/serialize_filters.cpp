@@ -137,7 +137,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     [[nodiscard]] bool OnStack(const void* identity) const
     {
         const auto& stack = Stack();
-        return identity && std::find(stack.begin(), stack.end(), identity) != stack.end();
+        return identity != nullptr && std::find(stack.begin(), stack.end(), identity) != stack.end();
     }
 
     // _recursion: what a container met again inside itself prints
@@ -192,6 +192,16 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return out;
     }
 
+    // Whether a container of this identity is met for the first time; one with none always is
+    static bool FirstVisit(const void* identity, detail::FlatSet<const void*>& seen)
+    {
+        if (!identity)
+        {
+            return true;
+        }
+        return seen.insert(identity).second;
+    }
+
     // Whether val holds a list that has no size (a host generator), which reading consumes. `seen`: the lists and dicts
     // already asked, so that a container that holds itself, or is held twice, is walked once (docs/tasks/0562)
     static bool HasSinglePassList(const InternalValue& val, detail::FlatSet<const void*>& seen)
@@ -209,7 +219,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 return true;
             }
             const auto* identity = list->GetIdentity();
-            if (identity && !seen.insert(identity).second)
+            if (!FirstVisit(identity, seen))
             {
                 return false;
             }
@@ -218,7 +228,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         if (auto map = AsMap(val); map && !map->GetObjectClass() && !map->GetProxiedMapping())
         {
             const auto* identity = map->GetIdentity();
-            if (identity && !seen.insert(identity).second)
+            if (!FirstVisit(identity, seen))
             {
                 return false;
             }
