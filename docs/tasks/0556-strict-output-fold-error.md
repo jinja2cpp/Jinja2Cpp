@@ -1,10 +1,11 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0546]
 touches: [src/expression_parser.cpp#FoldCheckPasses]
 shares: [test/parity/cases/subscripts.py, test/parity/divergences/subscripts.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/987
 ---
 # Strict output whose fold fails with an error that is no UndefinedError
 
@@ -22,3 +23,8 @@ Jinja2 which node covers it when the output does not fold (the optimizer's fold 
 changing the rule.
 
 **Done when.** The corpus line is deleted and the existing `tuple_of_slices_strict_output_*` cases still match.
+
+**As built (batch 12 A).** An output candidate never fails the Load: a failing evaluation, a strict undefined or
+a value str() refuses only means it does not fold (`FoldEvaluator::OutcomeOf`), and its non-output duplicate,
+evaluated next, decides as Jinja2's optimizer does once visit_Output gives up. `FoldCandidate::failsLoad` is false
+for outputs.

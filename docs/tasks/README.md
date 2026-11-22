@@ -612,9 +612,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0551](0551-recursive-closure-earlier-pass-names.md) | A closure of a recursive loop reads a name its last pass did not store from the live frame below | parity | low | done |
 | [0552](0552-block-in-stored-macro-of-nested-render.md) | A block inside a macro a nested render stored renders empty once that render has ended | parity | low | done |
 | [0553](0553-dict-walk-readd-by-erase-epoch.md) | A dict walk misses a key erased and added again when the entry's address is reused | parity | high | done |
-| [0554](0554-fold-check-argument-steps.md) | Tuple-of-slices fold check: candidates inside arguments and literal items | parity | low | open |
-| [0555](0555-strict-fold-errors-outside-tuple-slices.md) | Strict undefined fold errors outside tuple-of-slices templates | parity | low | open |
-| [0556](0556-strict-output-fold-error.md) | Strict output whose fold fails with an error that is no UndefinedError | parity | low | open |
+| [0554](0554-fold-check-argument-steps.md) | Tuple-of-slices fold check: candidates inside arguments and literal items | parity | low | dropped |
+| [0555](0555-strict-fold-errors-outside-tuple-slices.md) | Strict undefined fold errors outside tuple-of-slices templates | parity | low | done |
+| [0556](0556-strict-output-fold-error.md) | Strict output whose fold fails with an error that is no UndefinedError | parity | low | done |
 | [0557](0557-make-module-filter-policies.md) | Macros of a module keep the filter policies of the load | parity | low | open |
 | [0558](0558-python-derived-context-in-loop-bodies.md) | `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context | parity | low | open |
 | [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | open |
@@ -622,9 +622,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0561](0561-engine-set-hash-index-and-live-loop.md) | The engine's set has no hash index, and a loop over a set changed in its body goes on | robustness | low | open |
 | [0562](0562-pprint-self-containing-container.md) | pprint of a list or dict that contains itself fails with a recursion error | parity | low | done |
 | [0563](0563-key-value-pair-tuple-methods.md) | A dictsort or items pair has no tuple methods | parity | low | done |
-| [0564](0564-reject-constants-past-str-digit-limit.md) | Reject integer constants past 4300 digits that survive folding | parity | low | open |
+| [0564](0564-reject-constants-past-str-digit-limit.md) | Reject integer constants past 4300 digits that survive folding | parity | low | done |
 | [0565](0565-set-methods-slow-on-msvc-debug.md) | Set methods over a big range are thousands of times slower in MSVC Debug than in a GCC Debug build | performance | medium | open |
 | [0566](0566-huge-host-big-int-converts-per-access.md) | Stop converting a huge host BigInt on every access | robustness | low | open |
 | [0567](0567-stored-closure-reaching-module-through-capture.md) | A stored closure that reaches a call's module only through its capture keeps the module | parity | low | open |
 | [0568](0568-huge-int-index-and-range-bound.md) | Render a huge integer used as a list index or a range() bound as Python does | robustness | low | open |
+| [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | open |
+| [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | open |
 | [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | open |

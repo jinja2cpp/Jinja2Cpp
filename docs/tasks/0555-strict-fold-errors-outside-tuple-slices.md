@@ -1,10 +1,11 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0546]
 touches: [src/expression_parser.cpp#FoldCheckPasses, src/template_impl.h#FailedFold]
 shares: [test/parity/cases/undefined.py, test/parity/divergences/undefined.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/987
 ---
 # Strict undefined fold errors outside tuple-of-slices templates
 
@@ -31,3 +32,10 @@ Measure the Load cost on bench/ templates (StrictUndefined is uncommon but chat 
 
 **Done when.** The three corpus lines are deleted, and a strict template without such constants loads with no
 measurable cost (bench/count.py Load workloads within noise).
+
+**As built (batch 12 A).** With StrictUndefined, a subscript or a built-in filter of a constant is a watch mark
+(`FoldMarkKind::Watch`), so the expressions around it are fold candidates the Load evaluates as around a tuple-slice
+subscript; a check with no tuple-slice subscript fails with `ErrorCode::UndefinedError`. A literal list, tuple or
+dict candidate fails as Impossible (`FoldCatchesFailure`), as its items' as_const does. New corpus cases:
+`strict_fold_list_item_unrendered`, `strict_fold_output_unrendered`, `strict_fold_subscript_or_unrendered`,
+`strict_fold_default_concat`.
