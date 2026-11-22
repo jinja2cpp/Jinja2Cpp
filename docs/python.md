@@ -496,7 +496,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   objects: `module.ns.count` is what a macro set last, `module.cyc.next()` advances the cycler the macros read, `next(module.cyc)`
   and `module.j()` work, and `repr(module.ns)` is `<Namespace {'count': 1}>`. They outlive the template, as a macro does. Still
   different: a `range` is a list; the object is a `ModuleObject`, not a `jinja2.utils.Namespace` (`isinstance` is false, `callable()`
-  is true of every one); the host cannot set an attribute of `module.ns` yet; each read of a nested namespace
+  is true of every one); Python cannot set an attribute of `module.ns` and an exported list or dict is a copy, not shared with the macros (deliberate: no shared mutable host data, 0575); each read of a nested namespace
   (`module.ns.inner`) is a new object, though one the module shares; a namespace the module holds itself (`ns.me = ns`)
   reprs to a `RecursionError` where Jinja2 prints `{...}`; and one passed back to a macro as an argument is the module's object,
   but inside a list or dict argument it is a copy (a cycler or joiner there cannot be called). The params of a module are

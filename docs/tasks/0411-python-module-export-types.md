@@ -37,8 +37,8 @@ the module's lock as a macro call does. The Python module asks for `Objects` and
 (`module.ns.count`, `module.cyc.next()`, a joiner is callable); a Python object a template read is itself. A thread that
 must wait for another thread's run in the module calls `ModuleOptions::waitForTurn`, where Python lets go of the GIL
 (otherwise a thread inside a macro whose Python callable released the GIL could never take it back), on every path: a
-call, a read of a live object from Python, and the engine reading one handed back to a render or another module. Follow-ups: 0569 (`shared=True` and the engine's
-globals), 0570 (writes through a view, live lists and dicts) and 0559 (lent class globals as Python objects). Known
+call, a read of a live object from Python, and the engine reading one handed back to a render or another module. Follow-ups: 0574 (`shared=True` and the engine's
+globals), 0575 (isinstance, nested identity, reprs; host writes and live lists/dicts stay divergences by the design principle) and 0559 (lent class globals as Python objects). Known
 limits: two modules that store each other's views or macros leak (a cycle across modules is not collected), and two
 modules that call each other through host callables take their locks in opposite orders and can deadlock, as two
 engine modules can; so does a Python callable in a macro that joins a thread which uses the same module.
