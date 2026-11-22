@@ -63,9 +63,11 @@ and the earlier trains of 2026-10, collected for the 2026-11-22 workflow review.
 - A runner-cancelled job (for example fuzz `render_wide` at about 45 minutes): `rerun_failed_jobs`
   once on that run id, merge only when its siblings pass, and record the gap in the merge message.
 - A red job goes to `ci-triage` first; read its summary, not the log.
-- Jobs now carry `timeout-minutes` (60; 90 for sanitizers and clang-tidy) and Windows ctest
-  runs `--timeout 600`, so a hang fails in at most an hour. A new slow MSVC Debug test failing on
-  that cap is the signal docs/tasks/0565 wanted.
+- Job deadlines: PR #982 adds `timeout-minutes` (60; 90 for sanitizers and clang-tidy) and
+  lowers the Windows ctest per-test timeout to 600 s. Until it merges, jobs without a cap run to
+  GitHub's 6 h default and Windows ctest allows 2400 s per test, so a hung job needs a manual
+  cancel and re-run. After it merges, a hang fails within an hour; a new slow MSVC Debug test
+  failing on the cap is the signal docs/tasks/0565 wanted.
 
 ## Traps
 
