@@ -308,6 +308,9 @@ bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const 
 }
 namespace
 {
+// Per thread, not per render (detail::RenderThreadState): the scope spans only DropDuplicates' sort, which runs no
+// sink write and so never suspends. A host callback inside it that renders another template sees it too: that
+// render's host orderings decline for the duration (task 0580 tracks it)
 thread_local bool t_nativeOrderOnly = false;
 
 bool IsOrderingOperator(HostOperator op)

@@ -2229,6 +2229,27 @@ TEST(PublicHostObjectTest, OrderingHandsTheObjectTheKeyIgnoreCaseMakes)
     Render("{{ [x, 'B']|max(case_sensitive=true) }}", params);
     ASSERT_EQ(1U, spec->seen.size());
     EXPECT_EQ("B", spec->seen[0].AsString());
+    // Non-ASCII keys are lowered as str.lower() does, final sigma included: 'ÄΣ' arrives as 'äς'
+    Render("{{ [x, '\xC3\x84\xCE\xA3']|max }}", params);
+    ASSERT_EQ(1U, spec->seen.size());
+    EXPECT_EQ("\xC3\xA4\xCF\x82", spec->seen[0].AsString());
+    RenderW(L"{{ [x, '\u00C4\u03A3']|max }}", params);
+    ASSERT_EQ(1U, spec->seen.size());
+    EXPECT_EQ(L"\u00E4\u03C2", spec->seen[0].AsWString());
+    spec->seen.clear();
+}
+
+TEST(PublicHostObjectTest, GroupbyOrdersHostKeysByTheirOwnOrder)
+{
+    // Python Jinja2 3.1.6: sorted by __lt__, grouped by == (identity here)
+    auto x = std::make_shared<const ToySpec>(Numbered(3));
+    auto y = std::make_shared<const ToySpec>(Numbered(1));
+    const ValuesMap params{ { "x", MakeToy(x) }, { "y", MakeToy(y) } };
+    ExpectBoth("T1:2;T3:1,3;",
+               "{% for g in [{'k': x, 'n': 1}, {'k': y, 'n': 2}, {'k': x, 'n': 3}]|groupby('k') %}{{ g.grouper }}:{{ g.list|map(attribute='n')|join(',') }};{% endfor %}",
+               params);
+    x->seen.clear();
+    y->seen.clear();
 }
 
 TEST(PublicHostObjectTest, UniqueNeverAsksTheObjectForOrder)
@@ -2242,6 +2263,9 @@ TEST(PublicHostObjectTest, UniqueNeverAsksTheObjectForOrder)
     // Outside unique the same objects order
     EXPECT_EQ("[T(1), T(3), T(3)]", Render("{{ [a, c, b]|sort }}", params));
     EXPECT_NE(0, spec->operations + other->operations);
+    // `seen` holds the operand last compared, b itself here: a cycle through the spec
+    spec->seen.clear();
+    other->seen.clear();
 }
 
 TEST(PublicHostObjectTest, OperationResultsOwnWhatTheyKeep)

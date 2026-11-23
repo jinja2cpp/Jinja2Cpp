@@ -3,7 +3,7 @@ status: in-progress
 priority: low
 area: parity
 depends: [0352]
-touches: [include/jinja2cpp/host_object.h, src/host_object.h, src/host_object.cpp, src/public_host_object.cpp, src/value_visitors.h#BinaryMathOperation, src/filters.cpp, src/testers.cpp, src/expression_evaluator.cpp, src/stable_sort_values.h, python/src/adapters.h, python/src/adapters.cpp]
+touches: [include/jinja2cpp/host_object.h, src/host_object.h, src/host_object.cpp, src/public_host_object.cpp, src/value_visitors.h#BinaryMathOperation, src/value_visitors.h#UnaryOperation, src/string_converter_filter.cpp, src/filters.cpp, src/testers.cpp, src/expression_evaluator.cpp, src/stable_sort_values.h, python/src/adapters.h, python/src/adapters.cpp]
 shares: [test/public_host_object_test.cpp]
 ---
 # Host objects: arithmetic and ordering operators

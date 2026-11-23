@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0381]
-touches: [src/value_visitors.h#BinaryMathOperation, src/filters.cpp, src/serialize_filters.cpp, python/src/convert.cpp, python/src/adapters.cpp]
+touches: [src/value_visitors.h#BinaryMathOperation, src/host_object.cpp, src/public_host_object.cpp, src/filters.cpp, src/serialize_filters.cpp, python/src/convert.cpp, python/src/adapters.cpp]
 shares: [test/public_host_object_test.cpp, python/tests/test_values.py]
 ---
 # Host operators: the leftovers of task 0381
@@ -22,12 +22,21 @@ small and independent:
 - **pprint's `_safe_key`** (`src/serialize_filters.cpp`) with host keys: Python orders them by
   `__lt__`, the engine does not.
 - **`[1] + x`** says `unsupported operand type(s) for +: 'list' and 'T'` where Python says
-  `can only concatenate list (not "T") to list`. An existing gap that 0381 did not widen.
+  `can only concatenate list (not "T") to list` (and `(1, 2) + x` the same for tuple). An
+  existing gap that 0381 did not widen.
 - **Host-number cost.** `Fraction ** 10**8` costs what Python's does and is not covered by
   `MaxBigIntBits`; Jinja2's answer is `intercepted_binops`, which is task 0412.
 - **A template macro as an operand** reaches the object as None (`ToHostValue` of a callable
   outside a call), where Python hands it the macro. Safe, since nothing of the template is kept,
   but a host whose `__add__` accepts None would answer.
+
+- **The native-order scope is per thread.** `unique` holds a `thread_local` flag
+  (`src/host_object.cpp`) under which host orderings decline; a host `__eq__` that renders a
+  template sorting host objects during that window gets a TypeError. Move it into the render's
+  own state, or document it.
+- **The Markup flag of an operand is dropped** for `x + m`, `m + x`, `x < m` and `max`: the host
+  gets a plain `str` (as `Equals` does), so `__add__` sees `str` where Python passes `Markup`.
+  Errs toward more escaping, never less.
 
 **Done when.** Each item is fixed, or recorded on the divergence allow-list or in the module's
 docs with the reason, by a regression row in `test/public_host_object_test.cpp` or the module's

@@ -337,7 +337,9 @@ public:
      * when both operands have one type; the engine cannot see the type, so for two host objects the right one is
      * asked with side Right whenever the left declined. An undefined operand fails before the object is asked. A wide
      * template hands a string operand over as a `std::wstring`. A result may be any value, a host object included; it
-     * owns what it keeps, as does an operand it keeps (a list or map operand is an owning copy).
+     * owns what it keeps. A list or map operand the template made is an owning copy; one that is a render parameter
+     * is the caller's own container, valid while the caller keeps it, as for \ref Equals. A \ref IsSequence object is
+     * not asked: `+ * < <= > >=` read it as the list it iterates (the bullet list above).
      */
     [[nodiscard]] virtual std::optional<Value> Operate(HostOperator op, const Value& other, HostOperandSide side) const;
 };
