@@ -361,6 +361,12 @@ def test_a_host_sequence_doubled_in_a_loop_stops_at_the_cap(name):
     assert env.from_string("{{ (v + v)|length }}").render(v=context[name]) == "4"
 
 
+def test_an_array_times_a_list_is_no_repeat():
+    np = pytest.importorskip("numpy")
+    for source in ("{{ a * [1, 2, 3] }}", "{{ [1, 2, 3] * a }}", "{{ a * (1, 2, 3) }}"):
+        assert_same(source, {"a": np.array([1, 2, 3])})
+
+
 def test_a_failing_len_of_a_host_sequence_is_not_skipped_by_the_cap_check():
     class Broken(bytes):
         def __len__(self):

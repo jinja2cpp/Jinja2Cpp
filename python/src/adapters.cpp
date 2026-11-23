@@ -727,7 +727,14 @@ void CheckRepeatSize(PyObject* sequence, PyObject* count)
     const Py_ssize_t times = PyNumber_AsSsize_t(count, nullptr);
     if (times == -1 && PyErr_Occurred())
     {
-        ThrowPending();
+        // A count that is no index (numpy's ndarray has __index__ but refuses it) makes this no repeat: Python decides.
+        // Any other error (an __index__ that raises) propagates
+        if (!PyErr_ExceptionMatches(PyExc_TypeError))
+        {
+            ThrowPending();
+        }
+        PyErr_Clear();
+        return;
     }
     if (times <= 0)
     {
