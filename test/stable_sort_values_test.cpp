@@ -46,7 +46,7 @@ std::vector<std::string> SortedNames(std::vector<Item> items)
 
 TEST(StableSortValuesTest, MatchesStdStableSortWithTies)
 {
-    std::mt19937 rng(381);
+    std::mt19937 rng(381); // NOLINT(bugprone-random-generator-seed): a fixed sample, the same in every run
     const auto byKey = [](const Item& left, const Item& right) { return left.first < right.first; };
     for (std::size_t count : std::vector<std::size_t>{ 0, 1, 2, 3, 15, 16, 17, 31, 32, 33, 47, 64, 100, 257, 1000 })
     {
@@ -68,7 +68,7 @@ TEST(StableSortValuesTest, MatchesStdStableSortWithTies)
 // inside the range (ASan and JINJA2CPP_DEBUG_CONTAINERS check the accesses)
 TEST(StableSortValuesTest, InconsistentComparatorsStayInsideTheRange)
 {
-    std::mt19937 rng(1);
+    std::mt19937 rng(1); // NOLINT(bugprone-random-generator-seed): a fixed sample, the same in every run
     for (std::size_t count : std::vector<std::size_t>{ 2, 5, 16, 17, 40, 100, 1000 })
     {
         const auto items = MakeItems(count, rng);
@@ -96,7 +96,7 @@ TEST(StableSortValuesTest, InconsistentComparatorsStayInsideTheRange)
 
 TEST(StableSortValuesTest, ThrowingComparatorLeavesAPermutation)
 {
-    std::mt19937 rng(2);
+    std::mt19937 rng(2); // NOLINT(bugprone-random-generator-seed): a fixed sample, the same in every run
     for (std::size_t count : std::vector<std::size_t>{ 3, 16, 17, 40, 200 })
     {
         const auto items = MakeItems(count, rng);

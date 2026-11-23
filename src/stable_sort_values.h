@@ -16,34 +16,42 @@ namespace detail
 // Sorted runs start this long; insertion sort is cheaper than merging below it.
 constexpr std::ptrdiff_t StableSortRunLength = 16;
 
-// Guarded insertion sort of [first + begin, first + end): the scan stops at begin whatever
-// comp answers, unlike libstdc++'s unguarded insertion, which relies on comp(x, *first) being
-// consistent with an earlier answer and walks below first when it is not.
+// Binary insertion sort of [first + begin, first + end): each item goes after the equal ones
+// before it (stable), found by a binary search inside the sorted prefix, so the search stays in
+// the prefix whatever comp answers. libstdc++'s unguarded insertion instead relies on
+// comp(x, *first) agreeing with an earlier answer and walks below first when it does not.
 template<typename Iterator, typename Compare>
 void StableSortInsertRun(Iterator first, std::ptrdiff_t begin, std::ptrdiff_t end, Compare& comp)
 {
     for (std::ptrdiff_t idx = begin + 1; idx < end; ++idx)
     {
-        if (!comp(first[idx], first[idx - 1]))
+        auto item = first + idx;
+        // The first prefix item that *item sorts before; a hand-written std::upper_bound, whose
+        // checking-library form verifies that the prefix is partitioned and so calls comp again.
+        // No item-before-last shortcut: it saves comparisons on sorted input only, and costs one
+        // per item on any other (a run of 16 then takes more comparisons than libstdc++'s sort)
+        std::ptrdiff_t low = begin;
+        std::ptrdiff_t high = idx;
+        while (low < high)
+        {
+            const std::ptrdiff_t mid = low + ((high - low) / 2);
+            if (comp(*item, first[mid]))
+            {
+                high = mid;
+            }
+            else
+            {
+                low = mid + 1;
+            }
+        }
+        if (low == idx)
         {
             continue;
         }
-        auto moving = std::move(first[idx]);
-        std::ptrdiff_t hole = idx;
-        try
-        {
-            do
-            {
-                first[hole] = std::move(first[hole - 1]);
-                --hole;
-            } while (hole > begin && comp(moving, first[hole - 1]));
-        }
-        catch (...)
-        {
-            first[hole] = std::move(moving);
-            throw;
-        }
-        first[hole] = std::move(moving);
+        auto pos = first + low;
+        auto moving = std::move(*item);
+        std::move_backward(pos, item, item + 1);
+        *pos = std::move(moving);
     }
 }
 
@@ -120,9 +128,9 @@ void StableSortValues(Iterator first, Iterator last, Compare comp)
     buffer.reserve(static_cast<std::size_t>(widest));
     for (std::ptrdiff_t width = detail::StableSortRunLength; width < size; width *= 2)
     {
-        for (std::ptrdiff_t lo = 0; lo + width < size; lo += 2 * width)
+        for (std::ptrdiff_t lo = 0; lo + width < size; lo += (2 * width))
         {
-            detail::StableSortMergeRuns(first, lo, lo + width, std::min(lo + 2 * width, size), buffer, comp);
+            detail::StableSortMergeRuns(first, lo, lo + width, std::min(lo + (2 * width), size), buffer, comp);
         }
     }
 }
