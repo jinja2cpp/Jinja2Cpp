@@ -454,8 +454,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - `env.policies` is read at each render (`urlize.rel`, `urlize.target`, `urlize.extra_schemes`, `truncate.leeway`,
   `json.dumps_function`, `json.dumps_kwargs`) and compared with a copy, so an in-place edit counts; `ext.i18n.trimmed` is read
   when a template loads, as Jinja2 reads it when it compiles `{% trans %}`. `compiler.ascii_str` and unknown keys are ignored,
-  as Jinja2 3 does. The macros of `t.module` and `make_module` keep the policies of the load of their template (Jinja2's read
-  the environment's at each call, 0435). A filter whose arguments are all constants (`{{ 'abcdefghijk'|truncate(10) }}`,
+  as Jinja2 3 does. A macro of `t.module` or `make_module` reads them at each call from Python (0557). A filter whose arguments are all constants (`{{ 'abcdefghijk'|truncate(10) }}`,
   `{{ {'a': 1}|tojson }}`) follows a policy changed after the load, where Jinja2 folds it to its value when it compiles the
   template; the engine does not fold. Only the current `json.dumps_function` is kept: a template loaded under an earlier one
   keeps it for as long as the template lives, and a replaced one is released with the last template that used it.
@@ -491,12 +490,20 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   it go (0406); a load after a filter or test is replaced or removed reads the loader again.
 - An exported macro of `make_module` and `module` has `name`, `arguments`, `catch_kwargs`, `catch_varargs` and
   `caller` as Jinja2's `Macro` has them (0434).
-- `make_module` and `module` give the exports as Python values the host API can carry: a
-  `namespace` becomes a dict, a `cycler` a dict, a `range` a list, a tuple a list, an `Undefined` is
-  `None`, a dict key that is no str is spelled as `str()` spells it, and a Python object (not a str, number,
-  list, dict, Markup or callable) stays itself in the module (attributes and methods are Python's), but a list or dict read off it and exported with `{% set %}` arrives as `{}`, and `dictsort` entries as `{key, value}` dicts. The params of a module are
+- `make_module` and `module` give the exports as Jinja2 gives them: a Python object, and a list or dict read off one,
+  stay themselves (`module.o is o`), an `Undefined` is the environment's `Undefined` class, a tuple and a `dictsort`
+  entry are tuples, and a dict keeps its own keys (0411). A `namespace`, a `cycler` and a `joiner` are the module's own
+  objects: `module.ns.count` is what a macro set last, `module.cyc.next()` advances the cycler the macros read, `next(module.cyc)`
+  and `module.j()` work, and `repr(module.ns)` is `<Namespace {'count': 1}>`. They outlive the template, as a macro does. Still
+  different: a `range` is a list; the object is a `ModuleObject`, not a `jinja2.utils.Namespace` (`isinstance` is false, `callable()`
+  is true of every one); Python cannot set an attribute of `module.ns` and an exported list or dict is a copy, not shared with the macros (deliberate: no shared mutable host data, 0575); each read of a nested namespace
+  (`module.ns.inner`) is a new object, though one the module shares; a namespace the module holds itself (`ns.me = ns`)
+  reprs to a `RecursionError` where Jinja2 prints `{...}`; and one passed back to a macro as an argument is the module's object,
+  but inside a list or dict argument it is a copy (a cycler or joiner there cannot be called). The params of a module are
   copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
-  globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`) (0411).
+  globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`).
+  Calls and reads of one module from several threads take turns, waiting with the GIL released; a Python callable in
+  a macro that joins a thread using the same module, or two modules whose macros call each other from two threads, deadlock (0411).
 - A dict view (`keys()`, `values()`, `items()`) or a set (`d.keys() - []`) of the engine reaches a Python callable as a real
   `dict_keys`, `dict_values`, `dict_items` or `set`, a snapshot of its items at the call (a set of items Python cannot hash
   stays a list); its `.mapping` is then a snapshot dict, whose values are `None` for `dict_keys` and the item positions for

@@ -1,5 +1,6 @@
 // Template.make_module, the macros a module exports, and the meta queries of a template
 // (jinja2.meta): the parts of the Python layer (jinja2cpp/environment.py) that need the engine.
+#include "adapters.h"
 #include "common.h"
 #include "convert.h"
 #include "environment.h"
@@ -9,12 +10,19 @@
 #include <nanobind/stl/string.h>
 
 #include <jinja2cpp/generic_list_iterator.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <memory>
+#include <functional>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -185,6 +193,39 @@ bool IsEvalContext(nb::handle object)
     return false;
 }
 
+// ModuleOptions::waitForTurn: a thread that waits for another thread's run in the module lets go of the GIL meanwhile,
+// which that thread's Python callables may need. Called on an entry into the engine, which holds the GIL (RenderScope)
+void WaitWithoutGil(const std::function<void()>& wait)
+{
+    if (!HoldsGil())
+    {
+        wait();
+        return;
+    }
+    PyThreadState* saved = PyEval_SaveThread();
+    try
+    {
+        wait();
+    }
+    catch (...)
+    {
+        PyEval_RestoreThread(saved);
+        throw;
+    }
+    PyEval_RestoreThread(saved);
+}
+
+// What a macro or an object of a module needs to run in it, as ExportToPython passes it on
+struct ExportContext
+{
+    nb::object bound;
+    nb::object environment;
+    nb::object templateGlobals;
+    nb::object templateName;
+};
+
+nb::object ExportToPython(const jinja2::Value& value, const ExportContext& context, const std::string& name);
+
 // A macro of a module (Template.make_module, Template.module): it runs in its module, which
 // the callable keeps alive with the template, so it stays callable after the template, the
 // module object and every other reference to them are gone (docs/tasks/0284). It holds the
@@ -193,12 +234,12 @@ bool IsEvalContext(nb::handle object)
 class ModuleMacro
 {
 public:
-    ModuleMacro(jinja2::UserCallable callable, nb::object bound, nb::object environment, nb::object templateGlobals, nb::object templateName, std::string name)
-        : m_bound(std::move(bound))
+    ModuleMacro(jinja2::UserCallable callable, const ExportContext& context, std::string name)
+        : m_bound(context.bound)
         , m_callable(std::move(callable))
-        , m_environment(std::move(environment))
-        , m_templateGlobals(std::move(templateGlobals))
-        , m_templateName(std::move(templateName))
+        , m_environment(context.environment)
+        , m_templateGlobals(context.templateGlobals)
+        , m_templateName(context.templateName)
         , m_name(std::move(name))
     {
         // Jinja2's Macro attributes, read once; the macro's own name, not the name it is exported under
@@ -278,9 +319,12 @@ public:
         state.sandbox = SandboxOf(m_environment);
         state.sandboxAllNames = entry.sandboxAllNames;
         const RenderScope scope(state);
+        // env.policies as they are now, as Jinja2 reads them each time a filter runs (docs/tasks/0557)
+        jinja2::ModuleCallOptions callOptions;
+        callOptions.filterPolicies = entry.policies;
         try
         {
-            auto result = ToPython(m_callable.callable(params));
+            auto result = ExportToPython(jinja2::CallModuleMacro(m_callable, params, callOptions), Context(), m_name);
             RaiseAbort(state);
             if (autoescape >= 0 && PyUnicode_Check(result.ptr()))
             {
@@ -305,6 +349,7 @@ public:
         }
     }
 
+    [[nodiscard]] ExportContext Context() const { return ExportContext{ m_bound, m_environment, m_templateGlobals, m_templateName }; }
     [[nodiscard]] const std::string& Name() const { return m_name; }
     [[nodiscard]] nb::tuple Arguments() const
     {
@@ -352,6 +397,178 @@ private:
     bool m_caller = false;
 };
 
+// Whether the engine's object class `objectClass` (or null) is one a module exports as a live object
+bool IsModuleObjectClass(const char* objectClass)
+{
+    if (!objectClass)
+    {
+        return false;
+    }
+    const std::string_view name(objectClass);
+    return name == "Namespace" || name == "Cycler" || name == "Joiner";
+}
+
+// A namespace, a cycler or a joiner of a module (Template.make_module, Template.module): the module's own object, not a
+// copy, so that `module.ns.count` is what the macros set last and `module.cyc.next()` advances the cycler they read
+// (docs/tasks/0411). It holds the engine's view of the object, which holds the module: like a macro it outlives the
+// template and every other reference to the module. Every read runs in the module, as a macro call does, and gives Python
+// a copy of the attribute (a nested namespace is a new object each time it is read)
+class ModuleObject
+{
+public:
+    ModuleObject(jinja2::Value value, const ExportContext& context, std::string name)
+        : m_bound(context.bound)
+        , m_value(std::move(value))
+        , m_environment(context.environment)
+        , m_templateGlobals(context.templateGlobals)
+        , m_templateName(context.templateName)
+        , m_name(std::move(name))
+    {
+    }
+    ModuleObject(const ModuleObject&) = delete;
+    ModuleObject& operator=(const ModuleObject&) = delete;
+    ModuleObject(ModuleObject&&) = delete;
+    ModuleObject& operator=(ModuleObject&&) = delete;
+    ~ModuleObject() = default;
+
+    [[nodiscard]] ExportContext Context() const { return ExportContext{ m_bound, m_environment, m_templateGlobals, m_templateName }; }
+    // The engine's value, which the host API passes back to the module (ToEngine)
+    [[nodiscard]] const jinja2::Value& Value() const { return m_value; }
+
+    nb::object GetAttr(const std::string& name) const
+    {
+        return Read([&] {
+            const auto* map = m_value.GetIf<jinja2::GenericMap>();
+            std::optional<jinja2::Value> found = map ? map->Find(name) : std::nullopt;
+            if (!found)
+            {
+                PyErr_Format(PyExc_AttributeError, "'%s' object has no attribute '%s'", ClassName(), name.c_str());
+                throw nb::python_error();
+            }
+            return ExportToPython(*found, Context(), m_name + "." + name);
+        });
+    }
+
+    // Jinja2's Namespace.__repr__ is <Namespace {attributes}>, the others' the default object repr
+    nb::object Repr(nb::handle self) const
+    {
+        if (std::string_view(ClassName()) != "Namespace")
+        {
+            const auto text = "<jinja2.utils." + std::string(ClassName()) + " object at 0x" + AddressOf(self) + ">";
+            return nb::str(text.c_str(), text.size());
+        }
+        nb::dict attributes = Read([&] {
+            nb::dict result;
+            const auto* map = m_value.GetIf<jinja2::GenericMap>();
+            for (const auto& [key, item] : map->GetItems())
+            {
+                result[ToPython(key)] = ExportToPython(item, Context(), m_name);
+            }
+            return result;
+        });
+        const auto text = nb::steal<nb::str>(PyObject_Repr(attributes.ptr()));
+        if (!text)
+        {
+            throw nb::python_error();
+        }
+        return nb::str(("<Namespace " + std::string(nb::cast<std::string>(text)) + ">").c_str());
+    }
+
+    // next(cycler) as Jinja2's Cycler, which has __next__ and no __iter__
+    nb::object Next() const
+    {
+        RequireClass("Cycler", "is not an iterator");
+        return GetAttr("next")();
+    }
+    // A joiner is called as it is in the template: '' the first time, then its separator
+    nb::object Call(nb::args args, nb::kwargs kwargs) const
+    {
+        RequireClass("Joiner", "is not callable");
+        return GetAttr("__call__")(*args, **kwargs);
+    }
+
+    int Traverse(visitproc visit, void* arg) const
+    {
+        Py_VISIT(m_bound.ptr());
+        Py_VISIT(m_environment.ptr());
+        Py_VISIT(m_templateGlobals.ptr());
+        Py_VISIT(m_templateName.ptr());
+        return 0;
+    }
+    void Clear() noexcept
+    {
+        // The view first: the module it holds borrows from m_bound
+        m_value = jinja2::Value();
+        m_bound = nb::none();
+        m_environment = nb::none();
+        m_templateGlobals = nb::none();
+        m_templateName = nb::none();
+    }
+
+private:
+    [[nodiscard]] const char* ClassName() const
+    {
+        const auto* map = m_value.GetIf<jinja2::GenericMap>();
+        const char* name = map ? map->GetObjectClass() : nullptr;
+        return name ? name : "object";
+    }
+    void RequireClass(const char* expected, const char* what) const
+    {
+        if (std::string_view(ClassName()) != expected)
+        {
+            PyErr_Format(PyExc_TypeError, "'%s' object %s", ClassName(), what);
+            throw nb::python_error();
+        }
+    }
+    static std::string AddressOf(nb::handle self)
+    {
+        char text[2 * sizeof(void*) + 1];
+        snprintf(text, sizeof(text), "%llx", static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(self.ptr())));
+        return text;
+    }
+
+    // `read` in the module's environment as a macro's call runs, its engine errors raised as Jinja2's
+    template<typename Fn>
+    auto Read(Fn&& read) const -> std::invoke_result_t<Fn>
+    {
+        if (!m_environment.is_valid() || m_environment.is_none())
+        {
+            RaiseTemplateRuntimeError("the module object was cleared by the garbage collector");
+        }
+        auto& env = nb::cast<PyEnvironment&>(m_environment);
+        env.CheckAlive();
+        const auto entry = env.Enter();
+        RenderState state;
+        state.undefinedClass = env.UndefinedClass();
+        state.environment = m_environment.ptr();
+        state.templateGlobals = m_templateGlobals.ptr();
+        state.sandbox = SandboxOf(m_environment);
+        state.sandboxAllNames = entry.sandboxAllNames;
+        const RenderScope scope(state);
+        try
+        {
+            auto result = read();
+            RaiseAbort(state);
+            return result;
+        }
+        catch (const jinja2::BadResultAccess<char>& failure)
+        {
+            ErrorSource where;
+            where.environment = m_environment;
+            where.name = m_templateName;
+            RaiseError(failure.error(), where);
+        }
+    }
+
+    // Declared before m_value, so it goes after it
+    nb::object m_bound;
+    jinja2::Value m_value;
+    nb::object m_environment;
+    nb::object m_templateGlobals;
+    nb::object m_templateName;
+    std::string m_name;
+};
+
 // One level of a nested export, counted against Python's recursion limit
 class ExportDepth
 {
@@ -372,19 +589,19 @@ public:
 
 // An exported value as Python: the macros, also in lists and dicts, stay callable
 // (ModuleMacro); the rest as the engine's values become Python's (ToPython)
-nb::object ExportToPython(const jinja2::Value& value, const nb::object& bound, const nb::object& environment, const nb::object& templateGlobals, const nb::object& templateName, const std::string& name)
+nb::object ExportToPython(const jinja2::Value& value, const ExportContext& context, const std::string& name)
 {
     const ExportDepth depth;
     if (const auto* callable = value.GetIf<jinja2::UserCallable>())
     {
-        return nb::cast(new ModuleMacro(*callable, bound, environment, templateGlobals, templateName, name), nb::rv_policy::take_ownership);
+        return nb::cast(new ModuleMacro(*callable, context, name), nb::rv_policy::take_ownership);
     }
     if (const auto* list = value.GetIf<jinja2::ValuesList>())
     {
         nb::list result;
         for (const auto& item : *list)
         {
-            result.append(ExportToPython(item, bound, environment, templateGlobals, templateName, name));
+            result.append(ExportToPython(item, context, name));
         }
         return result;
     }
@@ -393,25 +610,50 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& bound, c
         nb::list result;
         for (const auto& item : *list)
         {
-            result.append(ExportToPython(item, bound, environment, templateGlobals, templateName, name));
+            result.append(ExportToPython(item, context, name));
         }
-        return result;
+        // A tuple of the template, whose macros stay ModuleMacro as in a list
+        if (!list->IsTuple())
+        {
+            return result;
+        }
+        auto tuple = nb::steal(PySequence_Tuple(result.ptr()));
+        if (!tuple.is_valid())
+        {
+            throw nb::python_error();
+        }
+        return tuple;
     }
     if (const auto* map = value.GetIf<jinja2::ValuesMap>())
     {
         nb::dict result;
         for (const auto& [key, item] : *map)
         {
-            result[MakeStr(key)] = ExportToPython(item, bound, environment, templateGlobals, templateName, name);
+            result[MakeStr(key)] = ExportToPython(item, context, name);
         }
         return result;
     }
     if (const auto* map = value.GetIf<jinja2::GenericMap>())
     {
-        nb::dict result;
-        for (const auto& [key, item] : *map)
+        // A Python object the template read, and an undefined value, are what they were (ModuleExports::Objects)
+        if (AsPyHost(value) || jinja2::UndefinedOf(value))
         {
-            result[MakeStr(key)] = ExportToPython(item, bound, environment, templateGlobals, templateName, name);
+            return ToPython(value);
+        }
+        // A namespace, a cycler or a joiner is the module's own (ModuleExports::Objects)
+        if (IsModuleObjectClass(map->GetObjectClass()))
+        {
+            return nb::cast(new ModuleObject(value, context, name), nb::rv_policy::take_ownership);
+        }
+        // The entries under their own keys: `{1: 'a', '1': 'b'}` stays two entries
+        nb::dict result;
+        for (const auto& [key, item] : map->GetItems())
+        {
+            auto pyKey = ToPython(key);
+            if (PyDict_SetItem(result.ptr(), pyKey.ptr(), ExportToPython(item, context, name).ptr()) != 0)
+            {
+                throw nb::python_error();
+            }
         }
         return result;
     }
@@ -437,8 +679,34 @@ int MacroClear(PyObject* self)
     return 0;
 }
 
+int ObjectTraverse(PyObject* self, visitproc visit, void* arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    if (!nb::inst_ready(self))
+    {
+        return 0;
+    }
+    return nb::inst_ptr<ModuleObject>(self)->Traverse(visit, arg);
+}
+
+int ObjectClear(PyObject* self)
+{
+    if (nb::inst_ready(self))
+    {
+        nb::inst_ptr<ModuleObject>(self)->Clear();
+    }
+    return 0;
+}
+
+PyType_Slot g_objectSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&ObjectTraverse) }, { Py_tp_clear, reinterpret_cast<void*>(&ObjectClear) }, { 0, nullptr } };
+
 PyType_Slot g_macroSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&MacroTraverse) }, { Py_tp_clear, reinterpret_cast<void*>(&MacroClear) }, { 0, nullptr } };
 } // namespace
+
+const jinja2::Value* ModuleObjectValue(nb::handle object)
+{
+    return nb::isinstance<ModuleObject>(object) ? &nb::cast<const ModuleObject&>(object).Value() : nullptr;
+}
 
 PyEnvironment& PyTemplate::LiveEnvironment() const
 {
@@ -476,12 +744,31 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     state.templateGlobals = m_globals.ptr();
     state.sandbox = SandboxOf(m_environment);
     state.sandboxAllNames = entry.sandboxAllNames;
+    jinja2::TemplateModule module;
+    nb::dict exports;
     auto result = [&] {
         const RenderScope scope(state);
         // Polled as a render is, and so are the calls of its macros, which keep the poll: Ctrl-C stops them
         jinja2::RenderOptions options;
         options.poll = RenderPoll();
-        return m_template.MakeModule(values, options);
+        // And env.policies as they are now, which a call of a macro replaces with those of its own entry
+        options.filterPolicies = entry.policies;
+        // The exports keep what the template made of them: an object of the host, an undefined value, a tuple
+        jinja2::ModuleOptions moduleOptions;
+        moduleOptions.exports = jinja2::ModuleExports::Objects;
+        moduleOptions.waitForTurn = &WaitWithoutGil;
+        auto made = m_template.MakeModule(values, options, moduleOptions);
+        // In the scope, which an undefined value needs for its class
+        if (made)
+        {
+            module = std::move(made).value();
+            const ExportContext context{ m_bound, m_environment, m_globals, m_name };
+            for (auto& [name, value] : module.exports)
+            {
+                exports[MakeStr(name)] = ExportToPython(value, context, name);
+            }
+        }
+        return made;
     }();
     RaiseAbort(state);
     if (!result)
@@ -493,12 +780,6 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         where.syntaxNote = kIncludedSyntaxNote;
         where.render = true;
         RaiseError(result.error(), where);
-    }
-    auto module = std::move(result).value();
-    nb::dict exports;
-    for (auto& [name, value] : module.exports)
-    {
-        exports[MakeStr(name)] = ExportToPython(value, m_bound, m_environment, m_globals, m_name, name);
     }
     return nb::make_tuple(MakeStr(module.body), exports);
 }
@@ -553,5 +834,10 @@ void BindTemplateModule(nb::module_& module)
         .def_prop_ro("catch_kwargs", &ModuleMacro::CatchKwargs)
         .def_prop_ro("catch_varargs", &ModuleMacro::CatchVarargs)
         .def_prop_ro("caller", &ModuleMacro::Caller);
+    nb::class_<ModuleObject>(module, "ModuleObject", nb::type_slots(g_objectSlots), nb::is_weak_referenceable())
+        .def("__getattr__", &ModuleObject::GetAttr)
+        .def("__repr__", [](nb::handle self) { return nb::cast<const ModuleObject&>(self).Repr(self); })
+        .def("__next__", &ModuleObject::Next)
+        .def("__call__", &ModuleObject::Call);
 }
 } // namespace jinja2cpp_py

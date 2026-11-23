@@ -199,7 +199,9 @@ inline CycleCollector* SharedSnapshotKeeper(const RenderWorkspace& workspace, co
 // is stored in never refers to the host's (template_module.cpp)
 // With `generic`, a GenericList or GenericMap as a list or dict of its items, which the host may free once a render
 // nested in another one returns (docs/tasks/0524)
-InternalValue OwnedArgument(const Value& value, bool generic = false);
+// `self` is the module (TemplateModuleState) the value is an argument of: an object of its own that it exported (ModuleObjectView)
+// is the object itself, or a copy of it in a list or dict
+InternalValue OwnedArgument(const Value& value, bool generic = false, const void* self = nullptr);
 
 class ITemplateImpl
 {
@@ -598,7 +600,7 @@ public:
 
     // Template::MakeModule: renders the template, which `self` owns, as a module for the host, with the host's
     // globals and poll of `options` when it is not null (template_module.cpp)
-    static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params, const RenderOptions* options = nullptr);
+    static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params, const RenderOptions* options = nullptr, const ModuleOptions* module = nullptr);
 
     // What a render takes besides its params (Template::RenderTo with RenderOptions, docs/tasks/0357 B3)
     struct RenderHooks

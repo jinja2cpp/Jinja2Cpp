@@ -139,6 +139,9 @@ private:
     bool m_alive = true;
 };
 
+// The engine's value of `object` when it is a ModuleObject (a namespace, cycler or joiner of a module, template_module.cpp), else null
+const jinja2::Value* ModuleObjectValue(nb::handle object);
+
 // Raises the engine's TemplateRuntimeError for a sequence of `count` items longer than the render's
 // Limits::maxSequenceSize (the engine's built-in cap when it sets none), with the engine's message
 void CheckSequenceSize(unsigned long long count);

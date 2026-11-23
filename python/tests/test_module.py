@@ -1,6 +1,9 @@
 """Template.make_module and Template.module: exports, macros, lifetimes, and jinja2.meta."""
 
+import faulthandler
 import gc
+import threading
+import time
 import weakref
 
 import jinja2
@@ -168,8 +171,8 @@ def test_module_params_and_exports_are_copies():
             data["k"].append(3)
             assert mod.d == {"k": [1, 2]}
             data["k"].pop()
-        # The host API has one empty value: an exported Undefined arrives as None (docs/python.md)
-        assert (mod.u is None) if module is jinja2cpp else isinstance(mod.u, jinja2.Undefined)
+        # An exported Undefined is the environment's Undefined (0411)
+        assert isinstance(mod.u, module.Undefined) and not mod.u
 
 
 # jinja2.meta
@@ -391,7 +394,8 @@ def test_python_object_params_keep_attributes_lists_and_methods():
     source = "{% set t = users[0].tags %}{% set called = users[0].m() %}{% macro g(u) %}{{ u.tags|join(',') }}{{ u.m() }}{% endmacro %}{{ users[0].name }}"
     mods = [m.Environment().from_string(source).make_module({"users": [User()]}) for m in (jinja2cpp, jinja2)]
     assert str(mods[0]) == str(mods[1]) == "u"
-    # an exported host list is not readable by the export copy yet (docs/tasks/0411)
+    # a list read off a Python object is that list (0411)
+    assert mods[0].t == mods[1].t == ["a", "b"]
     assert mods[0].called == "called"
     assert mods[0].g(User()) == mods[1].g(User()) == "a,bcalled"
 
@@ -427,3 +431,197 @@ def test_module_macro_attributes():
         for attribute in ("name", "arguments", "catch_kwargs", "catch_varargs", "caller"):
             assert getattr(mine, attribute) == getattr(expected, attribute), (name, attribute)
     assert ours.foo.arguments == ("a", "b")
+
+
+class Tagged:
+    def __init__(self):
+        self.tags = ["a", "b"]
+
+
+def test_module_exports_keep_python_objects():
+    obj = Tagged()
+    source = "{% set o = obj %}{% set tags = obj.tags %}{% set lst = [obj] %}{% set tup = (obj, 1) %}{% set d = {'k': obj} %}"
+    mods = both(source, {"obj": obj})
+    for mod in mods:
+        assert mod.o is obj and mod.tags is obj.tags and mod.lst[0] is obj and mod.tup[0] is obj and mod.d["k"] is obj
+    assert type(mods[0].lst) is type(mods[1].lst) and type(mods[0].tup) is type(mods[1].tup) and type(mods[0].d) is type(mods[1].d)
+
+
+def test_module_exports_undefined():
+    source = "{% set u = nope %}{% set v = [nope, 1] %}"
+    for module in (jinja2cpp, jinja2):
+        mod = module.Environment().from_string(source).make_module()
+        assert type(mod.u) is module.Undefined and str(mod.u) == "" and not mod.u
+        assert type(mod.v[0]) is module.Undefined and mod.v[1] == 1
+        # the environment's class: a strict Undefined is made, and raises where it is used
+        env = module.Environment(undefined=module.StrictUndefined)
+        mod = env.from_string(source).make_module()
+        assert type(mod.u) is module.StrictUndefined
+        with pytest.raises(jinja2.UndefinedError):
+            str(mod.u)
+        with pytest.raises(jinja2.UndefinedError):
+            bool(mod.u)
+
+
+def test_module_exports_tuples_pairs_and_keys():
+    source = "{% set t = (1, 'a', (2, 3)) %}{% set ds = {'b': 1, 'a': 2}|dictsort %}{% set d = {1: 'x', 'k': 2, (1, 2): 3, None: 4} %}{% set e = [] %}{% set one = (1,) %}"
+    ours, theirs = both(source)
+    assert ours.t == theirs.t == (1, "a", (2, 3)) and type(ours.t) is tuple
+    assert ours.ds == theirs.ds == [("a", 2), ("b", 1)] and type(ours.ds) is list and type(ours.ds[0]) is tuple
+    assert ours.d == theirs.d == {1: "x", "k": 2, (1, 2): 3, None: 4}
+    assert list(ours.d) == list(theirs.d)
+    assert ours.e == theirs.e == [] and ours.one == theirs.one == (1,)
+
+
+def test_module_exports_macros_stay_callable_in_tuples_and_keyed_dicts():
+    source = "{% macro m(x) %}<{{ x }}>{% endmacro %}{% set t = (m, 1) %}{% set d = {1: m} %}"
+    ours, theirs = both(source)
+    assert ours.t[0](2) == theirs.t[0](2) == "<2>"
+    assert ours.d[1](3) == theirs.d[1](3) == "<3>"
+
+
+LIVE_SOURCE = (
+    "{% set ns = namespace(count=0) %}{% set cyc = cycler('a', 'b', 'c') %}{% set j = joiner('|') %}"
+    "{% macro inc() %}{% set ns.count = ns.count + 1 %}{{ ns.count }}{% endmacro %}"
+    "{% macro cur() %}{{ cyc.current }}{% endmacro %}{% macro nxt() %}{{ cyc.next() }}{% endmacro %}"
+    "{% macro show(x) %}{{ x.count }}{% endmacro %}{% macro set_on(x) %}{% set x.count = 40 %}{% endmacro %}"
+)
+
+
+def test_module_namespace_is_live():
+    ours, theirs = both(LIVE_SOURCE)
+    for mod in (ours, theirs):
+        assert mod.ns.count == 0
+        assert mod.inc() == "1"
+        assert mod.ns.count == 1
+    assert repr(ours.ns) == repr(theirs.ns) == "<Namespace {'count': 1}>"
+    assert str(ours.ns) == str(theirs.ns)
+    assert hasattr(ours.ns, "count") and not hasattr(ours.ns, "nope") and not hasattr(theirs.ns, "nope")
+    with pytest.raises(AttributeError):
+        ours.ns.nope
+    # what a macro does to the namespace it is passed is done to the module's own
+    for mod in (ours, theirs):
+        assert mod.show(mod.ns) == "1"
+        mod.set_on(mod.ns)
+        assert mod.ns.count == 40
+        assert mod.inc() == "41"
+
+
+def test_module_cycler_is_live():
+    ours, theirs = both(LIVE_SOURCE)
+    for mod in (ours, theirs):
+        assert (mod.cyc.next(), mod.cyc.next(), mod.cyc.current, mod.cyc.pos) == ("a", "b", "c", 2)
+        # the macros read the cycler the host advanced, and the host the one they advanced
+        assert (mod.cur(), mod.nxt(), mod.cyc.current, mod.cyc.pos) == ("c", "c", "a", 0)
+        assert next(mod.cyc) == "a"
+        assert mod.cyc.reset() is None
+        assert mod.cyc.current == "a"
+        assert list(mod.cyc.items) == ["a", "b", "c"]
+        assert (mod.j(), mod.j(), mod.j.sep) == ("", "|", "|")
+
+
+def test_module_objects_reject_what_they_are_not():
+    ours, theirs = both(LIVE_SOURCE)
+    for mod in (ours, theirs):
+        for call in (lambda: mod.ns(), lambda: next(mod.ns), lambda: iter(mod.ns), lambda: next(mod.j), lambda: iter(mod.cyc)):
+            with pytest.raises(TypeError):
+                call()
+
+
+def test_module_object_passed_to_render_and_nested():
+    source = "{% set ns = namespace(inner=namespace(n=1), l=[namespace(k=2)]) %}{% set d = {'o': ns.inner} %}{% macro bump() %}{% set i = ns.inner %}{% set i.n = i.n + 1 %}{% endmacro %}"
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        mod = env.from_string(source).make_module()
+        inner = mod.ns.inner
+        assert inner.n == 1 and mod.ns.l[0].k == 2 and mod.d["o"].n == 1
+        mod.bump()
+        assert inner.n == 2 and mod.d["o"].n == 2
+        assert env.from_string("{{ ns.n }}").render(ns=inner) == "2"
+
+
+def test_module_object_outlives_template_and_environment():
+    env = jinja2cpp.Environment()
+    tpl = env.from_string(LIVE_SOURCE)
+    mod = tpl.make_module()
+    ns, cyc, inc = mod.ns, mod.cyc, mod.inc
+    del tpl, env, mod
+    gc.collect()
+    assert ns.count == 0
+    inc()
+    assert ns.count == 1
+    assert cyc.next() == "a" and cyc.current == "b"
+
+
+def test_module_object_cycle_is_collected():
+    env = jinja2cpp.Environment()
+    mod = env.from_string(LIVE_SOURCE).make_module()
+    ns = mod.ns
+    env.keep = ns  # environment -> object -> environment
+    refs = [weakref.ref(env), weakref.ref(ns)]
+    del env, mod, ns
+    gc.collect()
+    assert refs[0]() is None and refs[1]() is None
+
+
+def test_module_object_holding_itself():
+    source = "{% set ns = namespace(n=1) %}{% set ns.me = ns %}"
+    mod = jinja2cpp.Environment().from_string(source).make_module()
+    me = mod.ns.me
+    assert me.n == 1 and me.me.n == 1
+    # Jinja2's repr stops at the dict that repeats; each read here is a new object, so the repr is cut by the recursion limit
+    with pytest.raises(RecursionError):
+        repr(mod.ns)
+    del me, mod
+    gc.collect()
+
+
+def test_module_macro_result_that_is_an_object():
+    source = "{% set cyc = cycler(namespace(n=1), namespace(n=2)) %}"
+    for module in (jinja2cpp, jinja2):
+        mod = module.Environment().from_string(source).make_module()
+        first = mod.cyc.next()
+        assert first.n == 1 and mod.cyc.next().n == 2 and first.n == 1
+
+
+def test_module_waits_without_the_gil():
+    # A macro that sleeps in a Python callable holds the module; a read or a call from another thread waits for it
+    # with the GIL let go, or the sleeping thread could never take the GIL back
+    source = "{% set ns = namespace(count=0) %}{% macro slow(f) %}{{ f() }}{% endmacro %}{% macro inc() %}{% set ns.count = ns.count + 1 %}{% endmacro %}"
+    mod = jinja2cpp.Environment().from_string(source).make_module()
+    started = threading.Event()
+
+    def pause():
+        started.set()
+        time.sleep(0.5)
+        return ""
+
+    worker = threading.Thread(target=lambda: mod.slow(pause))
+    faulthandler.dump_traceback_later(30, exit=True)
+    try:
+        worker.start()
+        assert started.wait(10)
+        assert mod.ns.count == 0
+        mod.inc()
+        assert mod.ns.count == 1
+        worker.join(10)
+        assert not worker.is_alive()
+        # The engine reading a live object handed back to it, in a render and in another module's macro
+        env = jinja2cpp.Environment()
+        other = env.from_string("{% macro peek(v) %}{{ v.count }}{% endmacro %}{% macro first(v) %}{{ v[0].count }}{% endmacro %}").make_module()
+        for read in (lambda: env.from_string("{{ v.count }}").render(v=mod.ns), lambda: other.peek(mod.ns), lambda: other.first([mod.ns])):
+            started.clear()
+            worker = threading.Thread(target=lambda: mod.slow(pause))
+            worker.start()
+            assert started.wait(10)
+            assert read() == "1"
+            worker.join(10)
+        assert not worker.is_alive()
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+
+
+def test_module_reentered_on_the_same_thread():
+    source = "{% set ns = namespace(count=0) %}{% macro run(f) %}{{ f() }}{% endmacro %}{% macro inc() %}{% set ns.count = ns.count + 1 %}{% endmacro %}"
+    mod = jinja2cpp.Environment().from_string(source).make_module()
+    assert mod.run(lambda: str(mod.ns.count) + (mod.inc() or "") + str(mod.ns.count)) == "01"
