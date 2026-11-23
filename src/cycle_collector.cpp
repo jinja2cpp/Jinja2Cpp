@@ -863,29 +863,25 @@ bool KeptObjects::MayHoldKeeper(const InternalValueMap& names) noexcept
 
 void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noexcept
 {
+    // A call that starts while a release empties what it found (a host's object that calls the module as it goes)
+    // leaves the check to the next one: the walk's tables are in use
+    if (m_checking)
+    {
+        return;
+    }
     ++m_calls;
+    m_checking = true;
+    m_liveRoots = liveRoots;
+    m_liveState = state;
+    m_liveRead = false;
     try
     {
-        bool rootsRead = false;
-        const auto check = [this, &rootsRead, liveRoots, state](const InternalValueMap* names) {
-            if (!rootsRead)
-            {
-                m_live.clear();
-                if (liveRoots)
-                {
-                    liveRoots(state, m_live);
-                    std::sort(m_live.begin(), m_live.end());
-                }
-                rootsRead = true;
-            }
-            CheckCopy(names);
-        };
         // A copy CheckCopy releases may keep others as it goes, which come next time
         const auto young = m_young;
         const size_t youngSize = std::exchange(m_youngSize, 0);
         for (size_t i = 0; i != youngSize; ++i)
         {
-            check(young[i]);
+            CheckCopy(young[i]);
         }
         // Then one older copy that is due, looking at a few entries in turn, as ReleaseExpired does
         for (size_t looked = 0; looked != ReleaseLooksPerCall && !m_kept.empty(); ++looked)
@@ -900,13 +896,14 @@ void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noe
             {
                 continue;
             }
-            check(entry.names);
+            CheckCopy(entry.names);
             break;
         }
     }
     catch (...) // NOLINT(bugprone-empty-catch): out of memory; the copies stay until their owners expire or a later call
     {
     }
+    m_checking = false;
 }
 
 bool KeptObjects::FindGroup(const InternalValueMap* names, Group& group) const
@@ -960,8 +957,7 @@ bool KeptObjects::ReadOwners(Group& group) const
     }
     for (size_t i = 0; i != group.size; ++i)
     {
-        // use_count: ordered by the fence below; a count read high keeps the copy
-        group.references[i] = m_kept[group.entries[i]].owner.use_count();
+        group.references[i] = m_kept[group.entries[i]].owner.use_count(); // use_count: ordered by the fence below; read high, it keeps
     }
     std::atomic_thread_fence(std::memory_order_acquire);
     return true;
@@ -977,6 +973,17 @@ bool KeptObjects::WalkCopy(const InternalValueMap& names)
     if (tables.Capacity() == 0)
     {
         tables.Reserve(WalkNodeLimit / 4);
+    }
+    // The module's live roots, read once a call, by the first walk
+    if (!m_liveRead)
+    {
+        m_live.clear();
+        if (m_liveRoots)
+        {
+            m_liveRoots(m_liveState, m_live);
+            std::sort(m_live.begin(), m_live.end());
+        }
+        m_liveRead = true;
     }
     tables.Reset();
     tables.SetLimit(WalkNodeLimit);

@@ -194,7 +194,7 @@ private:
     static constexpr size_t ReleaseLooksPerCall = 4;
     // ReleaseUnreached: the copies kept since the last call it asks about at most, the objects a walk tracks at most,
     // and the most calls a copy found live waits for its next check
-    static constexpr size_t YoungChecksPerCall = 4;
+    static constexpr size_t YoungChecksPerCall = 16;
     static constexpr size_t WalkNodeLimit = 256;
     static constexpr size_t WalkItemLimit = 4096;
     static constexpr uint8_t MaxBackoff = 6;
@@ -209,9 +209,14 @@ private:
     size_t m_checkCursor = 0;
     std::array<const InternalValueMap*, YoungChecksPerCall> m_young{};
     size_t m_youngSize = 0;
-    // The tables of its walk, made on the first one, and the module's live roots it reads
+    // The tables of its walk, made on the first one, and the module's live roots it reads (m_liveRoots)
     std::unique_ptr<WalkTables> m_walk;
     std::vector<const ValueObject*> m_live;
+    // The running ReleaseUnreached's: the module's live roots, whether m_live holds them, and whether it runs
+    LiveRootsFn m_liveRoots = nullptr;
+    const void* m_liveState = nullptr;
+    bool m_liveRead = false;
+    bool m_checking = false;
 };
 
 // The lists, dicts and namespaces a template module's calls made and handed the host, which the

@@ -40,13 +40,14 @@ change to the cycle collector's object model, so it wants an architect plan firs
 **Resolution (option B, plan `0542/plan.md`, Ruslan 2026-11-23).** The leak is an ephemeron cycle: `KeptObjects`
 holds the copy X while its owner, the capture C, lives, and C is held only by the `m_keepAlive` of the blocks of a
 `self` inside a container X holds. `KeptObjects::ReleaseUnreached`, called when a module's outermost call returns
-(after `ReleaseExpired`, before `PruneReplaced`), walks from the values of a copy kept since the last call (and of one
-older copy in turn, with a backoff of 1 to 64 calls) at most 256 objects. When C's every reference comes from
+(after `ReleaseExpired`, before `PruneReplaced`), walks from the values of each copy kept since the last call (up to 16, and
+of one older copy in turn, with a backoff of 1 to 64 calls) at most 256 objects and 4,096 items. When C's every reference comes from
 closure boxes in that walk and none of them is held from outside (the module's live roots, or a count above the
 walk's), the copy's entries go as if C had expired, and what only the copy reached is emptied and let go of as the
 collector's walk does, so the trees go in the same call. Nothing a value reads is rebuilt: a `self` stored out of the
 container (`ns.s = l[0]`) keeps C, and `l.append` sharing stays. References the call's own collector holds for its
-walk (`NoteStore` candidates) do not count as outside. Limits: a copy whose walk passes 256 objects, a frame with
-more than 16 kept records, or a cycle that runs through an inner capture's `outer` stays kept (conservative); a copy
-let go of is freed up to 64 calls late. 0386 (the same shape during a render) can call the check from `Keep`'s prune
+walk (`NoteStore` candidates) do not count as outside. Limits: a copy whose walk passes 256 objects or 4,096 items, a frame with
+more than 16 kept records, more than 16 such copies made by one call (the rest wait for the older-copy turn),
+a call that starts while a release empties what it found (it skips the check), or a cycle that runs through an inner capture's `outer` stays kept (conservative); a copy
+let go of is freed up to 64 calls late, or about a quarter of the kept entries in calls when many are kept. 0386 (the same shape during a render) can call the check from `Keep`'s prune
 point as a follow-up.

@@ -1109,6 +1109,32 @@ TEST_F(ModuleCallTest, ReplacedGroupsEndUnderInjection)
     }
 }
 
+// A call that ends more such copies than one: up to 16 kept since the last call are checked (docs/tasks/0542)
+TEST_F(ModuleCallTest, EveryUseManySelvesInListsPerCallStayFlat)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
+    m_env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+    m_env.GetSettings().cacheSize = 0;
+    m_tpl = Template(&m_env);
+    auto module = MakeModule("{% for i in range(7) %}{% include 'lib' %}{% endfor %}");
+    const auto& m = module.exports["m"];
+    int serial = 0;
+    const auto callMany = [&](int count) {
+        for (int i = 0; i != count; ++i)
+        {
+            m_fs->AddFile("lib", "{% block b %}B{% endblock %}{% set l = [self] %}{# " + std::to_string(1000000 + ++serial) + " #}");
+            ASSERT_EQ("BBBBBBB", Call(m));
+        }
+    };
+    callMany(100);
+    const long before = g_live.load(std::memory_order_relaxed);
+    callMany(1000);
+    EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16);
+}
+
 // A call that fails at any allocation while the copies of names only closures inside them keep are released
 // (docs/tasks/0542) leaves the module working: a copy that stayed goes with a later call
 TEST_F(ModuleCallTest, UnreachedCopiesEndUnderInjection)
@@ -1129,7 +1155,7 @@ TEST_F(ModuleCallTest, UnreachedCopiesEndUnderInjection)
         auto module = MakeModule("[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}", "{% set ns = namespace(s=none) %}");
         const auto& m = module.exports["m"];
         int serial = 0;
-        const auto addLib = [&, lib = lib] { m_fs->AddFile("lib", lib + ("{# " + std::to_string(1000000 + ++serial) + " #}")); };
+        const auto addLib = [&, text = lib] { m_fs->AddFile("lib", text + ("{# " + std::to_string(1000000 + ++serial) + " #}")); };
         addLib();
         ASSERT_EQ(first, Call(m)) << lib;
         long n = 0;
