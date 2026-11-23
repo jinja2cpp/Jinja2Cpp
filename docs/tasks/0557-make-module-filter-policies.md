@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0435]
 touches: [include/jinja2cpp/template.h, src/template.cpp, python/src/template_module.cpp]
 shares: [docs/python.md, python/tests/test_environment_api.py]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/993
 ---
 # Macros of a module keep the filter policies of the load
 

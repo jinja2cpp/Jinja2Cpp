@@ -478,7 +478,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0408](0408-bench-gate-driver-capabilities.md) | Detect the base bench driver's features by a capability marker | ci | low | open |
 | [0409](0409-truncate-tokens-shrink-bound.md) | Bound the host calls of truncate_tokens' shrink loop | robustness | low | done |
 | [0410](0410-python-include-join-path.md) | `include`, `import` and `extends` do not call `env.join_path` | parity | low | done |
-| [0411](0411-python-module-export-types.md) | `make_module` exports lose the type of a namespace, a cycler, a range and an undefined | parity | low | open |
+| [0411](0411-python-module-export-types.md) | `make_module` exports lose the type of a namespace, a cycler, a range and an undefined | parity | low | done |
 | [0412](0412-python-sandbox-operator-interception.md) | Sandbox: `intercepted_binops`, `intercepted_unops`, `call_binop` and `call_unop` | api | low | open |
 | [0413](0413-strict-undefined-sort-unique-key.md) | `sort` and `unique` with `attribute=` do not fail on a StrictUndefined key | parity | low | done |
 | [0414](0414-python-sandbox-policy-on-engine-values.md) | Sandbox policy on the engine's own values | api | low | open |
@@ -615,7 +615,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0554](0554-fold-check-argument-steps.md) | Tuple-of-slices fold check: candidates inside arguments and literal items | parity | low | dropped |
 | [0555](0555-strict-fold-errors-outside-tuple-slices.md) | Strict undefined fold errors outside tuple-of-slices templates | parity | low | done |
 | [0556](0556-strict-output-fold-error.md) | Strict output whose fold fails with an error that is no UndefinedError | parity | low | done |
-| [0557](0557-make-module-filter-policies.md) | Macros of a module keep the filter policies of the load | parity | low | open |
+| [0557](0557-make-module-filter-policies.md) | Macros of a module keep the filter policies of the load | parity | low | done |
 | [0558](0558-python-derived-context-in-loop-bodies.md) | `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context | parity | low | open |
 | [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | open |
 | [0560](0560-ended-block-in-stored-macro-sees-inner-frames.md) | A block in a macro stored by a nested render that failed renders nothing | parity | low | open |
@@ -630,3 +630,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | open |
 | [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | open |
 | [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | open |
+| [0574](0574-make-module-shared-without-engine-globals.md) | `make_module(shared=True)` keeps the engine's own globals | parity | low | open |
+| [0575](0575-module-object-parity-leftovers.md) | What a live module object still lacks of Jinja2's, short of shared mutable data | parity | low | open |

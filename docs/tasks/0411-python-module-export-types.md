@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: parity
 depends: [0354, 0284]
 touches: [python/src/template_module.cpp, src/template_module.cpp]
 shares: [python/tests/test_module.py, docs/python.md]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/993
 ---
 # `make_module` exports lose the type of a namespace, a cycler, a range and an undefined
 
