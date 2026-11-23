@@ -1,7 +1,9 @@
 """Values crossing between Python and the engine (0248 D4, D6), against Python Jinja2."""
 
 import collections
+import array
 import dataclasses
+import datetime
 import decimal
 import fractions
 import types
@@ -96,6 +98,32 @@ class SizedIterable:
     def __iter__(self):
         return iter("ab")
 
+@dataclasses.dataclass(frozen=True)
+class Key:
+    """Orders by __lt__ only, as a host object that has no other operator"""
+
+    value: int
+
+    def __lt__(self, other):
+        return self.value < other.value
+
+    def __repr__(self):
+        return f"Key({self.value})"
+
+
+@dataclasses.dataclass
+class Holder:
+    key: Key
+
+
+class Stops:
+    def __add__(self, other):
+        raise StopIteration
+
+
+DEC = decimal.Decimal
+FRAC = fractions.Fraction
+
 CASES = [
     # dict: items, attributes, methods, non-string keys, filters that want a mapping
     ("{{ d.a }} {{ d['a'] }} {{ d.get('z', 0) }} {{ d.items()|list }} {{ d|length }}", {"d": {"a": 1, "b": 2}}),
@@ -137,6 +165,26 @@ CASES = [
     ("{{ f }} {{ f|round(1) }} {{ b }} {{ b + 1 }} {{ none }} {{ none is none }}", {"f": 2.25, "b": True, "none": None}),
     ("{{ s }} {{ s|length }} {{ s|reverse }} {{ s[2:] }}", {"s": "żółw 🐢 \x00 end"}),
     ("{{ e }} {{ e|int }}", {"e": __import__("enum").IntEnum("E", "A B").B}),
+    # operators of host objects are Python's: Decimal, Fraction, datetime, a user __lt__ (task 0381)
+    ("{{ d + 1 }} {{ 1 + d }} {{ d - 1 }} {{ 10 - d }} {{ d * 2 }} {{ 2 * d }} {{ d / 2 }} {{ 1 / d }} {{ d // 2 }} {{ d % 2 }} {{ d ** 2 }}", {"d": DEC("3")}),
+    ("{{ d + d }} {{ d * d }} {{ d - e }} {{ d < e }} {{ e < d }} {{ d >= 3 }} {{ 4 > d }} {{ 3 <= d }}", {"d": DEC("3.5"), "e": DEC("1.25")}),
+    ("{{ -d }} {{ +d }} {{ d is odd }} {{ d is even }} {{ d is divisibleby 3 }} {{ d < 4 }}", {"d": DEC("3")}),
+    ("{{ ds|max }} {{ ds|min }} {{ ds|sum }} {{ ds|sort }} {{ ds|sort(reverse=true) }} {{ ds|sum(start=1) }}", {"ds": [DEC("2.5"), DEC("1"), DEC("3")]}),
+    ("{{ a + b }} {{ a - b }} {{ a * b }} {{ a / b }} {{ a // b }} {{ a % b }} {{ a ** 2 }} {{ -a }} {{ a < b }} {{ a + 1 }} {{ 2 * a }}", {"a": FRAC(1, 2), "b": FRAC(1, 3)}),
+    ("{{ [a, b]|max }} {{ [a, b]|sort }} {{ [a, b]|sum }}", {"a": FRAC(1, 2), "b": FRAC(1, 3)}),
+    ("{{ t + d }} {{ d + t }} {{ t - d }} {{ t - u }} {{ d - d }} {{ d * 2 }} {{ -d }} {{ t < u }} {{ u >= t }}",
+     {"t": datetime.datetime(2020, 1, 1), "u": datetime.datetime(2021, 6, 7, 8), "d": datetime.timedelta(days=1, hours=2)}),
+    ("{{ [t, u]|max }} {{ [u, t]|min }} {{ [u, t]|sort }} {{ [d, d + d]|sum }}",
+     {"t": datetime.datetime(2020, 1, 1), "u": datetime.datetime(2021, 6, 7, 8), "d": datetime.timedelta(days=1)}),
+    ("{{ ks|sort }} {{ ks|sort(reverse=true) }} {{ ks|max }} {{ ks|min }} {{ ks[0] < ks[1] }} {{ ks[0] > ks[1] }}", {"ks": [Key(2), Key(1), Key(3)]}),
+    ("{% for k, g in hs|groupby('key') %}{{ k }}:{{ g|map(attribute='key')|list|length }};{% endfor %}", {"hs": [Holder(Key(2)), Holder(Key(1)), Holder(Key(2))]}),
+    ("{{ hs|sort(attribute='key')|map(attribute='key')|list }} {{ hs|max(attribute='key') }}", {"hs": [Holder(Key(2)), Holder(Key(1))]}),
+    # bytes, bytearray, array and deque repeat as Python repeats them
+    ("{{ b * 3 }} {{ 3 * b }} {{ ba * 2 }} {{ ar * 2 }} {{ dq * 2 }} {{ b * 0 }} {{ b + b }}",
+     {"b": b"ab", "ba": bytearray(b"a"), "ar": array.array("i", [1]), "dq": collections.deque([1])}),
+    # a StopIteration of an operator is Jinja2's RuntimeError, not the end of an iteration (PEP 479)
+    ("{{ s + 1 }}", {"s": Stops()}),
+    ("{% for x in [1] %}{{ s + x }}{% endfor %}", {"s": Stops()}),
 ]
 
 
@@ -151,6 +199,14 @@ TYPE_ERRORS = [
     ("{{ d < d }}", {"d": {}}),
     # `%` formatting names its class (0510)
     ("{{ '%s' % t }}", {"t": (1, 2)}, TypeError),
+    # a host object's operators raise Python's own TypeError (task 0381)
+    ("{{ d + 1.0 }}", {"d": DEC("1")}, TypeError),
+    ("{{ d < 'a' }}", {"d": DEC("1")}, TypeError),
+    ("{{ 'ab' * d }}", {"d": DEC("1")}, TypeError),
+    ("{{ d - 'a' }}", {"d": DEC("1")}, TypeError),
+    ("{{ k <= k }}", {"k": Key(1)}, TypeError),
+    ("{{ k + 1 }}", {"k": Key(1)}, TypeError),
+    ("{{ -k }}", {"k": Key(1)}, TypeError),
 ]
 
 
@@ -281,6 +337,16 @@ def test_a_huge_range_passed_to_python_counts_against_the_sequence_cap():
     with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long"):
         env.from_string("{{ f(range(1000000000000)) }}").render(f=len)
     assert env.from_string("{{ f(range(5)) }}").render(f=len) == "5"
+
+
+@pytest.mark.parametrize("source", ["{{ b * 1000000000 }}", "{{ 1000000000 * b }}", "{{ ba * 10**9 }}", "{{ ar * 10**9 }}", "{{ dq * 10**9 }}", "{{ b * 10**30 }}"])
+def test_a_host_sequence_repeated_past_the_cap_fails_before_python_allocates(source):
+    # bytes, bytearray, array and deque repeat in Python: the length is checked against the cap first
+    env = jinja2cpp.Environment()
+    context = {"b": b"ab", "ba": bytearray(b"ab"), "ar": array.array("i", [1, 2]), "dq": collections.deque([1, 2])}
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        env.from_string(source).render(**context)
+    assert env.from_string("{{ b * 3 }}").render(**context) == str(b"ab" * 3)
 
 
 def test_undefined_items_and_dictsort_pairs_reach_python_as_in_jinja2():

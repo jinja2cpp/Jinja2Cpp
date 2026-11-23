@@ -74,6 +74,7 @@ public:
     [[nodiscard]] bool IsNumber() const override;
     [[nodiscard]] std::optional<jinja2::Value> ToInt() const override;
     [[nodiscard]] std::optional<jinja2::Value> ToFloat() const override;
+    [[nodiscard]] std::optional<jinja2::Value> Operate(jinja2::HostOperator op, const jinja2::Value& other, jinja2::HostOperandSide side) const override;
 
 private:
     // The attribute `name`, checked by the sandbox of the render when there is one; null when there is none

@@ -689,6 +689,110 @@ std::optional<jinja2::Value> PyHost::ToFloat() const
     return ToEngine(nb::steal(number));
 }
 
+namespace
+{
+// A sequence repeated by a count the way `bytes * n`, `bytearray * n`, `array * n` and `deque * n` repeat (Py_sq_repeat) is
+// built by Python before the engine sees it: the length it would have counts against the sequence cap first
+void CheckRepeatSize(PyObject* sequence, PyObject* count)
+{
+    PyTypeObject* const type = Py_TYPE(sequence);
+    if (!PyType_GetSlot(type, Py_sq_repeat) || !PyIndex_Check(count))
+    {
+        return;
+    }
+    const Py_ssize_t length = PyObject_Size(sequence);
+    if (length < 0)
+    {
+        PyErr_Clear();
+        return;
+    }
+    // Clamps an int too large for Py_ssize_t instead of raising
+    const Py_ssize_t times = PyNumber_AsSsize_t(count, nullptr);
+    if (times == -1 && PyErr_Occurred())
+    {
+        PyErr_Clear();
+        return;
+    }
+    if (times <= 0 || length == 0)
+    {
+        return;
+    }
+    const auto size = static_cast<unsigned long long>(length);
+    const auto repeats = static_cast<unsigned long long>(times);
+    constexpr unsigned long long most = ~0ULL;
+    CheckSequenceSize(size > most / repeats ? most : size * repeats);
+}
+} // namespace
+
+// The operators as Python runs them: PyNumber_* and PyObject_RichCompare try the reflected method, the subclass first
+// rule and NotImplemented themselves, and a TypeError is Python's own. Only the exact dict, list and tuple decline: the
+// engine reads those by its own rules
+std::optional<jinja2::Value> PyHost::Operate(jinja2::HostOperator op, const jinja2::Value& other, jinja2::HostOperandSide side) const
+{
+    using jinja2::HostOperator;
+    if (m_kind != Kind::Other)
+    {
+        return std::nullopt;
+    }
+    if (op == HostOperator::Negative)
+    {
+        return ToEngine(Steal(PyNumber_Negative(m_object)));
+    }
+    if (op == HostOperator::Positive)
+    {
+        return ToEngine(Steal(PyNumber_Positive(m_object)));
+    }
+    const auto pyOther = ToPython(other);
+    PyObject* left = m_object;
+    PyObject* right = pyOther.ptr();
+    if (side == jinja2::HostOperandSide::Right)
+    {
+        std::swap(left, right);
+    }
+    PyObject* result = nullptr;
+    switch (op)
+    {
+    case HostOperator::Add:
+        result = PyNumber_Add(left, right);
+        break;
+    case HostOperator::Subtract:
+        result = PyNumber_Subtract(left, right);
+        break;
+    case HostOperator::Multiply:
+        CheckRepeatSize(left, right);
+        CheckRepeatSize(right, left);
+        result = PyNumber_Multiply(left, right);
+        break;
+    case HostOperator::TrueDivide:
+        result = PyNumber_TrueDivide(left, right);
+        break;
+    case HostOperator::FloorDivide:
+        result = PyNumber_FloorDivide(left, right);
+        break;
+    case HostOperator::Remainder:
+        result = PyNumber_Remainder(left, right);
+        break;
+    case HostOperator::Power:
+        result = PyNumber_Power(left, right, Py_None);
+        break;
+    case HostOperator::Less:
+        result = PyObject_RichCompare(left, right, Py_LT);
+        break;
+    case HostOperator::LessEqual:
+        result = PyObject_RichCompare(left, right, Py_LE);
+        break;
+    case HostOperator::Greater:
+        result = PyObject_RichCompare(left, right, Py_GT);
+        break;
+    case HostOperator::GreaterEqual:
+        result = PyObject_RichCompare(left, right, Py_GE);
+        break;
+    default:
+        return std::nullopt;
+    }
+    return ToEngine(Steal(result));
+}
+
 const PyHost* AsPyHost(const jinja2::Value& value)
 {
     const auto* map = value.GetIf<jinja2::GenericMap>();
