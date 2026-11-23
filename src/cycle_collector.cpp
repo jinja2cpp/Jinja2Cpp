@@ -402,18 +402,19 @@ void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const v
         m_pruneAt = std::max(MinPruneAt, m_kept.size() * 2);
     }
     m_kept.push_back(Entry{ std::move(owner), std::move(object), names });
-    if (!names)
+    if (!names || !m_unreached)
     {
         return;
     }
+    auto& u = *m_unreached;
     // The entries of one frame's copy come one after another: the copy is asked about once
     if (!MayHoldKeeper(*names))
     {
         m_kept.back().backoff = NeverChecked;
     }
-    else if (m_youngSize != m_young.size() && (m_youngSize == 0 || m_young[m_youngSize - 1].names != names))
+    else if (u.youngSize != u.young.size() && (u.youngSize == 0 || u.young[u.youngSize - 1].names != names))
     {
-        m_young[m_youngSize++] = Young{ names, m_kept.size() - 1 };
+        u.young[u.youngSize++] = Young{ names, m_kept.size() - 1 };
     }
 }
 
@@ -865,21 +866,22 @@ void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noe
 {
     // A call that starts while a release empties what it found (a host's object that calls the module as it goes)
     // leaves the check to the next one: the walk's tables are in use
-    if (m_checking)
+    if (!m_unreached || m_unreached->checking)
     {
         return;
     }
-    ++m_calls;
-    m_checking = true;
-    m_liveRoots = liveRoots;
-    m_liveState = state;
-    m_liveRead = false;
+    auto& u = *m_unreached;
+    ++u.calls;
+    u.checking = true;
+    u.liveRoots = liveRoots;
+    u.liveState = state;
+    u.liveRead = false;
     try
     {
         // A copy CheckCopy releases may keep others as it goes, which come next time. The newest first: a release
         // moves the entries after it, not those before
-        const auto young = m_young;
-        const size_t youngSize = std::exchange(m_youngSize, 0);
+        const auto young = u.young;
+        const size_t youngSize = std::exchange(u.youngSize, 0);
         for (size_t i = youngSize; i != 0; --i)
         {
             CheckCopy(young[i - 1].names, young[i - 1].index);
@@ -887,14 +889,14 @@ void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noe
         // Then one older copy that is due, looking at a few entries in turn, as ReleaseExpired does
         for (size_t looked = 0; looked != ReleaseLooksPerCall && !m_kept.empty(); ++looked)
         {
-            if (m_checkCursor >= m_kept.size())
+            if (u.checkCursor >= m_kept.size())
             {
-                m_checkCursor = 0;
+                u.checkCursor = 0;
             }
-            const size_t index = m_checkCursor++;
+            const size_t index = u.checkCursor++;
             const auto& entry = m_kept[index];
-            // Due: checkAt is not after m_calls, in a counter that wraps
-            if (!entry.names || entry.backoff == NeverChecked || m_calls - entry.checkAt >= 0x80000000U)
+            // Due: checkAt is not after the calls, in a counter that wraps
+            if (!entry.names || entry.backoff == NeverChecked || u.calls - entry.checkAt >= 0x80000000U)
             {
                 continue;
             }
@@ -905,7 +907,7 @@ void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noe
     catch (...) // NOLINT(bugprone-empty-catch): out of memory; the copies stay until their owners expire or a later call
     {
     }
-    m_checking = false;
+    u.checking = false;
 }
 
 bool KeptObjects::FindGroup(const InternalValueMap* names, size_t hint, Group& group) const
@@ -942,10 +944,11 @@ bool KeptObjects::FindGroup(const InternalValueMap* names, size_t hint, Group& g
 
 void KeptObjects::Delay(const Group& group) noexcept
 {
+    const auto& u = *m_unreached;
     for (size_t i = 0; i != group.size; ++i)
     {
         auto& entry = m_kept[group.entries[i]];
-        entry.checkAt = m_calls + (1U << std::min(entry.backoff, MaxBackoff));
+        entry.checkAt = u.calls + (1U << std::min(entry.backoff, MaxBackoff));
         entry.backoff = static_cast<uint8_t>(std::min<unsigned>(entry.backoff + 1U, MaxBackoff));
     }
 }
@@ -978,29 +981,26 @@ bool KeptObjects::ReadOwners(Group& group) const
 
 bool KeptObjects::WalkCopy(const InternalValueMap& names)
 {
-    if (!m_walk)
-    {
-        m_walk = std::make_unique<WalkTables>();
-    }
-    auto& tables = *m_walk;
+    auto& u = *m_unreached;
+    auto& tables = u.walk;
     if (tables.Capacity() == 0)
     {
         tables.Reserve(WalkNodeLimit / 4);
     }
     // The module's live roots, read once a call, by the first walk
-    if (!m_liveRead)
+    if (!u.liveRead)
     {
-        m_live.clear();
-        if (m_liveRoots)
+        u.live.clear();
+        if (u.liveRoots)
         {
-            m_liveRoots(m_liveState, m_live);
-            std::sort(m_live.begin(), m_live.end());
+            u.liveRoots(u.liveState, u.live);
+            std::sort(u.live.begin(), u.live.end());
         }
-        m_liveRead = true;
+        u.liveRead = true;
     }
     tables.Reset();
     tables.SetLimit(WalkNodeLimit);
-    const auto& live = m_live;
+    const auto& live = u.live;
     auto visit = [&tables, &live](const ValueObject* object) {
         if (object->IsTraversable() && !IsLive(live, object))
         {
@@ -1045,7 +1045,7 @@ bool KeptObjects::OwnersHeldInside(const Group& group) const
 {
     // The closures among what the copy holds that keep an owner (Callable::SetKeepAlive): all of an owner's
     // references, none held from outside
-    const auto& tables = *m_walk;
+    const auto& tables = m_unreached->walk;
     std::array<long, MaxGroup> found{};
     const auto* const owners = group.owners.data();
     const auto* const ownersEnd = owners + group.size;
@@ -1076,7 +1076,7 @@ void KeptObjects::Release(const Group& group)
     // As if the owners had expired. What the walk did not mark is held while the copy goes, then emptied and let go
     // of, as WalkAndClear does: what only the copy reached goes now, with the owners, before the call prunes the
     // trees they held, and a cycle among its containers is broken (`l.append(l)`)
-    auto& tables = *m_walk;
+    auto& tables = m_unreached->walk;
     std::vector<Entry> released;
     released.reserve(group.size);
     for (size_t i = 0; i != tables.Size(); ++i)

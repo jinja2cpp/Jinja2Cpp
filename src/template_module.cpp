@@ -593,6 +593,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         , dropped(std::make_shared<DroppedExports>())
     {
         cells.SetDroppedExports(dropped);
+        // The copies of names its calls keep that only closures inside them keep go when a call ends (docs/tasks/0542)
+        kept.TrackUnreached();
     }
     TemplateModuleState(const TemplateModuleState&) = delete;
     TemplateModuleState(TemplateModuleState&&) = delete;

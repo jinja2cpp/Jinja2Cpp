@@ -139,6 +139,14 @@ public:
     // whose references all come from the walk), so a value that reads it is held from outside and is left as it is.
     // When anything fails, it keeps the copy
     void ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noexcept;
+    // A template module's: Keep notes the copies ReleaseUnreached asks about from now on. Throws std::bad_alloc
+    void TrackUnreached()
+    {
+        if (!m_unreached)
+        {
+            m_unreached = std::make_unique<Unreached>();
+        }
+    }
     // Moves to `other` what is still of use. Throws std::bad_alloc, and then keeps what it did not move
     void MoveInto(KeptObjects& other);
     // Notes to the collector running on this thread the values of the kept copies of names: a
@@ -181,7 +189,7 @@ private:
     // `hint`: the index of one of its entries
     void CheckCopy(const InternalValueMap* names, size_t hint);
     // CheckCopy's steps: the entries of `names` (false: none, or one to leave as it is), their owners (false: the copy
-    // or an owner is held elsewhere), the walk from the copy into m_walk (false: past its limits), whether every
+    // or an owner is held elsewhere), the walk from the copy into the walk tables (false: past its limits), whether every
     // reference to the owners comes from a closure in the walk not held from outside, the release, and the delay of a
     // copy found live. Throw std::bad_alloc before Release changes anything
     [[nodiscard]] bool FindGroup(const InternalValueMap* names, size_t hint, Group& group) const;
@@ -204,26 +212,31 @@ private:
     size_t m_pruneAt = MinPruneAt;
     // The next entry ReleaseExpired looks at
     size_t m_cursor = 0;
-    // ReleaseUnreached's: the calls it ran at, the next entry it looks at, and the copies of names kept since its last
-    // call that may hold a keeper (MayHoldKeeper); more are looked at in turn
-    uint32_t m_calls = 0;
-    size_t m_checkCursor = 0;
+    // ReleaseUnreached's, made by TrackUnreached: the calls it ran at, the next entry it looks at, and the copies of
+    // names kept since its last call that may hold a keeper (MayHoldKeeper); more are looked at in turn
     struct Young
     {
         const InternalValueMap* names = nullptr;
         // Of its first entry, when kept
         size_t index = 0;
     };
-    std::array<Young, YoungChecksPerCall> m_young{};
-    size_t m_youngSize = 0;
-    // The tables of its walk, made on the first one, and the module's live roots it reads (m_liveRoots)
-    std::unique_ptr<WalkTables> m_walk;
-    std::vector<const ValueObject*> m_live;
-    // The running ReleaseUnreached's: the module's live roots, whether m_live holds them, and whether it runs
-    LiveRootsFn m_liveRoots = nullptr;
-    const void* m_liveState = nullptr;
-    bool m_liveRead = false;
-    bool m_checking = false;
+    struct Unreached
+    {
+        uint32_t calls = 0;
+        size_t checkCursor = 0;
+        std::array<Young, YoungChecksPerCall> young{};
+        size_t youngSize = 0;
+        // The tables of its walk, and the module's live roots it reads (liveRoots)
+        WalkTables walk;
+        std::vector<const ValueObject*> live;
+        // The running ReleaseUnreached's: the module's live roots, whether `live` holds them, and whether it runs
+        LiveRootsFn liveRoots = nullptr;
+        const void* liveState = nullptr;
+        bool liveRead = false;
+        bool checking = false;
+    };
+    // Null for a render's, which never calls ReleaseUnreached: its renders pay nothing for it
+    std::unique_ptr<Unreached> m_unreached;
 };
 
 // The lists, dicts and namespaces a template module's calls made and handed the host, which the
