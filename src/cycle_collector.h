@@ -66,6 +66,7 @@ public:
     [[nodiscard]] size_t Size() const noexcept { return m_size; }
     // The nodes in the order found, which grows while the walk goes on
     [[nodiscard]] Node& At(size_t index) noexcept { return m_nodes[index]; }
+    [[nodiscard]] const Node& At(size_t index) const noexcept { return m_nodes[index]; }
     // The index of `object`, or Size() when it is not tracked
     [[nodiscard]] size_t IndexOf(const ValueObject* object) const noexcept;
     // The marking pass's stack: at most one entry for each node
@@ -132,10 +133,11 @@ public:
     // copy, such as the blocks of a `self` in a list the copy holds, and nothing outside reaches them, nothing else
     // ever lets go of it (an ephemeron cycle, docs/tasks/0542). A template module's outermost call that returns asks
     // this of the copies kept since the last call and of one older copy in turn, a walk of at most WalkNodeLimit
-    // objects from the copy's values: a copy found live is asked again after 1, 2, 4 ... up to 64 calls. `liveRoots`
-    // (with `state`), may be null: what the module's names hold, not walked into. It changes nothing a value reads:
-    // the copy goes, and with it what only it held; a cycle among its containers is noted to the collector of the
-    // call (CycleCollector::NoteDropped). When anything fails, it keeps the copy
+    // objects and WalkItemLimit items from the copy's values: a copy found live is asked again after 1, 2, 4 ... up
+    // to 64 calls. `liveRoots` (with `state`), may be null: what the module's names hold, not walked into. What it
+    // empties and lets go of is what only the copy reaches, found as the collector's walk finds garbage (an object
+    // whose references all come from the walk), so a value that reads it is held from outside and is left as it is.
+    // When anything fails, it keeps the copy
     void ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noexcept;
     // Moves to `other` what is still of use. Throws std::bad_alloc, and then keeps what it did not move
     void MoveInto(KeptObjects& other);
@@ -160,10 +162,33 @@ private:
     // Whether `names` holds a value whose object may hold a closure that keeps the copy's owner: a list or a dict, a
     // namespace, but not a `self`, whose blocks the copy holds keep nothing (docs/tasks/0529)
     [[nodiscard]] static bool MayHoldKeeper(const InternalValueMap& names) noexcept;
+    // The items a walk of `object` visits: a list's or dict's size, past WalkItemLimit for one whose size is not known
+    // cheaply. Throws std::bad_alloc
+    [[nodiscard]] static size_t ItemsOf(const ValueObject& object);
+    // The entries that hold one copy, one for each closure record of the frame that keeps it (RenderContext::
+    // CaptureClosures), with their owners and the references each has. A frame with more than MaxGroup is kept
+    static constexpr size_t MaxGroup = 16;
+    struct Group
+    {
+        std::array<size_t, MaxGroup> entries{};
+        std::array<const void*, MaxGroup> owners{};
+        std::array<long, MaxGroup> references{};
+        size_t size = 0;
+    };
     // Whether the copy `names` is held by kept entries only, whose owners are held by closures among what it holds
-    // only, none of which is held from outside (m_live, read already): then releases them. Else delays their next check. Throws
-    // std::bad_alloc, and then changes nothing
+    // only, none of which is held from outside (m_live, read already): then releases them. Else delays their next
+    // check. Throws std::bad_alloc, and then changes nothing
     void CheckCopy(const InternalValueMap* names);
+    // CheckCopy's steps: the entries of `names` (false: none, or one to leave as it is), their owners (false: the copy
+    // or an owner is held elsewhere), the walk from the copy into m_walk (false: past its limits), whether every
+    // reference to the owners comes from a closure in the walk not held from outside, the release, and the delay of a
+    // copy found live. Throw std::bad_alloc before Release changes anything
+    [[nodiscard]] bool FindGroup(const InternalValueMap* names, Group& group) const;
+    [[nodiscard]] bool ReadOwners(Group& group) const;
+    [[nodiscard]] bool WalkCopy(const InternalValueMap& names);
+    [[nodiscard]] bool OwnersHeldInside(const Group& group) const;
+    void Release(const Group& group);
+    void Delay(const Group& group) noexcept;
 
     static constexpr size_t MinPruneAt = 64;
     static constexpr size_t ReleaseLooksPerCall = 4;
@@ -171,6 +196,7 @@ private:
     // and the most calls a copy found live waits for its next check
     static constexpr size_t YoungChecksPerCall = 4;
     static constexpr size_t WalkNodeLimit = 256;
+    static constexpr size_t WalkItemLimit = 4096;
     static constexpr uint8_t MaxBackoff = 6;
     static constexpr uint8_t NeverChecked = 0xFF;
     std::vector<Entry> m_kept;
@@ -343,7 +369,11 @@ public:
     [[nodiscard]] static bool HoldsCandidate(const ValueObject* object)
     {
         const auto* collector = s_current;
-        return collector && collector->m_notes && collector->m_notes->noted.count(object) != 0;
+        if (!collector || !collector->m_notes)
+        {
+            return false;
+        }
+        return collector->m_notes->noted.count(object) != 0;
     }
     // Whether the render noted anything: a store, a container letting go of a value, a frozen cell (docs/tasks/0312)
     [[nodiscard]] bool HasNotes() const noexcept { return m_notes != nullptr; }
