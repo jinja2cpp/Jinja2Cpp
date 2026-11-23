@@ -771,6 +771,16 @@ TEST_F(TemplateModuleChangingSourceTest, SelfInAContainerOutlivesTheInclude)
                              "{% block b %}B2{% endblock %}{% set ns.f = none %}", "{% block b %}B3{% endblock %}", "{% block b %}B4{% endblock %}" }));
 }
 
+// A list too large for the check at the call's end to walk (more than its 256 objects) is kept, and reads as above
+TEST_F(TemplateModuleChangingSourceTest, SelfInALargeListOutlivesTheInclude)
+{
+    const auto results = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% set t='T1' %}{% block b %}B1{{ t }}{% endblock %}{% set l = [self] %}{% for i in range(300) %}{% set _ = l.append([i]) %}"
+                                        "{% endfor %}{% set ns.s = l[0] %}{{ l|length }}",
+                                        "{% block b %}B2{% endblock %}", "{% block b %}B3{% endblock %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]B1T1301", "[B1T1]B2", "[B1T1]B3" }), results);
+}
+
 TEST_F(TemplateModuleChangingSourceTest, WideSelfInAListOutlivesTheInclude)
 {
     const std::string head = "{% set t='T1' %}{% block b %}B1{{ t }}{% endblock %}";

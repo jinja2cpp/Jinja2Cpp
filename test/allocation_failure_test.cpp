@@ -998,7 +998,21 @@ TEST_F(ModuleCallTest, EveryUseStoredSelfLetGoOfStaysFlat)
                                "{% block b %}B{% endblock %}{% set q = self %}",
                                "{% block b %}B{% endblock %}{% macro f() %}{{ 1 }}{% endmacro %}",
                                "{% block b %}B{% endblock %}{% macro f() %}{{ self.b() }}{% endmacro %}",
-                               "{% set q = 2 %}{% macro f() %}{{ q }}{% endmacro %}" })
+                               "{% set q = 2 %}{% macro f() %}{{ q }}{% endmacro %}",
+                               // A `self` in a list or dict the include's top level made, whose blocks keep the frame's
+                               // copy of names, which holds the list: released by the check at the call's end, up to 64
+                               // calls after something let go of what reached it (docs/tasks/0542)
+                               "{% block b %}B{% endblock %}{% set l = [self] %}",
+                               "{% block b %}B{% endblock %}{% set d = {'s': self} %}",
+                               "{% block b %}B{% endblock %}{% set d = {'s': [self]} %}",
+                               "{% block b %}B{% endblock %}{% set l = [self] %}{% macro f() %}{{ l[0].b() }}{% endmacro %}",
+                               "{% block b %}B{% endblock %}{% set l = [self] %}{% macro f() %}{{ l[0].b() }}{% endmacro %}{% if ns.n == 0 %}{% set ns.s = f %}{% endif %}",
+                               "{% block b %}B{% endblock %}{% set l = [self] %}{% if ns.n == 0 %}{% set ns.s = l[0] %}{% endif %}",
+                               "{% block b %}B{% endblock %}{% set l = [[1, self]] %}{% set k = l %}{% macro f() %}{{ k[0][1].b() }}{% endmacro %}",
+                               "{% block b %}B{% endblock %}{% set l = [self] %}{% macro f() %}{% set _ = l.append(1) %}{% endmacro %}{% if ns.n == 0 %}{% set ns.s = f %}{% endif %}",
+                               "{% block b %}B{% endblock %}{% set l = [self] %}{% set _ = l.append(l) %}",
+                               // A macro in a list it reads, the shape of docs/tasks/0386 in an include
+                               "{% set l = [] %}{% macro g() %}{{ l|length }}{% endmacro %}{% set _ = l.append(g) %}" })
     {
         ASSERT_TRUE(!!m_tpl.Load("{% set ns = namespace(s=none, n=0) %}{% macro m() %}{% include 'lib' %}{% if ns.n == 1 %}{% set ns.s = none %}{% endif %}"
                                  "{% set ns.n = ns.n + 1 %}{% endmacro %}"));
@@ -1085,6 +1099,66 @@ TEST_F(ModuleCallTest, ReplacedGroupsEndUnderInjection)
             {
                 addFiles();
                 ASSERT_EQ(expected, Call(m)) << body << " allocation " << n;
+            }
+            if (!fired)
+            {
+                break;
+            }
+        }
+        EXPECT_LT(n, maxAllocations);
+    }
+}
+
+// A call that fails at any allocation while the copies of names only closures inside them keep are released
+// (docs/tasks/0542) leaves the module working: a copy that stayed goes with a later call
+TEST_F(ModuleCallTest, UnreachedCopiesEndUnderInjection)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    m_env.GetSettings().templateLookup = jinja2::TemplateLookup::EveryUse;
+    m_env.GetSettings().cacheSize = 0;
+    m_tpl = Template(&m_env);
+    struct Row
+    {
+        const char* lib;
+        const char* first;
+        const char* expected;
+    };
+    for (const auto& [lib, first, expected] : { Row{ "{% block b %}B{% endblock %}{% set l = [self] %}", "[]B", "[]B" },
+                                                Row{ "{% block b %}B{% endblock %}{% set l = [self] %}{% set ns.s = l[0] %}", "[]B", "[B]B" } })
+    {
+        auto module = MakeModule("[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}", "{% set ns = namespace(s=none) %}");
+        const auto& m = module.exports["m"];
+        int serial = 0;
+        const auto addLib = [&, lib = lib] { m_fs->AddFile("lib", lib + ("{# " + std::to_string(1000000 + ++serial) + " #}")); };
+        addLib();
+        ASSERT_EQ(first, Call(m)) << lib;
+        long n = 0;
+        for (; n != maxAllocations; ++n)
+        {
+            addLib();
+            bool fired = false;
+            bool threw = false;
+            std::string result;
+            OnFreshThread([&] {
+                const Injection injection(n);
+                try
+                {
+                    result = Call(m);
+                }
+                catch (const std::bad_alloc&)
+                {
+                    threw = true;
+                }
+                fired = Injection::Fired();
+            });
+            if (!threw)
+            {
+                ASSERT_EQ(expected, result) << lib << " allocation " << n;
+            }
+            for (int k = 0; k != 2; ++k)
+            {
+                addLib();
+                ASSERT_EQ(expected, Call(m)) << lib << " allocation " << n;
             }
             if (!fired)
             {
