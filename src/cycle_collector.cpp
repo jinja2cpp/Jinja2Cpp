@@ -5,9 +5,11 @@
 #include "render_workspace.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -400,6 +402,19 @@ void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const v
         m_pruneAt = std::max(MinPruneAt, m_kept.size() * 2);
     }
     m_kept.push_back(Entry{ std::move(owner), std::move(object), names });
+    if (!names)
+    {
+        return;
+    }
+    // The entries of one frame's copy come one after another: the copy is asked about once
+    if (!MayHoldKeeper(*names))
+    {
+        m_kept.back().backoff = NeverChecked;
+    }
+    else if (m_youngSize != m_young.size() && (m_youngSize == 0 || m_young[m_youngSize - 1] != names))
+    {
+        m_young[m_youngSize++] = names;
+    }
 }
 
 void KeptObjects::ReleaseAllExpired() noexcept
@@ -804,6 +819,234 @@ void CycleCollector::CollectFrom(std::vector<ValueObjectPtr> roots) noexcept
     WalkAndClear(tables, none, roots);
 }
 
+bool KeptObjects::MayHoldKeeper(const InternalValueMap& names) noexcept
+{
+    return std::any_of(names.begin(), names.end(), [](const auto& entry) {
+        const auto& value = entry.second;
+        const auto* object = detail::InternalValueAccess::Object(value);
+        if (!object || !object->IsTraversable())
+        {
+            return false;
+        }
+        if (AsList(value))
+        {
+            return true;
+        }
+        const auto map = AsMap(value);
+        if (!map)
+        {
+            return false;
+        }
+        const char* objectClass = map->GetObjectClass();
+        return !objectClass || std::strcmp(objectClass, "TemplateReference") != 0;
+    });
+}
+
+void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noexcept
+{
+    ++m_calls;
+    try
+    {
+        bool rootsRead = false;
+        const auto check = [this, &rootsRead, liveRoots, state](const InternalValueMap* names) {
+            if (!rootsRead)
+            {
+                m_live.clear();
+                if (liveRoots)
+                {
+                    liveRoots(state, m_live);
+                    std::sort(m_live.begin(), m_live.end());
+                }
+                rootsRead = true;
+            }
+            CheckCopy(names);
+        };
+        // A copy CheckCopy releases may keep others as it goes, which come next time
+        const auto young = m_young;
+        const size_t youngSize = std::exchange(m_youngSize, 0);
+        for (size_t i = 0; i != youngSize; ++i)
+        {
+            check(young[i]);
+        }
+        // Then one older copy that is due, looking at a few entries in turn, as ReleaseExpired does
+        for (size_t looked = 0; looked != ReleaseLooksPerCall && !m_kept.empty(); ++looked)
+        {
+            if (m_checkCursor >= m_kept.size())
+            {
+                m_checkCursor = 0;
+            }
+            const auto& entry = m_kept[m_checkCursor++];
+            // Due: checkAt is not after m_calls, in a counter that wraps
+            if (!entry.names || entry.backoff == NeverChecked || m_calls - entry.checkAt >= 0x80000000U)
+            {
+                continue;
+            }
+            check(entry.names);
+            break;
+        }
+    }
+    catch (...) // NOLINT(bugprone-empty-catch): out of memory; the copies stay until their owners expire or a later call
+    {
+    }
+}
+
+void KeptObjects::CheckCopy(const InternalValueMap* names)
+{
+    // The entries that hold the copy: one for each closure record of the frame that keeps it (RenderContext::
+    // CaptureClosures). A frame with more is left as it is
+    constexpr size_t MaxGroup = 16;
+    std::array<size_t, MaxGroup> group{};
+    size_t groupSize = 0;
+    for (size_t i = 0; i != m_kept.size(); ++i)
+    {
+        const auto& entry = m_kept[i];
+        if (entry.names != names)
+        {
+            continue;
+        }
+        // An owner that expired: ReleaseExpired's
+        if (groupSize == MaxGroup || !entry.object || entry.owner.expired())
+        {
+            return;
+        }
+        group[groupSize++] = i;
+    }
+    if (groupSize == 0)
+    {
+        // Released already: an address in m_young that a copy no entry holds had
+        return;
+    }
+    const auto delay = [this, &group, groupSize] {
+        for (size_t i = 0; i != groupSize; ++i)
+        {
+            auto& entry = m_kept[group[i]];
+            entry.checkAt = m_calls + (1U << entry.backoff);
+            entry.backoff = std::min<uint8_t>(entry.backoff + 1, MaxBackoff);
+        }
+    };
+    // Held by something else than the entries: a call that reads it
+    if (m_kept[group[0]].object.use_count() != static_cast<long>(groupSize))
+    {
+        delay();
+        return;
+    }
+    // The owners, and the references each has: the closures that keep it, and whatever else holds it. A reference a
+    // host's thread lets go of has its writes ordered before what follows, as IsSoleOwner orders them (docs/tasks/0339)
+    std::array<const void*, MaxGroup> owners{};
+    std::array<long, MaxGroup> references{};
+    std::array<long, MaxGroup> found{};
+    for (size_t i = 0; i != groupSize; ++i)
+    {
+        const auto owner = m_kept[group[i]].owner.lock();
+        if (!owner)
+        {
+            return;
+        }
+        owners[i] = owner.get();
+    }
+    for (size_t i = 0; i != groupSize; ++i)
+    {
+        references[i] = m_kept[group[i]].owner.use_count();
+    }
+    std::atomic_thread_fence(std::memory_order_acquire);
+
+    // The walk from the copy's values: which objects only it reaches, as WalkAndClear finds them
+    if (!m_walk)
+    {
+        m_walk = std::make_unique<WalkTables>();
+    }
+    auto& tables = *m_walk;
+    if (tables.Capacity() == 0)
+    {
+        tables.Reserve(WalkNodeLimit / 4);
+    }
+    tables.Reset();
+    tables.SetLimit(WalkNodeLimit);
+    const auto& live = m_live;
+    auto visit = [&tables, &live](const ValueObject* object) {
+        if (object->IsTraversable() && !IsLive(live, object))
+        {
+            tables.Count(object);
+        }
+    };
+    for (const auto& [name, value] : *names)
+    {
+        TraverseValue(value, visit);
+    }
+    for (size_t next = 0; next != tables.Size(); ++next)
+    {
+        tables.At(next).object->Traverse(visit);
+    }
+    // An object it did not track may hold a closure that keeps an owner, or reach one
+    if (tables.Saturated())
+    {
+        delay();
+        return;
+    }
+    // The call's collector holds what the call stored into (NoteStore) until its walk, which runs after this: not a
+    // reference from outside
+    for (size_t index = 0; index != tables.Size(); ++index)
+    {
+        if (CycleCollector::HoldsCandidate(tables.At(index).object))
+        {
+            ++tables.At(index).refs;
+        }
+    }
+    MarkHeldFromOutside(tables, live);
+    // The closures among what the copy holds that keep an owner (Callable::SetKeepAlive): all of an owner's
+    // references, none held from outside
+    for (size_t index = 0; index != tables.Size(); ++index)
+    {
+        const auto& node = tables.At(index);
+        const auto* box = dynamic_cast<const ValueBox<Callable>*>(node.object);
+        if (!box)
+        {
+            continue;
+        }
+        const void* keepAlive = box->Get().GetKeepAlive();
+        const auto* owner = std::find(owners.begin(), owners.begin() + static_cast<std::ptrdiff_t>(groupSize), keepAlive);
+        if (owner == owners.begin() + static_cast<std::ptrdiff_t>(groupSize))
+        {
+            continue;
+        }
+        if (node.reachable)
+        {
+            delay();
+            return;
+        }
+        ++found[static_cast<size_t>(owner - owners.begin())];
+    }
+    for (size_t i = 0; i != groupSize; ++i)
+    {
+        if (found[i] != references[i])
+        {
+            delay();
+            return;
+        }
+    }
+
+    // Garbage: as if the owners had expired. What the walk did not mark is held while the copy goes, then emptied and
+    // let go of, as WalkAndClear does: what only the copy reached goes now, with the owners, before the call prunes
+    // the trees they held, and a cycle among its containers is broken (`l.append(l)`)
+    std::vector<Entry> released;
+    released.reserve(groupSize);
+    for (size_t i = 0; i != tables.Size(); ++i)
+    {
+        if (!tables.At(i).reachable)
+        {
+            intrusive_ptr_add_ref(tables.At(i).object);
+        }
+    }
+    for (size_t i = 0; i != groupSize; ++i)
+    {
+        released.push_back(std::move(m_kept[group[i]]));
+    }
+    m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const Entry& entry) { return !entry.object; }), m_kept.end());
+    // Once the list is whole again: what they hold may keep in turn as it goes
+    released.clear();
+    ClearGarbage(tables);
+}
+
 WalkTables::WalkTables(WalkTables&& other) noexcept
     : m_nodes(std::move(other.m_nodes))
     , m_slots(std::move(other.m_slots))
@@ -812,6 +1055,7 @@ WalkTables::WalkTables(WalkTables&& other) noexcept
     , m_slotMask(std::exchange(other.m_slotMask, 0))
     , m_size(std::exchange(other.m_size, 0))
     , m_pendingSize(std::exchange(other.m_pendingSize, 0))
+    , m_limit(std::exchange(other.m_limit, 0))
     , m_saturated(std::exchange(other.m_saturated, false))
 {
 }
@@ -883,6 +1127,11 @@ void WalkTables::Count(const ValueObject* object) noexcept
     }
     if (m_saturated)
     {
+        return;
+    }
+    if (m_limit != 0 && m_size == m_limit)
+    {
+        m_saturated = true;
         return;
     }
     if (m_size == m_capacity)
