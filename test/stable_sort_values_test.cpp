@@ -113,13 +113,17 @@ TEST(StableSortValuesTest, ThrowingComparatorLeavesAPermutation)
                 }
                 return left.first < right.first;
             };
+            bool thrown = false;
             try
             {
                 jinja2::StableSortValues(sorted.begin(), sorted.end(), comp);
             }
             catch (const std::runtime_error&)
             {
+                thrown = true;
             }
+            // A sort that finishes before the limit compares no further
+            EXPECT_EQ(calls > limit, thrown) << count << ' ' << limit;
             EXPECT_EQ(names, SortedNames(sorted)) << count << ' ' << limit;
         }
     }
@@ -131,7 +135,7 @@ TEST(StableSortValuesTest, SortFilterIsStableAcrossRuns)
     std::string list = "[";
     for (int idx = 0; idx < 40; ++idx)
     {
-        list += (idx ? "," : "") + std::string("(") + std::to_string(idx * 7 % 5) + ",'" + static_cast<char>('a' + idx % 26) + std::to_string(idx) + "')";
+        list += (idx ? "," : "") + std::string("(") + std::to_string((idx * 7) % 5) + ",'" + static_cast<char>('a' + (idx % 26)) + std::to_string(idx) + "')";
     }
     list += "]";
     const auto render = [&list](const std::string& args) {
