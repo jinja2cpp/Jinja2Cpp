@@ -461,9 +461,9 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
 - Unsupported operands raise Python's own `TypeError` with Python's text (`unsupported operand type(s) for +:
   'decimal.Decimal' and 'float'`), not `TemplateRuntimeError`; any other exception of the method is the template's.
   A `StopIteration` becomes a `RuntimeError`, as in Jinja2.
-- `bytes`, `bytearray`, `array.array`, `collections.deque` and other types that repeat with `*` are checked against the
-  sequence cap before Python builds the result, so `{{ b * 10**9 }}` fails with "too long" instead of allocating.
-  Jinja2 would allocate it. A type that multiplies elementwise (numpy's `ndarray`) is not a repeat and is not checked.
+- `bytes`, `bytearray`, `array.array`, `collections.deque` and other types that repeat with `*` or concatenate with `+`
+  are checked against the sequence cap before Python builds the result, so `{{ b * 10**9 }}`, or a loop that doubles a
+  value with `+`, fails with "too long" instead of allocating, as a `str` or `list` does. Jinja2 would allocate it. A type that multiplies elementwise (numpy's `ndarray`) is not a repeat and is not checked.
 - The cost of a number's own arithmetic (`Fraction ** 10**8`) is not capped by `MaxBigIntBits`; Python Jinja2 behaves
   the same (task 0412).
 

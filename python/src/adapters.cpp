@@ -693,34 +693,65 @@ namespace
 {
 // A sequence repeated by a count the way `bytes * n`, `bytearray * n`, `array * n` and `deque * n` repeat (Py_sq_repeat) is
 // built by Python before the engine sees it: the length it would have counts against the sequence cap first
+// len(x) of an object whose type has a length, nullopt for one without; an error __len__ raises propagates, so a
+// guard never lets an operation through unchecked
+std::optional<unsigned long long> LengthOf(PyObject* object)
+{
+    PyTypeObject* const type = Py_TYPE(object);
+    if (!PyType_GetSlot(type, Py_sq_length) && !PyType_GetSlot(type, Py_mp_length))
+    {
+        return std::nullopt;
+    }
+    const Py_ssize_t length = PyObject_Size(object);
+    if (length < 0)
+    {
+        ThrowPending();
+    }
+    return static_cast<unsigned long long>(length);
+}
+
+// sequence * count of a type that repeats (bytes, bytearray, array, deque): the result's length against the cap,
+// before Python allocates it
 void CheckRepeatSize(PyObject* sequence, PyObject* count)
 {
-    PyTypeObject* const type = Py_TYPE(sequence);
-    if (!PyType_GetSlot(type, Py_sq_repeat) || !PyIndex_Check(count))
+    if (!PyType_GetSlot(Py_TYPE(sequence), Py_sq_repeat) || !PyIndex_Check(count))
     {
         return;
     }
-    const Py_ssize_t length = PyObject_Size(sequence);
-    if (length < 0)
+    const auto length = LengthOf(sequence);
+    if (!length || *length == 0)
     {
-        PyErr_Clear();
         return;
     }
     // Clamps an int too large for Py_ssize_t instead of raising
     const Py_ssize_t times = PyNumber_AsSsize_t(count, nullptr);
     if (times == -1 && PyErr_Occurred())
     {
-        PyErr_Clear();
-        return;
+        ThrowPending();
     }
-    if (times <= 0 || length == 0)
+    if (times <= 0)
     {
         return;
     }
-    const auto size = static_cast<unsigned long long>(length);
     const auto repeats = static_cast<unsigned long long>(times);
     constexpr unsigned long long most = ~0ULL;
-    CheckSequenceSize(size > most / repeats ? most : size * repeats);
+    CheckSequenceSize(*length > most / repeats ? most : *length * repeats);
+}
+
+// left + right of a type that concatenates (bytes, bytearray, array, deque): the sum of the lengths against the cap,
+// so a template loop that doubles a value stops at the cap as a str or list does
+void CheckConcatSize(PyObject* left, PyObject* right)
+{
+    if (!PyType_GetSlot(Py_TYPE(left), Py_sq_concat))
+    {
+        return;
+    }
+    const auto leftLength = LengthOf(left);
+    const auto rightLength = LengthOf(right);
+    if (leftLength && rightLength)
+    {
+        CheckSequenceSize(*leftLength + *rightLength);
+    }
 }
 } // namespace
 
@@ -753,6 +784,8 @@ std::optional<jinja2::Value> PyHost::Operate(jinja2::HostOperator op, const jinj
     switch (op)
     {
     case HostOperator::Add:
+        CheckConcatSize(left, right);
+        CheckConcatSize(right, left);
         result = PyNumber_Add(left, right);
         break;
     case HostOperator::Subtract:

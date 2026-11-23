@@ -38,6 +38,12 @@ small and independent:
   gets a plain `str` (as `Equals` does), so `__add__` sees `str` where Python passes `Markup`.
   Errs toward more escaping, never less.
 
+- **`Markup * x` with an `__index__` object** (`np.int64`, a user class) raises a TypeError
+  where markupsafe repeats the text; the engine's Markup repeat check runs before the host is
+  asked. Its message also names `'Decimal'` where Python names `'decimal.Decimal'`.
+- **The guard calls `__len__` and `__index__` before Python does**, so a `bytes * n` with
+  user-defined `__index__` runs it twice.
+
 **Done when.** Each item is fixed, or recorded on the divergence allow-list or in the module's
 docs with the reason, by a regression row in `test/public_host_object_test.cpp` or the module's
 `test_values.py` that renders as Python does under the pinned Jinja2.

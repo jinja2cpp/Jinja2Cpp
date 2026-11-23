@@ -1,7 +1,7 @@
 """Values crossing between Python and the engine (0248 D4, D6), against Python Jinja2."""
 
-import collections
 import array
+import collections
 import dataclasses
 import datetime
 import decimal
@@ -97,6 +97,7 @@ class SizedIterable:
 
     def __iter__(self):
         return iter("ab")
+
 
 @dataclasses.dataclass(frozen=True)
 class Key:
@@ -347,6 +348,26 @@ def test_a_host_sequence_repeated_past_the_cap_fails_before_python_allocates(sou
     with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
         env.from_string(source).render(**context)
     assert env.from_string("{{ b * 3 }}").render(**context) == str(b"ab" * 3)
+
+
+@pytest.mark.parametrize("name", ["b", "ba", "ar", "dq"])
+def test_a_host_sequence_doubled_in_a_loop_stops_at_the_cap(name):
+    # `+` grows bytes, bytearray, array and deque as it grows str and list: each step is checked against the cap
+    env = jinja2cpp.Environment()
+    context = {"b": b"ab", "ba": bytearray(b"ab"), "ar": array.array("i", [1, 2]), "dq": collections.deque([1, 2])}
+    source = "{% set ns = namespace(v=v) %}{% for i in range(40) %}{% set ns.v = ns.v + ns.v %}{% endfor %}{{ ns.v|length }}"
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        env.from_string(source).render(v=context[name])
+    assert env.from_string("{{ (v + v)|length }}").render(v=context[name]) == "4"
+
+
+def test_a_failing_len_of_a_host_sequence_is_not_skipped_by_the_cap_check():
+    class Broken(bytes):
+        def __len__(self):
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        jinja2cpp.Environment().from_string("{{ (b * 10**9)|length }}").render(b=Broken(b"ab"))
 
 
 def test_undefined_items_and_dictsort_pairs_reach_python_as_in_jinja2():
