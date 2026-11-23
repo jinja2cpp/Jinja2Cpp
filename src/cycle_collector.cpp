@@ -411,9 +411,9 @@ void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const v
     {
         m_kept.back().backoff = NeverChecked;
     }
-    else if (m_youngSize != m_young.size() && (m_youngSize == 0 || m_young[m_youngSize - 1] != names))
+    else if (m_youngSize != m_young.size() && (m_youngSize == 0 || m_young[m_youngSize - 1].names != names))
     {
-        m_young[m_youngSize++] = names;
+        m_young[m_youngSize++] = Young{ names, m_kept.size() - 1 };
     }
 }
 
@@ -876,12 +876,13 @@ void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noe
     m_liveRead = false;
     try
     {
-        // A copy CheckCopy releases may keep others as it goes, which come next time
+        // A copy CheckCopy releases may keep others as it goes, which come next time. The newest first: a release
+        // moves the entries after it, not those before
         const auto young = m_young;
         const size_t youngSize = std::exchange(m_youngSize, 0);
-        for (size_t i = 0; i != youngSize; ++i)
+        for (size_t i = youngSize; i != 0; --i)
         {
-            CheckCopy(young[i]);
+            CheckCopy(young[i - 1].names, young[i - 1].index);
         }
         // Then one older copy that is due, looking at a few entries in turn, as ReleaseExpired does
         for (size_t looked = 0; looked != ReleaseLooksPerCall && !m_kept.empty(); ++looked)
@@ -890,13 +891,14 @@ void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noe
             {
                 m_checkCursor = 0;
             }
-            const auto& entry = m_kept[m_checkCursor++];
+            const size_t index = m_checkCursor++;
+            const auto& entry = m_kept[index];
             // Due: checkAt is not after m_calls, in a counter that wraps
             if (!entry.names || entry.backoff == NeverChecked || m_calls - entry.checkAt >= 0x80000000U)
             {
                 continue;
             }
-            CheckCopy(entry.names);
+            CheckCopy(entry.names, index);
             break;
         }
     }
@@ -906,16 +908,28 @@ void KeptObjects::ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noe
     m_checking = false;
 }
 
-bool KeptObjects::FindGroup(const InternalValueMap* names, Group& group) const
+bool KeptObjects::FindGroup(const InternalValueMap* names, size_t hint, Group& group) const
 {
+    // Keep adds the entries of one copy one after another: the run around `hint`, the index of one of them, without a
+    // scan of the others. An entry another has moved since (a prune, the swap of ReleaseExpired) is not found, and the
+    // copy is then held by more than its group (ReadOwners): kept
     group.size = 0;
-    for (size_t i = 0; i != m_kept.size(); ++i)
+    if (hint >= m_kept.size() || m_kept[hint].names != names)
+    {
+        return false;
+    }
+    size_t first = hint;
+    while (first != 0 && m_kept[first - 1].names == names)
+    {
+        if (hint - first == MaxGroup)
+        {
+            return false;
+        }
+        --first;
+    }
+    for (size_t i = first; i != m_kept.size() && m_kept[i].names == names; ++i)
     {
         const auto& entry = m_kept[i];
-        if (entry.names != names)
-        {
-            continue;
-        }
         // An owner that expired: ReleaseExpired's. A copy that holds no container, at an address a released one had
         if (group.size == MaxGroup || !entry.object || entry.owner.expired() || entry.backoff == NeverChecked)
         {
@@ -923,8 +937,7 @@ bool KeptObjects::FindGroup(const InternalValueMap* names, Group& group) const
         }
         group.entries[group.size++] = i;
     }
-    // None: released already, an address in m_young that a copy no entry holds had
-    return group.size != 0;
+    return true;
 }
 
 void KeptObjects::Delay(const Group& group) noexcept
@@ -1077,16 +1090,27 @@ void KeptObjects::Release(const Group& group)
     {
         released.push_back(std::move(m_kept[group.entries[i]]));
     }
-    m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const Entry& entry) { return !entry.object; }), m_kept.end());
+    // The last entries take their places, as in ReleaseExpired: the order does not matter, and no other entry moves
+    // that ReleaseUnreached is still to look at (it looks at the newest copies first). From the last of the group, so
+    // that one of the group never takes another's place
+    for (size_t i = group.size; i != 0; --i)
+    {
+        const size_t index = group.entries[i - 1];
+        if (index != m_kept.size() - 1)
+        {
+            m_kept[index] = std::move(m_kept.back());
+        }
+        m_kept.pop_back();
+    }
     // Once the list is whole again: what they hold may keep in turn as it goes
     released.clear();
     ClearGarbage(tables);
 }
 
-void KeptObjects::CheckCopy(const InternalValueMap* names)
+void KeptObjects::CheckCopy(const InternalValueMap* names, size_t hint)
 {
     Group group;
-    if (!FindGroup(names, group))
+    if (!FindGroup(names, hint, group))
     {
         return;
     }

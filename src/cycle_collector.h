@@ -178,12 +178,13 @@ private:
     // Whether the copy `names` is held by kept entries only, whose owners are held by closures among what it holds
     // only, none of which is held from outside (m_live, read already): then releases them. Else delays their next
     // check. Throws std::bad_alloc, and then changes nothing
-    void CheckCopy(const InternalValueMap* names);
+    // `hint`: the index of one of its entries
+    void CheckCopy(const InternalValueMap* names, size_t hint);
     // CheckCopy's steps: the entries of `names` (false: none, or one to leave as it is), their owners (false: the copy
     // or an owner is held elsewhere), the walk from the copy into m_walk (false: past its limits), whether every
     // reference to the owners comes from a closure in the walk not held from outside, the release, and the delay of a
     // copy found live. Throw std::bad_alloc before Release changes anything
-    [[nodiscard]] bool FindGroup(const InternalValueMap* names, Group& group) const;
+    [[nodiscard]] bool FindGroup(const InternalValueMap* names, size_t hint, Group& group) const;
     [[nodiscard]] bool ReadOwners(Group& group) const;
     [[nodiscard]] bool WalkCopy(const InternalValueMap& names);
     [[nodiscard]] bool OwnersHeldInside(const Group& group) const;
@@ -207,7 +208,13 @@ private:
     // call that may hold a keeper (MayHoldKeeper); more are looked at in turn
     uint32_t m_calls = 0;
     size_t m_checkCursor = 0;
-    std::array<const InternalValueMap*, YoungChecksPerCall> m_young{};
+    struct Young
+    {
+        const InternalValueMap* names = nullptr;
+        // Of its first entry, when kept
+        size_t index = 0;
+    };
+    std::array<Young, YoungChecksPerCall> m_young{};
     size_t m_youngSize = 0;
     // The tables of its walk, made on the first one, and the module's live roots it reads (m_liveRoots)
     std::unique_ptr<WalkTables> m_walk;

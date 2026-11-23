@@ -554,10 +554,10 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // What closures the host's calls let go of kept goes now, before the slots are asked who holds them
             if (m_callback.calls == 0)
             {
-                m_kept.ReleaseExpired();
                 // And the copies only closures inside them keep (docs/tasks/0542), before the replaced trees, which
-                // what they held may own
+                // what they held may own. First: ReleaseExpired moves the newest entries, where the call's copies are
                 m_kept.ReleaseUnreached(m_liveRoots, m_liveState);
+                m_kept.ReleaseExpired();
             }
             if (m_succeeded && m_callback.calls == 0 && m_callback.HasReplaced())
             {
