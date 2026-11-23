@@ -1034,7 +1034,8 @@ bool KeptObjects::OwnersHeldInside(const Group& group) const
     // references, none held from outside
     const auto& tables = *m_walk;
     std::array<long, MaxGroup> found{};
-    const auto* const ownersEnd = group.owners.begin() + static_cast<std::ptrdiff_t>(group.size);
+    const auto* const owners = group.owners.data();
+    const auto* const ownersEnd = owners + group.size;
     for (size_t index = 0; index != tables.Size(); ++index)
     {
         const auto& node = tables.At(index);
@@ -1043,7 +1044,7 @@ bool KeptObjects::OwnersHeldInside(const Group& group) const
         {
             continue;
         }
-        const auto* owner = std::find(group.owners.begin(), ownersEnd, box->Get().GetKeepAlive());
+        const auto* owner = std::find(owners, ownersEnd, box->Get().GetKeepAlive());
         if (owner == ownersEnd)
         {
             continue;
@@ -1052,7 +1053,7 @@ bool KeptObjects::OwnersHeldInside(const Group& group) const
         {
             return false;
         }
-        ++found[static_cast<size_t>(owner - group.owners.begin())];
+        ++found[static_cast<size_t>(owner - owners)];
     }
     return std::equal(found.begin(), found.begin() + static_cast<std::ptrdiff_t>(group.size), group.references.begin());
 }
