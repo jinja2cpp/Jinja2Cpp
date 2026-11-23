@@ -68,6 +68,13 @@ struct ToySpec
     const char* typeName = "Toy";
     std::optional<Value> toInt;
     std::optional<Value> toFloat;
+    // An object with Python's __add__, __radd__ (an int, giving a new object), __mod__ (an int, giving an int), __mul__ (a
+    // string, giving a string) and __lt__ (another such object): the object of task 0381, printed as T<value>
+    std::optional<int64_t> value;
+    // Its __add__ keeps whatever it is given in the result, as the attribute `other`
+    bool keepOperand = false;
+    // How often the engine asked it to operate
+    mutable int operations = 0;
     // A call keeps the template callable it was handed as `caller`, for a later call to try
     mutable std::optional<UserCallable> kept;
     mutable std::string keptResult;
@@ -281,8 +288,83 @@ public:
     [[nodiscard]] bool IsNumber() const override { return m_spec->number; }
     [[nodiscard]] std::optional<Value> ToInt() const override { return m_spec->toInt; }
     [[nodiscard]] std::optional<Value> ToFloat() const override { return m_spec->toFloat; }
+    [[nodiscard]] std::optional<Value> Operate(HostOperator op, const Value& other, HostOperandSide side) const override
+    {
+        if (!m_spec->value)
+        {
+            return IHostObject::Operate(op, other, side);
+        }
+        m_spec->seen = { other };
+        ++m_spec->operations;
+        const int64_t mine = *m_spec->value;
+        switch (op)
+        {
+        case HostOperator::Add:
+            // __add__ and __radd__ alike
+            if (m_spec->keepOperand)
+            {
+                ToySpec kept;
+                kept.str = "K";
+                kept.attrs = { { "other", other } };
+                return MakeHostValue<ToyObject>(std::make_shared<const ToySpec>(std::move(kept)));
+            }
+            if (other.IsInt())
+            {
+                return WithValue(mine + other.AsInt());
+            }
+            return std::nullopt;
+        case HostOperator::Remainder:
+            if (side == HostOperandSide::Left && other.IsInt() && other.AsInt() != 0)
+            {
+                return Value(mine % other.AsInt());
+            }
+            return std::nullopt;
+        case HostOperator::Multiply:
+            if (side == HostOperandSide::Left && other.IsString())
+            {
+                return Value("mul:" + other.AsString());
+            }
+            if (side == HostOperandSide::Left && other.IsWString())
+            {
+                return Value("mul:" + ConvertString<std::string>(other.AsWString()));
+            }
+            return std::nullopt;
+        case HostOperator::Less:
+            // self < other is __lt__; other < self would be __gt__, which the object has not
+            if (const auto theirs = ValueOf(other); side == HostOperandSide::Left && theirs)
+            {
+                return Value(mine < *theirs);
+            }
+            return std::nullopt;
+        case HostOperator::Greater:
+            // other > self is self.__lt__(other)
+            if (const auto theirs = ValueOf(other); side == HostOperandSide::Right && theirs)
+            {
+                return Value(mine < *theirs);
+            }
+            return std::nullopt;
+        default:
+            return std::nullopt;
+        }
+    }
 
 private:
+    [[nodiscard]] Value WithValue(int64_t value) const
+    {
+        ToySpec next = *m_spec;
+        next.value = value;
+        next.str = "T" + std::to_string(value);
+        next.repr = "T(" + std::to_string(value) + ")";
+        return MakeHostValue<ToyObject>(std::make_shared<const ToySpec>(std::move(next)));
+    }
+    // The value of another such object
+    static std::optional<int64_t> ValueOf(const Value& other)
+    {
+        const auto* map = other.GetIf<GenericMap>();
+        const auto* object = map ? dynamic_cast<const ToyObject*>(map->AsHostObject().get()) : nullptr;
+        return object ? object->m_spec->value : std::nullopt;
+    }
+
     template<typename Map, typename Key>
     static std::optional<Value> Find(const Map& map, const Key& key)
     {
@@ -338,6 +420,30 @@ std::string Render(const std::string& source, const ValuesMap& params, const Opt
 std::wstring RenderW(const std::wstring& source, const ValuesMap& params)
 {
     return Render<wchar_t>(source, params);
+}
+
+// The object of ToySpec::value, which prints as the oracle's Python class does: T3 and T(3)
+ToySpec Numbered(int64_t value)
+{
+    ToySpec spec;
+    spec.value = value;
+    spec.str = "T" + std::to_string(value);
+    spec.repr = "T(" + std::to_string(value) + ")";
+    return spec;
+}
+
+// A narrow template and its wide twin render alike
+void ExpectBoth(const std::string& expected, const std::string& source, const ValuesMap& params)
+{
+    EXPECT_EQ(expected, Render(source, params)) << source;
+    EXPECT_EQ(ConvertString<std::wstring>(expected), RenderW(ConvertString<std::wstring>(source), params)) << source;
+}
+
+// The template's error contains `message`, narrow and wide
+void ExpectBothError(const std::string& message, const std::string& source, const ValuesMap& params)
+{
+    EXPECT_NE(std::string::npos, Render(source, params).find(message)) << source;
+    EXPECT_NE(std::wstring::npos, RenderW(ConvertString<std::wstring>(source), params).find(ConvertString<std::wstring>(message))) << source;
 }
 
 ToySpec Rich()
@@ -2032,6 +2138,142 @@ TEST(PublicHostObjectTest, OddAndEvenTakeTheRemainder)
     EXPECT_NE(std::string::npos, Render("{{ o is odd }}", params).find("unsupported operand type(s) for %: 'Toy' and 'int'"));
     EXPECT_NE(std::string::npos, Render("{{ o is even }}", params).find("unsupported operand type(s) for %: 'Toy' and 'int'"));
     EXPECT_NE(std::wstring::npos, RenderW(L"{{ o is odd }}", params).find(L"unsupported operand type(s) for %: 'Toy' and 'int'"));
+
+    // An object with __mod__ answers (task 0381): 3 % 2 == 1; 4 % 2 == 0
+    const ValuesMap withMod{ { "three", MakeToy(Numbered(3)) }, { "four", MakeToy(Numbered(4)) } };
+    ExpectBoth("True False|False True", "{{ three is odd }} {{ three is even }}|{{ four is odd }} {{ four is even }}", withMod);
+}
+
+TEST(PublicHostObjectTest, ArithmeticAndOrderingAskTheObjectThenTheOther)
+{
+    // The same rows render under Python Jinja2 3.1.6 with a class Toy that has these methods: __add__ and __radd__
+    // (an int, giving a Toy), __mod__ (an int), __mul__ (a str), __lt__ (a Toy), str T<v>, repr T(<v>)
+    const ValuesMap params{ { "x", MakeToy(Numbered(3)) }, { "y", MakeToy(Numbered(1)) }, { "m", Markup("a") } };
+    const std::pair<const char*, const char*> rows[] = {
+        { "x + 1", "T4" },
+        { "1 + x", "T4" },
+        { "(x + 1) + 1", "T5" },
+        { "x + 1 + 1 + 1", "T6" },
+        { "x is odd", "True" },
+        { "x is even", "False" },
+        { "(x + 1) is odd", "False" },
+        { "x is divisibleby 3", "True" },
+        { "x % 2", "1" },
+        { "[x, y]|sort", "[T(1), T(3)]" },
+        { "[x, y]|sort(reverse=true)", "[T(3), T(1)]" },
+        { "[x, y]|sort|first", "T1" },
+        { "x < y", "False" },
+        { "x > y", "True" },
+        { "[x, y]|max", "T3" },
+        { "[y, x]|max", "T3" },
+        { "[x, y]|min", "T1" },
+        { "{'a': x, 'b': y}|dictsort(by='value')", "[('b', T(1)), ('a', T(3))]" },
+        { "[x]|sum", "T3" },
+        { "[1, x]|sum", "T4" },
+        { "x is lt y", "False" },
+        { "x is gt y", "True" },
+        { "x * m", "mul:a" },
+        { "(x * m)|upper", "MUL:A" },
+        { "[x, x]|unique|list", "[T(3)]" },
+        { "[x, y, x]|unique|list", "[T(3), T(1)]" },
+    };
+    for (const auto& [source, expected] : rows)
+    {
+        ExpectBoth(expected, std::string("{{ ") + source + " }}", params);
+    }
+
+    // Both operands decline: today's errors, as Python's text
+    const std::pair<const char*, const char*> errors[] = {
+        { "x + x", "unsupported operand type(s) for +: 'Toy' and 'Toy'" },
+        { "x <= y", "'<=' not supported between instances of 'Toy' and 'Toy'" },
+        { "x >= y", "'>=' not supported between instances of 'Toy' and 'Toy'" },
+        { "x < 1", "'<' not supported between instances of 'Toy' and 'int'" },
+        { "1 > x", "'>' not supported between instances of 'int' and 'Toy'" },
+        { "x - 1", "unsupported operand type(s) for -: 'Toy' and 'int'" },
+        { "x * 2", "unsupported operand type(s) for *: 'Toy' and 'int'" },
+        { "x / 2", "unsupported operand type(s) for /: 'Toy' and 'int'" },
+        { "x // 2", "unsupported operand type(s) for //: 'Toy' and 'int'" },
+        { "x ** 2", "unsupported operand type(s) for ** or pow(): 'Toy' and 'int'" },
+        { "x % 'a'", "unsupported operand type(s) for %: 'Toy' and 'str'" },
+        { "x + 1.5", "unsupported operand type(s) for +: 'Toy' and 'float'" },
+        { "x + none", "unsupported operand type(s) for +: 'Toy' and 'NoneType'" },
+        { "-x", "bad operand type for unary -: 'Toy'" },
+        { "+x", "bad operand type for unary +: 'Toy'" },
+        { "'a' + x", "can only concatenate str (not \"Toy\") to str" },
+        { "m * x", "'Toy' object cannot be interpreted as an integer" },
+    };
+    for (const auto& [source, message] : errors)
+    {
+        ExpectBothError(message, std::string("{{ ") + source + " }}", params);
+    }
+
+    // An object without the methods keeps today's errors
+    const ValuesMap plain{ { "p", MakeToy() }, { "q", MakeToy() } };
+    ExpectBothError("unsupported operand type(s) for +: 'Toy' and 'int'", "{{ p + 1 }}", plain);
+    ExpectBothError("'>' not supported between instances of 'Toy' and 'Toy'", "{{ [p, q]|max }}", plain);
+    ExpectBothError("bad operand type for unary -: 'Toy'", "{{ -p }}", plain);
+}
+
+TEST(PublicHostObjectTest, OrderingHandsTheObjectTheKeyIgnoreCaseMakes)
+{
+    // max compares `item > best`, so 'B' is lowered, as Jinja2's ignore_case key does, and arrives as x.__lt__('b')
+    auto spec = std::make_shared<const ToySpec>(Numbered(3));
+    const ValuesMap params{ { "x", MakeToy(spec) } };
+    EXPECT_NE(std::string::npos, Render("{{ [x, 'B']|max }}", params).find("'>' not supported between instances of 'str' and 'Toy'"));
+    ASSERT_EQ(1U, spec->seen.size());
+    EXPECT_EQ("b", spec->seen[0].AsString());
+    EXPECT_NE(std::wstring::npos, RenderW(L"{{ [x, 'B']|max }}", params).find(L"'>' not supported between instances of 'str' and 'Toy'"));
+    ASSERT_EQ(1U, spec->seen.size());
+    EXPECT_EQ(L"b", spec->seen[0].AsWString());
+    // case_sensitive keeps the text
+    Render("{{ [x, 'B']|max(case_sensitive=true) }}", params);
+    ASSERT_EQ(1U, spec->seen.size());
+    EXPECT_EQ("B", spec->seen[0].AsString());
+}
+
+TEST(PublicHostObjectTest, UniqueNeverAsksTheObjectForOrder)
+{
+    // unique hashes in Python: `==` only. Its sort shortcut must not call a host's __lt__ (a set's subset order is no order)
+    auto spec = std::make_shared<const ToySpec>(Numbered(3));
+    auto other = std::make_shared<const ToySpec>(Numbered(1));
+    const ValuesMap params{ { "a", MakeToy(spec) }, { "b", MakeToy(spec) }, { "c", MakeToy(other) } };
+    ExpectBoth("[T(3), T(1)]", "{{ [a, b, c]|unique|list }}", params);
+    EXPECT_EQ(0, spec->operations + other->operations);
+    // Outside unique the same objects order
+    EXPECT_EQ("[T(1), T(3), T(3)]", Render("{{ [a, c, b]|sort }}", params));
+    EXPECT_NE(0, spec->operations + other->operations);
+}
+
+TEST(PublicHostObjectTest, OperationResultsOwnWhatTheyKeep)
+{
+    // __add__ keeps the operand it is given in its result; the operand is an owning copy
+    ToySpec keeper = Numbered(3);
+    keeper.keepOperand = true;
+    auto spec = std::make_shared<const ToySpec>(keeper);
+    const ValuesMap params{ { "k", MakeToy(spec) } };
+    ExpectBoth("[1, 2]|K", "{% set r = k + [1, 2] %}{{ r.other }}|{{ r }}", params);
+    ExpectBoth("[1, 2]", "{% for i in [k + [1, 2]] %}{{ i.other }}{% endfor %}", params);
+    ExpectBoth("1 2 ", "{% for i in [1, 2] %}{{ (k + [i]).other[0] }} {% endfor %}", params);
+    ExpectBoth("[3]", "{% set ns = namespace(v=none) %}{% set ns.v = k + [3] %}{{ ns.v.other }}", params);
+    ExpectBoth("{'a': 1}", "{{ (k + {'a': 1}).other }}", params);
+
+    // A macro has no call to be lent for here: ToHostValue gives the object None for it, and nothing of the template is kept
+    EXPECT_EQ("True", Render("{% macro f() %}1{% endmacro %}{% set r = k + f %}{{ r.other is none }}", params));
+    ASSERT_EQ(1U, spec->seen.size());
+    EXPECT_TRUE(spec->seen[0].IsNone());
+
+    // A result the host keeps outlives the render, with what it holds
+    std::vector<Value> kept;
+    auto keep = Probe([&kept](const UserCallableParams& callParams) {
+        kept.push_back(callParams["x"]);
+        return Value();
+    });
+    {
+        const ValuesMap keeping{ { "k", MakeToy(spec) }, { "keep", std::move(keep) } };
+        EXPECT_EQ("", Render("{% do keep(k + [1, 2]) %}{% do keep(k + 'text') %}", keeping));
+    }
+    ASSERT_EQ(2U, kept.size());
+    EXPECT_EQ("[1, 2]|K|text", Render("{{ r[0].other }}|{{ r[0] }}|{{ r[1].other }}", { { "r", ValuesList(kept.begin(), kept.end()) } }));
 }
 
 TEST(PublicHostObjectTest, UrlencodeIteratesPairsOrQuotesStr)

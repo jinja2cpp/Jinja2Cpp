@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
@@ -305,6 +306,52 @@ bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const 
     // Python's default __eq__: the same object
     return left != nullptr && right != nullptr && left->Identity() == right->Identity();
 }
+namespace
+{
+thread_local bool t_nativeOrderOnly = false;
+
+bool IsOrderingOperator(HostOperator op)
+{
+    return op >= HostOperator::Less && op <= HostOperator::GreaterEqual;
+}
+} // namespace
+
+NativeOrderScope::NativeOrderScope()
+    : m_previous(t_nativeOrderOnly)
+{
+    t_nativeOrderOnly = true;
+}
+
+NativeOrderScope::~NativeOrderScope()
+{
+    t_nativeOrderOnly = m_previous;
+}
+
+std::optional<InternalValue> Operate(HostOperator op, const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue)
+{
+    if (t_nativeOrderOnly && IsOrderingOperator(op))
+    {
+        return std::nullopt;
+    }
+    if (left)
+    {
+        if (auto result = left->Operate(op, rightValue, HostOperandSide::Left))
+        {
+            return result;
+        }
+    }
+    if (right)
+    {
+        return right->Operate(op, leftValue, HostOperandSide::Right);
+    }
+    return std::nullopt;
+}
+
+std::optional<InternalValue> OperateUnary(HostOperator op, const IEngineHostObject& object)
+{
+    return object.Operate(op, InternalValue(NoneValue()), HostOperandSide::Left);
+}
+
 std::optional<ListAdapter> ExactListOrTuple(const InternalValue& value)
 {
     const auto* host = GetHostObject(value);

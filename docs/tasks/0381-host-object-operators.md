@@ -36,5 +36,8 @@ HostOperandSide)` entry returning `optional<Value>`, the Python module on the fu
 - P0: `StableSortValues` becomes a guarded merge sort. libstdc++'s `std::stable_sort`
   writes below the range when a comparator answers inconsistently, which a host `__lt__`
   reaching `{{ items|sort }}` could do.
-- P1: the seam, the engine dispatch (left, then reflected right) and the toy tests.
+- P1: the seam (`HostOperator`, `HostOperandSide`, `IHostObject::Operate`), the engine dispatch
+  (`+ - * / // % **`, orderings, unary, `odd`/`even`, `min`/`max`/`dictsort`/`groupby`, left
+  then reflected right; `unique` never asks for an order) and the toy tests. Follow-ups that
+  stay out of it: task 0580.
 - P2: the Python module bridge.

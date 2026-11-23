@@ -109,7 +109,10 @@ bool CompareForOrder(const InternalValue& left,
         }
     }
     auto kind = GetOrderKind(left);
-    if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
+    // A host object decides itself, by its __lt__ or __gt__ and then the other operand's reflected one;
+    // BinaryMathOperation raises the same TypeError when neither answers (task 0381)
+    const bool hostOperand = GetHostObject(left) != nullptr || GetHostObject(right) != nullptr;
+    if (!hostOperand && (kind != GetOrderKind(right) || kind == OrderKind::Unordered))
     {
         // Python's max compares item > best, min and sorted item < other (docs/tasks/0420)
         throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + (oper == BinaryExpression::LogicalGt ? ">" : "<") + "' not supported between instances of '" + Apply<visitors::PythonTypeNameGetter>(left) + "' and '" + Apply<visitors::PythonTypeNameGetter>(right) + "'");
@@ -1278,6 +1281,9 @@ void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareTyp
     std::vector<size_t> order(items.size());
     std::iota(order.begin(), order.end(), size_t{ 0 });
     std::vector<UniqueItem> uniqueItems;
+    // The order is a shortcut for the equality pass: a host's `<` (a set's subset order) is no total order, so
+    // host objects decline it and take the quadratic pass (task 0381)
+    const host::NativeOrderScope nativeOrder;
     try
     {
         StableSortValues(order.begin(), order.end(), [&items, compType](size_t i1, size_t i2) {

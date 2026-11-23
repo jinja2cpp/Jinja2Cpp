@@ -24,6 +24,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
@@ -1032,6 +1033,17 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
     }
     if (oper == BinaryExpression::Mul && (leftVal.IsMarkup() || rightVal.IsMarkup()))
     {
+        // `host * Markup` asks the host first, as Python calls x.__mul__; `Markup * host` raises before the host is asked
+        if (rightVal.IsMarkup() && !leftVal.IsMarkup())
+        {
+            if (const auto* leftHost = GetHostObject(leftVal))
+            {
+                if (auto hostResult = host::Operate(HostOperator::Multiply, leftHost, leftVal, nullptr, rightVal))
+                {
+                    return std::move(*hostResult);
+                }
+            }
+        }
         CheckMarkupRepeatCount(leftVal.IsMarkup() ? rightVal : leftVal);
     }
     InternalValue result = Apply2<visitors::BinaryMathOperation>(leftVal, rightVal, oper);
