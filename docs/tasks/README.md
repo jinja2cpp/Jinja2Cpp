@@ -640,3 +640,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0579](0579-render-fixed-cost-creep-2026-11.md) | Render rows crept +1-2% in the week to 2026-11-23, in steps under the bar | perf | low | open |
 | [0580](0580-stored-block-of-an-extending-include-lost.md) | A block stored from inside an extending include renders nothing two calls later | parity | low | open |
 | [0581](0581-failed-include-kept-self-loses-frame-names.md) | A `self` an include stored before it failed reads the include's names as undefined | parity | low | open |
+| [0582](0582-host-operator-followups.md) | Host operators: the leftovers of task 0381 | parity | low | open |
