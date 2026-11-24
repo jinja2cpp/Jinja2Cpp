@@ -448,7 +448,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0376](0376-same-string-getter-round-trip.md) | GetAsSameString moves its string through the PLT | perf | low | done |
 | [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | medium | done |
 | [0380](0380-markup-escape-copy-assignment.md) | MarkupEscape calls InternalValue's copy assignment out of line | perf | low | open |
-| [0381](0381-host-object-operators.md) | Host objects: arithmetic and ordering operators | parity | low | in-progress |
+| [0381](0381-host-object-operators.md) | Host objects: arithmetic and ordering operators | parity | low | done |
 | [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | done |
 | [0383](0383-lazy-filter-results-not-sequences.md) | A lazy filter result is no sequence: `last` and slicing it | parity | low | done |
 | [0384](0384-dormant-chat-preset-load-cost.md) | Keep the dormant chat-template preset free on every Load | perf | low | done |
