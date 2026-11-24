@@ -1,5 +1,5 @@
 ---
-status: dropped
+status: open
 priority: low
 area: parity
 depends: [0546]
@@ -23,7 +23,7 @@ FoldEvaluator-only evaluation, as `EvaluateWithLeft` and `EvaluateLast` are).
 **Done when.** A strict nesting of N filter arguments or list literals around a tuple-of-slices subscript
 evaluates O(N) nodes at Load (a LimitsEnvTest step-limit test with maxExpressionDepth raised).
 
-**Dropped (batch 12 A, 2026-11-22), pending Ruslan's decision.** Measured on the batch 12 A branch (Debug build,
+**Left open for later (Ruslan, 2026-11-24), after batch 12 A proposed dropping it.** Measured on the batch 12 A branch (Debug build,
 -O0): a 33-level nest of `1|default(...)` around a tuple-of-slices subscript under StrictUndefined (near the
 70-bracket maxExpressionDepth cap) loads and renders in about 0.4 ms, against 0.12 ms for one level. An O(N)
 evaluation needs the filter's or literal's own argument evaluation (`BoundArguments::Evaluate`) to take a given
