@@ -419,6 +419,30 @@ def test_a_format_padded_past_the_cap_fails_before_python_allocates(source):
         jinja2cpp.Environment().from_string(source).render(**context)
 
 
+@pytest.mark.parametrize("fmt", [b"%s%s", b"%b%b", b"%r%r"])
+def test_a_format_that_doubles_its_value_stops_at_the_cap(fmt):
+    # The bytes each conversion copies count too: a loop of `fmt % (v, v)` doubles v and stops at the cap
+    source = "{% set ns = namespace(v=v) %}{% for i in range(40) %}{% set ns.v = f % (ns.v, ns.v) %}{% endfor %}{{ ns.v|length }}"
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string(source).render(v=b"x", f=fmt)
+
+
+def test_a_format_counts_the_values_its_mapping_keys_name():
+    m = {b"a": b"x" * (40 * 2**20)}
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string("{{ (f % m)|length }}").render(f=b"%(a)s%(a)s", m=m)
+    assert_same("{{ f % m }}", {"f": b"%(a)s-%(a).2s", "m": {b"a": b"xyz"}})
+
+
+def test_bytes_plus_a_wide_buffer_counts_its_bytes():
+    # bytes + memoryview copies the view's bytes: an array of 8-byte items counts eight per item
+    view = memoryview(array.array("Q", [0]) * 10_000_000)
+    for source in ("{{ (b + v)|length }}", "{{ (ba + v)|length }}"):
+        with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+            jinja2cpp.Environment().from_string(source).render(b=b"x", ba=bytearray(b"x"), v=view)
+    assert_same("{{ (b + v)|length }}", {"b": b"x", "v": memoryview(array.array("Q", [1, 2]))})
+
+
 def test_a_format_within_the_cap_renders_as_python_formats_it():
     context = {"f": b"%*s|%-*d|%%|%.3s|%5.2f|%ld", "b": b"xyz", "fd": b"%(a)s-%(b)05d", "p": bytearray(b"%.*d")}
     for source in ("{{ f % (4, b, 3, 7, b, 2.5, 9) }}", "{{ fd % {'a': b, 'b': 42} }}", "{{ p % (5, 42) }}", "{{ b % () }}",

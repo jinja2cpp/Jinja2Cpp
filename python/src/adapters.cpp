@@ -750,6 +750,30 @@ std::optional<unsigned long long> GuardLength(PyObject* object, int operationSlo
     return length && *length > counted ? *length : counted;
 }
 
+// The bytes a buffer holds (bytes, bytearray, memoryview, array, mmap): what a bytes or bytearray concatenation or
+// a `%s`/`%b` conversion copies, whatever its length in items. nullopt for an object without a buffer
+std::optional<unsigned long long> BufferBytes(PyObject* object)
+{
+    if (!PyObject_CheckBuffer(object))
+    {
+        return std::nullopt;
+    }
+    Py_buffer view{};
+    if (PyObject_GetBuffer(object, &view, PyBUF_RECORDS_RO) < 0)
+    {
+        PyErr_Clear();
+        return std::nullopt;
+    }
+    const auto bytes = static_cast<unsigned long long>(view.len < 0 ? 0 : view.len);
+    PyBuffer_Release(&view);
+    return bytes;
+}
+
+bool IsByteString(PyObject* object)
+{
+    return PyBytes_Check(object) || PyByteArray_Check(object);
+}
+
 // A deque with a maxlen keeps at most that many items of a repeat or a concatenation: the bound of its result
 unsigned long long BoundByMaxlen(PyObject* sequence, unsigned long long length)
 {
@@ -823,7 +847,15 @@ void CheckConcatSize(PyObject* left, PyObject* right)
         return;
     }
     const auto leftLength = GuardLength(left, Py_sq_concat);
-    const auto rightLength = GuardLength(right, Py_sq_concat);
+    auto rightLength = GuardLength(right, Py_sq_concat);
+    // bytes + memoryview copies the view's bytes, not its items
+    if (IsByteString(left))
+    {
+        if (const auto bytes = BufferBytes(right); bytes && (!rightLength || *bytes > *rightLength))
+        {
+            rightLength = bytes;
+        }
+    }
     if (leftLength && rightLength)
     {
         CheckSequenceSize(BoundByMaxlen(left, *leftLength + *rightLength));
@@ -832,9 +864,10 @@ void CheckConcatSize(PyObject* left, PyObject* right)
 
 // The padding a printf-style bytes format adds: a width, written in the format or taken by `*` from the arguments,
 // makes a conversion that long, and a precision does for a number (`%.*d` pads zeros; a string conversion truncates).
-// `b'%*s' % (10**9, b'x')` would build it before the engine sees it, so the sum counts against the cap first. The
-// converted values themselves exist already. A str format is the engine's own (PercentFormat); a format Python
-// rejects is left to Python's own error
+// `b'%*s' % (10**9, b'x')` would build it before the engine sees it, so the sum counts against the cap first, with
+// the format's own text and the bytes a `%s`, `%b`, `%r` or `%a` copies from a buffer (a loop of `fmt % (v, v)` doubles
+// v). Another value's own conversion (`__bytes__`, a repr) is its own cost. A str format is the engine's own
+// (PercentFormat); a format Python rejects is left to Python's own error
 void CheckFormatSize(PyObject* format, PyObject* args)
 {
     const char* text = nullptr;
@@ -861,7 +894,8 @@ void CheckFormatSize(PyObject* format, PyObject* args)
     const Py_ssize_t argCount = tuple ? PyTuple_Size(args) : 1;
     Py_ssize_t argIndex = 0;
     constexpr unsigned long long most = ~0ULL >> 2;
-    unsigned long long total = 0;
+    unsigned long long total = static_cast<unsigned long long>(size);
+    const auto add = [&](unsigned long long count) { total = total > most - count ? most : total + count; };
     // A star takes the next argument: an int, or Python raises
     const auto star = [&](bool width) -> unsigned long long {
         if (argIndex >= argCount)
@@ -912,13 +946,29 @@ void CheckFormatSize(PyObject* format, PyObject* args)
         {
             continue;
         }
+        // A mapping key, which may hold balanced parentheses: such a conversion takes args[key], not the next argument
+        nb::object keyed;
         if (pos < size && text[pos] == '(')
         {
-            // A mapping key, which may hold balanced parentheses; such a conversion takes no positional argument
             int depth = 1;
+            const Py_ssize_t keyStart = pos + 1;
             for (++pos; pos < size && depth > 0; ++pos)
             {
                 depth += text[pos] == '(' ? 1 : (text[pos] == ')' ? -1 : 0);
+            }
+            if (depth == 0 && !tuple && PyMapping_Check(args))
+            {
+                const auto key = Steal(PyBytes_FromStringAndSize(text + keyStart, pos - 1 - keyStart));
+                PyObject* const value = PyObject_GetItem(args, key.ptr());
+                if (value)
+                {
+                    keyed = nb::steal(value);
+                }
+                else
+                {
+                    // A missing key is Python's KeyError, raised by the formatter itself
+                    PyErr_Clear();
+                }
             }
         }
         while (pos < size && (text[pos] == '-' || text[pos] == '+' || text[pos] == ' ' || text[pos] == '#' || text[pos] == '0'))
@@ -936,7 +986,8 @@ void CheckFormatSize(PyObject* format, PyObject* args)
             padding = digits(pos);
         }
         unsigned long long precision = 0;
-        if (pos < size && text[pos] == '.')
+        const bool hasPrecision = pos < size && text[pos] == '.';
+        if (hasPrecision)
         {
             ++pos;
             if (pos < size && text[pos] == '*')
@@ -955,20 +1006,63 @@ void CheckFormatSize(PyObject* format, PyObject* args)
             ++pos;
         }
         // A string conversion truncates to its precision; a number is padded to the larger of the two
-        const bool truncates = pos < size && (text[pos] == 's' || text[pos] == 'b' || text[pos] == 'r' || text[pos] == 'a' || text[pos] == 'c');
+        const char conversion = pos < size ? text[pos] : '\0';
+        const bool copies = conversion == 's' || conversion == 'b';
+        const bool quotes = conversion == 'r' || conversion == 'a';
+        const bool truncates = copies || quotes || conversion == 'c';
         if (!truncates && precision > padding)
         {
             padding = precision;
         }
-        // The converted value's own argument; `pos` now stands on the conversion
-        ++argIndex;
-        total = total > most - padding ? most : total + padding;
-        if (padding >= most)
+        // The converted value: args[key], or the next argument; `pos` now stands on the conversion
+        PyObject* value = keyed.ptr();
+        if (!value && conversion != '%')
+        {
+            value = argIndex < argCount ? (tuple ? PyTuple_GetItem(args, argIndex) : args) : nullptr;
+            ++argIndex;
+        }
+        if (value && (copies || quotes))
+        {
+            if (auto bytes = BufferBytes(value))
+            {
+                // repr of bytes escapes each byte to at most four characters, plus b'' around it
+                unsigned long long copied = quotes ? (*bytes > most / 4 ? most : (*bytes * 4) + 3) : *bytes;
+                if (copies && hasPrecision && precision < copied)
+                {
+                    copied = precision;
+                }
+                add(copied);
+            }
+        }
+        add(padding);
+        if (total >= most)
         {
             break;
         }
     }
     CheckSequenceSize(total);
+}
+// A bytes, bytearray, array or deque an operation built: its length against the cap, so that growth the guards above
+// cannot predict (a type's own conversion) stops at the next step, as a str or list does
+void CheckResultSize(PyObject* result)
+{
+    if (!IsByteString(result))
+    {
+        const int sequence = PyObject_IsInstance(result, Names().arrayType.ptr());
+        const int queue = sequence > 0 ? 0 : PyObject_IsInstance(result, Names().dequeType.ptr());
+        if (sequence < 0 || queue < 0)
+        {
+            ThrowPending();
+        }
+        if (sequence == 0 && queue == 0)
+        {
+            return;
+        }
+    }
+    if (const auto length = GuardLength(result, Py_sq_length))
+    {
+        CheckSequenceSize(*length);
+    }
 }
 } // namespace
 
@@ -1040,7 +1134,9 @@ std::optional<jinja2::Value> PyHost::Operate(jinja2::HostOperator op, const jinj
     default:
         return std::nullopt;
     }
-    return ToEngine(Steal(result));
+    auto owned = Steal(result);
+    CheckResultSize(owned.ptr());
+    return ToEngine(std::move(owned));
 }
 
 const PyHost* AsPyHost(const jinja2::Value& value)
