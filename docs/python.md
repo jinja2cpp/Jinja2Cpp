@@ -464,6 +464,10 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
 - `bytes`, `bytearray`, `array.array`, `collections.deque` and other types that repeat with `*` or concatenate with `+`
   are checked against the sequence cap before Python builds the result, so `{{ b * 10**9 }}`, or a loop that doubles a
   value with `+`, fails with "too long" instead of allocating, as a `str` or `list` does. Jinja2 would allocate it. A type that multiplies elementwise (numpy's `ndarray`) is not a repeat and is not checked.
+  A subclass that overrides `__len__` is checked by the storage it repeats, and a `deque` with a `maxlen` by that bound.
+- `%` formatting of a `bytes` or `bytearray` format (and of a `str` format given a Python object) counts its widths and
+  precisions, written or taken by `*`, against the same cap first: `{{ fmt % (10**9, b) }}` with `fmt=b'%*s'` fails
+  with "too long".
 - The cost of a number's own arithmetic (`Fraction ** 10**8`) is not capped by `MaxBigIntBits`; Python Jinja2 behaves
   the same (task 0412).
 

@@ -42,5 +42,6 @@ HostOperandSide)` entry returning `optional<Value>`, the Python module on the fu
   stay out of it: task 0582.
 - P2: the Python module bridge: `PyHost::Operate` runs `PyNumber_*` and `PyObject_RichCompare` for every object that
   is not an exact dict, list or tuple (Python's own `TypeError` propagates), with sequence-cap guards before
-  `Multiply` and `Add` for types that repeat or concatenate (`bytes`, `bytearray`, `array`, `deque`); `docs/python.md`,
+  `Multiply` and `Add` for types that repeat or concatenate (`bytes`, `bytearray`, `array`, `deque`; by the storage a
+  subclass repeats, bounded by a deque's `maxlen`) and before `Remainder` for printf-style padding; `docs/python.md`,
   "Operators on Python objects".

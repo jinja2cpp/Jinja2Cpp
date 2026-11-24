@@ -92,6 +92,7 @@ struct PyNames
     nb::object dictType;
     nb::object mappingType; // collections.abc.Mapping
     nb::object numberType;  // numbers.Number
+    nb::object dequeType;   // collections.deque
 };
 const PyNames& Names();
 // Drops the references Names() holds, when the module is freed

@@ -693,6 +693,7 @@ namespace
 {
 // A sequence repeated by a count the way `bytes * n`, `bytearray * n`, `array * n` and `deque * n` repeat (Py_sq_repeat) is
 // built by Python before the engine sees it: the length it would have counts against the sequence cap first
+
 // len(x) of an object whose type has a length, nullopt for one without; an error __len__ raises propagates, so a
 // guard never lets an operation through unchecked
 std::optional<unsigned long long> LengthOf(PyObject* object)
@@ -710,6 +711,73 @@ std::optional<unsigned long long> LengthOf(PyObject* object)
     return static_cast<unsigned long long>(length);
 }
 
+// The length a guard counts: the larger of len(x) and the length that the type providing the operation reads. A
+// subclass of bytes, bytearray, array or deque that overrides __len__ still repeats and concatenates its storage (the
+// inherited slot reads it), so the length slot of the furthest base that shares the operation's slot counts as well
+std::optional<unsigned long long> GuardLength(PyObject* object, int operationSlot)
+{
+    auto length = LengthOf(object);
+    PyTypeObject* const type = Py_TYPE(object);
+    void* const operation = PyType_GetSlot(type, operationSlot);
+    PyTypeObject* provider = type;
+    while (auto* base = static_cast<PyTypeObject*>(PyType_GetSlot(provider, Py_tp_base)))
+    {
+        if (PyType_GetSlot(base, operationSlot) != operation)
+        {
+            break;
+        }
+        provider = base;
+    }
+    if (provider == type)
+    {
+        return length;
+    }
+    auto* storageLength = reinterpret_cast<lenfunc>(PyType_GetSlot(provider, Py_sq_length));
+    if (!storageLength)
+    {
+        storageLength = reinterpret_cast<lenfunc>(PyType_GetSlot(provider, Py_mp_length));
+    }
+    if (!storageLength)
+    {
+        return length;
+    }
+    const Py_ssize_t storage = storageLength(object);
+    if (storage < 0)
+    {
+        ThrowPending();
+    }
+    const auto counted = static_cast<unsigned long long>(storage);
+    return length && *length > counted ? *length : counted;
+}
+
+// A deque with a maxlen keeps at most that many items of a repeat or a concatenation: the bound of its result
+unsigned long long BoundByMaxlen(PyObject* sequence, unsigned long long length)
+{
+    const int isDeque = PyObject_IsInstance(sequence, Names().dequeType.ptr());
+    if (isDeque < 0)
+    {
+        ThrowPending();
+    }
+    if (isDeque == 0)
+    {
+        return length;
+    }
+    // deque's own descriptor: a subclass cannot make the bound larger than the storage keeps
+    const auto descriptor = Steal(PyObject_GetAttrString(Names().dequeType.ptr(), "maxlen"));
+    const auto maxlen = Steal(PyObject_CallMethod(descriptor.ptr(), "__get__", "O", sequence));
+    if (maxlen.ptr() == Py_None)
+    {
+        return length;
+    }
+    const Py_ssize_t most = PyLong_AsSsize_t(maxlen.ptr());
+    if (most == -1 && PyErr_Occurred())
+    {
+        ThrowPending();
+    }
+    const auto kept = static_cast<unsigned long long>(most < 0 ? 0 : most);
+    return length < kept ? length : kept;
+}
+
 // sequence * count of a type that repeats (bytes, bytearray, array, deque): the result's length against the cap,
 // before Python allocates it
 void CheckRepeatSize(PyObject* sequence, PyObject* count)
@@ -718,7 +786,7 @@ void CheckRepeatSize(PyObject* sequence, PyObject* count)
     {
         return;
     }
-    const auto length = LengthOf(sequence);
+    const auto length = GuardLength(sequence, Py_sq_repeat);
     if (!length || *length == 0)
     {
         return;
@@ -742,7 +810,7 @@ void CheckRepeatSize(PyObject* sequence, PyObject* count)
     }
     const auto repeats = static_cast<unsigned long long>(times);
     constexpr unsigned long long most = ~0ULL;
-    CheckSequenceSize(*length > most / repeats ? most : *length * repeats);
+    CheckSequenceSize(BoundByMaxlen(sequence, *length > most / repeats ? most : *length * repeats));
 }
 
 // left + right of a type that concatenates (bytes, bytearray, array, deque): the sum of the lengths against the cap,
@@ -753,12 +821,144 @@ void CheckConcatSize(PyObject* left, PyObject* right)
     {
         return;
     }
-    const auto leftLength = LengthOf(left);
-    const auto rightLength = LengthOf(right);
+    const auto leftLength = GuardLength(left, Py_sq_concat);
+    const auto rightLength = GuardLength(right, Py_sq_concat);
     if (leftLength && rightLength)
     {
-        CheckSequenceSize(*leftLength + *rightLength);
+        CheckSequenceSize(BoundByMaxlen(left, *leftLength + *rightLength));
     }
+}
+
+// The padding a printf-style format adds: each width and precision, written in the format or taken by `*` from the
+// arguments, can make a conversion that long. `b'%*s' % (10**9, b'x')` or `'%.*d' % (10**9, 1)` would build it
+// before the engine sees it, so the sum counts against the cap first. The converted values themselves exist already.
+// A format Python rejects is left to Python's own error
+void CheckFormatSize(PyObject* format, PyObject* args)
+{
+    const char* text = nullptr;
+    Py_ssize_t size = 0;
+    if (PyBytes_Check(format))
+    {
+        char* bytes = nullptr;
+        if (PyBytes_AsStringAndSize(format, &bytes, &size) < 0)
+        {
+            ThrowPending();
+        }
+        text = bytes;
+    }
+    else if (PyByteArray_Check(format))
+    {
+        text = PyByteArray_AsString(format);
+        size = PyByteArray_Size(format);
+    }
+    else if (PyUnicode_Check(format))
+    {
+        // The format's own characters are ASCII; no byte of a multibyte UTF-8 sequence is
+        text = PyUnicode_AsUTF8AndSize(format, &size);
+        if (!text)
+        {
+            ThrowPending();
+        }
+    }
+    else
+    {
+        return;
+    }
+    const bool tuple = PyTuple_Check(args) != 0;
+    const Py_ssize_t argCount = tuple ? PyTuple_Size(args) : 1;
+    Py_ssize_t argIndex = 0;
+    constexpr unsigned long long most = ~0ULL >> 2;
+    unsigned long long total = 0;
+    // A star takes the next argument: an int, or Python raises
+    const auto star = [&]() -> unsigned long long {
+        if (argIndex >= argCount)
+        {
+            return 0;
+        }
+        PyObject* const item = tuple ? PyTuple_GetItem(args, argIndex) : args;
+        ++argIndex;
+        if (!item || !PyLong_Check(item))
+        {
+            PyErr_Clear();
+            return 0;
+        }
+        int overflow = 0;
+        const long long value = PyLong_AsLongLongAndOverflow(item, &overflow);
+        if (overflow != 0)
+        {
+            return most;
+        }
+        if (value == -1 && PyErr_Occurred())
+        {
+            ThrowPending();
+        }
+        return value < 0 ? static_cast<unsigned long long>(-(value + 1)) + 1 : static_cast<unsigned long long>(value);
+    };
+    const auto digits = [&](Py_ssize_t& pos) {
+        unsigned long long value = 0;
+        while (pos < size && text[pos] >= '0' && text[pos] <= '9')
+        {
+            value = value > most / 10 ? most : (value * 10) + static_cast<unsigned long long>(text[pos] - '0');
+            ++pos;
+        }
+        return value;
+    };
+    for (Py_ssize_t pos = 0; pos < size; ++pos)
+    {
+        if (text[pos] != '%')
+        {
+            continue;
+        }
+        ++pos;
+        if (pos < size && text[pos] == '%')
+        {
+            continue;
+        }
+        if (pos < size && text[pos] == '(')
+        {
+            // A mapping key, which may hold balanced parentheses; such a conversion takes no positional argument
+            int depth = 1;
+            for (++pos; pos < size && depth > 0; ++pos)
+            {
+                depth += text[pos] == '(' ? 1 : (text[pos] == ')' ? -1 : 0);
+            }
+        }
+        while (pos < size && (text[pos] == '-' || text[pos] == '+' || text[pos] == ' ' || text[pos] == '#' || text[pos] == '0'))
+        {
+            ++pos;
+        }
+        unsigned long long padding = 0;
+        if (pos < size && text[pos] == '*')
+        {
+            padding = star();
+            ++pos;
+        }
+        else
+        {
+            padding = digits(pos);
+        }
+        if (pos < size && text[pos] == '.')
+        {
+            ++pos;
+            if (pos < size && text[pos] == '*')
+            {
+                padding = padding + star();
+                ++pos;
+            }
+            else
+            {
+                padding = padding + digits(pos);
+            }
+        }
+        // The converted value's own argument; `pos` now stands on a length modifier or the conversion
+        ++argIndex;
+        total = total > most - padding ? most : total + padding;
+        if (padding >= most)
+        {
+            break;
+        }
+    }
+    CheckSequenceSize(total);
 }
 } // namespace
 
@@ -810,6 +1010,7 @@ std::optional<jinja2::Value> PyHost::Operate(jinja2::HostOperator op, const jinj
         result = PyNumber_FloorDivide(left, right);
         break;
     case HostOperator::Remainder:
+        CheckFormatSize(left, right);
         result = PyNumber_Remainder(left, right);
         break;
     case HostOperator::Power:
