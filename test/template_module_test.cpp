@@ -885,6 +885,67 @@ TEST_F(TemplateModuleChangingSourceTest, StoredSelfRunsItsOldBlocks)
     EXPECT_EQ((std::vector<std::string>{ "[]OLD", "[OLD]NEW", "[NEW]NEW2" }), results);
 }
 
+// A `self` an include's top level puts in a list or dict, and that a later call reads through a namespace, keeps the
+// include's frame as Jinja2 keeps its context (docs/tasks/0542; the rows are 3.1.6 make_module() results)
+TEST_F(TemplateModuleChangingSourceTest, SelfInAContainerOutlivesTheInclude)
+{
+    const std::string selfMain = "{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}";
+    const std::string head = "{% set t='T1' %}{% block b %}B1{{ t }}{% endblock %}";
+    const std::vector<std::string> selfTail = { "{% block b %}B2{% endblock %}", "{% block b %}B3{% endblock %}" };
+    const std::vector<std::string> selfWanted = { "[]B1T1", "[B1T1]B2", "[B1T1]B3" };
+    for (const char* store : { "{% set l = [self] %}{% set ns.s = l[0] %}", "{% set d = {'s': self} %}{% set ns.s = d.s %}",
+                               "{% set d = {'k': [self]} %}{% set ns.s = d.k[0] %}" })
+    {
+        EXPECT_EQ(selfWanted, CallWithLibs(selfMain, { head + store, selfTail[0], selfTail[1] })) << store;
+    }
+
+    // An alias of the list and an append share the one list
+    EXPECT_EQ((std::vector<std::string>{ "[]B1T1", "[B1T11]B2", "[B1T12]B3", "[B1T13]B4" }),
+              CallWithLibs("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                           { head + "{% set l = [self] %}{% set k = l %}{% macro f() %}{{ l[0].b() }}{{ k|length }}{% set _ = l.append(1) %}{% endmacro %}{% set ns.f = f %}",
+                             "{% block b %}B2{% endblock %}", "{% block b %}B3{% endblock %}", "{% block b %}B4{% endblock %}" }));
+
+    // `l[0]` stored by a call is read after the closure that stored it is gone
+    EXPECT_EQ((std::vector<std::string>{ "[|]B1T1", "[F|B1T1]B2", "[|B1T1]B3", "[|B1T1]B4" }),
+              CallWithLibs("{% set ns = namespace(f=none, s=none, n=0) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}|{% if ns.s %}{{ ns.s.b() }}{% endif %}]"
+                           "{% include 'lib' %}{% set ns.n = ns.n + 1 %}{% endmacro %}",
+                           { head + "{% set l = [self] %}{% macro f() %}{% set ns.s = l[0] %}F{% endmacro %}{% set ns.f = f %}",
+                             "{% block b %}B2{% endblock %}{% set ns.f = none %}", "{% block b %}B3{% endblock %}", "{% block b %}B4{% endblock %}" }));
+}
+
+// A list too large for the check at the call's end to walk (more than its 256 objects or 4,096 items) is kept, and
+// reads as above
+TEST_F(TemplateModuleChangingSourceTest, SelfInALargeListOutlivesTheInclude)
+{
+    const auto results = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                      { "{% set t='T1' %}{% block b %}B1{{ t }}{% endblock %}{% set l = [self] %}{% for i in range(300) %}{% set _ = l.append([i]) %}"
+                                        "{% endfor %}{% set ns.s = l[0] %}{{ l|length }}",
+                                        "{% block b %}B2{% endblock %}", "{% block b %}B3{% endblock %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]B1T1301", "[B1T1]B2", "[B1T1]B3" }), results);
+    // More items than it visits (4,096)
+    const auto longList = CallWithLibs("{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}",
+                                       { "{% set t='T1' %}{% block b %}B1{{ t }}{% endblock %}{% set l = [self] + range(5000)|list %}{% set ns.s = l[0] %}{{ l|length }}",
+                                         "{% block b %}B2{% endblock %}", "{% block b %}B3{% endblock %}" });
+    EXPECT_EQ((std::vector<std::string>{ "[]B1T15001", "[B1T1]B2", "[B1T1]B3" }), longList);
+}
+
+TEST_F(TemplateModuleChangingSourceTest, WideSelfInAListOutlivesTheInclude)
+{
+    const std::string head = "{% set t='T1' %}{% block b %}B1{{ t }}{% endblock %}";
+    const std::vector<std::string> libs = { head + "{% set l = [self] %}{% set ns.s = l[0] %}", "{% block b %}B2{% endblock %}", "{% block b %}B3{% endblock %}" };
+    AddFile("lib", libs.front());
+    jinja2::TemplateW tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load(L"{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}"));
+    auto module = tpl.MakeModule().value();
+    std::vector<std::wstring> results;
+    for (const auto& lib : libs)
+    {
+        AddFile("lib", lib);
+        results.push_back(Call(module.exports["m"]).AsWString());
+    }
+    EXPECT_EQ((std::vector<std::wstring>{ L"[]B1T1", L"[B1T1]B2", L"[B1T1]B3" }), results);
+}
+
 // Trees that take a slot go too once no `self`, `super` or module holds a handle of one (docs/tasks/0503): the
 // module's own blocks keep the slots, a stored `super` or `self` keeps them while it lives (and, until 0529, for
 // the module's life), and a parent that changes under a child that extends it is the new one each call (3.1.6

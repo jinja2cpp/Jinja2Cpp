@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "recursion_guard.h"
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -54,6 +55,10 @@ public:
     // Room for `nodes` nodes at least, at least doubling. Throws std::bad_alloc and then changes
     // nothing
     void Reserve(size_t nodes);
+    // The walk saturates once it has found `nodes` objects (none: no limit), as if growing had failed
+    void SetLimit(size_t nodes) noexcept { m_limit = nodes; }
+    // Whether the walk found objects it did not track
+    [[nodiscard]] bool Saturated() const noexcept { return m_saturated; }
     // Empties the tables for a walk, keeping their room
     void Reset() noexcept;
     // Counts a reference to `object`, adding it when new, unless the walk is saturated
@@ -61,6 +66,7 @@ public:
     [[nodiscard]] size_t Size() const noexcept { return m_size; }
     // The nodes in the order found, which grows while the walk goes on
     [[nodiscard]] Node& At(size_t index) noexcept { return m_nodes[index]; }
+    [[nodiscard]] const Node& At(size_t index) const noexcept { return m_nodes[index]; }
     // The index of `object`, or Size() when it is not tracked
     [[nodiscard]] size_t IndexOf(const ValueObject* object) const noexcept;
     // The marking pass's stack: at most one entry for each node
@@ -80,6 +86,7 @@ private:
     size_t m_slotMask = 0;
     size_t m_size = 0;
     size_t m_pendingSize = 0;
+    size_t m_limit = 0;
     bool m_saturated = false;
 };
 
@@ -119,6 +126,27 @@ public:
     }
     // Releases what every owner that has expired kept: before a tree is refused for want of budget (docs/tasks/0539)
     void ReleaseAllExpired() noexcept;
+    // The objects held from outside a walk: ModuleScope::LiveRootsFn's. Throws std::bad_alloc
+    using LiveRootsFn = void (*)(const void* state, std::vector<const ValueObject*>& roots);
+    // Releases the copies of names that only their own owners keep, as if those had expired: the owner of a copy (a
+    // ClosureCapture) is kept alive by the closures that hold it, and when the only closures holding it are inside the
+    // copy, such as the blocks of a `self` in a list the copy holds, and nothing outside reaches them, nothing else
+    // ever lets go of it (an ephemeron cycle, docs/tasks/0542). A template module's outermost call that returns asks
+    // this of the copies kept since the last call and of one older copy in turn, a walk of at most WalkNodeLimit
+    // objects and WalkItemLimit items from the copy's values: a copy found live is asked again after 1, 2, 4 ... up
+    // to 64 calls. `liveRoots` (with `state`), may be null: what the module's names hold, not walked into. What it
+    // empties and lets go of is what only the copy reaches, found as the collector's walk finds garbage (an object
+    // whose references all come from the walk), so a value that reads it is held from outside and is left as it is.
+    // When anything fails, it keeps the copy
+    void ReleaseUnreached(LiveRootsFn liveRoots, const void* state) noexcept;
+    // A template module's: Keep notes the copies ReleaseUnreached asks about from now on. Throws std::bad_alloc
+    void TrackUnreached()
+    {
+        if (!m_unreached)
+        {
+            m_unreached = std::make_unique<Unreached>();
+        }
+    }
     // Moves to `other` what is still of use. Throws std::bad_alloc, and then keeps what it did not move
     void MoveInto(KeptObjects& other);
     // Notes to the collector running on this thread the values of the kept copies of names: a
@@ -133,14 +161,82 @@ private:
         std::weak_ptr<const void> owner;
         std::shared_ptr<const void> object;
         const InternalValueMap* names;
+        // ReleaseUnreached: the call from which on the entry is due, and the log2 of the calls it waits after a check
+        // that found its copy live; NeverChecked for an entry whose copy holds no container
+        uint32_t checkAt = 0;
+        uint8_t backoff = 0;
     };
+
+    // Whether `names` holds a value whose object may hold a closure that keeps the copy's owner: a list or a dict, a
+    // namespace, but not a `self`, whose blocks the copy holds keep nothing (docs/tasks/0529)
+    [[nodiscard]] static bool MayHoldKeeper(const InternalValueMap& names) noexcept;
+    // The items a walk of `object` visits: a list's or dict's size, past WalkItemLimit for one whose size is not known
+    // cheaply. Throws std::bad_alloc
+    [[nodiscard]] static size_t ItemsOf(const ValueObject& object);
+    // The entries that hold one copy, one for each closure record of the frame that keeps it (RenderContext::
+    // CaptureClosures), with their owners and the references each has. A frame with more than MaxGroup is kept
+    static constexpr size_t MaxGroup = 16;
+    struct Group
+    {
+        std::array<size_t, MaxGroup> entries{};
+        std::array<const void*, MaxGroup> owners{};
+        std::array<long, MaxGroup> references{};
+        size_t size = 0;
+    };
+    // Whether the copy `names` is held by kept entries only, whose owners are held by closures among what it holds
+    // only, none of which is held from outside (m_live, read already): then releases them. Else delays their next
+    // check. Throws std::bad_alloc, and then changes nothing
+    // `hint`: the index of one of its entries
+    void CheckCopy(const InternalValueMap* names, size_t hint);
+    // CheckCopy's steps: the entries of `names` (false: none, or one to leave as it is), their owners (false: the copy
+    // or an owner is held elsewhere), the walk from the copy into the walk tables (false: past its limits), whether every
+    // reference to the owners comes from a closure in the walk not held from outside, the release, and the delay of a
+    // copy found live. Throw std::bad_alloc before Release changes anything
+    [[nodiscard]] bool FindGroup(const InternalValueMap* names, size_t hint, Group& group) const;
+    [[nodiscard]] bool ReadOwners(Group& group) const;
+    [[nodiscard]] bool WalkCopy(const InternalValueMap& names);
+    [[nodiscard]] bool OwnersHeldInside(const Group& group) const;
+    void Release(const Group& group);
+    void Delay(const Group& group) noexcept;
 
     static constexpr size_t MinPruneAt = 64;
     static constexpr size_t ReleaseLooksPerCall = 4;
+    // ReleaseUnreached: the copies kept since the last call it asks about at most, the objects a walk tracks at most,
+    // and the most calls a copy found live waits for its next check
+    static constexpr size_t YoungChecksPerCall = 16;
+    static constexpr size_t WalkNodeLimit = 256;
+    static constexpr size_t WalkItemLimit = 4096;
+    static constexpr uint8_t MaxBackoff = 6;
+    static constexpr uint8_t NeverChecked = 0xFF;
     std::vector<Entry> m_kept;
     size_t m_pruneAt = MinPruneAt;
     // The next entry ReleaseExpired looks at
     size_t m_cursor = 0;
+    // ReleaseUnreached's, made by TrackUnreached: the calls it ran at, the next entry it looks at, and the copies of
+    // names kept since its last call that may hold a keeper (MayHoldKeeper); more are looked at in turn
+    struct Young
+    {
+        const InternalValueMap* names = nullptr;
+        // Of its first entry, when kept
+        size_t index = 0;
+    };
+    struct Unreached
+    {
+        uint32_t calls = 0;
+        size_t checkCursor = 0;
+        std::array<Young, YoungChecksPerCall> young{};
+        size_t youngSize = 0;
+        // The tables of its walk, and the module's live roots it reads (liveRoots)
+        WalkTables walk;
+        std::vector<const ValueObject*> live;
+        // The running ReleaseUnreached's: the module's live roots, whether `live` holds them, and whether it runs
+        LiveRootsFn liveRoots = nullptr;
+        const void* liveState = nullptr;
+        bool liveRead = false;
+        bool checking = false;
+    };
+    // Null for a render's, which never calls ReleaseUnreached: its renders pay nothing for it
+    std::unique_ptr<Unreached> m_unreached;
 };
 
 // The lists, dicts and namespaces a template module's calls made and handed the host, which the
@@ -293,6 +389,17 @@ public:
     static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner, const InternalValueMap* names = nullptr);
     // The collector of the render running on this thread, or null
     [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
+    // Whether the collector of the render running on this thread holds `object` as a candidate of its walk (NoteStore,
+    // NoteDropped): one reference that goes when the render ends (KeptObjects::ReleaseUnreached)
+    [[nodiscard]] static bool HoldsCandidate(const ValueObject* object)
+    {
+        const auto* collector = s_current;
+        if (!collector || !collector->m_notes)
+        {
+            return false;
+        }
+        return collector->m_notes->noted.count(object) != 0;
+    }
     // Whether the render noted anything: a store, a container letting go of a value, a frozen cell (docs/tasks/0312)
     [[nodiscard]] bool HasNotes() const noexcept { return m_notes != nullptr; }
     // Counts a tree (a template, what a render of it loaded) against this render's memory budget for as long as

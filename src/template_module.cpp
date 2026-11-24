@@ -650,11 +650,14 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     {
     public:
         // `holdsHandles`: the module, `outer`, holds handles of the callback's table of templates (its blocks)
-        CallScope(Callback& callback, const ImportedModule& outer, KeptObjects& kept)
+        // `liveRoots` and `state`: what the module's names hold (ModuleScope's)
+        CallScope(Callback& callback, const ImportedModule& outer, KeptObjects& kept, KeptObjects::LiveRootsFn liveRoots, const void* state)
             : m_callback(callback)
             , m_outer(outer)
             , m_holdsHandles(outer.HoldsTemplateHandles())
             , m_kept(kept)
+            , m_liveRoots(liveRoots)
+            , m_liveState(state)
             , m_mark(callback.MarkCall())
             , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
         {
@@ -679,6 +682,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // What closures the host's calls let go of kept goes now, before the slots are asked who holds them
             if (m_callback.calls == 0)
             {
+                // And the copies only closures inside them keep (docs/tasks/0542), before the replaced trees, which
+                // what they held may own. First: ReleaseExpired moves the newest entries, where the call's copies are
+                m_kept.ReleaseUnreached(m_liveRoots, m_liveState);
                 m_kept.ReleaseExpired();
             }
             if (m_succeeded && m_callback.calls == 0 && m_callback.HasReplaced())
@@ -700,6 +706,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         const ImportedModule& m_outer;
         bool m_holdsHandles;
         KeptObjects& m_kept;
+        KeptObjects::LiveRootsFn m_liveRoots;
+        const void* m_liveState;
         typename Callback::CallMark m_mark;
         // A call made from a shared module's top level (a host callable there) imports for
         // itself: its modules end with it
@@ -713,6 +721,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         , dropped(std::make_shared<DroppedExports>())
     {
         cells.SetDroppedExports(dropped);
+        // The copies of names its calls keep that only closures inside them keep go when a call ends (docs/tasks/0542)
+        kept.TrackUnreached();
     }
     TemplateModuleState(const TemplateModuleState&) = delete;
     TemplateModuleState(TemplateModuleState&&) = delete;
@@ -912,7 +922,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             // among them (docs/tasks/0480)
             NoteDropped();
             // Then what the call loads, which its collector sees go
-            CallScope callScope(*callback, *module, kept);
+            CallScope callScope(*callback, *module, kept, &LiveRoots, this);
             // Then the module's context as the call found it, which a failed call would leave
             // with its scopes pushed
             const HomeCall::Restore restore(module->Context());

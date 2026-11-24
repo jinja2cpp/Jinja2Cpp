@@ -1,10 +1,10 @@
 ---
-status: open
+status: in-progress
 pr:
 priority: low
 area: robustness
 depends: [0529]
-touches: [src/statements.cpp, test/allocation_failure_test.cpp]
+touches: [src/cycle_collector.h, src/cycle_collector.cpp, src/template_module.cpp, test/allocation_failure_test.cpp, test/template_module_test.cpp]
 ---
 # A `self` inside a list or dict at an include's top level keeps every replaced tree
 
@@ -36,3 +36,18 @@ What is left is the first option: let the module's call collector traverse the c
 that copy -> container -> `self` -> capture -> copy is collected once nothing outside holds the capture. That is a
 change to the cycle collector's object model, so it wants an architect plan first. The prototype is in the project files at
 `0542/container-weakening-prototype.patch`.
+
+**Resolution (option B, plan `0542/plan.md`, Ruslan 2026-11-23).** The leak is an ephemeron cycle: `KeptObjects`
+holds the copy X while its owner, the capture C, lives, and C is held only by the `m_keepAlive` of the blocks of a
+`self` inside a container X holds. `KeptObjects::ReleaseUnreached`, called when a module's outermost call returns
+(before `ReleaseExpired`, whose swaps would move the call's new entries, and `PruneReplaced`), walks from the values of each copy kept since the last call (up to 16, and
+of one older copy in turn, with a backoff of 1 to 64 calls) at most 256 objects and 4,096 items. When C's every reference comes from
+closure boxes in that walk and none of them is held from outside (the module's live roots, or a count above the
+walk's), the copy's entries go as if C had expired, and what only the copy reached is emptied and let go of as the
+collector's walk does, so the trees go in the same call. Nothing a value reads is rebuilt: a `self` stored out of the
+container (`ns.s = l[0]`) keeps C, and `l.append` sharing stays. References the call's own collector holds for its
+walk (`NoteStore` candidates) do not count as outside. Limits: a copy whose walk passes 256 objects or 4,096 items, a frame with
+more than 16 kept records, more than 16 such copies made by one call (the rest wait for the older-copy turn),
+a call that starts while a release empties what it found (it skips the check), a copy whose entries a prune or `ReleaseExpired` separated (the group is found around one entry, not by a scan), or a cycle that runs through an inner capture's `outer` stays kept (conservative); a copy
+let go of is freed up to 64 calls late, or about a quarter of the kept entries in calls when many are kept. 0386 (the same shape during a render) can call the check from `Keep`'s prune
+point as a follow-up.
