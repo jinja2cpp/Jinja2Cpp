@@ -379,6 +379,12 @@ Result<BasicTemplateModule<CharT>, CharT> BasicTemplate<CharT>::MakeModule(const
 }
 
 template<typename CharT>
+Result<BasicTemplateModule<CharT>, CharT> BasicTemplate<CharT>::MakeModule(const ValuesMap& params, const RenderOptions& options, const ModuleOptions& module) const
+{
+    return TemplateImpl<CharT>::MakeModule(std::static_pointer_cast<const TemplateImpl<CharT>>(m_impl), params, &options, &module);
+}
+
+template<typename CharT>
 bool BasicTemplate<CharT>::IsEqual(const BasicTemplate& other) const
 {
     return m_impl == other.m_impl;
