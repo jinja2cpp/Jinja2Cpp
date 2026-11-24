@@ -718,7 +718,9 @@ void BorrowedCells::FreezeCallScopedSlow(CycleCollector* collector) noexcept
             continue;
         }
         const IntrusivePtr<const BorrowedCell> cell = entry->second;
-        // Not an event of the cell trace yet: the model has no call-scoped cell (docs/tasks/0402)
+        // The model's call-scoped freeze (tla/CellProtocol.tla, EndModCall; docs/tasks/0402)
+        JINJA2CPP_CELL_TRACE_EVENT("cfreeze", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, cell.get()),
+                                   Trace::Links("held", cell->m_links.data(), cell->m_links.size()));
         cell->m_frozen = true;
         for (const auto* link : cell->m_links)
         {
@@ -748,7 +750,8 @@ void BorrowedCells::FreezeCallScopedSlow(CycleCollector* collector) noexcept
     }
     detail::CellCounters::RemoveLive(count);
     // An adapter that read one of these cells, or found none while the call ran, looks again
-    detail::CellCounters::NextEpoch();
+    [[maybe_unused]] const auto epoch = detail::CellCounters::NextEpoch();
+    JINJA2CPP_CELL_TRACE_EVENT("cfrozen", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Num("live", detail::CellCounters::Live()));
 }
 
 void BorrowedCells::ReleaseCallFrozen(CycleCollector* collector) noexcept

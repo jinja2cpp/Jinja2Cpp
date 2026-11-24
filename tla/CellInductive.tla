@@ -74,7 +74,7 @@ TypeOK ==
     /\ ns \in Ids(MaxAd) /\ lock \in Threads \cup {"none"}
     /\ DOMAIN hkeep = OwnedAddrs /\ \A o \in OwnedAddrs : hkeep[o] \in BOOLEAN
     /\ lag \subseteq OwnedAddrs
-    /\ DOMAIN inc = OwnedAddrs /\ \A o \in OwnedAddrs : inc[o] >= 0
+    /\ DOMAIN inc = OwnedAddrs \cup {"J"} /\ \A o \in DOMAIN inc : inc[o] >= 0
     /\ fails \in 0..MaxFail
     /\ dirty \in BOOLEAN /\ pendDrop \in BOOLEAN
     /\ dirtyBy[1] \in Threads \cup {"none"} /\ dirtyBy[2] \in BOOLEAN
@@ -95,7 +95,7 @@ IndInitOf(NAd, NCell, NGen, NReg, NFr, NEx, NThreads, NOwned, NWr) ==
     /\ fr = Gen(NFr) /\ ex = Gen(NEx) /\ nEx = Gen(1) /\ gsnap = Gen(NThreads)
     /\ gatt = Gen(NThreads) /\ ns = Gen(1) /\ hkeep = Gen(NOwned)
     /\ lag = Gen(NOwned) /\ lock = Gen(1)
-    /\ inc = Gen(NOwned) /\ fails = Gen(1) /\ dirty = Gen(1)
+    /\ inc = Gen(NOwned + 1) /\ fails = Gen(1) /\ dirty = Gen(1)
     /\ dirtyBy = Gen(1) /\ pendDrop = Gen(1) /\ wr \in [Objs -> SUBSET (Threads \X BOOLEAN)] /\ flag = Gen(1)
     /\ TypeOK
     /\ IndInv

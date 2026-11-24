@@ -1,10 +1,10 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0352]
-touches: [src/host_object.h, src/value_visitors.h#BinaryMathOperation]
-shares: [test/host_object_test.cpp]
+touches: [include/jinja2cpp/host_object.h, src/host_object.h, src/host_object.cpp, src/public_host_object.cpp, src/value_visitors.h#BinaryMathOperation, src/filters.cpp, src/testers.cpp, src/expression_evaluator.cpp, src/stable_sort_values.h, python/src/adapters.h, python/src/adapters.cpp]
+shares: [test/public_host_object_test.cpp]
 ---
 # Host objects: arithmetic and ordering operators
 
@@ -24,7 +24,17 @@ reflected method, then raises the TypeError it raises today. Ordering inside `so
 `min`, `max` and `dictsort` should use the same entry (`__lt__`). Results come back as
 values the template can read, which may be other host objects.
 
-**Done when.** On the toy (`test/host_object_test.cpp`), an object with `__add__`,
+**Done when.** On the toy (`test/public_host_object_test.cpp`), an object with `__add__`,
 `__radd__`, `__mod__` and `__lt__` renders as an equivalent Python class does under the
 pinned Jinja2, narrow and wide. This covers `x + 1`, `1 + x`, `x is odd`, `[x, y]|sort`
 and `x < y`. An object without them keeps today's errors.
+
+**Plan.** Approved by Ruslan 2026-11-23 (one `IHostObject::Operate(HostOperator, other,
+HostOperandSide)` entry returning `optional<Value>`, the Python module on the full
+`PyNumber_*`/`PyObject_RichCompare` protocol, unary `-`/`+` in scope). Three PRs:
+
+- P0: `StableSortValues` becomes a guarded merge sort. libstdc++'s `std::stable_sort`
+  writes below the range when a comparator answers inconsistently, which a host `__lt__`
+  reaching `{{ items|sort }}` could do.
+- P1: the seam, the engine dispatch (left, then reflected right) and the toy tests.
+- P2: the Python module bridge.

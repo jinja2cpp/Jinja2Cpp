@@ -2038,8 +2038,10 @@ InternalValue CellSource(const BySharedVal<T>& /*holder*/, const InternalValue& 
 // of the accessor's shared_ptr are all that can lend it again. Any other accessor may be reached
 // some other way (an aliasing pointer over a holder, the 1.x callable form), so it may be lent
 // again (docs/tasks/0336)
+// Whether the container's accessor is not one the library made on its own: an aliasing pointer
+// over a holder (WithOwner, an item of a generic list or map) or a host's accessor
 template<typename Container>
-bool AccessorHasOtherOwners(const Container& container) noexcept
+bool AccessorIsLent(const Container& container) noexcept
 {
     const auto& accessor = detail::GenericAccessorAccess::Get(container);
     const auto* owned = dynamic_cast<const detail::OwnedAccessor*>(accessor.get());
@@ -2050,11 +2052,13 @@ bool AccessorHasOtherOwners(const Container& container) noexcept
     // The container shares the control block that owns the accessor, not an aliasing pointer
     // over another object
     const auto self = owned->weak_from_this();
-    if (self.owner_before(accessor) || accessor.owner_before(self))
-    {
-        return true;
-    }
-    return !IsSoleOwner(accessor);
+    return self.owner_before(accessor) || accessor.owner_before(self);
+}
+
+template<typename Container>
+bool AccessorHasOtherOwners(const Container& container) noexcept
+{
+    return AccessorIsLent(container) || !IsSoleOwner(detail::GenericAccessorAccess::Get(container));
 }
 } // namespace
 
@@ -2163,11 +2167,23 @@ const void* HostIdentity(const IJsonNode* node, const void* accessor, const Cell
     return cell && cell->IsFrozen() ? static_cast<const void*>(cell) : identity;
 }
 
-// Whether HostIdentity is the document value's address, which the accessor does not keep alive
-// for a borrowed document (CellLink::Adopt's unheldIdentity)
-bool HasNodeIdentity(const IJsonNode* node) noexcept
+// Whether a cell of the view keyed by HostIdentity lives for one call of a template module
+// (CellLink::Adopt's unheldIdentity, BorrowedCells::FreezeCallScoped): the address of a borrowed
+// document's value, which the host may change or free between two calls. A document the view owns
+// or shares stays at its address while the cell's source lives (IJsonNode::KeepsDocument,
+// docs/tasks/0402), so the cell of the document itself, lent by the host, lives across the calls
+// and DropUnheld drops it once the host lets go. A nested value read through its parent (`d.a`) is
+// lent through an aliasing accessor (WithOwner), which DropUnheld cannot tell lent again or not:
+// its cell stays call-scoped, as before 0402, unless it is a global's, which the module keeps
+// anyway, so that a fresh document per call does not leave a cell per call (verifier of 0402)
+template<typename Container>
+bool HasUnheldIdentity(const IJsonNode* node, const Container& container, bool global) noexcept
 {
-    return node != nullptr && node->NodeIdentity() != nullptr;
+    if (!node || !node->NodeIdentity())
+    {
+        return false;
+    }
+    return !node->KeepsDocument() || (!global && AccessorIsLent(container));
 }
 } // namespace
 
@@ -2402,7 +2418,7 @@ public:
     {
         // A global's data is the host's, whatever holds it
         return m_link.Adopt(CellSource(m_values, self), GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
-                            HasNodeIdentity(m_node));
+                            HasUnheldIdentity(m_node, m_values.Get(), this->IsGlobalData()));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     // An enumeration of the list's cell that finds the cell's storage again at each step: a
@@ -4777,7 +4793,7 @@ public:
     {
         // As GenericListAdapter's
         return m_link.Adopt(CellSource(m_values, self), GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
-                            HasNodeIdentity(m_node));
+                            HasUnheldIdentity(m_node, m_values.Get(), this->IsGlobalData()));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_node ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }

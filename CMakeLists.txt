@@ -629,6 +629,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/public_host_object_test.cpp
         test/public_sandbox_policy_test.cpp
         test/sandbox_policy_test.cpp
+        test/stable_sort_values_test.cpp
         test/i18n_test.cpp
         test/limits_test.cpp
         test/if_test.cpp

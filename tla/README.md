@@ -22,7 +22,7 @@ python3 tla/check.py --only mixed threads   # ... about 1h40m ...
 python3 tla/check.py --except render mixed threads   # ... and 1h10m
 python3 tla/check.py --only f1-nested-export --traces
 python3 tla/check.py --list
-python3 tla/check.py --kind exhaustive            # past the level bound: about 90 minutes
+python3 tla/check.py --kind exhaustive            # past the level bound: about 95 minutes
 python3 tla/check.py --simulate 900 --depth 40    # random behaviours of each pass run, 15 min each
 ```
 
@@ -83,6 +83,9 @@ not change in a later one. That rule is D8's copy on write.
 | `l.pop()` of a nested list | op `drop` |
 | a generic container (`MakeGenericList`) as a module call's argument, a copy the host keeps (0336) | `ad[a].generic`, `hkeep`, `HostLetsGo` |
 | `NextEpoch` (64 bits since 0342), `BeginCall` wrapping past 32 bits (0341) | `NextEp`, `NextCall` with `MaxEpoch`, `MaxCallId` |
+| a borrowed JSON value (`Reflect(const J&)`, keyed by `IJsonNode::NodeIdentity`, `CellLink::Adopt`'s `unheldIdentity`) as a module call's argument; the host changing the document between calls (0212 P3, 0402) | key `J`, `inc["J"]`, `HostChangesJson`, `BorrowedJson` |
+| `BorrowedCells::FreezeCallScoped` at the end of a module's outermost call | the freeze in `EndModCall`, `FixCallScoped` |
+| a JSON document the view owns or shares (`IJsonNode::KeepsDocument`, 0402) | owned data (`OwnedAddrs`): its adapters keep it, and its address, alive |
 
 What the model abstracts:
 - **Values.** A list's content is the number of appends. A copy shares its item adapters, as
@@ -115,6 +118,7 @@ What the model abstracts:
 | 8 | No cell is dropped while its data can be lent to a later call (0336) | `NoLostWrites` |
 | 9 | A step that runs out of memory changes nothing the next step reads, but what its caller's cleanup does (0338 step D) | `NoTornStep` |
 | 10 | A render nested in another on the same thread never freezes a global's cell, which would leave the outer render without the write (0463) | `NestedGlobalKept` |
+| 11 | Between module calls, the registry holds no cell of a borrowed JSON value (0212 P3, 0402) | `CallScopedBounded` |
 | + | Every id names an object made so far; tables, links and frames agree (0338 F) | `WellFormed` |
 
 ## Results
@@ -364,6 +368,7 @@ slower):
 | `module-exhaustive` | 1 thread: module calls, nested through a callback | 6/2/2/1 | 22,593,199 | 35 | 26 min |
 | `module-0332-exhaustive` | `module-0332`: `keep([x])`, nested writes, `drop` | 6/1/2/1 | 3,167,437 | 27 | 3 min |
 | `module-generic-exhaustive` | `module-generic`: generic containers the host may keep | 6/1/2/1 | 34,093,829 | 31 | 26 min |
+| `module-json-exhaustive` | `module-json`: borrowed JSON the host changes between calls | 6/1/2/1, `MaxVal` 2 | 12,027,701 | 29 | 7 min |
 | `threads-module-exhaustive` | `threads-module`: two threads, module calls only | 6/2/2/1 | 9,181,371 | 33 | 8 min |
 | `threads-module-exhaustive-4` | the same, four calls | 8/1/2/1 | 14,263,417 | 34 | 12 min |
 | `threads-module-kept-exhaustive` | `threads-module-kept`: `keep([x])` handed off | 8/1/2/1 | 15,417,037 | 33 | 10 min |
@@ -371,7 +376,7 @@ slower):
 | `mixed-exhaustive` | `mixed`: renders and module calls on one thread | 4/2/2/1 | 1,389,466 | 29 | 2 min |
 | `threads-exhaustive` | `threads`: two threads, renders and the locked module | 4/1/2/1 | 123,118 | 22 | 10 s |
 
-All nine find no error, with every pass invariant (`WellFormed` included): 88 minutes in all,
+All ten find no error, with every pass invariant (`WellFormed` included): 95 minutes in all,
 one weekly shard.
 
 The depths, 19 to 35 states, are about twice the levels of the depth-bounded runs of the
@@ -562,8 +567,9 @@ from here to a safety argument for the implementation is task 0338.
   cycles: an item is always another identity. The collector has its own spec,
   `CycleCollector.tla` (next section), and the GC action here stands for it: it frees exactly
   what no root reaches, which is the collector's guarantee G3 when its contract holds.
-- JSON identities (P5) and callables' results. Generic containers (0336) are modelled as module
-  call arguments only.
+- JSON identities in renders (P5) and callables' results. Generic containers (0336) and borrowed
+  JSON values (0402) are modelled as module call arguments only, and a JSON value as one identity
+  with no nested item.
 - A module destroyed during its own call, and the freeze at module death.
 - Python parity of values. The model checks lifetimes and isolation, not output.
 
@@ -744,6 +750,7 @@ trace can show it. The events and what the spec checks at each:
 | `write` (`MutableItems`/`MutableDict`) | never a frozen cell (`FrozenUnwritten`); in place only to an unmarked cell (`MarkRule`); never to a storage a value of an ended call shares (`SnapshotStable`) |
 | `begin`, `end` (`BeginCall`, `EndCall`) | call numbers and the call restored (`CallsAgree`); nested calls on the thread holding the lock |
 | `drop`, `dropped` (`DropUnheld`) | `CellRules!MayDrop` on the spec's state: owned data, live cell, no link but its source's (`DropRule`); the code's list is the global's links |
+| `cfreeze`, `cfrozen` (`FreezeCallScoped`, 0402) | a live table cell of a module registry whose only running call is ending, so its outermost (`CallsAgree`); the links as at `freeze`; the cell leaves the table and freezes, and the live count follows (`LiveCount`) |
 | `freeze`, `finish`, `finished` (`Finish`) | the code's list of each cell is the spec's global links, every other link owns (`LinksAgree`); a global's links detach (`FinishDetaches`), the rest keep the frozen cell; every table cell freezes |
 | `free` (`~BorrowedCell`) | no table lists the cell and no adapter is attached to it (`NoUseAfterFree`) |
 | `regnew`, `regfree` | a registry goes with an empty table and no running call |
@@ -767,7 +774,8 @@ nothing; the call's end pins the cells (`pin`) and the next write copies, which 
 with `MarkRule` and `SnapshotStable`. Every trace passes (81 with `--mutants`). The mutants
 (`--mutants`, `trace_check.py` MUTANTS) change a real trace as a defect would: an adapter that
 goes attached, a pin that leaves its cell unmarked, a write to a frozen cell, a missed lookup, a
-foreign read, a write from another thread, EndCall without its restore, an event the spec lacks.
+foreign read, a write from another thread, EndCall without its restore, a borrowed JSON value's
+cell left in the table at the outermost call's end (0402), an event the spec lacks.
 Each fails as expected. A test's log must stay small for TLC: the 0340 drop row runs 20 renders
 instead of 2000 under `JINJA2CPP_CELL_TRACE` (400k events ran out of TLC's heap).
 
