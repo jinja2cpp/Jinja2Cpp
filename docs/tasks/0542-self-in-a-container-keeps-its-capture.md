@@ -1,10 +1,10 @@
 ---
-status: in-progress
-pr:
+status: done
 priority: low
 area: robustness
 depends: [0529]
 touches: [src/cycle_collector.h, src/cycle_collector.cpp, src/template_module.cpp, test/allocation_failure_test.cpp, test/template_module_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/998
 ---
 # A `self` inside a list or dict at an include's top level keeps every replaced tree
 

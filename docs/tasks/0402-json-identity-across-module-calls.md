@@ -1,10 +1,10 @@
 ---
-status: in-progress
-pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/989
+status: done
 priority: low
 area: parity
 depends: [0212]
 touches: [include/jinja2cpp/json_adapter.h, src/internal_value.cpp, src/borrowed_cells.h, src/borrowed_cells.cpp, src/cycle_collector.h, tla/CellProtocol.tla, tla/CellTrace.tla, tla/CellApalache.tla, tla/CellInductive.tla, tla/check.py, tla/trace_check.py, tla/README.md, test/binding/conformance.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/989
 ---
 # JSON values across the calls of a template module
 
