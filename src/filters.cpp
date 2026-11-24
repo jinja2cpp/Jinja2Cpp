@@ -111,8 +111,7 @@ bool CompareForOrder(const InternalValue& left,
     auto kind = GetOrderKind(left);
     // A host object decides itself, by its __lt__ or __gt__ and then the other operand's reflected one;
     // BinaryMathOperation raises the same TypeError when neither answers (task 0381)
-    const bool hostOperand = GetHostObject(left) != nullptr || GetHostObject(right) != nullptr;
-    if (!hostOperand && (kind != GetOrderKind(right) || kind == OrderKind::Unordered))
+    if ((kind != GetOrderKind(right) || kind == OrderKind::Unordered) && !GetHostObject(left) && !GetHostObject(right))
     {
         // Python's max compares item > best, min and sorted item < other (docs/tasks/0420)
         throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + (oper == BinaryExpression::LogicalGt ? ">" : "<") + "' not supported between instances of '" + Apply<visitors::PythonTypeNameGetter>(left) + "' and '" + Apply<visitors::PythonTypeNameGetter>(right) + "'");
