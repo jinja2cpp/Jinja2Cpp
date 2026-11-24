@@ -309,7 +309,7 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
 }
 
 // value % 2 of a value that is no number, which is never 0 or 1: str formats 2, Undefined fails
-// under every policy, and anything else (a host object too, docs/tasks/0362) has no `%`
+// under every policy, and anything else has no `%` (a host object that has one is asked before, task 0381)
 [[noreturn]] void ThrowNoRemainder(const InternalValue& val)
 {
     throw TemplateRuntimeError("unsupported operand type(s) for %: '"s + Apply<visitors::PythonTypeNameGetter>(val) + "' and 'int'");
@@ -355,6 +355,12 @@ bool IsEvenOrOdd(const InternalValue& val, TestKind valKind, bool even)
         // outside int64_t's range would overflow; inf and nan are neither
         auto remainder = std::fabs(std::fmod(ConvertToDouble(val), 2.0));
         result = remainder == (even ? 0.0 : 1.0);
+    }
+    else if (GetHostObject(val))
+    {
+        // `x % 2 == 1` through the object's __mod__; ThrowUnsupported's TypeError when it has none (task 0381)
+        const auto remainder = Apply2<visitors::BinaryMathOperation>(val, InternalValue(int64_t{ 2 }), BinaryExpression::DivRemainder);
+        result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(remainder, InternalValue(int64_t{ even ? 0 : 1 }), BinaryExpression::LogicalEq));
     }
     else
     {

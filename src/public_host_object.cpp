@@ -204,6 +204,11 @@ std::optional<bool> IHostObject::Equals(const Value& /*other*/) const
     return std::nullopt;
 }
 
+std::optional<Value> IHostObject::Operate(HostOperator /*op*/, const Value& /*other*/, HostOperandSide /*side*/) const
+{
+    return std::nullopt;
+}
+
 std::optional<size_t> IHostObject::Hash() const
 {
     return std::hash<const void*>()(Identity());
@@ -480,6 +485,10 @@ public:
     [[nodiscard]] std::optional<size_t> Len() const override { return m_object->Len(); }
     [[nodiscard]] bool Truth() const override { return m_object->Truth(); }
     [[nodiscard]] std::optional<bool> Equals(const InternalValue& other) const override { return m_object->Equals(ToHostValue(other)); }
+    [[nodiscard]] std::optional<InternalValue> Operate(HostOperator op, const InternalValue& other, HostOperandSide side) const override
+    {
+        return ToEngine(m_object->Operate(op, ToHostValue(other), side));
+    }
     [[nodiscard]] std::optional<size_t> Hash() const override { return m_object->Hash(); }
     [[nodiscard]] const void* Identity() const override { return m_object->Identity(); }
     [[nodiscard]] bool IsMapping() const override { return m_object->IsMapping(); }

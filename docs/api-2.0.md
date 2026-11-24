@@ -1001,6 +1001,13 @@ Recommend A now, C only if someone asks.
      `ToInt`, then `ToFloat` truncated, then the default, as Jinja2's `do_int`. The Python module
      answers them with `numbers.Number`, `int()` and `float()` (a `TypeError` or `ValueError` is
      nullopt). It adds three vtable slots before the freeze.
+   - **Operators of a host object (task 0381, before the freeze; decided by Ruslan 2026-11-23).**
+     `IHostObject::Operate(HostOperator, const Value& other, HostOperandSide)` returns
+     `std::optional<Value>` (nullopt is `NotImplemented`, the default) for `+ - * / // % **`, the
+     four orderings and unary `-`/`+`, with the side saying whether the object is the left
+     operand (`__add__`) or the right one (`__radd__`; a comparison keeps its operator and the
+     object maps it to the swapped method). The enums are append-only. It adds one vtable slot
+     before the freeze; after it a new operator needs `IHostObject2`.
    - **Attributes of a module macro (task 0434, before the freeze; decided by Ruslan 2026-11-12).**
      `jinja2::MacroAttributes(const UserCallable&)` returns the attributes Jinja2's `Macro` has for
      a macro a module exports: `name`, `arguments` (a `ValuesList`), `catch_kwargs`,

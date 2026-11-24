@@ -3,6 +3,7 @@
 
 #include "internal_value.h"
 
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/value.h>
 
 #include <cstddef>
@@ -37,6 +38,7 @@ class RenderContext;
 // - reversed() (the last filter, then the reverse filter before it iterates): Reversed
 // - len(): Len; truth: Truth
 // - ==, !=: Equals of the left operand, then of the right one, then identity
+// - + - * / // % **, < <= > >=, unary - +: Operate of the left operand, then of the right one (host::Operate)
 // - a dict key: Hash says whether it is hashable; the key is the object's Identity()
 //   (ObjectKey in template_dict.cpp; plan 0248 section 7)
 // - `is sameas`: Identity()
@@ -96,6 +98,12 @@ public:
     // x == other; nullopt is NotImplemented, and the engine asks the other operand, then
     // compares identities
     [[nodiscard]] virtual std::optional<bool> Equals(const InternalValue& /*other*/) const { return std::nullopt; }
+    // + - * / // % **, < <= > >= and unary - +, as the dunder methods (__add__, __radd__, __lt__);
+    // side Right is `other op self`. nullopt is NotImplemented (docs/tasks/0381)
+    [[nodiscard]] virtual std::optional<InternalValue> Operate(HostOperator /*op*/, const InternalValue& /*other*/, HostOperandSide /*side*/) const
+    {
+        return std::nullopt;
+    }
     // hash(x); nullopt for an unhashable object (__hash__ = None). A dict the template makes
     // keys the object by its identity (see above), so only hashability matters to the engine
     [[nodiscard]] virtual std::optional<size_t> Hash() const;
@@ -201,6 +209,25 @@ std::optional<ListAdapter> AsSetView(const IEngineHostObject& host);
 // x == other by Python's rules: left.__eq__, then right.__eq__, then identity. Null hosts
 // stand for operands that are no host objects
 bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue);
+// left op right by Python's rules: left.__op__, then right.__rop__; nullopt when both decline (the
+// caller raises the TypeError). Null hosts stand for operands that are no host objects. Under a
+// NativeOrderScope the ordering operators decline
+std::optional<InternalValue> Operate(HostOperator op, const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue);
+// The same for a unary operator
+std::optional<InternalValue> OperateUnary(HostOperator op, const IEngineHostObject& object);
+// While one lives, the ordering operators of host objects decline: `unique` orders by `<` as a shortcut for
+// the equality pass, and a host's `<` (a set's subset order) is no total order (docs/tasks/0381)
+class NativeOrderScope
+{
+public:
+    NativeOrderScope();
+    ~NativeOrderScope();
+    NativeOrderScope(const NativeOrderScope&) = delete;
+    NativeOrderScope& operator=(const NativeOrderScope&) = delete;
+
+private:
+    bool m_previous;
+};
 } // namespace host
 
 } // namespace v2

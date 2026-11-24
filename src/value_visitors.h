@@ -18,6 +18,7 @@
 #include <jinja2cpp/big_int.h>
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
@@ -56,6 +57,8 @@ int CompareLowerUnicode(std::string_view left, std::string_view right);
 int CompareLowerUnicode(std::wstring_view left, std::wstring_view right);
 // str.lower() of UTF-8 text with a non-ASCII byte (string_converter_filter.cpp)
 void LowerUtf8Unicode(std::string_view str, std::string& out);
+// The same for wide text
+void LowerWideUnicode(std::wstring_view str, std::wstring& out);
 
 // Sets out to str.lower() of UTF-8 text, whose bytes then order as the code points of the
 // lowered string. ASCII text is lowered inline, into a sized buffer: push_back with the
@@ -1246,6 +1249,20 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         return this->operator()(static_cast<int64_t>(val));
     }
 
+    // -x and +x of a host object: its __neg__ or __pos__; the TypeError below when it has none (docs/tasks/0381)
+    JINJA2CPP_COLD_INLINE InternalValue operator()(const MapRef& val) const
+    {
+        if (const auto* hostObject = val.GetHostObject(); hostObject && m_oper != jinja2::UnaryExpression::LogicalNot)
+        {
+            const auto op = m_oper == jinja2::UnaryExpression::UnaryMinus ? HostOperator::Negative : HostOperator::Positive;
+            if (auto result = host::OperateUnary(op, *hostObject))
+            {
+                return std::move(*result);
+            }
+        }
+        return this->operator()<MapRef>(val);
+    }
+
     template<typename T>
     InternalValue operator()(const T& val) const
     {
@@ -1518,7 +1535,92 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return HostCompare(left, right);
         }
-        return HostSequenceOperation(left, right);
+        if (auto result = HostSequenceOperation(left, right))
+        {
+            return result;
+        }
+        return HostOperation(left, right);
+    }
+
+    // The host operator of an operation of the template, nullopt for one no host answers
+    [[nodiscard]] std::optional<HostOperator> ToHostOperator() const
+    {
+        switch (m_oper)
+        {
+        case BinaryExpression::Plus:
+            return HostOperator::Add;
+        case BinaryExpression::Minus:
+            return HostOperator::Subtract;
+        case BinaryExpression::Mul:
+            return HostOperator::Multiply;
+        case BinaryExpression::Div:
+            return HostOperator::TrueDivide;
+        case BinaryExpression::DivInteger:
+            return HostOperator::FloorDivide;
+        case BinaryExpression::DivRemainder:
+            return HostOperator::Remainder;
+        case BinaryExpression::Pow:
+            return HostOperator::Power;
+        case BinaryExpression::LogicalLt:
+            return HostOperator::Less;
+        case BinaryExpression::LogicalLe:
+            return HostOperator::LessEqual;
+        case BinaryExpression::LogicalGt:
+            return HostOperator::Greater;
+        case BinaryExpression::LogicalGe:
+            return HostOperator::GreaterEqual;
+        default:
+            return std::nullopt;
+        }
+    }
+
+    // A string operand of an operation a host object answers: lowered under ignore_case, as Jinja2 hands the
+    // host's __lt__ the str.lower() of a key
+    template<typename T>
+    [[nodiscard]] InternalValue HostOperationOperand(const T& val) const
+    {
+        if constexpr (IsStringType_v<T>)
+        {
+            if (m_compType != BinaryExpression::CaseSensitive)
+            {
+                using CharT = typename T::value_type;
+                std::basic_string<CharT> lowered;
+                if constexpr (std::is_same_v<CharT, char>)
+                {
+                    jinja2::detail::LowerUtf8(std::string_view(val), lowered);
+                }
+                else
+                {
+                    jinja2::detail::LowerWideUnicode(std::wstring_view(val), lowered);
+                }
+                return InternalValue(std::move(lowered));
+            }
+        }
+        return HostOperand(val);
+    }
+
+    // `+ - * / // % **` and the orderings with a host object on either side: the left operand's method, then
+    // the right operand's reflected one (host::Operate); nullopt when both decline, for the TypeError.
+    // Out of line and cold like HostCompare
+    template<typename L, typename R>
+    [[nodiscard]] JINJA2CPP_COLD_INLINE std::optional<InternalValue> HostOperation(const L& left, const R& right) const
+    {
+        const auto op = ToHostOperator();
+        if (!op)
+        {
+            return std::nullopt;
+        }
+        const IEngineHostObject* leftHost = nullptr;
+        const IEngineHostObject* rightHost = nullptr;
+        if constexpr (std::is_same_v<L, MapRef>)
+        {
+            leftHost = left.GetHostObject();
+        }
+        if constexpr (std::is_same_v<R, MapRef>)
+        {
+            rightHost = right.GetHostObject();
+        }
+        return host::Operate(*op, leftHost, HostOperationOperand(left), rightHost, HostOperationOperand(right));
     }
 
     // == or != with a host object on either side (host::Equal). Out of line and cold: inlined,

@@ -3,7 +3,7 @@ status: in-progress
 priority: low
 area: parity
 depends: [0352]
-touches: [include/jinja2cpp/host_object.h, src/host_object.h, src/host_object.cpp, src/public_host_object.cpp, src/value_visitors.h#BinaryMathOperation, src/filters.cpp, src/testers.cpp, src/expression_evaluator.cpp, src/stable_sort_values.h, python/src/adapters.h, python/src/adapters.cpp]
+touches: [include/jinja2cpp/host_object.h, src/host_object.h, src/host_object.cpp, src/public_host_object.cpp, src/value_visitors.h#BinaryMathOperation, src/value_visitors.h#UnaryOperation, src/string_converter_filter.cpp, src/filters.cpp, src/testers.cpp, src/expression_evaluator.cpp, src/stable_sort_values.h, python/src/adapters.h, python/src/adapters.cpp]
 shares: [test/public_host_object_test.cpp]
 ---
 # Host objects: arithmetic and ordering operators
@@ -36,5 +36,8 @@ HostOperandSide)` entry returning `optional<Value>`, the Python module on the fu
 - P0: `StableSortValues` becomes a guarded merge sort. libstdc++'s `std::stable_sort`
   writes below the range when a comparator answers inconsistently, which a host `__lt__`
   reaching `{{ items|sort }}` could do.
-- P1: the seam, the engine dispatch (left, then reflected right) and the toy tests.
+- P1: the seam (`HostOperator`, `HostOperandSide`, `IHostObject::Operate`), the engine dispatch
+  (`+ - * / // % **`, orderings, unary, `odd`/`even`, `min`/`max`/`dictsort`/`groupby`, left
+  then reflected right; `unique` never asks for an order) and the toy tests. Follow-ups that
+  stay out of it: task 0582.
 - P2: the Python module bridge.

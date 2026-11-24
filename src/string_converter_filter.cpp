@@ -2350,6 +2350,13 @@ void LowerUtf8Unicode(std::string_view str, std::string& out)
     AppendLower(out, chars, 0, 0, chars.cps.size());
 }
 
+void LowerWideUnicode(std::wstring_view str, std::wstring& out)
+{
+    out.clear();
+    const CaseChars<wchar_t> chars(str);
+    AppendLower(out, chars, 0, 0, chars.cps.size());
+}
+
 int CompareLowerUnicode(std::string_view left, std::string_view right)
 {
     return CompareLower(left, right);

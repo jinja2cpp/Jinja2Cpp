@@ -109,6 +109,35 @@ private:
 };
 
 /*!
+ * \brief The operators \ref IHostObject::Operate answers: Python's arithmetic, ordering and unary operators
+ *
+ * Append-only: a value is never reused or renumbered (docs/tasks/0381)
+ */
+enum class HostOperator : unsigned char
+{
+    Add,          //!< `+`: `__add__`, `__radd__`
+    Subtract,     //!< `-`
+    Multiply,     //!< `*`
+    TrueDivide,   //!< `/`
+    FloorDivide,  //!< `//`
+    Remainder,    //!< `%`
+    Power,        //!< `**`
+    Less,         //!< `<`: `__lt__`
+    LessEqual,    //!< `<=`
+    Greater,      //!< `>`
+    GreaterEqual, //!< `>=`
+    Negative,     //!< unary `-`
+    Positive      //!< unary `+`
+};
+
+//! Which operand of a binary operator the object is, for \ref IHostObject::Operate
+enum class HostOperandSide : unsigned char
+{
+    Left, //!< `self op other`
+    Right //!< `other op self`
+};
+
+/*!
  * \brief An object of a host language that templates read as that language reads it
  *
  * A host object is an opaque value: a Python object, a scripting-language object or a C++ object that keeps its own
@@ -136,6 +165,9 @@ private:
  * - `is mapping`, `dictsort`, `items`, `tojson`, `xmlattr`: a \ref IsMapping object is read as a map whose keys
  *   \ref Iterate gives and whose values \ref GetItem gives
  * - `urlencode`: a \ref IsDict object is read as its items, any other one iterated
+ * - `+ - * / // % **`, `< <= > >=`, unary `-` and `+`, `is odd`, `is even`, `sum`, and the order `sort`, `min`, `max`,
+ *   `dictsort` and `groupby` use: \ref Operate of the left operand, then of the right one (`__lt__` and `__add__`, then the
+ *   reflected `__gt__` and `__radd__`)
  * - `+ * < <= > >=`, `str % x`, tojson arrays: a \ref IsSequence object is read as the list \ref Iterate gives,
  *   printed as a tuple when \ref IsTuple
  *
@@ -288,6 +320,28 @@ public:
     [[nodiscard]] virtual std::optional<Value> ToInt() const;
     //! `float(x)`, for the `int` and `float` filters; nullopt when the object has no float value, which is the default
     [[nodiscard]] virtual std::optional<Value> ToFloat() const;
+    /*!
+     * \brief The arithmetic, ordering and unary operators: `__add__`, `__radd__`, `__lt__` and the rest
+     *
+     * With side \ref HostOperandSide::Left the call is `self op other`; with \ref HostOperandSide::Right it is
+     * `other op self`, the reflected method (`__radd__`, `__rsub__`). The engine passes the operator the template
+     * wrote, so for a comparison `1 > x` arrives as (Greater, 1, Right): the object maps it to its swapped method,
+     * `x.__lt__(1)`, as Python does. A unary operator gets None as `other` and side Left.
+     *
+     * The result is a value, not a bool: a comparison may give anything (a host object, a string). Nullopt, the
+     * default, is `NotImplemented`: the engine asks the other operand when it is a host object too, then raises the
+     * TypeError it raises for any unsupported operands. A host object of an arithmetic or ordering template
+     * expression is asked only when an operand is one; native numbers, strings and lists never reach it.
+     *
+     * Notes. `==` and `!=` are \ref Equals, `in` is \ref Contains, `~` is \ref Str. Python skips the reflected method
+     * when both operands have one type; the engine cannot see the type, so for two host objects the right one is
+     * asked with side Right whenever the left declined. An undefined operand fails before the object is asked. A wide
+     * template hands a string operand over as a `std::wstring`. A result may be any value, a host object included; it
+     * owns what it keeps. A list or map operand the template made is an owning copy; one that is a render parameter
+     * is the caller's own container, valid while the caller keeps it, as for \ref Equals. A \ref IsSequence object is
+     * not asked: `+ * < <= > >=` read it as the list it iterates (the bullet list above).
+     */
+    [[nodiscard]] virtual std::optional<Value> Operate(HostOperator op, const Value& other, HostOperandSide side) const;
 };
 
 /*!
