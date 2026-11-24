@@ -352,7 +352,8 @@ Copied ==
     /\ UNCHANGED <<lk, rg, exr, live, promoted, bad>>
 
 -----------------------------------------------------------------------------
-(* The end of a module call (DropUnheld), of a render or a module (Finish), and a cell's free *)
+(* The end of a module call (DropUnheld, FreezeCallScoped), of a render or a module (Finish), and a
+   cell's free *)
 
 Drop ==
     /\ E.ev = "drop" /\ Known(E.c) /\ E.reg \in DOMAIN rg
@@ -390,6 +391,34 @@ Freeze ==
                                                  ELSE lk[a]])
     /\ UNCHANGED <<rg, exr, live, promoted>>
 
+\* The outermost call of a template module ends: the cells of borrowed JSON values freeze and leave
+\* the table, as a render's cells do at its end (BorrowedCells::FreezeCallScoped; CellProtocol's
+\* EndModCall with FixCallScoped, docs/tasks/0402). One event a cell, then CallFrozen
+CallFreeze ==
+    /\ E.ev = "cfreeze" /\ Known(E.c) /\ E.reg \in DOMAIN rg
+    /\ LET c == E.c
+           C == cl[c]
+           detach == {a \in C.links : FinishDetaches(a \in C.held)}
+       IN /\ Check([TableAgrees |-> c \notin TblCells(E.reg) \/ C.frozen,
+                    \* Only the module's outermost call runs: no outer call reads the cell any more
+                    CallsAgree |-> ~rg[E.reg].module \/ Len(Calls(E.reg)) # 1,
+                    LinksAgree |-> AsSet(E.held) # C.held \/ \E a \in C.links \ C.held : ~L(a).own,
+                    NoUseAfterFree |-> ~C.alive,
+                    NoCrossThreadWrite |-> ~WriterOk(E.reg, E.t)])
+          /\ Next1(/\ cl' = [cl EXCEPT ![c].frozen = TRUE, ![c].links = {}, ![c].held = {},
+                                       ![c].inTable = FALSE]
+                   /\ lk' = [a \in DOMAIN lk |-> IF a \in detach THEN [lk[a] EXCEPT !.cell = 0, !.seen = 0]
+                                                 ELSE lk[a]]
+                   /\ rg' = [rg EXCEPT ![E.reg].tbl = [i \in DOMAIN @ |-> IF @[i] = c THEN 0 ELSE @[i]]]
+                   /\ live' = live - 1)
+    /\ UNCHANGED <<exr, promoted>>
+
+CallFrozen ==
+    /\ E.ev = "cfrozen"
+    /\ Check([LiveCount |-> OneThread /\ E.live # live])
+    /\ Next1(TRUE)
+    /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
+
 Finish ==
     /\ E.ev = "finish" /\ E.reg \in DOMAIN rg
     /\ LET r == E.reg
@@ -426,7 +455,7 @@ Next ==
         \/ Skip \/ Hit \/ Find \/ Link \/ LinkFail \/ Unlink \/ Leave \/ Inherit \/ DieAttached
         \/ CellNew \/ AdoptNo \/ Adopt \/ Promote
         \/ Export \/ Pin \/ Write \/ Unshare \/ Copied
-        \/ Drop \/ Dropped \/ Freeze \/ Finish \/ Finished \/ Free
+        \/ Drop \/ Dropped \/ Freeze \/ CallFreeze \/ CallFrozen \/ Finish \/ Finished \/ Free
     \/ Done
 
 Spec == Init /\ [][Next]_vars

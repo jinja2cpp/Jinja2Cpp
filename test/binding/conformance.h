@@ -1121,7 +1121,9 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
         // ... and is not the value the host put at the document's address since (Codex review of #778)
         EXPECT_EQ("FalseFalse", call("same", { jinja2::Reflect(std::as_const(doc)) }));
         // Within one call two views of the value are one object; the next call starts from the host's data, also for
-        // a view the host lends again (Python's would keep the writes: docs/tasks/0402)
+        // a view the host lends again. Python's would keep the writes: a deliberate divergence, decided as option (b)
+        // of docs/tasks/0402 (host data is immutable and calls are independent). An owned or shared document keeps
+        // them (ModuleCallsOfAnOwnedDocument)
         const typename TypeParam::Json list = TypeParam::Parse(R"([0])");
         const jinja2::Value kept = jinja2::Reflect(std::as_const(list));
         EXPECT_EQ("[0]2", call("g", { kept }));
@@ -1147,6 +1149,86 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
     }
 }
 
+// A document the view owns or shares stays at its address while a value reads it (IJsonNode::KeepsDocument): its
+// cells live across the calls of a template module, so a view the host lends to several calls keeps the module's
+// writes, as Python's dict does (docs/tasks/0402). Each mode makes its own document, which the view keeps
+TYPED_TEST_P(JsonConformance, ModuleCallsOfAnOwnedDocument)
+{
+    // A handle type is borrowed whatever the call (JsonTraits::IsHandle): ModuleCallsOfABorrowedDocument covers it
+    if constexpr (TypeParam::kViewable && !jinja2::detail::json::IsHandle<typename TypeParam::Json>::value)
+    {
+        using Json = typename TypeParam::Json;
+        jinja2::Template tpl;
+        ASSERT_TRUE(!!tpl.Load("{% set store = [] %}"
+                               "{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{% endmacro %}"
+                               "{% macro h(d) %}{{ d.a }}{% set _ = d.a.append(1) %}{% endmacro %}"
+                               "{% macro keep(d) %}{% set _ = d.update(k=2) %}{% set _ = store.append(d) %}{% endmacro %}"
+                               "{% macro same(d) %}{{ store[0] is sameas d }}{{ store[0] }}{{ d }}{% endmacro %}"));
+        auto module = tpl.MakeModule({});
+        ASSERT_TRUE(!!module) << module.error().ToString();
+        const auto call = [&module](const char* name, jinja2::ValuesList args) {
+            jinja2::UserCallableParams params;
+            params.extraPosArgs = std::move(args);
+            const jinja2::Value result = module->exports[name].template As<jinja2::UserCallable>().callable(params);
+            return jc::AsText(result);
+        };
+        const std::vector<std::function<jinja2::Value(const char*)>> owners = {
+            [](const char* text) { return jinja2::Reflect(TypeParam::Parse(text)); },
+            [](const char* text) {
+                Json doc = TypeParam::Parse(text);
+                return jinja2::Reflect(doc); // a copy of a non-const lvalue
+            },
+            [](const char* text) { return jinja2::Reflect(std::make_shared<Json>(TypeParam::Parse(text))); },
+        };
+        for (const auto& own : owners)
+        {
+            const jinja2::Value list = own("[0]");
+            EXPECT_EQ("[0]", call("g", { list }));
+            EXPECT_EQ("[0, 1]", call("g", { list }));
+            EXPECT_EQ("[0, 1, 1]", call("g", { list }));
+            // A fresh document in each call starts from its own data, also at an address an earlier one had
+            EXPECT_EQ("[0]", call("g", { own("[0]") }));
+            EXPECT_EQ("[0]", call("g", { own("[0]") }));
+            // A nested value of the document: the write makes the document's own cell, which keeps the nested one
+            const jinja2::Value nested = own(R"({"a":[0]})");
+            EXPECT_EQ("[0]", call("h", { nested }));
+            EXPECT_EQ("[0, 1]", call("h", { nested }));
+            EXPECT_EQ("[0, 1, 1]", call("h", { nested }));
+            // The module's own value of the document and the view the host lends again are one object
+            const jinja2::Value dict = own(R"({"k":1})");
+            EXPECT_EQ("", call("keep", { dict }));
+            EXPECT_EQ("True{'k': 2}{'k': 2}", call("same", { dict }));
+            EXPECT_EQ("", call("keep", { own("{}") })); // store keeps both; store[0] stays the first
+            EXPECT_EQ("True{'k': 2}{'k': 2}", call("same", { dict }));
+            module = tpl.MakeModule({});
+            ASSERT_TRUE(!!module) << module.error().ToString();
+        }
+        // A document the host lets go of goes by the end of the next call, and a fresh one per call leaves no cell
+        // behind, also after a write to its nested value (verifier of 0402)
+        std::vector<std::weak_ptr<Json>> gone;
+        for (int n = 0; n != 4; ++n)
+        {
+            for (const char* name : { "g", "h" })
+            {
+                auto doc = std::make_shared<Json>(TypeParam::Parse(name[0] == 'g' ? "[0]" : R"({"a":[0]})"));
+                gone.push_back(doc);
+                const jinja2::Value view = jinja2::Reflect(std::move(doc));
+                EXPECT_EQ("[0]", call(name, { view }));
+            }
+        }
+        EXPECT_EQ("[0]", call("g", { jinja2::Reflect(TypeParam::Parse("[0]")) }));
+        // Traits without an Identity hook key a cell by the view's accessor: a nested item's cell is never dropped yet
+        // (docs/tasks/0572)
+        if constexpr (jinja2::detail::json::HasIdentity<Json>::value)
+        {
+            for (const auto& doc : gone)
+            {
+                EXPECT_TRUE(doc.expired());
+            }
+        }
+    }
+}
+
 // Test names for INSTANTIATE_TYPED_TEST_SUITE_P: clang's -Wpedantic rejects the macro without its optional argument
 struct JsonBindingNames
 {
@@ -1157,6 +1239,6 @@ struct JsonBindingNames
     }
 };
 
-REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly, Identity, MidLoopCell, ModuleCallsOfABorrowedDocument);
+REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly, Identity, MidLoopCell, ModuleCallsOfABorrowedDocument, ModuleCallsOfAnOwnedDocument);
 
 #endif // JINJA2CPP_TEST_BINDING_CONFORMANCE_H

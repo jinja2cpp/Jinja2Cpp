@@ -25,7 +25,8 @@ import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_FILTER = "BorrowedCells*:TemplateModuleTest*:ModuleCallTest*"
+# The JSON suite's module calls: the call-scoped cells of a borrowed document (docs/tasks/0402)
+DEFAULT_FILTER = "BorrowedCells*:TemplateModuleTest*:ModuleCallTest*:*JsonConformance*.ModuleCalls*"
 INVARIANTS = ["NoForeignCell", "AliasesAgree", "NoUseAfterFree", "NoDanglingLink", "SnapshotStable",
               "FrozenUnwritten", "NoCrossThreadWrite", "MarkRule", "DropRule", "LiveCount",
               "LinksAgree", "TableAgrees", "CallsAgree", "StorageAgrees", "EpochAgrees",
@@ -209,6 +210,15 @@ def _use_after_free(events):
     return events[:i + 1] + [dict(ev="hit", t=events[i]["t"], cur=events[i]["cur"], a=1, c=events[i]["c"])] + events[i + 1:]
 
 
+def _call_scoped_stays(events):
+    # The outermost module call leaves a borrowed JSON value's cell in the table (FreezeCallScoped
+    # taken out, CellProtocol's no-call-scoped-freeze): a later call would find it at an address
+    # the host reused
+    if _first(events, lambda e: e["ev"] == "cfreeze") is None:
+        return None
+    return [e for e in events if e["ev"] != "cfreeze"]
+
+
 def _unknown_event(events):
     # A code path the spec has no step for
     return events[:1] + [dict(ev="retarget", t=1, cur=0)] + events[1:]
@@ -227,6 +237,9 @@ MUTANTS = {
     "no-call-restore": ("EndCall leaves the nested call running", _no_restore, {"violated: CallsAgree"}),
     "use-after-free": ("a read of a freed cell", _use_after_free,
                        {"violated: NoUseAfterFree", "violated: LinksAgree"}),
+    "call-scoped-stays": ("0402: a borrowed JSON value's cell outlives the module call", _call_scoped_stays,
+                          {"violated: LiveCount", "violated: NoUseAfterFree", "violated: FrozenAgrees",
+                           "violated: TableAgrees"}),
     "unknown-event": ("an event the spec has no step for", _unknown_event, {"no step takes this event"}),
 }
 

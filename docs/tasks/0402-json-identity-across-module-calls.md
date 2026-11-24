@@ -1,9 +1,10 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/989
 priority: low
 area: parity
 depends: [0212]
-touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/cycle_collector.h, tla/CellProtocol.tla, test/binding/conformance.h]
+touches: [include/jinja2cpp/json_adapter.h, src/internal_value.cpp, src/borrowed_cells.h, src/borrowed_cells.cpp, src/cycle_collector.h, tla/CellProtocol.tla, tla/CellTrace.tla, tla/CellApalache.tla, tla/CellInductive.tla, tla/check.py, tla/trace_check.py, tla/README.md, test/binding/conformance.h]
 ---
 # JSON values across the calls of a template module
 
@@ -39,3 +40,32 @@ test that pins the borrowed case's per-call behaviour (with a comment naming thi
 
 **Done when** the model covers the call-scoped freeze, owned documents keep their cells across calls,
 and the borrowed case is pinned as deliberate by a test.
+
+**Result.**
+- `IJsonNode::KeepsDocument()` (additive, `false` unless overridden): the library's views return
+  whether they hold an owner (`Reflect` of an rvalue, of a copied lvalue or of a `shared_ptr`,
+  `ReflectJson` with an owner). A cell of such a view is not call-scoped (`HasUnheldIdentity` in
+  internal_value.cpp): its source keeps the document, and so the address, alive, so it lives
+  across calls like any owned data and a view lent again keeps the module's writes, as Python's.
+  The header now also says that the host does not change a shared document while a Value reads it,
+  and that `ReflectJson`'s owner must keep the document alive and unchanged.
+- A nested value read through its parent (`d.a`, an aliasing `WithOwner` accessor) keeps a
+  call-scoped cell: `DropUnheld` cannot tell such an accessor lent again, so a non-call-scoped cell
+  of it stayed for the module's life, one per call with fresh documents (verifier round 1). Writes
+  to it still last across calls through the document's own cell, which the write makes and which
+  keeps the nested item. Writes to a nested value held under a name of its own (`{% set a = d.a %}`,
+  a loop item, `d.its|first`) stay call-scoped, as on master; Python keeps them (verifier round 2,
+  task 0572, which also has the older leak without node identities).
+- Known cost, verifier round 2: a cycle through a fresh owned document's cell
+  (`d.update(self=d)`) now stays until the module goes, one document per call, where the
+  call-scoped freeze used to hand it to the collector. Owned `ValuesMap` arguments already behave
+  so on master (`IsUnheld` counts the cycle's own link); both are task 0573.
+- Tests: `JsonConformance.ModuleCallsOfAnOwnedDocument` (owned, copied and shared documents;
+  writes kept across calls, a nested item, `sameas` with the module's value, fresh documents per
+  call, the documents freed by the next call's end); it fails on master. `ModuleCallsOfABorrowedDocument` names option (b) at the borrowed case.
+- Model: key `J`, `HostChangesJson` and the freeze in `EndModCall` (`FixCallScoped`), invariant
+  `CallScopedBounded`; runs `module-json` (pass), `module-json-exhaustive`, and the mutant
+  `no-call-scoped-freeze` (`NoForeignCell` in 9 states: the 0212 F1/F2 shape). Exports of a frozen
+  view read that cell (`OfFrozen`), as `HostIdentity` makes the cell their identity.
+- Cell trace: `cfreeze`/`cfrozen` events and `CallFreeze`/`CallFrozen` in CellTrace.tla; the
+  default trace filter adds the JSON module-call tests; trace mutant `call-scoped-stays`.

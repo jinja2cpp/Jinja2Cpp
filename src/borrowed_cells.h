@@ -195,8 +195,9 @@ public:
     // (ValueObject::IsInSnapshot). `owner`: what owns data that lives only as long as its
     // adapters (a user callable's result, a module call's argument), empty for the host's data
     // `unheldIdentity`: the identity is the address of a value the source does not keep alive (a
-    // JSON document's value, IJsonNode::NodeIdentity, which the host may free or reassign between
-    // two calls of a template module, docs/tasks/0212)
+    // borrowed JSON document's value, IJsonNode::NodeIdentity, which the host may free or reassign
+    // between two calls of a template module, docs/tasks/0212; a document the view owns or shares
+    // is kept, IJsonNode::KeepsDocument, 0402)
     bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner = {}, bool unheldIdentity = false) const;
 
 private:

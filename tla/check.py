@@ -50,10 +50,12 @@ FIXES = {
     "FixSnapshotLinks": True,
     # 0338 step D: a step allocates first and then commits with operations that cannot fail
     "FixAtomicLink": True, "FixAtomicPin": True,
+    # 0212 P3, 0402: the outermost module call's end freezes the cells of borrowed JSON values
+    "FixCallScoped": True,
 }
 SAFETY = ["SnapshotStable", "NoCrossThreadWrite", "NoUseAfterFree", "NoForeignCell",
           "RegistryBounded", "AliasesAgree", "NoUndefItems", "LiveCount", "ExportKeepsCallState",
-          "NoLostWrites", "NoTornStep", "NestedGlobalKept", "WellFormed"]
+          "NoLostWrites", "NoTornStep", "NestedGlobalKept", "CallScopedBounded", "WellFormed"]
 
 # Scopes. The deep counterexamples need about 14 steps, which an all-actions model of two
 # threads cannot reach exhaustively; each scope enables the parts a group of fixes needs.
@@ -228,6 +230,14 @@ RUNS = {
                                        {"GenericArgs": True, "DropRule": '"nohostcopy"'},
                                        ["NoLostWrites"],
                                        "0336: a cell dropped while the host can lend its data again"),
+    # 0402: module calls taking a view of a borrowed JSON value, whose document the host changes
+    # between the calls while the module keeps a view of the old one (`ns`) or the host does
+    "module-json": ("pass", dict(MODULE1, Actions='{"read", "export", "keeplist", "release", "ns"}'),
+                    {"BorrowedJson": True}, SAFETY,
+                    "0402: a borrowed JSON value the host changes between module calls"),
+    "no-call-scoped-freeze": ("mutant", dict(MODULE1, Actions='{"read"}'),
+                              {"BorrowedJson": True, "FixCallScoped": False}, ["NoForeignCell"],
+                              "0212 F1/F2: a later call finds the cell of the document an earlier call copied"),
     # Task 0351: no level bound. Each run must reach its scope's fixed point, which checks every
     # behaviour of these constants at any length (README, "Depth"). The allocation bounds are
     # smaller than the level-bounded runs' (3 module calls of 2 adapters, one export), as the
@@ -241,6 +251,10 @@ RUNS = {
     "module-generic-exhaustive": ("exhaustive", dict(MODULE1, Actions='{"export", "release", "ns", "read", "hostgen"}'),
                                   {"GenericArgs": True, "MaxAd": 6, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1},
                                   SAFETY, "0336: every behaviour of 3 calls taking generic containers"),
+    "module-json-exhaustive": ("exhaustive", dict(MODULE1, Actions='{"read", "export", "release", "ns"}'),
+                               {"BorrowedJson": True, "MaxAd": 6, "MaxCell": 1, "MaxGen": 2, "MaxEx": 1,
+                                "MaxVal": 2}, SAFETY,
+                               "0402: every behaviour of 3 calls taking a borrowed JSON value"),
     "threads-module-exhaustive": ("exhaustive", dict(TWO, RenderThreads='{}',
                                                      Actions='{"export", "release", "ns", "touch", "read"}'),
                                   {"MaxAd": 6, "MaxCell": 2, "MaxGen": 2, "MaxEx": 1}, SAFETY,
@@ -266,7 +280,7 @@ RUNS = {
 
 def config(scope, overrides, invariants, symmetry=True):
     consts = dict(OwnedAddrs='{"O1", "O2"}', MaxVal=3, MaxFail=1, DropRule='"full"',
-                  AllowModuleKeepList=False, AllowModuleNested=False, GenericArgs=False,
+                  AllowModuleKeepList=False, AllowModuleNested=False, GenericArgs=False, BorrowedJson=False,
                   HostHandoff=False, MaxCallId=1000, MaxEpoch=1000)
     consts["Actions"] = ALL
     consts.update(FIXES)
