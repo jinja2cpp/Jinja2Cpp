@@ -449,6 +449,33 @@ Going the other way, the engine's lists and dicts become `list` and `dict`, Mark
 A macro, `caller`, `loop` or another template object passed to a Python callable is lent for
 that call: using it after the call returns raises `TemplateRuntimeError`.
 
+## Operators on Python objects
+
+`+ - * / // % **`, `< <= > >=` and unary `-` and `+` on an object that is not a `dict`, `list`, `tuple` or one of the
+engine's own values (a `Decimal`, a `Fraction`, a `datetime` or `timedelta`, a class with `__add__` or
+`__lt__`) are run by Python: the module calls `PyNumber_Add` and its siblings and `PyObject_RichCompare`, so reflected
+methods (`1 + d`, `1 > d`), the subclass-first rule and `NotImplemented` are Python's. The same holds where the engine
+orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the tests `odd`, `even` and `divisibleby`. A
+`dict`, `list` or `tuple` keeps the engine's rules (the parity corpus is unchanged).
+
+- Unsupported operands raise Python's own `TypeError` with Python's text (`unsupported operand type(s) for +:
+  'decimal.Decimal' and 'float'`), not `TemplateRuntimeError`; any other exception of the method is the template's.
+  A `StopIteration` becomes a `RuntimeError`, as in Jinja2.
+- `bytes`, `bytearray`, `array.array`, `collections.deque` and other types that repeat with `*` or concatenate with `+`
+  are checked against the sequence cap before Python builds the result, so `{{ b * 10**9 }}`, or a loop that doubles a
+  value with `+`, fails with "too long" instead of allocating, as a `str` or `list` does. Jinja2 would allocate it. A type that multiplies elementwise (numpy's `ndarray`) is not a repeat and is not checked.
+  A subclass that overrides `__len__` is checked by the storage it repeats, and a `deque` with a `maxlen` by that bound.
+- `%` formatting of a `bytes` or `bytearray` format counts its own text, its widths and numeric precisions (written or
+  taken by `*`) and the bytes a `%s`, `%b`, `%r` or `%a` copies from a buffer against the same cap first:
+  `{{ fmt % (10**9, b) }}` with `fmt=b'%*s'` fails with "too long", as does a loop of `fmt % (v, v)`. `bytes + memoryview`
+  counts the view's bytes. A `bytes`, `bytearray`, `array` or `deque` result is checked against the cap as well. The
+  check reads a `%(key)` value and exports a buffer once more than Python does, so a mapping or buffer with side effects
+  sees an extra call. A class whose own
+  Python `__mul__`, `__add__` or `__mod__` builds the result runs its own code first, as Jinja2 does; a `bytes`,
+  `bytearray`, `array` or `deque` it returns is then checked.
+- The cost of a number's own arithmetic (`Fraction ** 10**8`) is not capped by `MaxBigIntBits`; Python Jinja2 behaves
+  the same (task 0412).
+
 ## Differences from Jinja2
 
 - `env.policies` is read at each render (`urlize.rel`, `urlize.target`, `urlize.extra_schemes`, `truncate.leeway`,
@@ -463,7 +490,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `dumps` function that replaces itself, a macro called back from Python in a plain `Environment`) applies from the next
   entry, where Jinja2 applies it at the next filter call.
 - Template errors that Jinja2 raises as Python's own exceptions (`ZeroDivisionError`,
-  `TypeError` from an operator) are `TemplateRuntimeError` with the same message, except where the engine
+  `TypeError` from an operator of a template value) are `TemplateRuntimeError` with the same message, except where the engine
   names the class: `%` formatting (also of `format` and newstyle `gettext`) raises `ValueError`,
   `TypeError` or `OverflowError` as Python does (0510; a missing key is not a `KeyError` yet, 0511).
 - `tojson` writes any mapping and any list or tuple; Python's `json.dumps` takes only `dict`.

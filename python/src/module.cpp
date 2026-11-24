@@ -99,6 +99,8 @@ const PyNames& Names()
         names->dictType = builtins.attr("dict");
         names->mappingType = nb::module_::import_("collections.abc").attr("Mapping");
         names->numberType = nb::module_::import_("numbers").attr("Number");
+        names->dequeType = nb::module_::import_("collections").attr("deque");
+        names->arrayType = nb::module_::import_("array").attr("array");
         g_names = names.release();
     }
     return *g_names;

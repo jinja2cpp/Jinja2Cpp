@@ -1,9 +1,13 @@
 """Values crossing between Python and the engine (0248 D4, D6), against Python Jinja2."""
 
+import array
 import collections
+import collections.abc
 import dataclasses
+import datetime
 import decimal
 import fractions
+import itertools
 import types
 
 import jinja2
@@ -96,6 +100,33 @@ class SizedIterable:
     def __iter__(self):
         return iter("ab")
 
+
+@dataclasses.dataclass(frozen=True)
+class Key:
+    """Orders by __lt__ only, as a host object that has no other operator"""
+
+    value: int
+
+    def __lt__(self, other):
+        return self.value < other.value
+
+    def __repr__(self):
+        return f"Key({self.value})"
+
+
+@dataclasses.dataclass
+class Holder:
+    key: Key
+
+
+class Stops:
+    def __add__(self, other):
+        raise StopIteration
+
+
+DEC = decimal.Decimal
+FRAC = fractions.Fraction
+
 CASES = [
     # dict: items, attributes, methods, non-string keys, filters that want a mapping
     ("{{ d.a }} {{ d['a'] }} {{ d.get('z', 0) }} {{ d.items()|list }} {{ d|length }}", {"d": {"a": 1, "b": 2}}),
@@ -137,6 +168,26 @@ CASES = [
     ("{{ f }} {{ f|round(1) }} {{ b }} {{ b + 1 }} {{ none }} {{ none is none }}", {"f": 2.25, "b": True, "none": None}),
     ("{{ s }} {{ s|length }} {{ s|reverse }} {{ s[2:] }}", {"s": "żółw 🐢 \x00 end"}),
     ("{{ e }} {{ e|int }}", {"e": __import__("enum").IntEnum("E", "A B").B}),
+    # operators of host objects are Python's: Decimal, Fraction, datetime, a user __lt__ (task 0381)
+    ("{{ d + 1 }} {{ 1 + d }} {{ d - 1 }} {{ 10 - d }} {{ d * 2 }} {{ 2 * d }} {{ d / 2 }} {{ 1 / d }} {{ d // 2 }} {{ d % 2 }} {{ d ** 2 }}", {"d": DEC("3")}),
+    ("{{ d + d }} {{ d * d }} {{ d - e }} {{ d < e }} {{ e < d }} {{ d >= 3 }} {{ 4 > d }} {{ 3 <= d }}", {"d": DEC("3.5"), "e": DEC("1.25")}),
+    ("{{ -d }} {{ +d }} {{ d is odd }} {{ d is even }} {{ d is divisibleby 3 }} {{ d < 4 }}", {"d": DEC("3")}),
+    ("{{ ds|max }} {{ ds|min }} {{ ds|sum }} {{ ds|sort }} {{ ds|sort(reverse=true) }} {{ ds|sum(start=1) }}", {"ds": [DEC("2.5"), DEC("1"), DEC("3")]}),
+    ("{{ a + b }} {{ a - b }} {{ a * b }} {{ a / b }} {{ a // b }} {{ a % b }} {{ a ** 2 }} {{ -a }} {{ a < b }} {{ a + 1 }} {{ 2 * a }}", {"a": FRAC(1, 2), "b": FRAC(1, 3)}),
+    ("{{ [a, b]|max }} {{ [a, b]|sort }} {{ [a, b]|sum }}", {"a": FRAC(1, 2), "b": FRAC(1, 3)}),
+    ("{{ t + d }} {{ d + t }} {{ t - d }} {{ t - u }} {{ d - d }} {{ d * 2 }} {{ -d }} {{ t < u }} {{ u >= t }}",
+     {"t": datetime.datetime(2020, 1, 1), "u": datetime.datetime(2021, 6, 7, 8), "d": datetime.timedelta(days=1, hours=2)}),
+    ("{{ [t, u]|max }} {{ [u, t]|min }} {{ [u, t]|sort }} {{ [d, d + d]|sum }}",
+     {"t": datetime.datetime(2020, 1, 1), "u": datetime.datetime(2021, 6, 7, 8), "d": datetime.timedelta(days=1)}),
+    ("{{ ks|sort }} {{ ks|sort(reverse=true) }} {{ ks|max }} {{ ks|min }} {{ ks[0] < ks[1] }} {{ ks[0] > ks[1] }}", {"ks": [Key(2), Key(1), Key(3)]}),
+    ("{% for k, g in hs|groupby('key') %}{{ k }}:{{ g|map(attribute='key')|list|length }};{% endfor %}", {"hs": [Holder(Key(2)), Holder(Key(1)), Holder(Key(2))]}),
+    ("{{ hs|sort(attribute='key')|map(attribute='key')|list }} {{ hs|max(attribute='key') }}", {"hs": [Holder(Key(2)), Holder(Key(1))]}),
+    # bytes, bytearray, array and deque repeat as Python repeats them
+    ("{{ b * 3 }} {{ 3 * b }} {{ ba * 2 }} {{ ar * 2 }} {{ dq * 2 }} {{ b * 0 }} {{ b + b }}",
+     {"b": b"ab", "ba": bytearray(b"a"), "ar": array.array("i", [1]), "dq": collections.deque([1])}),
+    # a StopIteration of an operator is Jinja2's RuntimeError, not the end of an iteration (PEP 479)
+    ("{{ s + 1 }}", {"s": Stops()}),
+    ("{% for x in [1] %}{{ s + x }}{% endfor %}", {"s": Stops()}),
 ]
 
 
@@ -151,6 +202,14 @@ TYPE_ERRORS = [
     ("{{ d < d }}", {"d": {}}),
     # `%` formatting names its class (0510)
     ("{{ '%s' % t }}", {"t": (1, 2)}, TypeError),
+    # a host object's operators raise Python's own TypeError (task 0381)
+    ("{{ d + 1.0 }}", {"d": DEC("1")}, TypeError),
+    ("{{ d < 'a' }}", {"d": DEC("1")}, TypeError),
+    ("{{ 'ab' * d }}", {"d": DEC("1")}, TypeError),
+    ("{{ d - 'a' }}", {"d": DEC("1")}, TypeError),
+    ("{{ k <= k }}", {"k": Key(1)}, TypeError),
+    ("{{ k + 1 }}", {"k": Key(1)}, TypeError),
+    ("{{ -k }}", {"k": Key(1)}, TypeError),
 ]
 
 
@@ -281,6 +340,149 @@ def test_a_huge_range_passed_to_python_counts_against_the_sequence_cap():
     with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long"):
         env.from_string("{{ f(range(1000000000000)) }}").render(f=len)
     assert env.from_string("{{ f(range(5)) }}").render(f=len) == "5"
+
+
+@pytest.mark.parametrize("source", ["{{ b * 1000000000 }}", "{{ 1000000000 * b }}", "{{ ba * 10**9 }}", "{{ ar * 10**9 }}", "{{ dq * 10**9 }}", "{{ b * 10**30 }}"])
+def test_a_host_sequence_repeated_past_the_cap_fails_before_python_allocates(source):
+    # bytes, bytearray, array and deque repeat in Python: the length is checked against the cap first
+    env = jinja2cpp.Environment()
+    context = {"b": b"ab", "ba": bytearray(b"ab"), "ar": array.array("i", [1, 2]), "dq": collections.deque([1, 2])}
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        env.from_string(source).render(**context)
+    assert env.from_string("{{ b * 3 }}").render(**context) == str(b"ab" * 3)
+
+
+@pytest.mark.parametrize("name", ["b", "ba", "ar", "dq"])
+def test_a_host_sequence_doubled_in_a_loop_stops_at_the_cap(name):
+    # `+` grows bytes, bytearray, array and deque as it grows str and list: each step is checked against the cap
+    env = jinja2cpp.Environment()
+    context = {"b": b"ab", "ba": bytearray(b"ab"), "ar": array.array("i", [1, 2]), "dq": collections.deque([1, 2])}
+    source = "{% set ns = namespace(v=v) %}{% for i in range(40) %}{% set ns.v = ns.v + ns.v %}{% endfor %}{{ ns.v|length }}"
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        env.from_string(source).render(v=context[name])
+    assert env.from_string("{{ (v + v)|length }}").render(v=context[name]) == "4"
+
+
+def test_an_array_times_a_list_is_no_repeat():
+    np = pytest.importorskip("numpy")
+    for source in ("{{ a * [1, 2, 3] }}", "{{ [1, 2, 3] * a }}", "{{ a * (1, 2, 3) }}"):
+        assert_same(source, {"a": np.array([1, 2, 3])})
+
+
+def test_a_failing_len_of_a_host_sequence_is_not_skipped_by_the_cap_check():
+    class Broken(bytes):
+        def __len__(self):
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        jinja2cpp.Environment().from_string("{{ (b * 10**9)|length }}").render(b=Broken(b"ab"))
+
+
+@pytest.mark.parametrize("source", ["{{ (b * 10**9)|length }}", "{{ (b + b + b)|length }}", "{{ (dq * 10**9)|length }}"])
+def test_a_subclass_that_hides_its_length_is_capped_by_its_storage(source):
+    # Inherited repetition and concatenation read the built-in storage, not an overridden __len__ (a list subclass
+    # is a sequence the engine reads and repeats itself)
+    class Hidden(bytes):
+        def __len__(self):
+            return 0
+
+    class HiddenDeque(collections.deque):
+        def __len__(self):
+            return 0
+
+    # Three of these pass the 2**26 cap only together
+    big = b"a" * (25 * 2**20)
+    context = {"b": Hidden(big if "+" in source else b"ab"), "dq": HiddenDeque([1, 2])}
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string(source).render(**context)
+
+
+def test_a_deque_with_a_maxlen_repeats_as_python_bounds_it():
+    # A bounded deque keeps maxlen items whatever the count: no cap error, Python's own result
+    for source in ("{{ dq * 10**9 }}", "{{ 10**9 * dq }}", "{{ dq + dq }}", "{{ (dq * 10**30)|list }}"):
+        assert_same(source, {"dq": collections.deque([1, 2], maxlen=3)})
+    # The left deque's maxlen bounds a concatenation, whatever the right one holds
+    big = collections.deque(itertools.repeat(None, 2**26 + 1))
+    assert jinja2cpp.Environment().from_string("{{ (s + b)|length }}").render(s=collections.deque([1, 2, 3], maxlen=3), b=big) == "3"
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string("{{ (b + s)|length }}").render(s=collections.deque([1, 2, 3], maxlen=3), b=big)
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string("{{ (dq * 10**9)|length }}").render(dq=collections.deque([1, 2], maxlen=2**27))
+
+
+@pytest.mark.parametrize("source", ["{{ (f % (10**9, b))|length }}", "{{ (f % (-10**9, b))|length }}", "{{ (p % (10**9, 1))|length }}",
+                                    "{{ (w % b)|length }}", "{{ (pd % 1)|length }}", "{{ (f % (10**30, b))|length }}", "{{ (n % (2**26 + 1, 1))|length }}"])
+def test_a_format_padded_past_the_cap_fails_before_python_allocates(source):
+    # printf-style widths and numeric precisions of bytes and bytearray formats build their padding in Python: checked
+    # against the cap first
+    context = {"f": b"%*s", "p": bytearray(b"%.*d"), "w": b"%1000000000s", "pd": b"%.100000000d", "b": b"x", "n": b"%*.3d"}
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string(source).render(**context)
+
+
+@pytest.mark.parametrize("fmt", [b"%s%s", b"%b%b", b"%r%r"])
+def test_a_format_that_doubles_its_value_stops_at_the_cap(fmt):
+    # The bytes each conversion copies count too: a loop of `fmt % (v, v)` doubles v and stops at the cap
+    source = "{% set ns = namespace(v=v) %}{% for i in range(40) %}{% set ns.v = f % (ns.v, ns.v) %}{% endfor %}{{ ns.v|length }}"
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string(source).render(v=b"x", f=fmt)
+
+
+def test_a_format_counts_the_values_its_mapping_keys_name():
+    m = {b"a": b"x" * (40 * 2**20)}
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string("{{ (f % m)|length }}").render(f=b"%(a)s%(a)s", m=m)
+    assert_same("{{ f % m }}", {"f": b"%(a)s-%(a).2s", "m": {b"a": b"xyz"}})
+
+
+def test_a_format_near_the_cap_is_counted_as_python_pads_it():
+    # A width pads to the larger of itself and the copied value; a precision truncates %r too; a memoryview's repr is
+    # short. None of these passes the cap in Python
+    big = b"x" * (20 * 2**20)
+    for fmt, value in ((b"%40000000s", b"x" * (30 * 2**20)), (b"%r", big), (b"%a", big), (b"%.5r", big), (b"%r", memoryview(big))):
+        got = jinja2cpp.Environment().from_string("{{ (f % (v,))|length }}").render(f=fmt, v=value)
+        assert got == str(len(fmt % (value,))), fmt
+
+
+def test_an_interrupt_in_a_format_value_lookup_propagates():
+    class Once(collections.abc.Mapping):
+        calls = 0
+
+        def __getitem__(self, key):
+            Once.calls += 1
+            if Once.calls == 1:
+                raise KeyboardInterrupt
+            return b"v"
+
+        def __iter__(self):
+            return iter([b"a"])
+
+        def __len__(self):
+            return 1
+
+    with pytest.raises(KeyboardInterrupt):
+        jinja2cpp.Environment().from_string("{{ f % m }}").render(f=b"%(a)s", m=Once())
+
+
+def test_bytes_plus_a_wide_buffer_counts_its_bytes():
+    # bytes + memoryview copies the view's bytes: an array of 8-byte items counts eight per item
+    view = memoryview(array.array("Q", [0]) * 10_000_000)
+    for source in ("{{ (b + v)|length }}", "{{ (ba + v)|length }}"):
+        with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+            jinja2cpp.Environment().from_string(source).render(b=b"x", ba=bytearray(b"x"), v=view)
+    assert_same("{{ (b + v)|length }}", {"b": b"x", "v": memoryview(array.array("Q", [1, 2]))})
+
+
+def test_a_format_within_the_cap_renders_as_python_formats_it():
+    context = {"f": b"%*s|%-*d|%%|%.3s|%5.2f|%ld", "b": b"xyz", "fd": b"%(a)s-%(b)05d", "p": bytearray(b"%.*d")}
+    for source in ("{{ f % (4, b, 3, 7, b, 2.5, 9) }}", "{{ fd % {'a': b, 'b': 42} }}", "{{ p % (5, 42) }}", "{{ b % () }}",
+                   "{{ f % (1, 2) }}", "{{ p % (3,) }}", "{{ p % ('x', 1) }}", "{{ '%*s|%s' % t }}",
+                   # A string conversion truncates to its precision, a number pads to the larger of width and
+                   # precision, and a negative precision is ignored: none of these nears the cap
+                   "{{ (ts % b)|length }}", "{{ (tr % b)|length }}", "{{ (np % (40000000, 40000002, 1))|length }}",
+                   "{{ ng % (-10**9, 1.5) }}"):
+        assert_same(source, {**context, "t": type("T", (tuple,), {})((3, "a", "b")), "ts": b"%.100000000s",
+                             "tr": b"%.100000000r", "np": b"%-*.*d", "ng": b"%.*f"})
 
 
 def test_undefined_items_and_dictsort_pairs_reach_python_as_in_jinja2():
