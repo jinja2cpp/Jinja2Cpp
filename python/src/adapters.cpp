@@ -761,12 +761,44 @@ std::optional<unsigned long long> BufferBytes(PyObject* object)
     Py_buffer view{};
     if (PyObject_GetBuffer(object, &view, PyBUF_RECORDS_RO) < 0)
     {
+        // A buffer it cannot export is Python's to report; anything else (KeyboardInterrupt) propagates
+        if (!PyErr_ExceptionMatches(PyExc_TypeError) && !PyErr_ExceptionMatches(PyExc_ValueError) && !PyErr_ExceptionMatches(PyExc_BufferError))
+        {
+            ThrowPending();
+        }
         PyErr_Clear();
         return std::nullopt;
     }
     const auto bytes = static_cast<unsigned long long>(view.len < 0 ? 0 : view.len);
     PyBuffer_Release(&view);
     return bytes;
+}
+
+// An upper bound of repr(bytes) without building it: b'' around the bytes, two characters for a backslash, a quote
+// and \t \n \r, four for any other byte outside the printable ASCII range
+unsigned long long ReprBound(PyObject* byteString)
+{
+    Py_buffer view{};
+    if (PyObject_GetBuffer(byteString, &view, PyBUF_SIMPLE) < 0)
+    {
+        ThrowPending();
+    }
+    const auto* bytes = static_cast<const unsigned char*>(view.buf);
+    unsigned long long length = 3;
+    for (Py_ssize_t idx = 0; idx < view.len; ++idx)
+    {
+        const unsigned char byte = bytes[idx];
+        if (byte == '\\' || byte == '\'' || byte == '"' || byte == '\t' || byte == '\n' || byte == '\r')
+        {
+            length += 2;
+        }
+        else
+        {
+            length += byte >= 32 && byte < 127 ? 1 : 4;
+        }
+    }
+    PyBuffer_Release(&view);
+    return length;
 }
 
 bool IsByteString(PyObject* object)
@@ -966,7 +998,11 @@ void CheckFormatSize(PyObject* format, PyObject* args)
                 }
                 else
                 {
-                    // A missing key is Python's KeyError, raised by the formatter itself
+                    // A missing key is Python's KeyError, raised by the formatter itself; any other error propagates
+                    if (!PyErr_ExceptionMatches(PyExc_LookupError))
+                    {
+                        ThrowPending();
+                    }
                     PyErr_Clear();
                 }
             }
@@ -1021,17 +1057,21 @@ void CheckFormatSize(PyObject* format, PyObject* args)
             value = argIndex < argCount ? (tuple ? PyTuple_GetItem(args, argIndex) : args) : nullptr;
             ++argIndex;
         }
-        if (value && (copies || quotes))
+        // The conversion is padded to its width: the larger of the width and what it copies
+        if (value && (copies || (quotes && IsByteString(value))))
         {
             if (auto bytes = BufferBytes(value))
             {
-                // repr of bytes escapes each byte to at most four characters, plus b'' around it
-                unsigned long long copied = quotes ? (*bytes > most / 4 ? most : (*bytes * 4) + 3) : *bytes;
-                if (copies && hasPrecision && precision < copied)
+                // repr of bytes as Python escapes it; another buffer's repr (a memoryview's) is short
+                unsigned long long copied = quotes ? ReprBound(value) : *bytes;
+                if (hasPrecision && precision < copied)
                 {
                     copied = precision;
                 }
-                add(copied);
+                if (copied > padding)
+                {
+                    padding = copied;
+                }
             }
         }
         add(padding);

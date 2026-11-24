@@ -2,6 +2,7 @@
 
 import array
 import collections
+import collections.abc
 import dataclasses
 import datetime
 import decimal
@@ -432,6 +433,35 @@ def test_a_format_counts_the_values_its_mapping_keys_name():
     with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
         jinja2cpp.Environment().from_string("{{ (f % m)|length }}").render(f=b"%(a)s%(a)s", m=m)
     assert_same("{{ f % m }}", {"f": b"%(a)s-%(a).2s", "m": {b"a": b"xyz"}})
+
+
+def test_a_format_near_the_cap_is_counted_as_python_pads_it():
+    # A width pads to the larger of itself and the copied value; a precision truncates %r too; a memoryview's repr is
+    # short. None of these passes the cap in Python
+    big = b"x" * (20 * 2**20)
+    for fmt, value in ((b"%40000000s", b"x" * (30 * 2**20)), (b"%r", big), (b"%a", big), (b"%.5r", big), (b"%r", memoryview(big))):
+        got = jinja2cpp.Environment().from_string("{{ (f % (v,))|length }}").render(f=fmt, v=value)
+        assert got == str(len(fmt % (value,))), fmt
+
+
+def test_an_interrupt_in_a_format_value_lookup_propagates():
+    class Once(collections.abc.Mapping):
+        calls = 0
+
+        def __getitem__(self, key):
+            Once.calls += 1
+            if Once.calls == 1:
+                raise KeyboardInterrupt
+            return b"v"
+
+        def __iter__(self):
+            return iter([b"a"])
+
+        def __len__(self):
+            return 1
+
+    with pytest.raises(KeyboardInterrupt):
+        jinja2cpp.Environment().from_string("{{ f % m }}").render(f=b"%(a)s", m=Once())
 
 
 def test_bytes_plus_a_wide_buffer_counts_its_bytes():

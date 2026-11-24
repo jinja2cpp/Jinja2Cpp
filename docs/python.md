@@ -468,8 +468,11 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
 - `%` formatting of a `bytes` or `bytearray` format counts its own text, its widths and numeric precisions (written or
   taken by `*`) and the bytes a `%s`, `%b`, `%r` or `%a` copies from a buffer against the same cap first:
   `{{ fmt % (10**9, b) }}` with `fmt=b'%*s'` fails with "too long", as does a loop of `fmt % (v, v)`. `bytes + memoryview`
-  counts the view's bytes. A `bytes`, `bytearray`, `array` or `deque` result is checked against the cap as well. A class whose own
-  Python `__mul__`, `__add__` or `__mod__` builds the result runs its own code unchecked, as Jinja2 does.
+  counts the view's bytes. A `bytes`, `bytearray`, `array` or `deque` result is checked against the cap as well. The
+  check reads a `%(key)` value and exports a buffer once more than Python does, so a mapping or buffer with side effects
+  sees an extra call. A class whose own
+  Python `__mul__`, `__add__` or `__mod__` builds the result runs its own code first, as Jinja2 does; a `bytes`,
+  `bytearray`, `array` or `deque` it returns is then checked.
 - The cost of a number's own arithmetic (`Fraction ** 10**8`) is not capped by `MaxBigIntBits`; Python Jinja2 behaves
   the same (task 0412).
 
