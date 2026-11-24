@@ -39,5 +39,5 @@ HostOperandSide)` entry returning `optional<Value>`, the Python module on the fu
 - P1: the seam (`HostOperator`, `HostOperandSide`, `IHostObject::Operate`), the engine dispatch
   (`+ - * / // % **`, orderings, unary, `odd`/`even`, `min`/`max`/`dictsort`/`groupby`, left
   then reflected right; `unique` never asks for an order) and the toy tests. Follow-ups that
-  stay out of it: task 0580.
+  stay out of it: task 0582.
 - P2: the Python module bridge.
