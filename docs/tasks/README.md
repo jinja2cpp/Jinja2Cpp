@@ -612,7 +612,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0551](0551-recursive-closure-earlier-pass-names.md) | A closure of a recursive loop reads a name its last pass did not store from the live frame below | parity | low | done |
 | [0552](0552-block-in-stored-macro-of-nested-render.md) | A block inside a macro a nested render stored renders empty once that render has ended | parity | low | done |
 | [0553](0553-dict-walk-readd-by-erase-epoch.md) | A dict walk misses a key erased and added again when the entry's address is reused | parity | high | done |
-| [0554](0554-fold-check-argument-steps.md) | Tuple-of-slices fold check: candidates inside arguments and literal items | parity | low | dropped |
+| [0554](0554-fold-check-argument-steps.md) | Tuple-of-slices fold check: candidates inside arguments and literal items | parity | low | open |
 | [0555](0555-strict-fold-errors-outside-tuple-slices.md) | Strict undefined fold errors outside tuple-of-slices templates | parity | low | done |
 | [0556](0556-strict-output-fold-error.md) | Strict output whose fold fails with an error that is no UndefinedError | parity | low | done |
 | [0557](0557-make-module-filter-policies.md) | Macros of a module keep the filter policies of the load | parity | low | done |
