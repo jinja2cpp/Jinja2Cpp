@@ -814,7 +814,8 @@ void CheckRepeatSize(PyObject* sequence, PyObject* count)
 }
 
 // left + right of a type that concatenates (bytes, bytearray, array, deque): the sum of the lengths against the cap,
-// so a template loop that doubles a value stops at the cap as a str or list does
+// so a template loop that doubles a value stops at the cap as a str or list does. Python concatenates by the left
+// operand's slot only (`n * b` repeats by either), and a left deque's maxlen bounds the result
 void CheckConcatSize(PyObject* left, PyObject* right)
 {
     if (!PyType_GetSlot(Py_TYPE(left), Py_sq_concat))
@@ -829,10 +830,11 @@ void CheckConcatSize(PyObject* left, PyObject* right)
     }
 }
 
-// The padding a printf-style format adds: each width and precision, written in the format or taken by `*` from the
-// arguments, can make a conversion that long. `b'%*s' % (10**9, b'x')` or `'%.*d' % (10**9, 1)` would build it
-// before the engine sees it, so the sum counts against the cap first. The converted values themselves exist already.
-// A format Python rejects is left to Python's own error
+// The padding a printf-style bytes format adds: a width, written in the format or taken by `*` from the arguments,
+// makes a conversion that long, and a precision does for a number (`%.*d` pads zeros; a string conversion truncates).
+// `b'%*s' % (10**9, b'x')` would build it before the engine sees it, so the sum counts against the cap first. The
+// converted values themselves exist already. A str format is the engine's own (PercentFormat); a format Python
+// rejects is left to Python's own error
 void CheckFormatSize(PyObject* format, PyObject* args)
 {
     const char* text = nullptr;
@@ -851,15 +853,6 @@ void CheckFormatSize(PyObject* format, PyObject* args)
         text = PyByteArray_AsString(format);
         size = PyByteArray_Size(format);
     }
-    else if (PyUnicode_Check(format))
-    {
-        // The format's own characters are ASCII; no byte of a multibyte UTF-8 sequence is
-        text = PyUnicode_AsUTF8AndSize(format, &size);
-        if (!text)
-        {
-            ThrowPending();
-        }
-    }
     else
     {
         return;
@@ -870,7 +863,7 @@ void CheckFormatSize(PyObject* format, PyObject* args)
     constexpr unsigned long long most = ~0ULL >> 2;
     unsigned long long total = 0;
     // A star takes the next argument: an int, or Python raises
-    const auto star = [&]() -> unsigned long long {
+    const auto star = [&](bool width) -> unsigned long long {
         if (argIndex >= argCount)
         {
             return 0;
@@ -886,13 +879,18 @@ void CheckFormatSize(PyObject* format, PyObject* args)
         const long long value = PyLong_AsLongLongAndOverflow(item, &overflow);
         if (overflow != 0)
         {
-            return most;
+            return overflow < 0 && !width ? 0 : most;
         }
         if (value == -1 && PyErr_Occurred())
         {
             ThrowPending();
         }
-        return value < 0 ? static_cast<unsigned long long>(-(value + 1)) + 1 : static_cast<unsigned long long>(value);
+        if (value < 0)
+        {
+            // A negative width left-justifies to its magnitude
+            return width ? static_cast<unsigned long long>(-(value + 1)) + 1 : 0;
+        }
+        return static_cast<unsigned long long>(value);
     };
     const auto digits = [&](Py_ssize_t& pos) {
         unsigned long long value = 0;
@@ -930,27 +928,39 @@ void CheckFormatSize(PyObject* format, PyObject* args)
         unsigned long long padding = 0;
         if (pos < size && text[pos] == '*')
         {
-            padding = star();
+            padding = star(true);
             ++pos;
         }
         else
         {
             padding = digits(pos);
         }
+        unsigned long long precision = 0;
         if (pos < size && text[pos] == '.')
         {
             ++pos;
             if (pos < size && text[pos] == '*')
             {
-                padding = padding + star();
+                // A negative precision is ignored
+                precision = star(false);
                 ++pos;
             }
             else
             {
-                padding = padding + digits(pos);
+                precision = digits(pos);
             }
         }
-        // The converted value's own argument; `pos` now stands on a length modifier or the conversion
+        while (pos < size && (text[pos] == 'h' || text[pos] == 'l' || text[pos] == 'L'))
+        {
+            ++pos;
+        }
+        // A string conversion truncates to its precision; a number is padded to the larger of the two
+        const bool truncates = pos < size && (text[pos] == 's' || text[pos] == 'b' || text[pos] == 'r' || text[pos] == 'a' || text[pos] == 'c');
+        if (!truncates && precision > padding)
+        {
+            padding = precision;
+        }
+        // The converted value's own argument; `pos` now stands on the conversion
         ++argIndex;
         total = total > most - padding ? most : total + padding;
         if (padding >= most)
@@ -992,7 +1002,6 @@ std::optional<jinja2::Value> PyHost::Operate(jinja2::HostOperator op, const jinj
     {
     case HostOperator::Add:
         CheckConcatSize(left, right);
-        CheckConcatSize(right, left);
         result = PyNumber_Add(left, right);
         break;
     case HostOperator::Subtract:

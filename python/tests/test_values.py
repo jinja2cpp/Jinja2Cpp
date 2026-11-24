@@ -6,6 +6,7 @@ import dataclasses
 import datetime
 import decimal
 import fractions
+import itertools
 import types
 
 import jinja2
@@ -399,16 +400,21 @@ def test_a_deque_with_a_maxlen_repeats_as_python_bounds_it():
     # A bounded deque keeps maxlen items whatever the count: no cap error, Python's own result
     for source in ("{{ dq * 10**9 }}", "{{ 10**9 * dq }}", "{{ dq + dq }}", "{{ (dq * 10**30)|list }}"):
         assert_same(source, {"dq": collections.deque([1, 2], maxlen=3)})
+    # The left deque's maxlen bounds a concatenation, whatever the right one holds
+    big = collections.deque(itertools.repeat(None, 2**26 + 1))
+    assert jinja2cpp.Environment().from_string("{{ (s + b)|length }}").render(s=collections.deque([1, 2, 3], maxlen=3), b=big) == "3"
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
+        jinja2cpp.Environment().from_string("{{ (b + s)|length }}").render(s=collections.deque([1, 2, 3], maxlen=3), b=big)
     with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
         jinja2cpp.Environment().from_string("{{ (dq * 10**9)|length }}").render(dq=collections.deque([1, 2], maxlen=2**27))
 
 
 @pytest.mark.parametrize("source", ["{{ (f % (10**9, b))|length }}", "{{ (f % (-10**9, b))|length }}", "{{ (p % (10**9, 1))|length }}",
-                                    "{{ (w % b)|length }}", "{{ (pd % 1)|length }}", "{{ ('%*s' % t)|length }}", "{{ (f % (10**30, b))|length }}"])
+                                    "{{ (w % b)|length }}", "{{ (pd % 1)|length }}", "{{ (f % (10**30, b))|length }}", "{{ (n % (2**26 + 1, 1))|length }}"])
 def test_a_format_padded_past_the_cap_fails_before_python_allocates(source):
-    # printf-style widths and precisions of bytes and bytearray formats (and a str format given a host tuple) build
-    # their padding in Python: checked against the cap first
-    context = {"f": b"%*s", "p": bytearray(b"%.*d"), "w": b"%1000000000s", "pd": b"%.100000000d", "b": b"x", "t": type("T", (tuple,), {})((10**9, "x"))}
+    # printf-style widths and numeric precisions of bytes and bytearray formats build their padding in Python: checked
+    # against the cap first
+    context = {"f": b"%*s", "p": bytearray(b"%.*d"), "w": b"%1000000000s", "pd": b"%.100000000d", "b": b"x", "n": b"%*.3d"}
     with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long|longer than"):
         jinja2cpp.Environment().from_string(source).render(**context)
 
@@ -416,8 +422,13 @@ def test_a_format_padded_past_the_cap_fails_before_python_allocates(source):
 def test_a_format_within_the_cap_renders_as_python_formats_it():
     context = {"f": b"%*s|%-*d|%%|%.3s|%5.2f|%ld", "b": b"xyz", "fd": b"%(a)s-%(b)05d", "p": bytearray(b"%.*d")}
     for source in ("{{ f % (4, b, 3, 7, b, 2.5, 9) }}", "{{ fd % {'a': b, 'b': 42} }}", "{{ p % (5, 42) }}", "{{ b % () }}",
-                   "{{ f % (1, 2) }}", "{{ p % (3,) }}", "{{ p % ('x', 1) }}", "{{ '%*s|%s' % t }}"):
-        assert_same(source, {**context, "t": type("T", (tuple,), {})((3, "a", "b"))})
+                   "{{ f % (1, 2) }}", "{{ p % (3,) }}", "{{ p % ('x', 1) }}", "{{ '%*s|%s' % t }}",
+                   # A string conversion truncates to its precision, a number pads to the larger of width and
+                   # precision, and a negative precision is ignored: none of these nears the cap
+                   "{{ (ts % b)|length }}", "{{ (tr % b)|length }}", "{{ (np % (40000000, 40000002, 1))|length }}",
+                   "{{ ng % (-10**9, 1.5) }}"):
+        assert_same(source, {**context, "t": type("T", (tuple,), {})((3, "a", "b")), "ts": b"%.100000000s",
+                             "tr": b"%.100000000r", "np": b"%-*.*d", "ng": b"%.*f"})
 
 
 def test_undefined_items_and_dictsort_pairs_reach_python_as_in_jinja2():
