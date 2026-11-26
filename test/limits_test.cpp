@@ -171,6 +171,11 @@ std::vector<LimitCase> Cases()
         { "MemoryHugeListUpFront", "{{ range(2**26)|list|length }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
         { "MemorySetSubsetOfRange", "{% set s = {1: 0, 2: 0}.keys() - [] %}{{ s.issubset(range(20000)) }}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "maxRenderMemory" },
         { "MemorySetUnionOfRange", "{% set s = {1: 0}.keys() - [] %}{% set s = s.union(range(20000)) %}{{ s|length }}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "maxRenderMemory" },
+        // The set's hash index counts against the budget as it grows and gives its entries back when the set is
+        // emptied (docs/tasks/0561)
+        { "MemorySetAddOver", "{% set s = {}.keys() - [] %}{% for i in range(20000) %}{% set _ = s.add(i) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 18; }, "maxRenderMemory" },
+        { "MemorySetIndexGivenBackByClear", "{% set s = {}.keys() - [] %}{% for r in range(100) %}{% for i in range(300) %}{% set _ = s.add(i) %}{% endfor %}{% set _ = s.clear() %}{% endfor %}{{ s|length }}", [](auto& l) { l.maxRenderMemory = 1 << 19; }, "" },
+        { "MemorySetIndexGivenBackByDiscard", "{% set s = {}.keys() - [] %}{% for r in range(100) %}{% for i in range(300) %}{% set _ = s.add(i) %}{% endfor %}{% for i in range(300) %}{% set _ = s.discard(i) %}{% endfor %}{% endfor %}{{ s|length }}", [](auto& l) { l.maxRenderMemory = 1 << 19; }, "" },
         { "MemorySetOpsGiveTheirTableBack", "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% for i in range(500) %}{% set _ = s.issubset(range(100)) %}{% set _ = s.intersection(range(100)) %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         { "MemorySortAfterClear", "{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.clear() %}{% set _ = x.sort() %}{% endfor %}{{ 1 }}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "" },
         { "MemorySortKeepsCount", "{% set ns = namespace(l=[]) %}{% for i in range(100) %}{% set x = range(1000)|list %}{% set _ = x.sort() %}{% set _ = ns.l.append(x) %}{% endfor %}", [](auto& l) { l.maxRenderMemory = 1 << 20; }, "maxRenderMemory" },
@@ -323,6 +328,15 @@ TEST_F(LimitsEnvTest, FoldsAtLoad)
     ASSERT_FALSE(loaded.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << ErrorToString(loaded.error());
     EXPECT_EQ("a", tpl.RenderAsString({}).value());
+
+    // And one the truth of an `and`, `or` or conditional's test reaches, which decides whether it folds
+    // (TryFoldTruth, docs/tasks/0570)
+    for (const char* source : { "{{ ()[:, :] ~ (('a' * 99999999) and x) }}", "{{ ()[:, :] ~ (('a' * 99999999) or x) }}", "{{ ()[:, :] ~ (x if ('a' * 99999999) else 1) }}" })
+    {
+        loaded = tpl.Load(source);
+        ASSERT_FALSE(loaded.has_value()) << source;
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << source << ": " << ErrorToString(loaded.error());
+    }
 
     // A fold that fails leaves the subscript unfolded: invalid Python, a Load error
     loaded = tpl.Load("{{ ()[0][:, :] }}");

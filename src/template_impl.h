@@ -572,16 +572,41 @@ public:
             return { 0, FoldCheckResult::Unfolded };
         }
         const InternalValueMap noValues;
-        // A fold may compute as much as a render: under the template's limits. Inside a render (a host's Load) these
-        // limits name that render's collector (RenderLimits::collector), which a fold never keeps a tree for
-        const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
+        // A fold may compute as much as a render: under the template's limits, or without any FoldBudget's. Inside a
+        // render (a host's Load) these limits name that render's collector (RenderLimits::collector), which a fold
+        // never keeps a tree for
+        // UINT64_MAX steps only counts them (the Python module's poll, PollOnlyLimits): no limit
+        auto ownLimits = m_settings->settings.limits;
+        ownLimits.maxRenderSteps = ownLimits.maxRenderSteps != UINT64_MAX ? ownLimits.maxRenderSteps : 0;
+        const bool budgeted = !HasRenderLimits(ownLimits);
+        std::optional<RenderLimitsScope> limitsScope;
+        if (!budgeted)
+        {
+            limitsScope.emplace(&m_settings->settings.limits, m_settings->bigIntBackend);
+        }
         RendererCallback callback(this);
         RenderContext context(noValues, noValues, &callback, &GetBuiltinGlobals(m_settings->settings.extensions));
         context.SetLookupCache(&LookupCache::ForThisThread());
         context.SetNodes(nodes);
+        auto budget = FoldBudget::Limits();
+        std::uint64_t pooledSteps = FoldBudget::Steps;
         for (std::size_t index = 0; index != checks.size(); ++index)
         {
-            if (const auto result = FoldCheckPasses(checks[index], context); result != FoldCheckResult::Passes)
+            std::optional<RenderLimitsScope> checkScope;
+            if (budgeted)
+            {
+                // Each check has steps of its own, enough for its literals, and the Load's pool
+                budget.maxRenderSteps = FoldBudget::CheckSteps + pooledSteps;
+                checkScope.emplace(&budget, m_settings->bigIntBackend);
+                detail::t_renderLimits.maxIntBits = FoldBudget::IntBits;
+            }
+            const auto result = FoldCheckPasses(checks[index], context, budgeted);
+            if (budgeted)
+            {
+                const auto taken = detail::StepsTaken();
+                pooledSteps -= std::min(pooledSteps, taken > FoldBudget::CheckSteps ? taken - FoldBudget::CheckSteps : 0);
+            }
+            if (result != FoldCheckResult::Passes)
             {
                 return { index, result };
             }

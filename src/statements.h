@@ -621,6 +621,8 @@ public:
     // Gives `values`, an included template's context, the `self` of `frame` for the closures
     // kept past the include (RenderContext::KeepEndedSelf)
     static void KeepEndedSelf(RenderContext& values, const TemplateFrame& frame);
+    // Ends the scopes a failure left, then KeepEndedSelf when the template has blocks (docs/tasks/0560)
+    static void KeepFailedSelf(RenderContext& values, const TemplateFrame& frame, bool hasBlocks);
     // Renders the template as the parent of the one rendering now: its blocks go below
     // the child's on the child's `stack`; `childName` is the name of the first template
     // of the chain, which `self` prints in every template of it, as in Jinja2

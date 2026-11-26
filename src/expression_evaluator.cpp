@@ -283,12 +283,29 @@ bool OperandFoldsAt(RenderContext& values, NodeRef<Expression> expr, std::uint8_
     return (fold & FoldAlways) != 0 || ((fold & FoldByChoice) != 0 && values.Nodes()[expr].IsFoldableAt(values));
 }
 
-// The truth of a foldable value, or nothing when evaluating it fails: Jinja2 then does not fold
+// The truth of a foldable value, or nothing when evaluating it fails: Jinja2 then does not fold. What fails the
+// render whenever it happens fails it here too, as in OutputFoldsAt (docs/tasks/0570)
 std::optional<bool> TryFoldTruth(RenderContext& values, NodeRef<Expression> expr)
 {
     try
     {
         return ConvertToBool(values.Nodes()[expr].Evaluate(values));
+    }
+    catch (const detail::HostUnrecoverableError&)
+    {
+        throw;
+    }
+    catch (const std::bad_alloc&)
+    {
+        throw;
+    }
+    catch (const ResourceLimitError&)
+    {
+        throw;
+    }
+    catch (const RecursionLimitError&)
+    {
+        throw;
     }
     catch (const std::exception&)
     {

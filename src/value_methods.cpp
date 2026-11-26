@@ -13,6 +13,7 @@
 #include "markup.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "set_index.h"
 #include "stable_sort_values.h"
 #include "template_dict.h"
 #include "undefined.h"
@@ -3419,6 +3420,17 @@ InternalValue SetCombined(const InternalValue& self, const CallParams& params, R
     return MakeSet(SetCombine(op, self, params, scratch));
 }
 
+// The index of the receiver, a set, which every set of the engine has
+SetIndex& SetIndexOf(const InternalValue& self)
+{
+    auto* index = ListOf(self).GetSetIndex();
+    if (!index)
+    {
+        Raise("not a set");
+    }
+    return *index;
+}
+
 // The receiver's items become `entries`, which SetCombine made from them
 InternalValue SetReplace(const InternalValue& self, const InternalDict& entries, SetScratch& scratch)
 {
@@ -3444,6 +3456,8 @@ InternalValue SetReplace(const InternalValue& self, const InternalDict& entries,
     {
         items.push_back(entry.second);
     }
+    // The index is built again by the next lookup
+    SetIndexOf(self).Reset();
     return InternalValue(NoneValue());
 }
 
@@ -3481,33 +3495,50 @@ InternalValue SetCopy(const InternalValue& self, const CallParams& params, Rende
     return ListAdapter::CreateIterator(ListOf(self).ToValueList(), IteratorKind::Set);
 }
 
-// The item equal to `item` (Python's ==, as the set's hash tokens find equal ones), or the end
-InternalValueList::iterator SetFind(InternalValueList& items, const InternalValue& item)
+// The hash token of `item`, a set's key; an unhashable item is Python's TypeError
+std::string SetToken(const InternalValue& item)
 {
-    return std::find_if(items.begin(), items.end(), [&item](const InternalValue& other) { return ItemEquals(other, item); });
+    const char* unhashable = nullptr;
+    auto token = MakeDictKey(item, &unhashable);
+    if (!token)
+    {
+        ThrowUnhashable(unhashable);
+    }
+    return std::move(*token);
+}
+
+// The position of the item equal to `item` (Python's ==, as the set's hash tokens find equal ones) in the receiver's
+// items, or SetIndex::NotFound, through the index beside them (docs/tasks/0561). `index` is that of the receiver
+size_t SetFind(SetIndex& index, const InternalValueList& items, const std::string& token, const InternalValue& item)
+{
+    return index.Find(items, token, [&item](const InternalValue& other) { return ItemEquals(other, item); });
 }
 
 InternalValue SetAdd(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "add", 1, 1);
-    CheckHashable(params.posParams[0]);
+    auto token = SetToken(params.posParams[0]);
     auto& items = MutableItems(self);
-    if (SetFind(items, params.posParams[0]) == items.end())
+    auto& index = SetIndexOf(self);
+    if (SetFind(index, items, token, params.posParams[0]) == SetIndex::NotFound)
     {
         CheckSequenceSize(uint64_t{ items.size() } + 1, "a set");
         ReserveCounted(items, items.size() + 1);
+        index.Reserve(token);
         NoteContainerStore(self, params.posParams[0]);
         items.push_back(params.posParams[0]);
+        index.Appended(items, std::move(token), items.size() - 1);
     }
     return InternalValue(NoneValue());
 }
 
 InternalValue SetRemoveItem(const InternalValue& self, const CallParams& params, bool mustExist)
 {
-    CheckHashable(params.posParams[0]);
+    const auto token = SetToken(params.posParams[0]);
     auto& items = MutableItems(self);
-    const auto found = SetFind(items, params.posParams[0]);
-    if (found == items.end())
+    auto& index = SetIndexOf(self);
+    const auto found = SetFind(index, items, token, params.posParams[0]);
+    if (found == SetIndex::NotFound)
     {
         if (mustExist)
         {
@@ -3516,8 +3547,9 @@ InternalValue SetRemoveItem(const InternalValue& self, const CallParams& params,
     }
     else
     {
-        CycleCollector::NoteDropped(*found);
-        items.erase(found);
+        CycleCollector::NoteDropped(items[found]);
+        items.erase(items.begin() + static_cast<std::ptrdiff_t>(found));
+        index.Erased(items, token, found);
     }
     return InternalValue(NoneValue());
 }
@@ -3542,9 +3574,12 @@ InternalValue SetPop(const InternalValue& self, const CallParams& params, Render
     {
         ThrowKeyError(InternalValue(std::string("pop from an empty set")));
     }
+    auto& index = SetIndexOf(self);
+    const auto token = SetToken(items.front());
     CycleCollector::NoteDropped(items.front());
     auto result = std::move(items.front());
     items.erase(items.begin());
+    index.Erased(items, token, 0);
     return result;
 }
 
@@ -3554,6 +3589,7 @@ InternalValue SetClear(const InternalValue& self, const CallParams& params, Rend
     auto& items = MutableItems(self);
     NoteDroppedItems(items);
     items.clear();
+    SetIndexOf(self).Reset();
     return InternalValue(NoneValue());
 }
 

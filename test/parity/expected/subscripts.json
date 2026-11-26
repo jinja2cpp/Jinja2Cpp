@@ -2512,6 +2512,110 @@
    "output": "[|5|]"
   },
   {
+   "id": "subscripts.tuple_of_slices_volatile_statement",
+   "template": "[{% autoescape x %}{% set q = ()[:, :] ~ 'a' %}{% endautoescape %}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 17)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_volatile_output_part",
+   "template": "[{% autoescape x %}{{ (()[:, :] ~ 'a') ~ s }}{% endautoescape %}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 17)"
+   }
+  },
+  {
+   "id": "subscripts.tuple_of_slices_volatile_print",
+   "template": "[{% autoescape s %}{% print ()[:, :] ~ 'a' %}{{ [()[:, :] ~ 'b'] }}{% endautoescape %}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[a['b']]"
+  },
+  {
    "id": "subscripts.tuple_of_slices_fold_by_choice",
    "template": "[{{ (()[:, :] if 1 > 0) is undefined and '' }}|{{ (()[:, :] if 1 > 0 else x) is undefined and '' }}]",
    "context": {

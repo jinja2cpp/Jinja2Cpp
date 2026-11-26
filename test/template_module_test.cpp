@@ -825,6 +825,32 @@ TEST_F(TemplateModuleTest, MacroStoredAcrossCallsKeepsItsModule)
     EXPECT_EQ("BAM", Call(module.exports["use"], { std::string("b") }).AsString());
 }
 
+// A closure of the template module that reaches a module a call imported with context only through what it kept of
+// its ended frame keeps that module, and so does a `caller` made at a module's top level that a macro stored: X, X, X
+// and CX, CX, C5, C5 in Jinja2 3.1.6 (docs/tasks/0567)
+TEST_F(TemplateModuleTest, ClosureStoredAcrossCallsKeepsTheModuleItsCaptureNames)
+{
+    auto module = Make("{% set ns = namespace() %}"
+                       "{% macro keep() %}{% import 'a' as l with context %}{% macro inn() %}{{ l.am() }}{% endmacro %}{% set ns.f = inn %}{% endmacro %}"
+                       "{% macro use() %}{{ ns.f() }}{% endmacro %}");
+    for (int i = 0; i != 2; ++i)
+    {
+        EXPECT_EQ("", Call(module.exports["keep"]).AsString());
+        EXPECT_EQ("AM", Call(module.exports["use"]).AsString());
+        EXPECT_EQ("AM", Call(module.exports["use"]).AsString());
+    }
+    AddFile("callerlib", "{% import 'a' as x with context %}{% macro st() %}{% set ns.f = caller %}{% endmacro %}{% call st() %}C{{ x.am() }}{% endcall %}");
+    AddFile("callerlate", "{% macro st() %}{% set ns.f = caller %}{% endmacro %}{% call st() %}C{{ v }}{% endcall %}{% set v = 5 %}");
+    for (const auto& [lib, wanted] : { std::pair<const char*, const char*>{ "callerlib", "CAM" }, { "callerlate", "C5" } })
+    {
+        const std::string keep = std::string("{% macro keep() %}{% import '") + lib + "' as l with context %}{% endmacro %}";
+        auto callers = Make("{% set ns = namespace() %}" + keep + "{% macro use() %}{{ ns.f() }}{% endmacro %}");
+        EXPECT_EQ("", Call(callers.exports["keep"]).AsString()) << lib;
+        EXPECT_EQ(wanted, Call(callers.exports["use"]).AsString()) << lib;
+        EXPECT_EQ(wanted, Call(callers.exports["use"]).AsString()) << lib;
+    }
+}
+
 // A module whose top level failed partway, inside a loop and a `with`, after storing its macro, stays for that macro with
 // the scopes the failure left: G1 on each later call, as in Jinja2 3.1.6 (docs/tasks/0312, security review)
 TEST_F(TemplateModuleTest, MacroStoredByAFailedImportKeepsItsModule)
@@ -976,6 +1002,58 @@ TEST_F(TemplateModuleChangingSourceTest, BlockOfASharedModuleKeepsTheSlots)
         results.push_back(Call(module.exports["m"]).AsString());
     }
     EXPECT_EQ((std::vector<std::string>{ "B1C0", "B1C1", "B1C2", "B1C3" }), results);
+}
+
+// A block an extending include stored (`self.b`, `self.c`, `super`) still runs the first tree after the calls that
+// replaced it, as Jinja2 keeps the old Template (docs/tasks/0580; 3.1.6 make_module() results)
+TEST_F(TemplateModuleChangingSourceTest, StoredBlockOfAnExtendingInclude)
+{
+    AddFile("base", "{% block b %}BASE{% endblock %}{% block c %}C0{% endblock %}");
+    const std::string main = "{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}";
+    const std::vector<std::string> tail = { "{% block b %}B2{% endblock %}", "{% block b %}B3{% endblock %}", "{% block b %}B4{% endblock %}" };
+    const std::pair<const char*, const char*> stores[] = { { "self.b", "XBASE" }, { "self.c", "C0" }, { "super", "BASE" } };
+    for (const auto& [store, stored] : stores)
+    {
+        std::vector<std::string> libs = { std::string("{% extends 'base' %}{% block b %}X{{ super() }}{% set ns.f = ") + store + " %}{% endblock %}" };
+        libs.insert(libs.end(), tail.begin(), tail.end());
+        const std::string kept = std::string("[") + stored + "]";
+        EXPECT_EQ((std::vector<std::string>{ "[]XBASEC0", kept + "B2", kept + "B3", kept + "B4" }), CallWithLibs(main, libs)) << store;
+    }
+}
+
+// A `self` an include stored before it failed reads the include's names on the later calls (docs/tasks/0581; 3.1.6
+// make_module() results)
+TEST_F(TemplateModuleChangingSourceTest, SelfStoredByAFailedInclude)
+{
+    const std::string main = "{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}";
+    for (const char* store : { "{% set l = [self] %}{% set ns.s = l[0] %}", "{% set ns.s = self %}" })
+    {
+        for (const char* failure : { "{{ 1 // 0 }}", "{{ nofn() }}" })
+        {
+            AddFile("lib", std::string("{% set t = 'T1' %}{% block b %}B1{{ t }}{% endblock %}") + store + failure);
+            auto module = Make(main);
+            EXPECT_THROW(Call(module.exports["m"]), jinja2::BadResultAccess<>) << store << failure;
+            for (const char* block : { "B2", "B3" })
+            {
+                AddFile("lib", std::string("{% block b %}") + block + "{% endblock %}");
+                EXPECT_EQ(std::string("[B1T1]") + block, Call(module.exports["m"]).AsString()) << store << failure;
+            }
+        }
+    }
+    // An include with no blocks whose loop rebound the name the stored macro reads: the macro reads the top level's (verifier)
+    AddFile("lib", "{% set t = 'T1' %}{% macro f() %}{{ t }}{% endmacro %}{% set ns.f = f %}{% for i in [1] %}{% set t = 'T2' %}{{ 1 // 0 }}{% endfor %}");
+    auto loopModule = Make("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}");
+    EXPECT_THROW(Call(loopModule.exports["m"]), jinja2::BadResultAccess<>);
+    AddFile("lib", "ok");
+    EXPECT_EQ("[T1]ok", Call(loopModule.exports["m"]).AsString());
+    // The wide template
+    AddFile("lib", "{% set t = 'T1' %}{% block b %}B1{{ t }}{% endblock %}{% set ns.s = self %}{{ 1 // 0 }}");
+    jinja2::TemplateW tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load(L"{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}"));
+    auto module = tpl.MakeModule().value();
+    EXPECT_THROW(Call(module.exports["m"]), jinja2::BadResultAccess<wchar_t>);
+    AddFile("lib", "{% block b %}B2{% endblock %}");
+    EXPECT_EQ(L"[B1T1]B2", Call(module.exports["m"]).AsWString());
 }
 
 TEST_F(TemplateModuleChangingSourceTest, StoredSuperRunsItsOldParent)

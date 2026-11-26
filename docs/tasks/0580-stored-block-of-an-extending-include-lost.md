@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1010
 priority: low
 area: parity
 depends: []
@@ -20,3 +21,9 @@ handle, 0503/0529), and the third call reads it as empty. Memory-safe.
 
 **Done when** a `TemplateModuleChangingSourceTest` row with the three calls above matches Jinja2, also with
 `ns.f = self.c` and with `super` stored instead.
+
+**As built.** Only `ns.f = self.b` failed: the stored block's body sets `ns.f = self.b` again when the second call
+runs it, and `SelfBlockCall` made that `self` with `MakeTemplateSelf(owner->ended, ...)`, a new `SelfBlocks` holding
+the handles of the calling render's table, so the first tree's slots went once the replaced callable did. The ended
+block's `self` is now made of the blocks' own owner (`MakeSelfOf`), which holds the table they resolve in.
+`TemplateModuleChangingSourceTest.StoredBlockOfAnExtendingInclude` covers `self.b`, `self.c` and `super`.
