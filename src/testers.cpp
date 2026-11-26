@@ -11,6 +11,7 @@
 #include "internal_value.h"
 #include "python_format.h"
 #include "render_context.h"
+#include "set_index.h"
 #include "template_dict.h"
 #include "undefined.h"
 #include "value_visitors.h"
@@ -476,9 +477,16 @@ bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
         {
             return false;
         }
-        if (const char* type = UnhashableType(baseVal))
+        const char* unhashable = nullptr;
+        const auto token = MakeDictKey(baseVal, &unhashable);
+        if (!token)
         {
-            ThrowUnhashable(type);
+            ThrowUnhashable(unhashable);
+        }
+        // Through the index beside the set's items (docs/tasks/0561)
+        if (auto* index = list->GetSetIndex(); index && list->GetMutableItems())
+        {
+            return index->Find(*list->GetMutableItems(), *token, [&baseVal](const InternalValue& item) { return IsInEqual(item, baseVal); }) != SetIndex::NotFound;
         }
     }
     if (const auto* items = list->GetMutableItems())

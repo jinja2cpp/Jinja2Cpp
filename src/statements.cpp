@@ -2434,6 +2434,7 @@ void CopyCaptured(RenderContext& context, const ClosureSite& site, const Closure
 // keep what the site keeps, which keeps it (the copy of an ended include's names,
 // RenderContext::KeepEndedSelf)
 InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, IRendererCallback* callback, bool keepsCapture = true);
+InternalValue MakeSelfOf(const BlocksStack& stack, const std::shared_ptr<SelfBlocks>& owner, const ClosureSite& site, std::string_view templateName, bool keepsCapture);
 
 // The SelfBlocks of `stack`, made on first use. Its blocks are this render's, of the table `callback` resolves them in:
 // one that ends before an outer render that may call them shares the table with them (SharedTemplates, 0491)
@@ -2505,9 +2506,10 @@ struct SelfBlockCall
             endedFrame.baseDepth = home.link;
             endedFrame.name = templateName;
             endedFrame.outer = curFrame;
-            // Its scopes have ended too: a `self` in the block renders the ended blocks,
-            // seeing what this one sees
-            endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName, context.GetRendererCallback());
+            // Its scopes have ended too: a `self` in the block renders the ended blocks, seeing what this one sees. The
+            // blocks' own owner renders them, which holds the table they resolve in: one made of the stack it ended
+            // with would hold the calling render's, and the trees the blocks are in could go (docs/tasks/0580)
+            endedFrame.self = MakeSelfOf(owner->ended, owner, site, templateName, true);
             frame = &endedFrame;
         }
         if (!frame)
@@ -2567,7 +2569,8 @@ struct SuperBlockCall
     }
 };
 
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, IRendererCallback* callback, bool keepsCapture)
+// `self` of the blocks of `stack`, which `owner` renders (MakeTemplateSelf)
+InternalValue MakeSelfOf(const BlocksStack& stack, const std::shared_ptr<SelfBlocks>& owner, const ClosureSite& site, std::string_view templateName, bool keepsCapture)
 {
     // What the site keeps (ClosureSite::CaptureOnEnd), while the `self` lives; the caller holds it
     const std::shared_ptr<const void> keepAlive = keepsCapture ? site.Capture() : nullptr;
@@ -2575,15 +2578,23 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
     std::shared_ptr<const void> identity;
     if (!stack.blocks.empty())
     {
-        SelfBlocksOf(stack, callback);
         identity = std::make_shared<char>();
     }
     for (const auto& block : stack.blocks)
     {
         std::string blockName(block.first);
-        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, stack.self, site, std::string(templateName), identity }), keepAlive));
+        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, owner, site, std::string(templateName), identity }), keepAlive));
     }
     return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)), identity.get());
+}
+
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, IRendererCallback* callback, bool keepsCapture)
+{
+    if (!stack.blocks.empty())
+    {
+        SelfBlocksOf(stack, callback);
+    }
+    return MakeSelfOf(stack, stack.self, site, templateName, keepsCapture);
 }
 } // namespace
 
@@ -3486,7 +3497,35 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     }
     if (failed)
     {
+        // A failure in a context that ends before the render keeps the `self` of the template too: a macro a nested
+        // render stored before it failed renders its blocks from it (docs/tasks/0560), and its closures the names of
+        // its top level
+        if (values.KeepsClosures())
+        {
+            KeepFailedSelf(values, frame, stack != nullptr);
+        }
         detail::RethrowKeptSealed();
+    }
+}
+
+JINJA2CPP_NOINLINE void TemplateRenderer::KeepFailedSelf(RenderContext& values, const TemplateFrame& frame, bool hasBlocks)
+{
+    // The scopes the failure left above the template's top level end first, as RenderForOuter ends them, so that
+    // the capture of the top level is the last of the chain and a name a loop the failure left rebound does not hide
+    // the top level's from its closures (also without blocks). A capture that fails to allocate throws
+    // std::bad_alloc instead of the render's failure, as there, and lets go of the failure kept
+    try
+    {
+        values.EndScopesLeftByFailure(frame.baseDepth);
+        if (hasBlocks)
+        {
+            KeepEndedSelf(values, frame);
+        }
+    }
+    catch (...)
+    {
+        [[maybe_unused]] const auto failure = detail::TakeKept();
+        throw;
     }
 }
 
@@ -3679,8 +3718,8 @@ JINJA2CPP_ALWAYS_INLINE void RenderIncludedIn(const TemplateImpl<CharT>& tpl, bo
 }
 
 // Renders `tpl` for `include`. Its closures keep what it saw, its parents' names too: Jinja2 renders it with a copy
-// of the context. Also when it fails where the context of `values` ends before the render: something outside may
-// still hold them (docs/tasks/0531)
+// of the context. Also when it fails: something outside may still hold them, a nested render's host that swallows the
+// failure (docs/tasks/0531) or a module whose macro the include ran in, which a later call reads (0581)
 template<typename CharT>
 void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
 {
@@ -3701,7 +3740,7 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
     }
     if (failed)
     {
-        EndFailedFrame(innerContext, values, FrameEnd{ 0, true, 0, 0 });
+        EndFailedFrame(innerContext, innerContext, FrameEnd{ 0, true, 0, 0 });
     }
     innerContext.CaptureClosures(FrameEnd{ 0, true, 0, 0 });
 }
@@ -4408,6 +4447,37 @@ const ClosureSite* ClosureSiteOfObject(const ValueObject& object)
 }
 } // namespace
 
+namespace
+{
+// Appends the objects of the names `site`'s capture kept of the closure's ended frames, and their `self`, each capture
+// once: the closures of a frame share its capture, and a capture walked has had its `outer` walked too
+void AppendCapturedObjects(const ClosureSite& site, std::unordered_set<const ClosureCapture*>& walked, std::vector<const ValueObject*>& objects)
+{
+    const auto capture = site.Capture();
+    for (const auto* frame = capture.get(); frame; frame = frame->outer.get())
+    {
+        if (!walked.insert(frame).second)
+        {
+            return;
+        }
+        if (const auto names = frame->names.lock())
+        {
+            for (const auto& entry : *names)
+            {
+                if (const auto* object = detail::InternalValueAccess::Object(entry.second))
+                {
+                    objects.push_back(object);
+                }
+            }
+        }
+        if (const auto* object = detail::InternalValueAccess::Object(frame->endedSelf))
+        {
+            objects.push_back(object);
+        }
+    }
+}
+} // namespace
+
 bool ImportedModule::MayBeReached(const std::vector<const ImportedModule*>& candidates)
 {
     // The objects the candidates' held values hold, each with the number of those holding it
@@ -4462,6 +4532,7 @@ void ImportedModule::MarkReached(std::vector<const ValueObject*> roots, const st
 {
     auto& pending = roots;
     std::unordered_set<const ValueObject*> seen;
+    std::unordered_set<const ClosureCapture*> walkedCaptures;
     while (!pending.empty())
     {
         const auto* object = pending.back();
@@ -4482,6 +4553,10 @@ void ImportedModule::MarkReached(std::vector<const ValueObject*> roots, const st
                     candidates[index]->AppendHeldObjects(pending);
                 }
             }
+            // What the closure kept of its ended frames, which Traverse does not show (it is behind the callable's
+            // keep-alive): a module named there stays with the closure (docs/tasks/0567). Only from a closure reached:
+            // a copy no closure of a value that lives on reaches does not keep what it names
+            AppendCapturedObjects(*site, walkedCaptures, pending);
         }
         object->Traverse([&pending](const ValueObject* held) { pending.push_back(held); });
     }
@@ -5044,6 +5119,8 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     }
 
     auto callParams = helpers::EvaluateCallParams(call.GetParams(), values);
+    // The macro called may store `caller` where no value of the module shows it (ImportedModule::MayBeReached)
+    values.NoteOtherClosure();
     helpers::AddCallerParam(callParams, MakeCallable(values));
     if (callable->GetType() == Callable::Type::Expression)
     {

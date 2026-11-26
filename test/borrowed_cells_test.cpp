@@ -1947,6 +1947,22 @@ TEST(BorrowedCellsSingle, NestedRenderThatFailsKeepsItsClosures)
         { "{% set v = 'V' %}{% for a in [[1], 2] recursive %}{% if a is iterable %}{{ loop(a) }}{% else %}{% macro m() %}[{{ v }}]{% endmacro %}"
           "{% set _ = g.append(m) %}{{ 1 // 0 }}{% endif %}{% endfor %}",
           "[V]" },
+        // A block in a macro the failed render stored renders from the template's blocks, with its top-level names
+        // (docs/tasks/0560)
+        { "{% set x = 'X' %}{% for a in [[1], 2] recursive %}{% if a is iterable %}{{ loop(a) }}{% else %}"
+          "{% macro m() %}{% block b %}{{ x }}{% endblock %}[{{ x }}{{ a }}]{% endmacro %}{% set _ = g.append(m) %}{{ 1 // 0 }}"
+          "{% endif %}{% endfor %}",
+          "X[X1]" },
+        { "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{{ 1 // 0 }}", "X" },
+        { "{% set x = 'X' %}{% for i in [1] %}{% macro m() %}{% block b %}{{ x }}{{ i }}{% endblock %}{% endmacro %}"
+          "{% set _ = g.append(m) %}{{ 1 // 0 }}{% endfor %}",
+          "X" },
+        { "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}"
+          "{% with x = 'W' %}{{ 1 // 0 }}{% endwith %}",
+          "X" },
+        { "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% set x = 'Y' %}{{ 1 // 0 }}", "Y" },
+        { "{% set x = 'X' %}{% macro m() %}{% block b %}{{ x }}{% endblock %}{% endmacro %}{% set _ = g.append(m) %}{% for i in [1] %}{{ 1|stop }}{% endfor %}",
+          "X" },
     };
     for (const auto& c : cases)
     {
@@ -1958,6 +1974,12 @@ TEST(BorrowedCellsSingle, NestedRenderThatFailsKeepsItsClosures)
     TemplateW outer(&nested.env);
     ASSERT_TRUE(!!outer.Load(L"{{ inner() }}{{ g[-1]() }}"));
     EXPECT_EQ(L"cl", outer.RenderAsString(nested.params).value());
+    FailingNestedEnv<TemplateW> nestedBlock("{% set x = 'X' %}{% for a in [[1], 2] recursive %}{% if a is iterable %}{{ loop(a) }}{% else %}"
+                                            "{% macro m() %}{% block b %}{{ x }}{% endblock %}[{{ x }}{{ a }}]{% endmacro %}"
+                                            "{% set _ = g.append(m) %}{{ 1 // 0 }}{% endif %}{% endfor %}");
+    TemplateW outerBlock(&nestedBlock.env);
+    ASSERT_TRUE(!!outerBlock.Load(L"{{ inner() }}{{ g[-1]() }}"));
+    EXPECT_EQ(L"X[X1]", outerBlock.RenderAsString(nestedBlock.params).value());
 }
 
 namespace
