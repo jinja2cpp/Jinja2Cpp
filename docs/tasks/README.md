@@ -629,15 +629,16 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0568](0568-huge-int-index-and-range-bound.md) | Render a huge integer used as a list index or a range() bound as Python does | robustness | low | open |
 | [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | open |
 | [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | open |
-| [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | open |
+| [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | done |
 | [0572](0572-nested-item-cells-never-dropped.md) | A template module keeps the cell of every nested item it wrote, one per call | robustness | medium | open |
 | [0573](0573-cycle-through-owned-argument-cell.md) | A cycle through the cell of a module call's owned argument keeps it for the module's life | robustness | medium | open |
 | [0574](0574-make-module-shared-without-engine-globals.md) | `make_module(shared=True)` keeps the engine's own globals | parity | low | open |
 | [0575](0575-module-object-parity-leftovers.md) | What a live module object still lacks of Jinja2's, short of shared mutable data | parity | low | open |
 | [0576](0576-fuzz-render-pr-timeout.md) | The pull-request `fuzz render` job runs close to its 45-minute timeout | ci | medium | open |
-| [0577](0577-big-int-radix-ops-slower-than-python.md) | Huge-integer bit_count and power-of-two formatting are slower than Python | perf | medium | open |
+| [0577](0577-big-int-radix-ops-slower-than-python.md) | Huge-integer bit_count and power-of-two formatting are slower than Python | perf | medium | done |
 | [0578](0578-loop-dict-view-fixed-cost.md) | Win back the for-loop start cost that the live dict views added | perf | medium | open |
 | [0579](0579-render-fixed-cost-creep-2026-11.md) | Render rows crept +1-2% in the week to 2026-11-23, in steps under the bar | perf | low | open |
 | [0580](0580-stored-block-of-an-extending-include-lost.md) | A block stored from inside an extending include renders nothing two calls later | parity | low | open |
 | [0581](0581-failed-include-kept-self-loses-frame-names.md) | A `self` an include stored before it failed reads the include's names as undefined | parity | low | open |
 | [0582](0582-host-operator-followups.md) | Host operators: the leftovers of task 0381 | parity | low | open |
+| [0585](0585-int-format-zero-pad-prefix-grouping.md) | Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base | parity | low | open |
