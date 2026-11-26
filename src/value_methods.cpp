@@ -45,6 +45,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -652,18 +653,22 @@ struct StrOps
         return Result(std::move(result));
     }
 
-    // self[start:end] for the methods that take optional start and end arguments
-    static View Window(View self, const Chars& chars, const CallParams& params, size_t firstIdx, size_t* startChar = nullptr)
+    // self[start:end] for the methods that take optional start and end arguments; none where
+    // Python's find, count and startswith match nothing, not even an empty string: a start past
+    // the end (a positive one past int64 too) or an end before the start. Both bounds are
+    // checked first, as Python parses them before it looks at either
+    static std::optional<View> Window(View self, const Chars& chars, const CallParams& params, size_t firstIdx, const char* name, size_t* startChar = nullptr)
     {
-        auto start = SliceIndex(Arg(params, firstIdx), chars.size(), 0);
+        const auto* startArg = Arg(params, firstIdx);
+        auto start = SliceIndex(startArg, chars.size(), 0);
         auto end = SliceIndex(Arg(params, firstIdx + 1), chars.size(), chars.size());
+        if (end < start || (startArg && !startArg->IsNone() && StartPastEnd(*startArg, chars.size(), name)))
+        {
+            return std::nullopt;
+        }
         if (startChar)
         {
             *startChar = start;
-        }
-        if (end < start)
-        {
-            end = start;
         }
         auto b = UnitOffset(self, chars, start);
         return self.substr(b, UnitOffset(self, chars, end) - b);
@@ -673,15 +678,12 @@ struct StrOps
     {
         CheckArgs(params, name, 1, 3);
         auto chars = SplitCodePoints(self);
-        // A start beyond the end matches nothing, not even an empty affix
-        if (const auto* startArg = ArgOrNone(params, 1))
+        const auto range = Window(self, chars, params, 1, name);
+        if (!range)
         {
-            if (StartPastEnd(*startArg, chars.size(), name))
-            {
-                return InternalValue(false);
-            }
+            return InternalValue(false);
         }
-        auto window = Window(self, chars, params, 1);
+        const auto window = *range;
         auto matches = [&](const InternalValue& affixVal) {
             auto affix = GetAsSameString(self, affixVal);
             if (!affix || !IsStringValue(affixVal))
@@ -720,15 +722,13 @@ struct StrOps
         CheckArgs(params, name, 1, 3);
         auto sub = StrArg(self, params.posParams[0], name);
         auto chars = SplitCodePoints(self);
-        if (const auto* startArg = ArgOrNone(params, 1))
-        {
-            if (StartPastEnd(*startArg, chars.size(), name))
-            {
-                return -1;
-            }
-        }
         size_t startChar = 0;
-        auto window = Window(self, chars, params, 1, &startChar);
+        const auto range = Window(self, chars, params, 1, name, &startChar);
+        if (!range)
+        {
+            return -1;
+        }
+        const auto window = *range;
         if (sub.empty())
         {
             return static_cast<int64_t>(fromRight ? CharIndex(self, chars, static_cast<size_t>(window.data() - self.data()) + window.size()) : startChar);
@@ -766,14 +766,12 @@ struct StrOps
         CheckArgs(params, "count", 1, 3);
         auto sub = StrArg(self, params.posParams[0], "count");
         auto chars = SplitCodePoints(self);
-        if (const auto* startArg = ArgOrNone(params, 1))
+        const auto range = Window(self, chars, params, 1, "count");
+        if (!range)
         {
-            if (StartPastEnd(*startArg, chars.size(), "count"))
-            {
-                return static_cast<int64_t>(0);
-            }
+            return static_cast<int64_t>(0);
         }
-        auto window = Window(self, chars, params, 1);
+        const auto window = *range;
         if (sub.empty())
         {
             return static_cast<int64_t>(CodePointCount(window) + 1);

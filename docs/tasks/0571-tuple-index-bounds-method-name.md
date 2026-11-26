@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: []
@@ -20,3 +20,13 @@ shares: [test/parity/cases/filters.py, test/parity/divergences/filters.txt]
 against Python), clamp big-int bounds to the length, and give a bound method its `__name__`.
 
 **Done when** the three divergence lines are gone and the cases match in narrow and wide runs.
+
+**Result.** `SliceIndex` reads a bound past int64 as Python's slice index does (negative clamps to 0, positive to the
+length), and `list.index`, `tuple.index` and a dict item pair's `index` reject None as Python does; str's methods keep
+None as an omitted bound, and a positive huge start is past the end for find, count and startswith. Those methods now parse both bounds before
+they answer, and an end before the start matches nothing, not even an empty string (`'abab'.find('', 2, 1)` is -1). `list.insert` reads
+its index as an index, so None and a huge integer are errors as in Python (None was accepted as 0). A bound built-in
+method answers `__name__` and `__qualname__` (`tuple.count`) from the name it keeps, with no allocation when binding.
+Cases `filters.tuple_index_*`, `filters.bound_method_*`, `filters.list_index_*`, `filters.str_find_*` and
+`filters.list_insert_*`, `filters.str_*_past_end_bad_end`, `filters.str_*_empty_*inverted`. Format spec gaps the
+verifier found on master are 0585.
