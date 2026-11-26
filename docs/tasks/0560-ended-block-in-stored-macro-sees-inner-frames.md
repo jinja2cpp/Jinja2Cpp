@@ -4,7 +4,7 @@ pr:
 priority: low
 area: parity
 depends: [0552]
-touches: [src/statements.cpp#TemplateRenderer::RenderBody, src/render_context.h#RenderContext::EndScopesLeftByFailure]
+touches: [src/statements.cpp#TemplateRenderer::RenderBody, src/statements.h, src/render_context.h#RenderContext::EndScopesLeftByFailure]
 shares: [test/borrowed_cells_test.cpp]
 ---
 # A block in a macro stored by a nested render that failed renders nothing

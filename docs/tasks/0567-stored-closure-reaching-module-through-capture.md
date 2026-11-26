@@ -3,7 +3,7 @@ status: in-progress
 priority: low
 area: parity
 depends: [0312]
-touches: [src/statements.cpp, src/template_impl.h, test/template_module_test.cpp]
+touches: [src/statements.cpp, src/render_context.h, test/template_module_test.cpp, test/allocation_failure_test.cpp]
 shares: [src/render_context.h, src/statements.h]
 ---
 # A stored closure that reaches a call's module only through its capture keeps the module
