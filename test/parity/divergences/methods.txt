@@ -5,5 +5,3 @@ methods.str_encode_bytes               rejects     0403 deliberate: the engine h
 methods.int_to_bytes                   rejects     0403 deliberate: the engine has no bytes type, so int.to_bytes is not a method (docs/python.md)
 methods.float_fromhex                  rejects     0403 deliberate: float.fromhex is an alternate constructor, not a method templates call on a value (docs/python.md)
 methods.int_methods_big                rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
-methods.set_add_during_loop            accepts     0545 deliberate: Python raises 'Set changed size during iteration' at the next step of a loop over a set whose size a method changed; the engine's loop reads a set's items like a list's (a list may grow or shrink under its loop, docs/tasks/0545), so it goes on over the items there are
-methods.set_remove_during_loop         accepts     0545 deliberate: as methods.set_add_during_loop, for a set that shrinks

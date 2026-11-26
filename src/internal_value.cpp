@@ -15,6 +15,7 @@
 #include "render_context.h"
 #include "render_failure.h"
 #include "render_suspension.h"
+#include "set_index.h"
 #include "shared_owner.h"
 #include "span.h"
 #include "template_dict.h"
@@ -3286,9 +3287,22 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         {
             SetTraversable();
             SetIteratorKind(iteratorKind);
+            if (iteratorKind == IteratorKind::Set)
+            {
+                m_index = MakeRef<SetIndex>();
+            }
         }
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
+        // A set's walk fails at its next step once the set's size changed, as Python's does (docs/tasks/0561);
+        // `startSize` is the set's size when the walk began
+        void CheckStep(size_t startSize) const
+        {
+            if (m_index && m_values.Get().size() != startSize)
+            {
+                throw TemplateRuntimeError("Set changed size during iteration");
+            }
+        }
         [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
         {
             // A list can shrink while it is iterated (pop() in a loop body)
@@ -3312,6 +3326,7 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
         [[nodiscard]] InternalValueList* GetMutableItems() const override { return &m_values.Get(); }
         [[nodiscard]] bool ItemsCharged() const override { return m_values.IsCharged(); }
+        [[nodiscard]] SetIndex* GetSetIndex() const override { return m_index.get(); }
         [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
@@ -3344,6 +3359,8 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
 
     private:
         BySharedMutable<InternalValueList> m_values;
+        // A set's index, shared by the copies of the adapter as their items are; null for a list
+        IntrusivePtr<SetIndex> m_index;
     };
 
     return ListAdapter(MakeRef<Adapter>(std::move(values), iteratorKind));

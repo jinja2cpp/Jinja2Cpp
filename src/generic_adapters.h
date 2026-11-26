@@ -222,6 +222,19 @@ public:
         // iterated, and Python's iteration follows it
         [[nodiscard]] size_t CurrentSize() const { return static_cast<const T*>(this->m_list)->GetItemsCountImpl(); }
 
+        bool MoveNext() override
+        {
+            // An adapter with CheckStep fails a walk whose list changed size (a set's)
+            if constexpr (HasCheckStep<T>::value)
+            {
+                if (this->m_list)
+                {
+                    static_cast<const T*>(this->m_list)->CheckStep(this->m_maxItems);
+                }
+            }
+            return BaseClass::MoveNext();
+        }
+
         [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
             const auto* list = static_cast<const T*>(this->m_list);
@@ -310,6 +323,15 @@ public:
     }
 
 private:
+    // Whether T has void CheckStep(size_t) const: it throws when the list's size is not the one a walk began with
+    template<typename U, typename = void>
+    struct HasCheckStep : std::false_type
+    {
+    };
+    template<typename U>
+    struct HasCheckStep<U, std::void_t<decltype(std::declval<const U&>().CheckStep(size_t{}))>> : std::true_type
+    {
+    };
     // Whether T has InternalValue GetCurrentItem(int64_t): the item the enumerator stands
     // on, Undefined past the end
     template<typename U, typename = void>

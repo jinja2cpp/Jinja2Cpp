@@ -744,6 +744,8 @@ private:
     Thunk m_call;
 };
 
+class SetIndex;
+
 struct IListAccessor : ValueObject
 {
 
@@ -768,6 +770,9 @@ struct IListAccessor : ValueObject
     // Whether a budget counted the storage GetMutableItems returns when it was made, so that its buffer is given back
     // when it is replaced (docs/tasks/0483)
     [[nodiscard]] virtual bool ItemsCharged() const { return false; }
+    // The hash index beside the items of the engine's set (IteratorKind::Set, set_index.h, docs/tasks/0561); null for
+    // every other list
+    [[nodiscard]] virtual SetIndex* GetSetIndex() const { return nullptr; }
     // Whether len() can change while the render runs: a list the template owns (GetMutableItems),
     // or a host's list that the template changes through the host's own methods (a Python
     // list's append). Then loop.length is len() at its first read, as Jinja2's (docs/tasks/0390)
@@ -930,6 +935,7 @@ public:
     [[nodiscard]] IteratorKind GetIteratorKind() const { return m_accessor ? m_accessor->GetIteratorKind() : IteratorKind::None; }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
     [[nodiscard]] bool ItemsCharged() const { return m_accessor != nullptr && m_accessor->ItemsCharged(); }
+    [[nodiscard]] SetIndex* GetSetIndex() const { return m_accessor ? m_accessor->GetSetIndex() : nullptr; }
     [[nodiscard]] bool HasLiveSize() const { return m_accessor != nullptr && m_accessor->HasLiveSize(); }
     [[nodiscard]] GenericList CreateGenericList() const { return m_accessor ? m_accessor->CreateGenericList() : GenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
@@ -1054,6 +1060,7 @@ public:
     [[nodiscard]] IteratorKind GetIteratorKind() const { return Ref().GetIteratorKind(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return Ref().GetMutableItems(); }
     [[nodiscard]] bool ItemsCharged() const { return Ref().ItemsCharged(); }
+    [[nodiscard]] SetIndex* GetSetIndex() const { return Ref().GetSetIndex(); }
     [[nodiscard]] GenericList CreateGenericList() const { return Ref().CreateGenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const { return Ref().GetEnumerator(); }
     void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const { Ref().RebindEnumerator(enumerator); }
