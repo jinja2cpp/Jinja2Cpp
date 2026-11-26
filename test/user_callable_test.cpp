@@ -1792,7 +1792,8 @@ TEST(CallSiteTest, ContextViewExpiresWithTheCall)
     ASSERT_TRUE(tpl.RenderAsString({}).has_value());
     ASSERT_TRUE(kept.GetIf<GenericMap>());
     ASSERT_TRUE(keptBody.GetIf<GenericMap>());
-    for (const auto& [view, name] : { std::make_pair(&kept, "top"), std::make_pair(&keptBody, "b") })
+    const std::pair<Value*, std::string> expiredViews[] = { { &kept, "top" }, { &keptBody, "b" } };
+    for (const auto& [view, name] : expiredViews)
     {
         try
         {
