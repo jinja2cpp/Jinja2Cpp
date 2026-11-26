@@ -38,9 +38,16 @@ std::string ToString(const std::string& text)
     return text;
 }
 
+// The expectations are ASCII: each wide character narrows to one char (MSVC /W4 warns of an implicit narrowing, C4244)
 std::string ToString(const std::wstring& text)
 {
-    return std::string(text.begin(), text.end());
+    std::string result;
+    result.reserve(text.size());
+    for (const wchar_t ch : text)
+    {
+        result.push_back(static_cast<char>(ch));
+    }
+    return result;
 }
 
 template<typename TemplateType, typename StringType>
