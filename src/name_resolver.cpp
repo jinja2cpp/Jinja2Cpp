@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -105,10 +106,11 @@ NameResolver::FrameId NameResolver::PushDynamic(FrameId parent)
     return id;
 }
 
-void NameResolver::DoAddStore(FrameId frame, std::string_view name, StoreKind kind)
+void NameResolver::DoAddStore(FrameId frame, std::string_view name, StoreKind kind, bool bySet)
 {
     m_frames[frame].hasStores = true;
-    m_stores.push_back(Store{ frame, kind, static_cast<std::uint32_t>(m_reads.size()), name });
+    m_frames[frame].hasSets = m_frames[frame].hasSets || bySet;
+    m_stores.push_back(Store{ frame, kind, bySet, static_cast<std::uint32_t>(m_reads.size()), name });
 }
 
 void NameResolver::AddStores(FrameId frame, Span<const TargetNode> target, const NodeArena& nodes, StoreKind kind)
@@ -117,7 +119,10 @@ void NameResolver::AddStores(FrameId frame, Span<const TargetNode> target, const
     {
         if (node.IsPlainName())
         {
-            AddStore(frame, nodes.Text(node.name), kind);
+            if (frame != NoFrame)
+            {
+                DoAddStore(frame, nodes.Text(node.name), kind, true);
+            }
         }
         else if (!node.attr.empty() && m_readsOpen != 0)
         {
@@ -174,6 +179,101 @@ ArenaSpan<SlotName> NameResolver::NamesResetAtEnd(FrameId frameId, NodeArena& no
         names.push_back({ nodes.MakeText(name), hash });
     }
     return nodes.MakeSpan(names);
+}
+
+void NameResolver::NoteBodyCall(NodeRef<CallExpression> call)
+{
+    const auto& frame = m_frames[m_current];
+    // The frames Jinja2 gives a loop_frame or block_frame: a loop's body and a block's, not a macro's
+    const bool inBody = frame.kind == Kind::For || (frame.kind == Kind::Unit && frame.isBlock && !frame.isMacro);
+    if (m_noBodyCalls != 0 || !inBody)
+    {
+        return;
+    }
+    m_bodyCalls.push_back(BodyCall{ call, m_current, static_cast<std::uint32_t>(m_stores.size()) });
+}
+
+namespace
+{
+// The names met so far, found by a scan while few, as most bodies store a few, then by a set
+class SeenNames
+{
+public:
+    // Whether `name` is new, and then remembered
+    bool Insert(std::string_view name)
+    {
+        bool known = false;
+        if (m_list.size() < MaxScanned)
+        {
+            known = std::find(m_list.begin(), m_list.end(), name) != m_list.end();
+        }
+        else
+        {
+            if (m_set.empty())
+            {
+                m_set.insert(m_list.begin(), m_list.end());
+            }
+            known = !m_set.insert(name).second;
+        }
+        if (!known)
+        {
+            m_list.push_back(name);
+        }
+        return !known;
+    }
+
+private:
+    static constexpr std::size_t MaxScanned = 16;
+    SmallVector<std::string_view, 8> m_list;
+    std::unordered_set<std::string_view> m_set;
+};
+} // namespace
+
+void NameResolver::ResolveFrameBodySets(NodeArena& nodes, const BodyCall* first, const BodyCall* last)
+{
+    // One list for the frame, each call taking the prefix of the names stored before it: linear in the stores,
+    // where a list per call is quadratic in a body of many `set`s
+    SmallVector<SlotName, 8> names;
+    SmallVector<std::size_t, 8> counts;
+    SeenNames seen;
+    auto idx = static_cast<std::size_t>(m_frames[first->frame].firstStore);
+    for (const auto* call = first; call != last; ++call)
+    {
+        for (; idx < call->storesBefore; ++idx)
+        {
+            const auto& store = m_stores[idx];
+            if (store.frame == first->frame && store.bySet && seen.Insert(store.name))
+            {
+                names.push_back({ nodes.MakeText(store.name), HashedName::Hash(store.name) });
+            }
+        }
+        counts.push_back(names.size());
+    }
+    const auto all = nodes.MakeSpan(names);
+    for (const auto* call = first; call != last; ++call)
+    {
+        if (const auto count = counts[static_cast<std::size_t>(call - first)]; count != 0)
+        {
+            nodes.Get<CallExpression>(call->call).SetBodySets(NodeArena::Prefix(all, count));
+        }
+    }
+}
+
+void NameResolver::ResolveBodySets(NodeArena& nodes)
+{
+    // The calls of a frame together, still in parse order: frames start and end around each other
+    std::stable_sort(m_bodyCalls.begin(), m_bodyCalls.end(), [](const BodyCall& left, const BodyCall& right) { return left.frame < right.frame; });
+    const auto* const end = m_bodyCalls.data() + m_bodyCalls.size();
+    for (const auto* first = m_bodyCalls.data(); first != end;)
+    {
+        const auto* last = first;
+        while (last != end && last->frame == first->frame)
+        {
+            ++last;
+        }
+        ResolveFrameBodySets(nodes, first, last);
+        first = last;
+    }
 }
 
 NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, NodeArena& nodes)

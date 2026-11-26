@@ -22,6 +22,7 @@ namespace jinja2
 inline namespace v2
 {
 class BindUndefinedStatement;
+class CallExpression;
 class ForStatement;
 class IRendererBase;
 class MacroStatement;
@@ -90,7 +91,7 @@ public:
     {
         if (frame != NoFrame)
         {
-            DoAddStore(frame, name, kind);
+            DoAddStore(frame, name, kind, false);
         }
     }
     // The names a `set` or `with` target stores; namespace attributes store none
@@ -98,6 +99,36 @@ public:
     void AddStores(FrameId frame, Span<const TargetNode> target, const NodeArena& nodes) { AddStores(frame, target, nodes, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
 
     [[nodiscard]] FrameId Current() const { return m_current; }
+    // A call expression made in the current frame (docs/tasks/0558). Jinja2 hands a `pass_context` callable the
+    // context derived with the names `set` stored so far in the loop or block body the call is written in
+    // directly. Resolve gives the call those names, `set`s before it in the frame; only those can be in the body's
+    // scope when it runs, which a pass empties. Inline: most frames store nothing by `set`
+    void NoteCall(NodeRef<CallExpression> call)
+    {
+        if (m_current != NoFrame && m_frames[m_current].hasSets)
+        {
+            NoteBodyCall(call);
+        }
+    }
+    // Calls made while it lives are not in the body: Jinja2 parses a `filter` statement's arguments and an
+    // `autoescape` value in a frame of their own, which the engine parses before it enters the body's frame
+    class NoBodyCalls
+    {
+    public:
+        explicit NoBodyCalls(NameResolver& names)
+            : m_names(names)
+        {
+            ++m_names.m_noBodyCalls;
+        }
+        ~NoBodyCalls() { --m_names.m_noBodyCalls; }
+        NoBodyCalls(const NoBodyCalls&) = delete;
+        NoBodyCalls(NoBodyCalls&&) = delete;
+        NoBodyCalls& operator=(const NoBodyCalls&) = delete;
+        NoBodyCalls& operator=(NoBodyCalls&&) = delete;
+
+    private:
+        NameResolver& m_names;
+    };
     // The hashes of the names read inside a macro or call block, wherever: by a name expression
     // (AddUse), or as the namespace of a `set ns.attr` target (AddStores). BeginReads before its
     // parameters and EndReads after its body give the names they read (MacroStatement::SetBodyReads);
@@ -184,6 +215,10 @@ public:
         {
             ResolveSlots(nodes);
         }
+        if (!m_bodyCalls.empty())
+        {
+            ResolveBodySets(nodes);
+        }
     }
     // The names a render looks up in the context, as jinja2.meta.find_undeclared_variables
     // finds them (docs/tasks/0236), in parse order and with repeats: the names read, and the
@@ -219,6 +254,8 @@ private:
         FrameId unit = NoFrame;
         // A name is stored in the frame (m_stores)
         bool hasStores = false;
+        // A name is stored by `set` in the frame
+        bool hasSets = false;
         // A Unit frame of a macro: its arguments are bound in slots
         bool isMacro = false;
         // Resolve: a For frame's names, `loop` first, or a macro's arguments, and their slot
@@ -251,7 +288,12 @@ private:
     static void PlaceMacroArgs(NodeArena& nodes, Frame& frame);
     static void SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner, UnitLayout layout);
     [[nodiscard]] bool IsStored(FrameId frame, std::string_view name) const;
-    void DoAddStore(FrameId frame, std::string_view name, StoreKind kind);
+    void DoAddStore(FrameId frame, std::string_view name, StoreKind kind, bool bySet);
+    void NoteBodyCall(NodeRef<CallExpression> call);
+    // Gives the calls NoteBodyCall found the names of their frame's `set`s before them
+    void ResolveBodySets(NodeArena& nodes);
+    struct BodyCall;
+    void ResolveFrameBodySets(NodeArena& nodes, const BodyCall* first, const BodyCall* last);
     // A name a frame may bind at its entry (EntryBinding)
     struct EntryCandidate
     {
@@ -303,10 +345,19 @@ private:
     {
         FrameId frame = NoFrame;
         StoreKind kind = StoreKind::Store;
+        // Stored by `set`, not by a macro, an import or `with`
+        bool bySet = false;
         // The reads made before the store (m_reads)
         std::uint32_t readsBefore = 0;
         // Text of the arena
         std::string_view name;
+    };
+    // A call that may be in a loop or block body (NoteCall), and the stores made before it
+    struct BodyCall
+    {
+        NodeRef<CallExpression> call;
+        FrameId frame = NoFrame;
+        std::uint32_t storesBefore = 0;
     };
     // A name a frame binds at its entry, unless a frame around it reads or binds it
     struct EntryName
@@ -322,6 +373,9 @@ private:
     // The names stored in frames, in parse order; most templates store a few
     SmallVector<Store, 8, SmallVectorDoubling> m_stores;
     std::vector<EntryName> m_entryNames;
+    // Heap only for a template with calls after a `set` in a loop or block body, which most have none of
+    std::vector<BodyCall> m_bodyCalls;
+    std::uint32_t m_noBodyCalls = 0;
     // Out of line: the parse of every name expression inlines the check of AddRead
     void RecordRead(std::size_t hash);
 

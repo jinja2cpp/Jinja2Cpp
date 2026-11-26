@@ -1123,6 +1123,13 @@ public:
         }
         return name == "loop" ? nullptr : FindInOuterLevels(name);
     }
+    // The value `name` has in `scope`, unless it is not bound there or only bound at entry (ContextNames::BodyVars)
+    [[nodiscard]] static const InternalValue* FindStoredName(const InternalValueMap& scope, const std::string& name)
+    {
+        const auto hashed = ToHashedName(name);
+        const auto* found = FindIn(scope, hashed);
+        return found && !IsEntryBinding(found->second, hashed.hash) ? &found->second : nullptr;
+    }
     // The names FindTopLevelName finds, in alphabetical order
     [[nodiscard]] std::vector<std::string> CollectTopLevelNames() const { return CollectPartNames(true); }
     // The names FindParentName finds, in alphabetical order

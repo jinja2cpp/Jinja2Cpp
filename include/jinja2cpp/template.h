@@ -490,6 +490,12 @@ enum class ContextNames
     TopLevel,
     //! `Context.parent`: the render's params, the globals and the built-ins (`range`, `dict`, ...)
     Parent,
+    //! Jinja2's `_loop_vars` / `_block_vars`: the names a `{% set %}` stored so far, in this pass, in the loop body (the
+    //! innermost loop's) or block body the call is written in directly (through `if` only). Python's `Context.call`
+    //! hands a `pass_context` callable `context.derived(these)` when there is one: `vars` empty and `parent` the Parent
+    //! and TopLevel names with these on top. Empty for every other call: a filter, a test, and a call in a `with`,
+    //! `filter`, `autoescape`, set-block, macro or call-block body or in a loop's filter or `else`
+    BodyVars,
 };
 
 /*!

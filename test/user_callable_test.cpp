@@ -1760,6 +1760,11 @@ TEST(CallSiteTest, ContextViewOfAWideTemplate)
                                    {
                                        seen += name + ",";
                                    }
+                                   seen += "|";
+                                   for (const auto& name : ContextView(params.context, ContextNames::BodyVars).GetIf<GenericMap>()->GetKeys())
+                                   {
+                                       seen += name + ",";
+                                   }
                                    return Value();
                                },
                                { ArgInfo(ArgInfo::Context) }));
@@ -1767,33 +1772,249 @@ TEST(CallSiteTest, ContextViewOfAWideTemplate)
     ASSERT_TRUE(tpl.Load(L"{% set t = 1 %}{% for i in [1] %}{% set u = 2 %}{{ probe() }}{% endfor %}").has_value());
     const auto result = tpl.RenderAsString({});
     ASSERT_TRUE(result.has_value()) << result.error().ToString();
-    EXPECT_EQ("t,", seen);
+    EXPECT_EQ("t,|u,", seen);
 }
 
 TEST(CallSiteTest, ContextViewExpiresWithTheCall)
 {
     Value kept;
+    Value keptBody;
     TemplateEnv env;
     env.AddGlobal("probe", UserCallable(
-                               [&kept](const UserCallableParams& params) {
+                               [&kept, &keptBody](const UserCallableParams& params) {
                                    kept = ContextView(params.context, ContextNames::TopLevel);
+                                   keptBody = ContextView(params.context, ContextNames::BodyVars);
                                    return Value();
                                },
                                { ArgInfo(ArgInfo::Context) }));
     Template tpl(&env);
-    ASSERT_TRUE(tpl.Load("{% set top = 1 %}{{ probe() }}{{ probe() }}").has_value());
+    ASSERT_TRUE(tpl.Load("{% set top = 1 %}{% for i in [1] %}{% set b = 2 %}{{ probe() }}{{ probe() }}{% endfor %}").has_value());
     ASSERT_TRUE(tpl.RenderAsString({}).has_value());
     ASSERT_TRUE(kept.GetIf<GenericMap>());
-    try
+    ASSERT_TRUE(keptBody.GetIf<GenericMap>());
+    for (const auto& [view, name] : { std::make_pair(&kept, "top"), std::make_pair(&keptBody, "b") })
     {
-        (void)kept.GetIf<GenericMap>()->Find("top");
-        FAIL() << "the view outlived its call";
-    }
-    catch (const ErrorInfo& error)
-    {
-        EXPECT_EQ(ErrorCode::TemplateExpired, error.GetCode());
+        try
+        {
+            (void)view->GetIf<GenericMap>()->Find(name);
+            FAIL() << "the view outlived its call";
+        }
+        catch (const ErrorInfo& error)
+        {
+            EXPECT_EQ(ErrorCode::TemplateExpired, error.GetCode());
+        }
     }
 }
+
+// The call's context as Python Jinja2 hands a `pass_context` callable (docs/tasks/0558): `vars` and `parent` of
+// `Context.call`, which derives the context when the call has BodyVars. Compared with Jinja2 3.1.6 for every row
+struct ContextBodyRow
+{
+    const char* name;
+    const char* source;
+    std::vector<std::pair<std::string, std::string>> files;
+    // `b` is a render parameter
+    bool hasB;
+    // `vars|body|parent` of each call, restricted to the names the templates use
+    const char* expected;
+};
+
+void PrintTo(const ContextBodyRow& row, std::ostream* os)
+{
+    *os << row.name;
+}
+
+class CallSiteContextBodyVarsTest : public ::testing::TestWithParam<ContextBodyRow>
+{
+};
+
+namespace
+{
+std::string ShownValue(const Value& value)
+{
+    if (const auto* number = value.GetIf<int64_t>())
+    {
+        return std::to_string(*number);
+    }
+    if (value.IsString())
+    {
+        return value.AsString();
+    }
+    if (const auto* wide = value.GetIf<std::wstring>())
+    {
+        return ConvertString<std::string>(*wide);
+    }
+    return "?";
+}
+
+std::string JoinNames(const std::vector<std::string>& names)
+{
+    std::string joined;
+    for (const auto& name : names)
+    {
+        joined += (joined.empty() ? "" : ",") + name;
+    }
+    return joined;
+}
+
+// What Context.vars, Context.parent and the derive Python makes of them show for a call
+std::string DescribeContextOfCall(const Value& context)
+{
+    const auto keys = [&](ContextNames part) { return ContextView(context, part).GetIf<GenericMap>()->GetKeys(); };
+    auto vars = keys(ContextNames::TopLevel);
+    auto parent = keys(ContextNames::Parent);
+    const auto bodyView = ContextView(context, ContextNames::BodyVars);
+    const auto bodyNames = bodyView.GetIf<GenericMap>()->GetKeys();
+    std::string shownBody;
+    for (const auto& name : bodyNames)
+    {
+        shownBody += (shownBody.empty() ? "" : ",") + name + "=" + ShownValue(bodyView.GetIf<GenericMap>()->GetValueByName(name));
+    }
+    if (!shownBody.empty())
+    {
+        // Context.call: the callable gets context.derived(body), with `vars` empty and everything else in `parent`
+        parent.insert(parent.end(), vars.begin(), vars.end());
+        parent.insert(parent.end(), bodyNames.begin(), bodyNames.end());
+        vars.clear();
+    }
+    std::vector<std::string> shownParent;
+    for (const char* name : { "_b", "a", "b", "c", "i", "j", "loop", "m", "ns", "x" })
+    {
+        if (std::find(parent.begin(), parent.end(), name) != parent.end())
+        {
+            shownParent.emplace_back(name);
+        }
+    }
+    return "V:" + JoinNames(vars) + "|B:" + shownBody + "|P:" + JoinNames(shownParent);
+}
+} // namespace
+
+TEST_P(CallSiteContextBodyVarsTest, MatchesPythonContext)
+{
+    const auto& row = GetParam();
+    std::vector<std::string> seen;
+    TemplateEnv env;
+    env.GetSettings().userCallablesAsFilters = true;
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("main", row.source);
+    for (const auto& [name, text] : row.files)
+    {
+        fs->AddFile(name, text);
+    }
+    env.AddFilesystemHandler(std::string(), fs);
+    const auto probe = UserCallable(
+        [&seen](const UserCallableParams& params) {
+            seen.push_back(DescribeContextOfCall(params.context));
+            return Value(std::string());
+        },
+        { ArgInfo(ArgInfo::Context), ArgInfo("*args") });
+    env.AddGlobal("p", probe);
+    env.AddGlobal("pf", probe);
+
+    ValuesMap params;
+    if (row.hasB)
+    {
+        params["b"] = 9;
+    }
+    const auto tpl = env.LoadTemplate("main");
+    ASSERT_TRUE(tpl.has_value()) << tpl.error().ToString();
+    const auto rendered = tpl->RenderAsString(params);
+    ASSERT_TRUE(rendered.has_value()) << rendered.error().ToString();
+    std::string joined;
+    for (const auto& line : seen)
+    {
+        joined += (joined.empty() ? "" : "; ") + line;
+    }
+    EXPECT_EQ(row.expected, joined) << row.source;
+
+    // Wide templates take the same path
+    if (row.files.empty())
+    {
+        seen.clear();
+        TemplateW wide(&env);
+        ASSERT_TRUE(wide.Load(ConvertString<std::wstring>(std::string(row.source))).has_value());
+        ASSERT_TRUE(wide.RenderAsString(params).has_value());
+        joined.clear();
+        for (const auto& line : seen)
+        {
+            joined += (joined.empty() ? "" : "; ") + line;
+        }
+        EXPECT_EQ(row.expected, joined) << row.source;
+    }
+}
+
+// clang-format off
+INSTANTIATE_TEST_SUITE_P(CallSiteTest, CallSiteContextBodyVarsTest, ::testing::Values(
+    ContextBodyRow{ "loop_set_twice", R"({% for i in [1,2] %}{{ p() }}{% set b = i %}{{ p() }}{% endfor %})", {}, true,
+      "V:|B:|P:b; V:|B:b=1|P:b; V:|B:|P:b; V:|B:b=2|P:b" },
+    ContextBodyRow{ "set_in_if", R"({% for i in [1] %}{% if true %}{% set b = i %}{% endif %}{{ p() }}{% endfor %})", {}, false,
+      "V:|B:b=1|P:b" },
+    ContextBodyRow{ "call_in_if", R"({% for i in [1] %}{% set b = i %}{% if true %}{{ p() }}{% endif %}{{ 0 if false else p() }}{{ p() if true else 0 }}{% endfor %})", {}, false,
+      "V:|B:b=1|P:b; V:|B:b=1|P:b; V:|B:b=1|P:b" },
+    ContextBodyRow{ "call_in_with", R"({% for i in [1] %}{% set b = i %}{% with x = 1 %}{{ p() }}{% endwith %}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "call_in_filter", R"({% for i in [1] %}{% set b = i %}{% filter upper %}{{ p() }}{% endfilter %}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "call_in_autoescape", R"({% for i in [1] %}{% set b = i %}{% autoescape false %}{{ p() }}{% endautoescape %}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "call_in_loop_else", R"({% for i in [1] %}{% set b = i %}{% for j in [] %}{% else %}{{ p() }}{% endfor %}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "call_in_set_block", R"({% for i in [1] %}{% set b = i %}{% set x %}{{ p() }}{% endset %}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "set_the_loop_target", R"({% for i in [1] %}{% set i = 5 %}{{ p() }}{% endfor %})", {}, false,
+      "V:|B:i=5|P:i" },
+    ContextBodyRow{ "set_underscore", R"({% for i in [1] %}{% set _b = 2 %}{{ p() }}{% endfor %})", {}, false,
+      "V:|B:_b=2|P:_b" },
+    ContextBodyRow{ "set_tuple", R"({% for i in [1] %}{% set b, c = 2, 3 %}{{ p() }}{% endfor %})", {}, false,
+      "V:|B:b=2,c=3|P:b,c" },
+    ContextBodyRow{ "set_block", R"({% for i in [1] %}{% set b %}x{% endset %}{{ p() }}{% endfor %})", {}, false,
+      "V:|B:b=x|P:b" },
+    ContextBodyRow{ "set_namespace_attr", R"({% set ns = namespace() %}{% for i in [1] %}{% set ns.b = 2 %}{{ p() }}{% endfor %})", {}, false,
+      "V:ns|B:|P:" },
+    ContextBodyRow{ "macro_in_body", R"({% for i in [1] %}{% macro b() %}{% endmacro %}{{ p() }}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "import_in_body", R"({% for i in [1] %}{% import 'lib' as b %}{{ p() }}{% endfor %})", { { "lib", R"({% macro f() %}{% endmacro %})" } }, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "block_set", R"({% block x %}{% set b = 1 %}{{ p() }}{% endblock %})", {}, false,
+      "V:|B:b=1|P:b" },
+    ContextBodyRow{ "loop_in_block", R"({% block x %}{% set b = 1 %}{% for i in [1] %}{{ p() }}{% endfor %}{% endblock %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "loop_in_macro", R"({% macro m() %}{% for i in [1] %}{% set b = i %}{{ p() }}{% endfor %}{% endmacro %}{{ m() }})", {}, false,
+      "V:|B:b=1|P:b,m" },
+    ContextBodyRow{ "macro_body_set", R"({% macro m() %}{% set b = 1 %}{{ p() }}{% endmacro %}{{ m() }})", {}, false,
+      "V:m|B:|P:" },
+    ContextBodyRow{ "nested_loops", R"({% for i in [1] %}{% set b = 1 %}{{ p() }}{% for j in [2] %}{% set c = 2 %}{{ p() }}{% endfor %}{% endfor %})", {}, false,
+      "V:|B:b=1|P:b; V:|B:c=2|P:c" },
+    ContextBodyRow{ "recursive_loop", R"({% for i in [1, 2] recursive %}{{ p() }}{% set b = i %}{{ p() }}{% if i == 1 %}{{ loop([2]) }}{% endif %}{% endfor %})", {}, true,
+      "V:|B:|P:b; V:|B:b=1|P:b; V:|B:|P:b; V:|B:b=2|P:b; V:|B:|P:b; V:|B:b=2|P:b" },
+    ContextBodyRow{ "inner_iterable", R"({% for i in [1] %}{% set b = i %}{% for j in [p()] %}{% endfor %}{% endfor %})", {}, false,
+      "V:|B:b=1|P:b" },
+    ContextBodyRow{ "with_value", R"({% for i in [1] %}{% set b = i %}{% with x = p() %}{% endwith %}{% endfor %})", {}, false,
+      "V:|B:b=1|P:b" },
+    ContextBodyRow{ "loop_filter", R"({% for i in [1] if p() %}{% set b = i %}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "filter_args", R"({% for i in [1] %}{% set b = i %}{% filter replace('x', p()) %}x{% endfilter %}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "macro_default", R"({% for i in [1] %}{% set b = i %}{% macro mm(z=p()) %}{% endmacro %}{{ mm() }}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "filter_with_context", R"({% for i in [1] %}{% set b = i %}{{ 1|pf }}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "unscoped_block_in_loop", R"({% for i in [1] %}{% set b = 2 %}{% block x %}{{ p() }}{% endblock %}{% endfor %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "call_block", R"({% macro m(x=0) %}{{ caller() }}{% endmacro %}{% for i in [1] %}{% set b = i %}{% call m() %}{{ p() }}{% endcall %}{% endfor %})", {}, false,
+      "V:m|B:|P:" },
+    ContextBodyRow{ "call_block_head", R"({% macro m(x=0) %}{{ caller() }}{% endmacro %}{% for i in [1] %}{% set b = i %}{% call m(p()) %}x{% endcall %}{% endfor %})", {}, false,
+      "V:|B:b=1|P:b,m" },
+    ContextBodyRow{ "filter_arg_expr", R"({% for i in [1] %}{% set b = i %}{{ 1|replace('1', p()) }}{% endfor %})", {}, false,
+      "V:|B:b=1|P:b" },
+    ContextBodyRow{ "p_as_arg_of_p", R"({% for i in [1] %}{% set b = i %}{{ p(p()) }}{% endfor %})", {}, false,
+      "V:|B:b=1|P:b; V:|B:b=1|P:b" },
+    ContextBodyRow{ "many_sets", R"({% for i in [1] %}{% set n00 = 0 %}{% set n01 = 1 %}{% set n02 = 2 %}{% set n03 = 3 %}{% set n04 = 4 %}{% set n05 = 5 %}{% set n06 = 6 %}{% set n07 = 7 %}{% set n08 = 8 %}{% set n09 = 9 %}{% set n10 = 10 %}{% set n11 = 11 %}{% set n12 = 12 %}{% set n13 = 13 %}{% set n14 = 14 %}{% set n15 = 15 %}{% set n16 = 16 %}{% set n17 = 17 %}{% set n18 = 18 %}{% set n19 = 19 %}{% set n03 = 30 %}{{ p() }}{% endfor %})", {}, false,
+      "V:|B:n00=0,n01=1,n02=2,n03=30,n04=4,n05=5,n06=6,n07=7,n08=8,n09=9,n10=10,n11=11,n12=12,n13=13,n14=14,n15=15,n16=16,n17=17,n18=18,n19=19|P:" },
+    ContextBodyRow{ "top_set", R"({% set a = 1 %}{{ p() }})", {}, false,
+      "V:a|B:|P:" }
+), [](const ::testing::TestParamInfo<ContextBodyRow>& param) { return std::string(param.param.name); });
+// clang-format on
 
 // DescribeLentCallable: how Python Jinja2 prints a template callable lent to a host's call (docs/tasks/0439)
 TEST(CallSiteTest, LentCallablesDescribeThemselvesAsPython)

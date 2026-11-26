@@ -1433,7 +1433,9 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCall(L
         return MakeUnexpected(params.error());
     }
 
-    result = m_nodes.Make<CallExpression>(m_nodes, valueRef, std::move(*params));
+    const auto call = m_nodes.Make<CallExpression>(m_nodes, valueRef, std::move(*params));
+    m_names.NoteCall(call);
+    result = call;
 
     return result;
 }
