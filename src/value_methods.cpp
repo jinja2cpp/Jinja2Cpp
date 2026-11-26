@@ -678,18 +678,19 @@ struct StrOps
     {
         CheckArgs(params, name, 1, 3);
         auto chars = SplitCodePoints(self);
+        // A range that matches nothing still checks each affix's type, as Python's tail match does
         const auto range = Window(self, chars, params, 1, name);
-        if (!range)
-        {
-            return InternalValue(false);
-        }
-        const auto window = *range;
         auto matches = [&](const InternalValue& affixVal) {
             auto affix = GetAsSameString(self, affixVal);
             if (!affix || !IsStringValue(affixVal))
             {
                 Raise(std::string(name) + " first arg must be str or a tuple of str, not " + TypeName(affixVal));
             }
+            if (!range)
+            {
+                return false;
+            }
+            const auto window = *range;
             if (affix->size() > window.size())
             {
                 return false;
