@@ -1040,6 +1040,12 @@ TEST_F(TemplateModuleChangingSourceTest, SelfStoredByAFailedInclude)
             }
         }
     }
+    // An include with no blocks whose loop rebound the name the stored macro reads: the macro reads the top level's (verifier)
+    AddFile("lib", "{% set t = 'T1' %}{% macro f() %}{{ t }}{% endmacro %}{% set ns.f = f %}{% for i in [1] %}{% set t = 'T2' %}{{ 1 // 0 }}{% endfor %}");
+    auto loopModule = Make("{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}");
+    EXPECT_THROW(Call(loopModule.exports["m"]), jinja2::BadResultAccess<>);
+    AddFile("lib", "ok");
+    EXPECT_EQ("[T1]ok", Call(loopModule.exports["m"]).AsString());
     // The wide template
     AddFile("lib", "{% set t = 'T1' %}{% block b %}B1{{ t }}{% endblock %}{% set ns.s = self %}{{ 1 // 0 }}");
     jinja2::TemplateW tpl(&m_env);

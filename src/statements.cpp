@@ -3498,22 +3498,35 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     if (failed)
     {
         // A failure in a context that ends before the render keeps the `self` of the template too: a macro a nested
-        // render stored before it failed renders its blocks from it (docs/tasks/0560)
-        if (stack && values.KeepsClosures())
+        // render stored before it failed renders its blocks from it (docs/tasks/0560), and its closures the names of
+        // its top level
+        if (values.KeepsClosures())
         {
-            KeepFailedSelf(values, frame);
+            KeepFailedSelf(values, frame, stack != nullptr);
         }
         detail::RethrowKeptSealed();
     }
 }
 
-JINJA2CPP_NOINLINE void TemplateRenderer::KeepFailedSelf(RenderContext& values, const TemplateFrame& frame)
+JINJA2CPP_NOINLINE void TemplateRenderer::KeepFailedSelf(RenderContext& values, const TemplateFrame& frame, bool hasBlocks)
 {
     // The scopes the failure left above the template's top level end first, as RenderForOuter ends them, so that
-    // the capture of the top level is the last of the chain. A capture that fails to allocate throws std::bad_alloc
-    // instead of the render's failure, as there
-    values.EndScopesLeftByFailure(frame.baseDepth);
-    KeepEndedSelf(values, frame);
+    // the capture of the top level is the last of the chain and a name a loop the failure left rebound does not hide
+    // the top level's from its closures (also without blocks). A capture that fails to allocate throws
+    // std::bad_alloc instead of the render's failure, as there, and lets go of the failure kept
+    try
+    {
+        values.EndScopesLeftByFailure(frame.baseDepth);
+        if (hasBlocks)
+        {
+            KeepEndedSelf(values, frame);
+        }
+    }
+    catch (...)
+    {
+        [[maybe_unused]] const auto failure = detail::TakeKept();
+        throw;
+    }
 }
 
 void TemplateRenderer::KeepEndedSelf(RenderContext& values, const TemplateFrame& frame)
@@ -4436,11 +4449,12 @@ const ClosureSite* ClosureSiteOfObject(const ValueObject& object)
 
 namespace
 {
-// Appends the objects of the names `site`'s capture kept of the closure's ended frames, and their `self`
-void AppendCapturedObjects(const ClosureSite& site, std::vector<const ValueObject*>& objects)
+// Appends the objects of the names `site`'s capture kept of the closure's ended frames, and their `self`, each capture
+// once: the closures of a frame share its capture, and a capture walked has had its `outer` walked too
+void AppendCapturedObjects(const ClosureSite& site, std::unordered_set<const ClosureCapture*>& walked, std::vector<const ValueObject*>& objects)
 {
     const auto capture = site.Capture();
-    for (const auto* frame = capture.get(); frame; frame = frame->outer.get())
+    for (const auto* frame = capture.get(); frame && walked.insert(frame).second; frame = frame->outer.get())
     {
         if (const auto names = frame->names.lock())
         {
@@ -4514,6 +4528,7 @@ void ImportedModule::MarkReached(std::vector<const ValueObject*> roots, const st
 {
     auto& pending = roots;
     std::unordered_set<const ValueObject*> seen;
+    std::unordered_set<const ClosureCapture*> walkedCaptures;
     while (!pending.empty())
     {
         const auto* object = pending.back();
@@ -4537,7 +4552,7 @@ void ImportedModule::MarkReached(std::vector<const ValueObject*> roots, const st
             // What the closure kept of its ended frames, which Traverse does not show (it is behind the callable's
             // keep-alive): a module named there stays with the closure (docs/tasks/0567). Only from a closure reached:
             // a copy no closure of a value that lives on reaches does not keep what it names
-            AppendCapturedObjects(*site, pending);
+            AppendCapturedObjects(*site, walkedCaptures, pending);
         }
         object->Traverse([&pending](const ValueObject* held) { pending.push_back(held); });
     }
