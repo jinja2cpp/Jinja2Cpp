@@ -375,14 +375,14 @@ Only the fact of an error is compared, not the message or the line.
 | `jinja2.ext.do` | ✅ | |
 | `jinja2.ext.loopcontrols` | ✅ (`Settings::Extensions::loopControls`) | |
 | `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ✅ newstyle (`Settings::Extensions::i18n`, `TemplateEnv::InstallGettextCallables`); no `ext.i18n.trimmed` policy | |
-| `jinja2.ext.debug` | ❌ `{% debug %}` is not implemented (not in corpus: output is not deterministic) | 0583 |
+| `jinja2.ext.debug` | ❌ `{% debug %}` is not implemented (not in corpus: output is not deterministic) | 0589 |
 
 ## API level (not corpus-checked)
 
 | Jinja2 feature | Jinja2C++ | Status | Task |
 |---|---|---|---|
 | `DictLoader`, `FileSystemLoader`, `PrefixLoader` | `MemoryFileSystem`, `RealFileSystem`, `AddFilesystemHandler(prefix, ...)` | ✅ | |
-| `ChoiceLoader` | several handlers on one prefix: tried in registration order, the first that opens the name wins | 🟡 read from `TemplateEnv::LoadTemplate`, no test pins it | 0584 |
+| `ChoiceLoader` | several handlers on one prefix: tried in registration order, the first that opens the name wins | 🟡 read from `TemplateEnv::LoadTemplate`, no test pins it | 0590 |
 | `FunctionLoader`, `PackageLoader` | custom `IFilesystemHandler` | ➖ | |
 | `env.globals` | `AddGlobal`/`RemoveGlobal` | ✅ | |
 | `env.from_string` | `TemplateEnv::FromString` | ✅ | |
