@@ -5,6 +5,7 @@ area: parity
 depends: [0416]
 touches: [src/render_context.h#FindTopLevelName, src/host_call_context.cpp#ContextPartMapper]
 shares: [python/jinja2cpp/runtime.py, python/tests/test_context.py, docs/python.md]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1014
 ---
 # `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context
 
