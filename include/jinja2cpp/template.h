@@ -486,9 +486,11 @@ JINJA2CPP_EXPORT std::optional<LentCallableInfo> DescribeLentCallable(const User
 enum class ContextNames
 {
     //! `Context.vars`: the names the template's top level binds where the call is made (`set`, `import`, macros), but
-    //! not a loop's variables, the names of a `with` block or a macro's arguments and locals
+    //! not a loop's variables, the names of a `with` block or a macro's arguments and locals; empty in a `scoped`
+    //! block, whose context Jinja2 derives
     TopLevel,
-    //! `Context.parent`: the render's params, the globals and the built-ins (`range`, `dict`, ...)
+    //! `Context.parent`: the render's params, the globals and the built-ins (`range`, `dict`, ...); in a `scoped`
+    //! block, every name the block's call site sees, a loop's `loop` included
     Parent,
     //! Jinja2's `_loop_vars` / `_block_vars`: the names a `{% set %}` stored so far, in this pass, in the loop body (the
     //! innermost loop's) or block body the call is written in directly (through `if` only). Python's `Context.call`
@@ -505,7 +507,8 @@ enum class ContextNames
  * `Context` holds the template's top-level names and its params and globals only, apart: a host that mirrors it (a
  * `pass_context` callable) reads the two views. A name in both is the top level's where the template reads it. The view
  * reads the render as the context does, lends its callables as it does, and expires with it: once the call returns, a
- * read fails with ErrorCode::TemplateExpired. No name is `loop`.
+ * read fails with ErrorCode::TemplateExpired. `loop` is only a name the template's top level sets, or, in a scoped
+ * block's Parent, the loop around the block.
  *
  * @param context The context of a call (UserCallableParams::context)
  * @param names   Which names the view shows

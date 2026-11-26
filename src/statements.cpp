@@ -3304,6 +3304,11 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
     // An unscoped block sees the template-level names only, not the loop variables or
     // other locals around it
     RenderContext blockContext = m_isScoped ? RenderContext(values, values.GetScopesCount()) : RenderContext(values, frame->baseDepth);
+    if (m_isScoped)
+    {
+        // Jinja2 calls the block with context.derived(locals), which a host's callable then sees (docs/tasks/0558)
+        blockContext.MarkDerived();
+    }
     RenderBlockAt(*frame->blocks, name, 0, os, blockContext);
 }
 

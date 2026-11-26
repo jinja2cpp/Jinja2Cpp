@@ -621,6 +621,7 @@ public:
         , m_fullWalk(other.m_fullWalk)
         , m_inheritsViews(other.m_inheritsViews)
         , m_hasEntryBindings(other.m_hasEntryBindings)
+        , m_derivedDepth(other.m_derivedDepth)
         , m_entryPassDepth(other.m_entryPassDepth)
         , m_autoescapeModes(other.m_autoescapeModes)
         , m_evalContext(other.m_evalContext)
@@ -672,6 +673,8 @@ public:
         , m_frame(other.m_frame)
         , m_inheritsViews(other.m_inheritsViews || !other.m_views.empty())
         , m_hasEntryBindings(other.m_hasEntryBindings)
+        // Never beyond the scopes this one sees
+        , m_derivedDepth(static_cast<std::uint32_t>(std::min<size_t>(other.m_derivedDepth, m_parentDepth)))
         , m_entryPassDepth(other.m_entryPassDepth)
         , m_autoescapeModes(other.m_autoescapeModes)
         , m_evalContext(other.m_evalContext)
@@ -686,6 +689,14 @@ public:
         NewEpoch();
         EnterScope();
     }
+
+    // The code this context runs is a `scoped` block's, which Jinja2 calls with `context.derived(locals)`: it sees the
+    // scopes below as the derived context's parent, and none as its top level (docs/tasks/0558). Set once, by the
+    // block statement, on the context it makes for the call
+    void MarkDerived() { m_derivedDepth = static_cast<std::uint32_t>(m_parentDepth); }
+    // Whether the code runs in a `scoped` block of its own template: an include or an import with context has a top
+    // level of its own, deeper than the block's scopes
+    [[nodiscard]] bool InDerivedBlock() const { return m_derivedDepth > TopLevelDepth(); }
 
     // A frame bound names at its entry in a scope of this context (BindUndefinedStatement)
     void SetHasEntryBindings() { m_hasEntryBindings = true; }
@@ -1110,7 +1121,9 @@ public:
     // the names the running template's top level binds (`set`, `import`, macros): those of its top scope
     // (TopLevelDepth) and its frame views, not the loop variables, `with` names and macro locals of the
     // scopes above it. Its `parent` holds what the template was given: the scopes below (an including template's),
-    // the params, the external scope, the globals and the built-ins. Neither has `loop` or a name bound at entry only
+    // the params, the external scope, the globals and the built-ins. Neither has a name bound at entry only, or `loop`
+    // but the one the top level sets itself. In a `scoped` block, whose context Jinja2 derives, `vars` is empty and
+    // `parent` holds every scope below the block, the loop around it too
     [[nodiscard]] const InternalValue* FindTopLevelName(const std::string& name) const
     {
         return FindInPart(name, true);
@@ -1615,27 +1628,40 @@ private:
         const size_t base = m_templateFrame ? m_templateFrame->baseDepth : 0;
         return base == 0 ? 0 : base - 1;
     }
-    // Whether the scope at `depth` is in the part of Python's Context FindTopLevelName (`topLevel`) or FindParentName reads
-    [[nodiscard]] static bool InPart(size_t depth, size_t top, bool topLevel) { return topLevel ? depth == top : depth < top; }
+    // Whether the scope at `depth` is in the part of Python's Context FindTopLevelName (`topLevel`) or FindParentName reads,
+    // `limit` being the depth of the top level (PartLimit)
+    [[nodiscard]] static bool InPart(size_t depth, size_t limit, bool topLevel) { return topLevel ? depth == limit : depth < limit; }
+    // The depth the part ends at: the top level's, or in a scoped block, where the context is the derived one, every
+    // scope below the block's (MarkDerived)
+    [[nodiscard]] size_t PartLimit(bool topLevel) const
+    {
+        return !topLevel && InDerivedBlock() ? m_derivedDepth : TopLevelDepth();
+    }
     // The innermost value of `name` among the scopes of a part of Python's Context (FindTopLevelName)
     [[nodiscard]] const InternalValue* FindInPart(const std::string& name, bool topLevel) const
     {
-        if (name == "loop")
+        // A scoped block's top level is empty: its context is derived, which holds everything in its parent
+        if (topLevel && InDerivedBlock())
         {
             return nullptr;
         }
+        // `loop` is no name of a part, except the one a scoped block's parent shows (the loop around the block) and one
+        // the template's top level itself sets
+        const bool isLoop = name == "loop";
         const InternalValue* result = nullptr;
         const auto hashed = ToHashedName(name);
         const size_t top = TopLevelDepth();
+        const size_t limit = PartLimit(topLevel);
+        const bool loopInParent = !topLevel && InDerivedBlock();
         VisitScopes(
             *this,
             [&](const InternalValueMap* scope, size_t depth) {
-                if (!InPart(depth, top, topLevel))
+                if (!InPart(depth, limit, topLevel))
                 {
                     return false;
                 }
                 const auto* p = FindIn(*scope, hashed);
-                if (!p || IsEntryBinding(p->second, hashed.hash))
+                if (!p || IsEntryBinding(p->second, hashed.hash) || (isLoop && !loopInParent && (!topLevel || depth != top)))
                 {
                     return false;
                 }
@@ -1643,7 +1669,7 @@ private:
                 return true;
             },
             [&](const FrameView& view, size_t depth) {
-                if (!InPart(depth, top, topLevel))
+                if (!InPart(depth, limit, topLevel) || (isLoop && !loopInParent))
                 {
                     return false;
                 }
@@ -1683,11 +1709,15 @@ private:
     [[nodiscard]] std::vector<std::string> CollectPartNames(bool topLevel) const
     {
         std::vector<std::string> names;
-        const size_t top = TopLevelDepth();
+        if (topLevel && InDerivedBlock())
+        {
+            return names;
+        }
+        const size_t limit = PartLimit(topLevel);
         VisitScopes(
             *this,
             [&](const InternalValueMap* scope, size_t depth) {
-                if (InPart(depth, top, topLevel))
+                if (InPart(depth, limit, topLevel))
                 {
                     for (const auto& entry : *scope)
                     {
@@ -1697,7 +1727,7 @@ private:
                 return false;
             },
             [&](const FrameView& view, size_t depth) {
-                if (InPart(depth, top, topLevel))
+                if (InPart(depth, limit, topLevel))
                 {
                     for (size_t idx = 0; idx != view.names.size(); ++idx)
                     {
@@ -2044,6 +2074,8 @@ private:
     bool m_inheritsViews = false;
     // A scope of this context, or of one it was made from, holds names bound at entry
     bool m_hasEntryBindings = false;
+    // The scopes below this depth are the parent of the derived context of a `scoped` block call (MarkDerived); 0 outside
+    std::uint32_t m_derivedDepth = 0;
     // Lookups pass over the names bound at entry in the scopes below this depth
     // (PassOverEntryBindings)
     size_t m_entryPassDepth = 0;

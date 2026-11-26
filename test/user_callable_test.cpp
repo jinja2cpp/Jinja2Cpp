@@ -2012,7 +2012,31 @@ INSTANTIATE_TEST_SUITE_P(CallSiteTest, CallSiteContextBodyVarsTest, ::testing::V
     ContextBodyRow{ "many_sets", R"({% for i in [1] %}{% set n00 = 0 %}{% set n01 = 1 %}{% set n02 = 2 %}{% set n03 = 3 %}{% set n04 = 4 %}{% set n05 = 5 %}{% set n06 = 6 %}{% set n07 = 7 %}{% set n08 = 8 %}{% set n09 = 9 %}{% set n10 = 10 %}{% set n11 = 11 %}{% set n12 = 12 %}{% set n13 = 13 %}{% set n14 = 14 %}{% set n15 = 15 %}{% set n16 = 16 %}{% set n17 = 17 %}{% set n18 = 18 %}{% set n19 = 19 %}{% set n03 = 30 %}{{ p() }}{% endfor %})", {}, false,
       "V:|B:n00=0,n01=1,n02=2,n03=30,n04=4,n05=5,n06=6,n07=7,n08=8,n09=9,n10=10,n11=11,n12=12,n13=13,n14=14,n15=15,n16=16,n17=17,n18=18,n19=19|P:" },
     ContextBodyRow{ "top_set", R"({% set a = 1 %}{{ p() }})", {}, false,
-      "V:a|B:|P:" }
+      "V:a|B:|P:" },
+    ContextBodyRow{ "scoped_top", R"({% set a = 1 %}{% block x scoped %}{{ p() }}{% endblock %})", {}, false,
+      "V:|B:|P:a" },
+    ContextBodyRow{ "scoped_in_loop", R"({% for i in [1] %}{% block x scoped %}{{ p() }}{% endblock %}{% endfor %})", {}, false,
+      "V:|B:|P:i,loop" },
+    ContextBodyRow{ "scoped_after_set", R"({% for i in [1] %}{% set b = i %}{% block x scoped %}{{ p() }}{% endblock %}{% endfor %})", {}, false,
+      "V:|B:|P:b,i,loop" },
+    ContextBodyRow{ "scoped_body_set", R"({% block x scoped %}{% set b = 1 %}{{ p() }}{% endblock %})", {}, false,
+      "V:|B:b=1|P:b" },
+    ContextBodyRow{ "scoped_nested", R"({% for i in [1] %}{% block x scoped %}{% block y scoped %}{{ p() }}{% endblock %}{% endblock %}{% endfor %})", {}, false,
+      "V:|B:|P:i,loop" },
+    ContextBodyRow{ "scoped_with", R"({% block x scoped %}{% with b = 4 %}{{ p() }}{% endwith %}{% endblock %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "scoped_macro_defined_in", R"({% block x scoped %}{% macro m() %}{{ p() }}{% endmacro %}{{ m() }}{% endblock %})", {}, false,
+      "V:|B:|P:" },
+    ContextBodyRow{ "scoped_macro_from_top", R"({% macro m() %}{{ p() }}{% endmacro %}{% block x scoped %}{{ m() }}{% endblock %})", {}, false,
+      "V:m|B:|P:" },
+    ContextBodyRow{ "scoped_include", R"({% set a = 1 %}{% block x scoped %}{% include 'inc' %}{% endblock %})", { { "inc", R"({{ p() }})" } }, false,
+      "V:|B:|P:a" },
+    ContextBodyRow{ "scoped_override", R"({% extends 'base' %}{% block x %}{{ p() }}{% endblock %})", { { "base", R"({% for i in [1] %}{% block x scoped %}{% endblock %}{% endfor %})" } }, false,
+      "V:|B:|P:i,loop" },
+    ContextBodyRow{ "set_loop_top", R"({% set loop = 6 %}{{ p() }})", {}, false,
+      "V:loop|B:|P:" },
+    ContextBodyRow{ "set_loop_top_in_for", R"({% set loop = 6 %}{% for i in [1] %}{{ p() }}{% endfor %})", {}, false,
+      "V:loop|B:|P:" }
 ), [](const ::testing::TestParamInfo<ContextBodyRow>& param) { return std::string(param.param.name); });
 // clang-format on
 
