@@ -1,10 +1,10 @@
 ---
-status: open
+status: in-progress
 pr:
 priority: low
 area: parity
 depends: [0552]
-touches: [src/statements.cpp#TemplateRenderer::RenderBody]
+touches: [src/statements.cpp#TemplateRenderer::RenderBody, src/render_context.h#RenderContext::EndScopesLeftByFailure]
 shares: [test/borrowed_cells_test.cpp]
 ---
 # A block in a macro stored by a nested render that failed renders nothing
@@ -24,3 +24,9 @@ level (`KeepEndedSelf` needs the scopes the failure left above the base to be en
 
 **Done when.** A `BorrowedCellsSingle.NestedRenderThatFailsKeepsItsClosures` row with the templates above prints
 Python's output, narrow and wide, ASan clean.
+
+**As built.** `TemplateRenderer::RenderBody` calls `KeepFailedSelf` on its failure path where the context keeps
+closures (`KeepsClosures`): the scopes the failure left above the template's top level end first
+(`RenderContext::EndScopesLeftByFailure`, which now takes a context with parents' scopes), then `KeepEndedSelf` gives
+the top level's capture its `endedSelf`. Rows in `BorrowedCellsSingle.NestedRenderThatFailsKeepsItsClosures` (the
+loop row with `X` for `X<`, top level, loop, `with`, a later `set`, a stop), narrow and wide.

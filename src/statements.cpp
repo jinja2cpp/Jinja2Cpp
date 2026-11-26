@@ -4434,6 +4434,32 @@ const ClosureSite* ClosureSiteOfObject(const ValueObject& object)
 }
 } // namespace
 
+namespace
+{
+// Appends the objects of the names `site`'s capture kept of the closure's ended frames, and their `self`
+void AppendCapturedObjects(const ClosureSite& site, std::vector<const ValueObject*>& objects)
+{
+    const auto capture = site.Capture();
+    for (const auto* frame = capture.get(); frame; frame = frame->outer.get())
+    {
+        if (const auto names = frame->names.lock())
+        {
+            for (const auto& entry : *names)
+            {
+                if (const auto* object = detail::InternalValueAccess::Object(entry.second))
+                {
+                    objects.push_back(object);
+                }
+            }
+        }
+        if (const auto* object = detail::InternalValueAccess::Object(frame->endedSelf))
+        {
+            objects.push_back(object);
+        }
+    }
+}
+} // namespace
+
 bool ImportedModule::MayBeReached(const std::vector<const ImportedModule*>& candidates)
 {
     // The objects the candidates' held values hold, each with the number of those holding it
@@ -4508,6 +4534,10 @@ void ImportedModule::MarkReached(std::vector<const ValueObject*> roots, const st
                     candidates[index]->AppendHeldObjects(pending);
                 }
             }
+            // What the closure kept of its ended frames, which Traverse does not show (it is behind the callable's
+            // keep-alive): a module named there stays with the closure (docs/tasks/0567). Only from a closure reached:
+            // a copy no closure of a value that lives on reaches does not keep what it names
+            AppendCapturedObjects(*site, pending);
         }
         object->Traverse([&pending](const ValueObject* held) { pending.push_back(held); });
     }
@@ -5070,6 +5100,8 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     }
 
     auto callParams = helpers::EvaluateCallParams(call.GetParams(), values);
+    // The macro called may store `caller` where no value of the module shows it (ImportedModule::MayBeReached)
+    values.NoteOtherClosure();
     helpers::AddCallerParam(callParams, MakeCallable(values));
     if (callable->GetType() == Callable::Type::Expression)
     {

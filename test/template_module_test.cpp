@@ -825,6 +825,32 @@ TEST_F(TemplateModuleTest, MacroStoredAcrossCallsKeepsItsModule)
     EXPECT_EQ("BAM", Call(module.exports["use"], { std::string("b") }).AsString());
 }
 
+// A closure of the template module that reaches a module a call imported with context only through what it kept of
+// its ended frame keeps that module, and so does a `caller` made at a module's top level that a macro stored: X, X, X
+// and CX, CX, C5, C5 in Jinja2 3.1.6 (docs/tasks/0567)
+TEST_F(TemplateModuleTest, ClosureStoredAcrossCallsKeepsTheModuleItsCaptureNames)
+{
+    auto module = Make("{% set ns = namespace() %}"
+                       "{% macro keep() %}{% import 'a' as l with context %}{% macro inn() %}{{ l.am() }}{% endmacro %}{% set ns.f = inn %}{% endmacro %}"
+                       "{% macro use() %}{{ ns.f() }}{% endmacro %}");
+    for (int i = 0; i != 2; ++i)
+    {
+        EXPECT_EQ("", Call(module.exports["keep"]).AsString());
+        EXPECT_EQ("AM", Call(module.exports["use"]).AsString());
+        EXPECT_EQ("AM", Call(module.exports["use"]).AsString());
+    }
+    AddFile("callerlib", "{% import 'a' as x with context %}{% macro st() %}{% set ns.f = caller %}{% endmacro %}{% call st() %}C{{ x.am() }}{% endcall %}");
+    AddFile("callerlate", "{% macro st() %}{% set ns.f = caller %}{% endmacro %}{% call st() %}C{{ v }}{% endcall %}{% set v = 5 %}");
+    for (const auto& [lib, wanted] : { std::pair<const char*, const char*>{ "callerlib", "CAM" }, { "callerlate", "C5" } })
+    {
+        const std::string keep = std::string("{% macro keep() %}{% import '") + lib + "' as l with context %}{% endmacro %}";
+        auto callers = Make("{% set ns = namespace() %}" + keep + "{% macro use() %}{{ ns.f() }}{% endmacro %}");
+        EXPECT_EQ("", Call(callers.exports["keep"]).AsString()) << lib;
+        EXPECT_EQ(wanted, Call(callers.exports["use"]).AsString()) << lib;
+        EXPECT_EQ(wanted, Call(callers.exports["use"]).AsString()) << lib;
+    }
+}
+
 // A module whose top level failed partway, inside a loop and a `with`, after storing its macro, stays for that macro with
 // the scopes the failure left: G1 on each later call, as in Jinja2 3.1.6 (docs/tasks/0312, security review)
 TEST_F(TemplateModuleTest, MacroStoredByAFailedImportKeepsItsModule)

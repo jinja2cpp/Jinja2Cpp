@@ -772,7 +772,9 @@ TEST_F(ModuleCallTest, StoredMacrosStayFlat)
                               "{% import 'lib' as l with context %}{% set ns.l = [l] %}{% set ns.d = {'f': l.x} %}{{ ns.l[0].x() }}",
                               "{% import 'both' as b with context %}{% set ns.f = b.z %}{{ ns.f() }}",
                               "{% import 'own' as o with context %}{% set f = o.y %}{% set ns.n = ns.n + 1 %}{{ f() }}",
-                              "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ 1 // 0 }}" })
+                              "{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ 1 // 0 }}",
+                              // A closure that names the module only in what it kept of this call's frame (docs/tasks/0567)
+                              "{% import 'lib' as l with context %}{% macro inn() %}{{ l.x() }}{% endmacro %}{% set ns.f = inn %}{{ ns.f() }}" })
     {
         auto module = MakeModule(body, "{% set ns = namespace(f=none, n=0) %}");
         const auto& m = module.exports["m"];

@@ -900,6 +900,15 @@ public:
     // Whether such a module made a closure that is not one of its top-level names: in a call of its macro, or below its
     // top-level scope
     [[nodiscard]] bool MadeOtherClosures() const { return m_madeOtherClosures; }
+    // A closure that is no top-level name was made in this context at its top level too: a call block's `caller`, which
+    // the macro it calls may store (docs/tasks/0567)
+    void NoteOtherClosure()
+    {
+        if (m_endsWithCall)
+        {
+            m_madeOtherClosures = true;
+        }
+    }
     // The context of an included template, which ends with the include: the closures defined
     // at its top level keep the names they see (ClosureCapture), which CaptureClosures copies
     // when the include ends

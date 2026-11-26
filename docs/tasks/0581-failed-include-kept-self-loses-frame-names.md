@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: []
@@ -17,3 +17,9 @@ keep the names its escaped closures read (the failing-frame path of `CaptureClos
 block in a macro stored by a failed nested render). Also with `{{ nofn() }}` (UndefinedError) as the failure.
 
 **Done when** both rows render `[B1T1]B2` after the failed call, in narrow and wide templates.
+
+**As built.** `RenderIncludedTemplate` closes the include's closures over its names whenever it fails
+(`EndFailedFrame(innerContext, innerContext, ...)`), not only where the including context ends before the render: a
+module whose macro ran the include keeps what a later call reads. Failure path only.
+`TemplateModuleChangingSourceTest.SelfStoredByAFailedInclude` covers both stores and both failures, and the wide
+template.

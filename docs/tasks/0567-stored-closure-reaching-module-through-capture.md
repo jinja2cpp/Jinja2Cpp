@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0312]
@@ -32,3 +32,11 @@ the closure only, never from `KeptObjects` as a root, so that a copy only a dyin
 
 **Done when** the example prints `X` on `use()` as in Jinja2, `ModuleCallTest.StoredMacrosStayFlat` still holds with a
 row storing such a closure on every call, and the 0312 rows stay as they are.
+
+**As built.** `ImportedModule::MarkReached` also walks, from each closure it reaches, the names its capture kept of
+the closure's ended frames (and their `endedSelf`), along `ClosureCapture::outer` (`AppendCapturedObjects`); never from
+`KeptObjects` as a root. `MacroCallStatement::Render` notes a `caller` made in a module that ends with the call
+(`RenderContext::NoteOtherClosure`), so that `MayBeReached` looks. Rows:
+`TemplateModuleTest.ClosureStoredAcrossCallsKeepsTheModuleItsCaptureNames` (the example, a top-level `caller` naming an
+imported module and one reading a later top-level name) and a `ModuleCallTest.StoredMacrosStayFlat` row storing such a
+closure on every call.
