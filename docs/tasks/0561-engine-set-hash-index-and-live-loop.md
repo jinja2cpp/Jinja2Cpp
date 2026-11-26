@@ -3,7 +3,7 @@ status: in-progress
 priority: low
 area: robustness
 depends: [0545]
-touches: [src/value_methods.cpp#SetMethods, src/statements.cpp, src/generic_adapters.h]
+touches: [src/value_methods.cpp#SetMethods, src/set_index.h, src/internal_value.h, src/internal_value.cpp, src/generic_adapters.h, src/testers.cpp, CMakeLists.txt, test/set_index_test.cpp, test/limits_test.cpp]
 shares: [test/parity/cases/methods.py, test/parity/divergences/methods.txt]
 ---
 # The engine's set has no hash index, and a loop over a set changed in its body goes on

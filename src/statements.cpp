@@ -4454,8 +4454,12 @@ namespace
 void AppendCapturedObjects(const ClosureSite& site, std::unordered_set<const ClosureCapture*>& walked, std::vector<const ValueObject*>& objects)
 {
     const auto capture = site.Capture();
-    for (const auto* frame = capture.get(); frame && walked.insert(frame).second; frame = frame->outer.get())
+    for (const auto* frame = capture.get(); frame; frame = frame->outer.get())
     {
+        if (!walked.insert(frame).second)
+        {
+            return;
+        }
         if (const auto names = frame->names.lock())
         {
             for (const auto& entry : *names)
