@@ -978,6 +978,52 @@ TEST_F(TemplateModuleChangingSourceTest, BlockOfASharedModuleKeepsTheSlots)
     EXPECT_EQ((std::vector<std::string>{ "B1C0", "B1C1", "B1C2", "B1C3" }), results);
 }
 
+// A block an extending include stored (`self.b`, `self.c`, `super`) still runs the first tree after the calls that
+// replaced it, as Jinja2 keeps the old Template (docs/tasks/0580; 3.1.6 make_module() results)
+TEST_F(TemplateModuleChangingSourceTest, StoredBlockOfAnExtendingInclude)
+{
+    AddFile("base", "{% block b %}BASE{% endblock %}{% block c %}C0{% endblock %}");
+    const std::string main = "{% set ns = namespace(f=none) %}{% macro m() %}[{% if ns.f %}{{ ns.f() }}{% endif %}]{% include 'lib' %}{% endmacro %}";
+    const std::vector<std::string> tail = { "{% block b %}B2{% endblock %}", "{% block b %}B3{% endblock %}", "{% block b %}B4{% endblock %}" };
+    const std::pair<const char*, const char*> stores[] = { { "self.b", "XBASE" }, { "self.c", "C0" }, { "super", "BASE" } };
+    for (const auto& [store, stored] : stores)
+    {
+        std::vector<std::string> libs = { std::string("{% extends 'base' %}{% block b %}X{{ super() }}{% set ns.f = ") + store + " %}{% endblock %}" };
+        libs.insert(libs.end(), tail.begin(), tail.end());
+        const std::string kept = std::string("[") + stored + "]";
+        EXPECT_EQ((std::vector<std::string>{ "[]XBASEC0", kept + "B2", kept + "B3", kept + "B4" }), CallWithLibs(main, libs)) << store;
+    }
+}
+
+// A `self` an include stored before it failed reads the include's names on the later calls (docs/tasks/0581; 3.1.6
+// make_module() results)
+TEST_F(TemplateModuleChangingSourceTest, SelfStoredByAFailedInclude)
+{
+    const std::string main = "{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}";
+    for (const char* store : { "{% set l = [self] %}{% set ns.s = l[0] %}", "{% set ns.s = self %}" })
+    {
+        for (const char* failure : { "{{ 1 // 0 }}", "{{ nofn() }}" })
+        {
+            AddFile("lib", std::string("{% set t = 'T1' %}{% block b %}B1{{ t }}{% endblock %}") + store + failure);
+            auto module = Make(main);
+            EXPECT_THROW(Call(module.exports["m"]), jinja2::BadResultAccess<>) << store << failure;
+            for (const char* block : { "B2", "B3" })
+            {
+                AddFile("lib", std::string("{% block b %}") + block + "{% endblock %}");
+                EXPECT_EQ(std::string("[B1T1]") + block, Call(module.exports["m"]).AsString()) << store << failure;
+            }
+        }
+    }
+    // The wide template
+    AddFile("lib", "{% set t = 'T1' %}{% block b %}B1{{ t }}{% endblock %}{% set ns.s = self %}{{ 1 // 0 }}");
+    jinja2::TemplateW tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load(L"{% set ns = namespace(s=none) %}{% macro m() %}[{% if ns.s %}{{ ns.s.b() }}{% endif %}]{% include 'lib' %}{% endmacro %}"));
+    auto module = tpl.MakeModule().value();
+    EXPECT_THROW(Call(module.exports["m"]), jinja2::BadResultAccess<wchar_t>);
+    AddFile("lib", "{% block b %}B2{% endblock %}");
+    EXPECT_EQ(L"[B1T1]B2", Call(module.exports["m"]).AsWString());
+}
+
 TEST_F(TemplateModuleChangingSourceTest, StoredSuperRunsItsOldParent)
 {
     AddFile("base", "<{% block b %}B{% endblock %}>");

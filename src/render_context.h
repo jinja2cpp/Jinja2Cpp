@@ -1370,20 +1370,22 @@ public:
     }
     // Ends the scopes above the first `scopes` that a failure left, with the views on them, innermost first: the
     // closures defined there keep the names the scopes held, as Jinja2 never reaches their ends (FrameEnd::Stopped).
-    // For a render that fails while an outer one may still call its closures (docs/tasks/0525): its own context or a
-    // module's, which see no other context's scopes, so that `scopes` counts theirs. Throws std::bad_alloc
+    // For a render that fails while an outer one may still call its closures (docs/tasks/0525): its own context, a
+    // module's, or a template's above its top level (docs/tasks/0560). Throws std::bad_alloc
     void EndScopesLeftByFailure(size_t scopes)
     {
-        JINJA2CPP_ASSERT(m_parentDepth == 0);
+        // `scopes` counts the parents' scopes too (GetScopesCount); the views count this context's own
+        JINJA2CPP_ASSERT(scopes >= m_parentDepth);
+        const size_t own = scopes - m_parentDepth;
         auto views = m_views.size();
-        while (views != 0 && m_views[views - 1].scopeIndex >= scopes)
+        while (views != 0 && m_views[views - 1].scopeIndex >= own)
         {
             --views;
         }
         TruncateViews(views);
-        while (m_scopes.size() > scopes)
+        while (m_scopes.size() > own)
         {
-            CaptureClosures(FrameEnd::Stopped(m_scopes.size()));
+            CaptureClosures(FrameEnd::Stopped(GetScopesCount()));
             ExitScope();
         }
     }
