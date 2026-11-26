@@ -51,3 +51,4 @@ compile_commands.json
 bench/rust/target/
 tla/tla2tools.jar
 tla/apalache
+tla/apalache-*/

@@ -9,16 +9,35 @@ EXTENDS CellApalache
 
 Safety == SnapshotStable /\ NoCrossThreadWrite /\ NoUseAfterFree /\ NoForeignCell
           /\ RegistryBounded /\ AliasesAgree /\ NoUndefItems /\ LiveCount
-          /\ ExportKeepsCallState /\ NoLostWrites
+          /\ ExportKeepsCallState /\ NoLostWrites /\ NoTornStep /\ NestedGlobalKept
+          /\ CallScopedBounded
 
-\* Probes of the encoding's cost
-NextStart == \E t \in Threads : StartModCall(t)
-NextEnd == \E t \in Threads : EndModCall(t)
+\* One action of Next each: `apalache.py inductive --next NextXxx` checks one inductive step per
+\* action, which is far cheaper than one of the whole Next (README, "Past the bounds")
 NextGC == GC
 NextDrop == DropUnheld
-NextUse == \E t \in Threads : \E a \in AdIds : Write(t, a, "append") \/ Read(t, a) \/ Export(t, a)
-NextSG == NextStart \/ NextUse \/ NextGC
-NextSE == NextStart \/ NextUse \/ NextEnd
+NextStartRender == \E t \in Threads : StartRender(t)
+NextStart == \E t \in Threads : StartModCall(t)
+NextFinSources == \E t \in Threads : FinishSources(t)
+NextFinFreeze == \E t \in Threads : FinishFreeze(t)
+NextEnd == \E t \in Threads : EndModCall(t)
+NextEnumStep == \E t \in Threads : EnumStep(t)
+NextSortEnd == \E t \in Threads : SortEnd(t)
+NextAppend == \E t \in Threads : \E a \in AdIds : Write(t, a, "append")
+NextTouch == \E t \in Threads : \E a \in AdIds : Write(t, a, "touch")
+NextPop == \E t \in Threads : \E a \in AdIds : Write(t, a, "drop")
+NextRead == \E t \in Threads : \E a \in AdIds : Read(t, a)
+NextExport == \E t \in Threads : \E a \in AdIds : Export(t, a)
+NextKeepList == \E t \in Threads : \E a \in AdIds : KeepList(t, a)
+NextStoreNs == \E t \in Threads : \E a \in AdIds : StoreNs(t, a)
+NextEnumStart == \E t \in Threads : \E a \in AdIds : EnumStart(t, a)
+NextSortStart == \E t \in Threads : \E a \in AdIds : SortStart(t, a)
+NextLend == \E t \in Threads : \E a \in AdIds : LendGItem(t, a, TRUE) \/ LendGItem(t, a, FALSE)
+NextEvict == \E t \in Threads : \E a \in AdIds : Evict(t, a)
+NextForget == \E t \in Threads : \E a \in AdIds : Forget(t, a)
+NextRelease == \E t \in Threads : "release" \in Actions /\ \E e \in ExIds : Release(t, e)
+NextLetGo == \E o \in OwnedAddrs : HostLetsGo(o)
+NextJson == HostChangesJson
 
 -----------------------------------------------------------------------------
 (* Types: the shape of every variable. IndInit starts from any such state *)
@@ -30,6 +49,7 @@ RegOk(r) == r \in RegIds
 AdOk(A) ==
     /\ A.idn \in Keys \cup {"none"} /\ A.inc >= 0 /\ A.held \in BOOLEAN /\ A.generic \in BOOLEAN
     /\ A.cell \in Ids(MaxCell) /\ (A.seen = ATT \/ A.seen \in 0..MaxEpoch) /\ A.alive \in BOOLEAN
+    /\ A.snap \in BOOLEAN /\ A.blk \subseteq AdIds
 \* @type: ($cell) => Bool;
 CellOk(C) ==
     /\ C.idn \in Keys \cup {"none"} /\ C.inc >= 0 /\ RegOk(C.reg)
@@ -88,7 +108,8 @@ NoState == FALSE
 
 \* Any state of the right shape: Apalache's Gen picks its values, TypeOK constrains them. Gen
 \* takes a literal: tla/apalache.py passes the sizes of the domains of the scope (IndInit in MCApalache): Gen(n) bounds
-\* every set and function inside the value by n
+\* every set and function inside the value by n. MCApalache adds the hypothesis: IndInv, or for a
+\* cheaper query a part of it (apalache.py --hyp)
 IndInitOf(NAd, NCell, NGen, NReg, NFr, NEx, NThreads, NOwned, NWr) ==
     /\ epoch = Gen(1) /\ live = Gen(1) /\ ad = Gen(NAd) /\ nAd = Gen(1) /\ cl = Gen(NCell)
     /\ nCell = Gen(1) /\ st = Gen(NGen) /\ nGen = Gen(1) /\ rg = Gen(NReg)
@@ -98,7 +119,6 @@ IndInitOf(NAd, NCell, NGen, NReg, NFr, NEx, NThreads, NOwned, NWr) ==
     /\ inc = Gen(NOwned + 1) /\ fails = Gen(1) /\ dirty = Gen(1)
     /\ dirtyBy = Gen(1) /\ pendDrop = Gen(1) /\ wr \in [Objs -> SUBSET (Threads \X BOOLEAN)] /\ flag = Gen(1)
     /\ TypeOK
-    /\ IndInv
 
 
 =============================================================================

@@ -418,8 +418,10 @@ on, the C++; the three mutants find their counterexamples again in 2 to 49 secon
 
 Step F was to replace "bounded" with inductive invariants checked by Apalache plus a cutoff
 argument for the sizes. Apalache now runs the model, but the inductive check is out of reach as
-the spec is written, so the mechanized proof is task 0363. This section records what was built,
-what it costs, and the argument that stands in for the proof.
+the spec is written. Task 0363 measured it again and closed it without the proof (see "The
+inductive proof: why the exhaustive runs are the answer" below); the proof itself is task 0591.
+This section records what was built, what it costs, and the argument that stands in for the
+proof.
 
 **Running Apalache.**
 
@@ -428,8 +430,10 @@ curl -sSL https://github.com/apalache-mc/apalache/releases/download/v0.51.1/apal
 ln -s apalache-0.51.1 tla/apalache
 python3 tla/apalache.py typecheck
 python3 tla/apalache.py bounded --length 3 --scope module --set MaxAd=6 MaxCell=2 MaxGen=3 MaxEx=1
-python3 tla/apalache.py inductive --inv NoLostWrites ...   # IndInv /\ Next => NoLostWrites'
-python3 tla/apalache.py sat ...                            # IndInv has a state at all
+python3 tla/apalache.py init ...                           # Init => IndInv
+python3 tla/apalache.py sat ...                            # IndInit has a state at all
+python3 tla/apalache.py inductive --next NextRead --inv NoForeignCell ...  # IndInv /\ Read => NoForeignCell'
+python3 tla/apalache.py sweep --jobs 2 --timeout 600 ...   # every NextXxx against every part of IndInv
 ```
 
 `apalache.py` takes the constants from a `check.py` run (`--scope`, `--set`), so both tools
@@ -438,8 +442,11 @@ checked to occur once: `InBound` (TLC's level; Apalache bounds the length itself
 `RECURSIVE` `Close` (a fold of a reached flag per object, one round per object, since the
 fixed point of a set of tuples ran out of memory) and the `EXTENDS`. The types are in
 `CellApalache.tla` and in `\* @type:` comments in `CellProtocol.tla`, which TLC ignores.
-`CellInductive.tla` has `TypeOK`, `IndInv` (so far `WellFormed /\ Safety`) and `IndInit`, any
-state of the right shape.
+`CellInductive.tla` has `TypeOK`, `IndInv` (so far `WellFormed /\ Safety`), `IndInit` (any
+state of the right shape, plus a hypothesis: `IndInv`, or a part of it with `--hyp`) and one
+`NextXxx` per action of `Next`. `sweep` splits `IndInv` into its named conjuncts and checks each
+action against each, one query apiece (`--actions`, `--parts` narrow it). Run `sat` after a change:
+an `IndInit` with no state makes every inductive query pass.
 
 **What it costs.** On the smallest module scope (6 adapters, 2 cells, 3 storages, 1 export):
 
@@ -454,7 +461,8 @@ state of the right shape.
 An inductive invariant is found by strengthening `IndInv` from the counterexamples of that
 last row, typically dozens of rounds, and the result would still hold for these sizes only.
 The costs come from the symbolic encoding of indirect function reads (`cl[ad[a].cell].stor`)
-and of `GC`, which every step may take. What would make it tractable is in task 0363.
+and of `GC`, which every step may take. Task 0363 measured them again, per action and per part
+(below).
 
 **The model found one defect on the way.** `DropUnheld`'s branch with no candidate set
 `lag' = {}` while its trailing `UNCHANGED` kept `lag`, so the step was enabled only when `lag`
@@ -547,6 +555,62 @@ makes, so they are a length bound in another form. No cutoff is claimed for them
 Every pass invariant, `WellFormed` included, holds in each. They are level-bounded like the
 rest, so they test the argument's assumptions rather than prove them.
 
+### The inductive proof: why the exhaustive runs are the answer (task 0363)
+
+Task 0363 came back to the proof with the harness repaired and one query per action. It closes
+with the exhaustive runs and the cutoff argument as the answer, and files the proof itself as
+task 0591. The reasons, in order:
+
+1. **For fixed constants the proof adds nothing the exhaustive runs lack.** Every scope is finite
+   ("Depth: every scope is finite"), so a run that reaches its fixed point has checked every
+   behaviour of its constants at any length: what `IndInv /\ Next => IndInv'` would show for
+   them. An Apalache proof also holds only for the bounds it is checked at; only a TLAPS proof
+   would reach every size, and that is a larger project than this model's role as a design tool
+   (Ruslan, 2026-10-30; the implementation is checked by 0364).
+2. **The proof does not fit a session.** Measured on the smallest module scope (6/2/2/1), the
+   repaired harness and `apalache.py sweep`, two queries at a time on 4 cores:
+
+   | Query | Time or result |
+   |---|---|
+   | `IndInv /\ StoreNs => WellFormed'`, one query | over 15 min, stopped |
+   | the same, one query per `WFXxx` part | 22 s each |
+   | `IndInv` as the hypothesis rather than `WellFormed` | 32 s |
+   | `StoreNs`, `Release`, `Export` against each of the 20 parts of `IndInv` | 59 of 60 hold, 30 s to 3 min |
+   | `Read` against the first 10 parts | 6 hold, 1 to 6 min; the other 4 below |
+   | `Export => WFTable'`, `Read => WFCell'`, `WFTable'`, `SnapshotStable'` | over 10 min, stopped |
+   | `Read => NoForeignCell'` | counterexample to induction in 89 s |
+
+   The split is the lever: a conjunction in one goal costs far more than its parts. What stays
+   slow is a read through an adapter (`cl[ad[a].cell]`, `rg[r].tbl[k]`), as 0338 F found. The
+   counterexample is a state no behaviour reaches, an adapter of `O1` attached to a cell of
+   `O2` in a render's registry of a scope without renders: `IndInv` lacks "an attached adapter's
+   cell is of its data, in a registry its frame may use". Each such lemma is a new part that
+   every action must preserve: a sweep of the module scope is about 260 queries, 4 to 8 hours
+   at these speeds, and the proof needs many rounds before `Start`, `End`, `GC` and `DropUnheld`,
+   the costly actions, are reached. Task 0591 has the plan: lemmas from the counterexamples,
+   the flattening of indirect reads, and a heap lemma for `GC`.
+3. **The cutoff gaps that runs can close are closed** (the runs below). What is left is on paper:
+   the thread reduction of "Sizes: the cutoff argument", which a TLAPS proof would mechanize.
+
+**The cutoff runs of task 0363** (exhaustive: each reached its fixed point with no error, every
+pass invariant, `WellFormed` included; 4 cores shared with Apalache, so the times are high):
+
+| Run | Change | States | Fixed point at depth | Time |
+|---|---|---|---|---|
+| `threads-exhaustive` | `MaxDepth=2`: a module call moved into another thread's render runs nested in it | 219,938 | 26 | 48 s |
+| `threads-module-exhaustive` | `MaxDepth=2` | 19,304,429 | 33 | 50 min |
+| `module-0332-exhaustive` | `OwnedAddrs` O1-O3: as many addresses as calls | 13,018,093 | 27 | 31 min |
+
+The first two are the depth one higher that the thread reduction needs, for renders with the
+locked module and for module calls nested through callbacks on both threads. The identity cutoff
+is exact for these bounds: each module call takes one address and two adapters, so a behaviour
+of `MaxAd / 2` calls names at most that many addresses, and with as many in `OwnedAddrs` renaming
+covers every behaviour (the protocol compares identities only for equality). Three addresses
+for three calls is therefore every identity behaviour of `module-0332`'s bounds, not a sample.
+The other exhaustive module scopes keep two addresses for three or four calls, which stays
+partial in identities; at about four times the states per added address they would not fit the
+weekly shard.
+
 ## What the results claim
 
 Bounded evidence, not a proof. Each pass run covers every behaviour up to its level within its
@@ -554,7 +618,8 @@ bounds, under sequentially consistent interleavings of the steps listed above. E
 finite, so a run without the level bound that completes covers every behaviour of its scope:
 the exhaustive runs do that for small allocation bounds, and the simulation samples deeper
 behaviours of the larger ones (task 0351); the cutoff argument above, on paper, carries the results to more threads and
-identities, with the limits it states. The mechanized inductive proof is task 0363. The path
+identities, with the limits it states. Task 0363 closed the mechanized proof on that basis
+(above); the proof itself is task 0591. The path
 from here to a safety argument for the implementation is task 0338.
 
 ## Not modelled
