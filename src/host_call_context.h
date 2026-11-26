@@ -14,7 +14,7 @@ namespace jinja2
 {
 inline namespace v2
 {
-class CallParams;
+struct CallParams;
 class InternalValue;
 class RenderContext;
 
