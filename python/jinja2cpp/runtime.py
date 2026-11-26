@@ -162,9 +162,13 @@ def _make_eval_context(environment: t.Any, autoescape: bool) -> EvalContext:
     return ctx
 
 
-# The parts of the render a context handle looks a name up in (ContextHandle::Part): Context.vars, Context.parent
+# The parts of the render a context handle looks a name up in (ContextHandle::Part): Context.vars, Context.parent, the
+# names a `set` stored in the loop or block body of the call (Jinja2's _loop_vars, _block_vars), and a lookup of the
+# three as Context.resolve makes it
 _VARS = 1
 _PARENT = 2
+_BODY = 3
+_RESOLVE = 4
 
 
 class Context:
@@ -172,9 +176,9 @@ class Context:
 
     It is lent for the call: using it after the call returned raises TemplateRuntimeError.
     As Jinja2's, ``vars`` holds the names the template's top level binds and ``parent`` the render
-    arguments and globals; a loop variable, a ``with`` name or a macro's local is in neither. A lookup
-    (``get``, ``resolve``, ``ctx[name]``) also finds the names of the loops, ``with`` blocks and macros
-    around the call, where Jinja2's finds only those a ``set`` in a loop or block body stored.
+    arguments and globals; a loop variable, a ``with`` name or a macro's local is in neither. A call written
+    in a loop or block body after a ``set`` there gets Jinja2's derived context: ``vars`` empty, and the
+    names that ``set`` stored on top of the others in ``parent``.
     """
 
     def __init__(
@@ -194,9 +198,7 @@ class Context:
     def resolve_or_missing(self, key: str) -> t.Any:
         if not isinstance(key, str):
             return missing
-        # Every name the call site sees: Jinja2's loop and block bodies hand a call the names a `set` there stored, which
-        # the engine does not tell from a loop's targets (task 0558)
-        found, value = self._handle.lookup(key)
+        found, value = self._handle.lookup(key, _RESOLVE)
         return value if found else missing
 
     def resolve(self, key: str) -> t.Union[t.Any, Undefined]:
@@ -227,8 +229,25 @@ class Context:
     def get_all(self) -> t.Dict[str, t.Any]:
         return {**self.parent, **self.vars}
 
+    def _part(self, part: int) -> t.Dict[str, t.Any]:
+        result = {}
+        for key in self._handle.names(part):
+            found, value = self._handle.lookup(key, part)
+            if found:
+                result[key] = value
+        return result
+
     @property
     def parent(self) -> t.Dict[str, t.Any]:
+        result = self._own_parent()
+        body = self._part(_BODY)
+        if body:
+            # Jinja2's Context.call: context.derived(_loop_vars), whose parent is the old get_all() with those on top
+            result.update(self._part(_VARS))
+            result.update(body)
+        return result
+
+    def _own_parent(self) -> t.Dict[str, t.Any]:
         names = self._handle.names(_PARENT)
         names.extend(self.environment.globals)
         if self._template_globals:
@@ -243,12 +262,8 @@ class Context:
 
     @property
     def vars(self) -> t.Dict[str, t.Any]:
-        result = {}
-        for key in self._handle.names(_VARS):
-            found, value = self._handle.lookup(key, _VARS)
-            if found:
-                result[key] = value
-        return result
+        # A derived context's vars are empty (parent)
+        return {} if self._handle.names(_BODY) else self._part(_VARS)
 
     @property
     def exported_vars(self) -> t.Set[str]:

@@ -158,8 +158,64 @@ def make_split_env(module):
 )
 def test_context_splits_top_level_names_from_arguments(source):
     # Context.vars holds the template's top-level names, Context.parent its arguments and globals, and a loop variable,
-    # a with name or a macro's local is in neither (task 0416). A lookup of one of those finds it, unlike Jinja2's (0558)
+    # a with name or a macro's local is in neither (task 0416)
     both(make_split_env, source, w=2)
+
+
+def make_body_env(module):
+    @module.pass_context
+    def p(ctx):
+        names = ("a", "b", "c", "i", "w", "loop", "_b")
+        return (
+            f"vars={sorted(k for k in ctx.vars if k != 'p')} i={ctx.get('i')!r} b={ctx.get('b')!r} loop={'loop' in ctx} "
+            f"parent={sorted(k for k in ctx.parent if k in names)} keys={sorted(k for k in ctx.keys() if k in names)}"
+        )
+
+    @module.pass_context
+    def pf(ctx, value):
+        return f"{value}:{sorted(k for k in ctx.vars if k not in ('p', 'pf'))}:{ctx.get('b')!r}"
+
+    env = module.Environment(loader=module.DictLoader({"base": "{% for i in [1] %}{% block x scoped %}{% endblock %}{% endfor %}"}))
+    env.globals["p"] = p
+    env.filters["pf"] = pf
+    return env
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        # The task's probe rows
+        "{% set a = 1 %}{% for i in [1] %}{{ p() }}{% endfor %}",
+        "{% set a = 1 %}{% for i in [1] %}{% set b = 2 %}{{ p() }}{% endfor %}",
+        "{% set a = 1 %}{% block x %}{% set b = 1 %}{{ p() }}{% endblock %}",
+        "{% with w = 3 %}{% set b = 2 %}{{ p() }}{% endwith %}",
+        # A body's names count from its `set` on, in each pass
+        "{% set b = 9 %}{% for i in [1, 2] %}{{ p() }}{% set b = i %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% if true %}{% set b = 2 %}{% endif %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% set b = 2 %}{% if true %}{{ p() }}{% endif %}{{ p() if true }}{% endfor %}",
+        "{% for i in [1] %}{% set b = 2 %}{% with %}{{ p() }}{% endwith %}{% filter upper %}{{ p() }}{% endfilter %}{% endfor %}",
+        "{% for i in [1] %}{% set i = 5 %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% set _b = 2 %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% set b, c = 1, 2 %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% set b %}x{% endset %}{{ p() }}{% endfor %}",
+        "{% block x %}{% set b = 1 %}{% for i in [1] %}{{ p() }}{% endfor %}{% endblock %}",
+        "{% macro m() %}{% for i in [1] %}{% set b = 1 %}{{ p() }}{% endfor %}{% endmacro %}{{ m() }}",
+        "{% macro m(i) %}{% set b = 1 %}{{ p() }}{% endmacro %}{{ m(3) }}",
+        "{% for i in [1] %}{% set b = 2 %}{% for j in [1] %}{{ p() }}{% endfor %}{% endfor %}",
+        "{% for i in [1] %}{% set b = 2 %}{{ 'v'|pf }}{% endfor %}",
+        "{% set loop = 6 %}{{ p() }}",
+        # A scoped block's context is derived from the names its call site sees
+        "{% set a = 1 %}{% block x scoped %}{{ p() }}{% endblock %}",
+        "{% for i in [1] %}{% block x scoped %}{{ p() }}{% endblock %}{% endfor %}",
+        "{% for i in [1] %}{% set b = 2 %}{% block x scoped %}{{ p() }}{% endblock %}{% endfor %}",
+        "{% for i in [1] %}{% block x scoped %}{% set b = 3 %}{{ p() }}{% endblock %}{% endfor %}",
+        "{% extends 'base' %}{% block x %}{{ p() }}{% endblock %}",
+    ],
+)
+def test_context_of_calls_in_loop_and_block_bodies(source):
+    # Jinja2's Context.call hands a call written in a loop or block body, after a `set` there, context.derived(the names
+    # those stored), and a scoped block gets context.derived(locals()) (task 0558)
+    both(make_body_env, source, w=2)
 
 
 def test_context_in_included_and_imported_templates():

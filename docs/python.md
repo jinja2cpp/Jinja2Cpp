@@ -571,12 +571,14 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   for an error a callable raised, and the line of a syntax error.
 - The `Context` a `pass_context` callable gets holds, as Jinja2's, the template's top-level names in
   `vars` and its arguments and globals in `parent` (and in `keys()`, `items()`, `get_all()`), with no
-  loop variable, `{% with %}` name or macro local (0416). A lookup (`get`, `resolve`, `ctx[name]`)
-  still finds the names of the loops, `with` blocks and macros around the call, where Jinja2's finds
-  only those a `{% set %}` in a loop or block body stored, and Jinja2 hands a call in such a body,
-  and in a `scoped` block, a derived context (`vars` empty, the outer names in `parent`) (0558).
-  `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and `exported_vars` (empty) are not
-  there.
+  loop variable, `{% with %}` name or macro local (0416). A call written in a loop or block body after
+  a `{% set %}` there, and any call in a `scoped` block, gets Jinja2's derived context (`vars` empty, the
+  names the body stored and the block's call site sees on top in `parent`). When a body both sets a
+  name and defines a macro or imports a name under it, the context shows the name's current value,
+  where Jinja2's shows the value the `set` stored; and a call in a loop body after an inner loop that
+  set names sees the outer body's names, where Jinja2's sees the inner loop's last pass (its
+  `_loop_vars` is one variable the inner loop overwrote). `eval_ctx.volatile` is always False.
+  `Context.derived`, `blocks` and `exported_vars` (empty) are not there.
 - A Python callable gets Python's own `range` and `dict` for the template's globals, and Jinja2's
   `jinja2.utils.Cycler`, `Joiner`, `Namespace` and `generate_lorem_ipsum` for `cycler`, `joiner`, `namespace` and
   `lipsum`, as Jinja2 passes them (when Jinja2 is not installed, those four are lent as the other template callables
