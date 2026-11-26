@@ -815,7 +815,9 @@ void SetupGlobals(InternalValueMap& globalParams)
         // Every render has a callback (TemplateImpl::Render)
         return CallLipsum(params, context.GetRendererCallback()->GetRandomEngine());
     });
-    lipsum.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__name__", InternalValue(std::string("generate_lorem_ipsum")) } }));
+    lipsum.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__name__", InternalValue(std::string("generate_lorem_ipsum")) },
+                                                                                     { "__qualname__", InternalValue(std::string("generate_lorem_ipsum")) },
+                                                                                     { "__module__", InternalValue(std::string("jinja2.utils")) } }));
     globalParams.emplace("lipsum", std::move(lipsum));
 }
 } // namespace

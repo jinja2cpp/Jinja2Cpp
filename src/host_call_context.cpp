@@ -266,6 +266,17 @@ std::optional<LentCallableInfo> DescribeLentCallable(const UserCallable& callabl
     // The repr a template's {{ x|pprint }} prints (ValueRendererBase), and Python's type of it
     visitors::RenderValue(*lent, info.repr, true);
     info.typeName = visitors::PythonTypeName(*fn);
+    // A global that is Python's own object holds its names (SetupGlobals); a macro or a bound method has neither
+    if (const auto& attributes = fn->GetAttributes(); attributes && fn->GetKind() != Callable::Macro && !fn->GetBoundReceiver())
+    {
+        const auto module = attributes->find("__module__");
+        const auto qualname = attributes->find("__qualname__");
+        if (module != attributes->end() && qualname != attributes->end() && IsStringValue(module->second) && IsStringValue(qualname->second))
+        {
+            info.pythonModule = AsString(module->second);
+            info.pythonQualname = AsString(qualname->second);
+        }
+    }
     return info;
 }
 } // namespace v2

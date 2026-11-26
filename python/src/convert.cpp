@@ -346,6 +346,32 @@ struct Memo
 
 nb::object ToPythonImpl(const Value& value, Memo& memo);
 
+// Python's own object for a global the engine lent (`range` is builtins.range, `cycler` jinja2.utils.Cycler, `lipsum`
+// jinja2.utils.generate_lorem_ipsum), as Jinja2 passes them (docs/tasks/0559); none for any other callable, and when
+// the module that holds it does not import (Jinja2 not installed)
+nb::object LentGlobalToPython(const Value& value, const jinja2::UserCallable& callable)
+{
+    auto info = jinja2::DescribeLentCallable(callable);
+    if (!info || info->pythonModule.empty())
+    {
+        return {};
+    }
+    auto module = nb::steal(PyImport_ImportModule(info->pythonModule.c_str()));
+    if (!module)
+    {
+        PyErr_Clear();
+        return {};
+    }
+    auto object = nb::steal(PyObject_GetAttrString(module.ptr(), info->pythonQualname.c_str()));
+    if (!object)
+    {
+        PyErr_Clear();
+        return {};
+    }
+    LeaseScope::NoteLentGlobal(object, value);
+    return object;
+}
+
 nb::object WrapTemplateValue(const Value& value)
 {
     return nb::cast(new TemplateValue(value), nb::rv_policy::take_ownership);
@@ -594,6 +620,10 @@ nb::object ToPythonImpl(const Value& value, Memo& memo)
                 {
                     return nb::borrow(own->object);
                 }
+                if (auto global = LentGlobalToPython(value, *data))
+                {
+                    return global;
+                }
                 return WrapTemplateValue(value);
             }
             else
@@ -755,6 +785,30 @@ LeaseScope::~LeaseScope()
         m_lease->active = false;
         m_lease->context = Value();
     }
+}
+
+void LeaseScope::NoteLentGlobal(nb::handle python, const jinja2::Value& lent)
+{
+    if (auto* scope = t_lease; scope && !LentGlobalOf(python.ptr()))
+    {
+        scope->m_lentGlobals.emplace_back(nb::borrow(python), lent);
+    }
+}
+
+const jinja2::Value* LeaseScope::LentGlobalOf(PyObject* python) noexcept
+{
+    // The calls around this one still run: what they were lent is still the template's
+    for (const auto* scope = t_lease; scope; scope = scope->m_outer)
+    {
+        for (const auto& [object, lent] : scope->m_lentGlobals)
+        {
+            if (object.ptr() == python)
+            {
+                return &lent;
+            }
+        }
+    }
+    return nullptr;
 }
 
 std::shared_ptr<CallLease> LeaseScope::Current()
@@ -1064,6 +1118,12 @@ auto Classify(nb::handle handle, Sink&& sink)
     if (IsUndefinedType(Py_TYPE(object)))
     {
         return sink.Engine(UndefinedToEngine(object));
+    }
+    // Python's `range` (or `jinja2.utils.Cycler`, ...) that a running call was given for the template's own goes back
+    // as the template's (LentGlobalToPython)
+    if (const auto* global = LeaseScope::LentGlobalOf(object))
+    {
+        return sink.Engine(*global);
     }
     return sink.Host(handle);
 }

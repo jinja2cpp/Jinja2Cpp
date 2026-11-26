@@ -75,6 +75,46 @@ def test_a_lent_engine_callable_prints_as_jinja2s(source, show):
     both(make_env, source, f=show)
 
 
+@pytest.mark.parametrize("name", ["range", "dict", "cycler", "joiner", "namespace", "lipsum"])
+def test_a_lent_global_is_pythons_own_object(name):
+    # Jinja2 passes Python's own range, dict and jinja2.utils objects, and the object a Python callable gives back is the
+    # template's global again (task 0559)
+    import builtins
+
+    import jinja2.utils
+
+    objects = (builtins.range, builtins.dict, jinja2.utils.Cycler, jinja2.utils.Joiner, jinja2.utils.Namespace)
+    objects += (jinja2.utils.generate_lorem_ipsum,)
+    both(make_env, f"{{{{ f({name}) }}}}", f=lambda x: f"{type(x).__name__} {any(x is o for o in objects)}")
+    both(make_env, f"{{{{ f({name}) is sameas {name} }}}}", f=lambda x: x)
+    both(make_env, f"{{{{ (f({name}), {name})|map('pprint')|unique|list|length }}}}", f=lambda x: x)
+
+
+def test_a_lent_global_read_through_the_context_is_pythons_own_object():
+    @jinja2cpp.pass_context
+    def get(ctx):
+        return ctx.get("range") is range and ctx["dict"] is dict
+
+    env = jinja2cpp.Environment()
+    env.globals["get"] = get
+    assert env.from_string("{{ get() }}").render() == "True"
+
+
+def test_python_range_given_back_after_the_call_stays_pythons():
+    # Past the call it was lent to, Python's range is a Python object to the template, which calls it as Jinja2 does;
+    # `back() is sameas range` is True in Jinja2 only (task 0583)
+    kept = []
+
+    def keep(x):
+        kept.append(x)
+        return ""
+
+    source = "{{ keep(range) }}{{ back()(2)|list }} {{ back() is sameas range }}"
+    assert jinja2cpp.Template(source).render(keep=keep, back=lambda: kept[0]) == "[0, 1] False"
+    kept.clear()
+    assert jinja2.Template(source).render(keep=keep, back=lambda: kept[0]) == "[0, 1] True"
+
+
 def test_lipsum_lent_to_python_prints_as_a_function():
     out = jinja2cpp.Template("{{ f(lipsum) }}").render(f=repr)
     assert out.startswith("<function generate_lorem_ipsum at 0x"), out

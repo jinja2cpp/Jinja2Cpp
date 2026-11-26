@@ -577,9 +577,14 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   and in a `scoped` block, a derived context (`vars` empty, the outer names in `parent`) (0558).
   `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and `exported_vars` (empty) are not
   there.
-- A template callable a Python callable gets (`range`, a macro, `loop.cycle`) prints as Jinja2's object
-  does (0439), but its `type()` is the module's `TemplateValue` and `f(range) is range` is False: Jinja2
-  passes Python's own `range`, `dict` and `jinja2.utils` classes (0559).
+- A Python callable gets Python's own `range` and `dict` for the template's globals, and Jinja2's
+  `jinja2.utils.Cycler`, `Joiner`, `Namespace` and `generate_lorem_ipsum` for `cycler`, `joiner`, `namespace` and
+  `lipsum`, as Jinja2 passes them (when Jinja2 is not installed, those four are lent as the other template callables
+  are). Given back while that call runs, such an object is the template's global again (`f(range) is sameas range`);
+  given to the template elsewhere (`render(r=range)`, or kept and given back later), it stays Python's, so that
+  `r is sameas range` is False, where Jinja2's is True (0583). Calling `cycler` or `namespace` in Python makes
+  Jinja2's object, a Python object to the template. A macro or `loop.cycle` prints as Jinja2's object does (0439), but
+  its `type()` is the module's `TemplateValue`, as the module has no `jinja2.runtime.Macro`.
 - Sandbox (0412, 0413, 0414): `intercepted_binops` and `intercepted_unops` raise
   `UnsupportedError` (Jinja2's `test_binary_operator_intercepting` and
   `test_unary_operator_intercepting` are `xfail`). A public name of the engine's own values

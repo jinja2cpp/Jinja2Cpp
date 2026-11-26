@@ -457,6 +457,12 @@ struct LentCallableInfo
     //! The name of its Python type: `type` for a class among the globals (`range`, `dict`, `cycler`, `joiner`,
     //! `namespace`), `Macro`, `function`, `method` or `builtin_function_or_method`
     std::string typeName;
+    //! Where Python finds the object Jinja2 passes, for a global that is Python's own object: its `__module__`
+    //! (`builtins` for `range` and `dict`, `jinja2.utils` for `cycler`, `joiner`, `namespace` and `lipsum`); empty for
+    //! a callable made by the render (a macro, `loop.cycle`), which Python has no object for
+    std::string pythonModule;
+    //! Its `__qualname__` in that module: `range`, `dict`, `Cycler`, `Joiner`, `Namespace`, `generate_lorem_ipsum`
+    std::string pythonQualname;
 };
 
 /*!

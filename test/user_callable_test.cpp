@@ -1829,6 +1829,29 @@ TEST(CallSiteTest, LentCallablesDescribeThemselvesAsPython)
     EXPECT_FALSE(DescribeLentCallable(*kept.GetIf<UserCallable>()));
 }
 
+// The Python object a lent global is in Jinja2: its __module__ and __qualname__ (docs/tasks/0559)
+TEST(CallSiteTest, LentGlobalsNameTheirPythonObjects)
+{
+    std::string seen;
+    TemplateEnv env;
+    env.AddGlobal("describe", UserCallable(
+                                  [&seen](const UserCallableParams& params) {
+                                      const Value fn = params["fn"];
+                                      const auto* callable = fn.GetIf<UserCallable>();
+                                      const auto info = callable ? DescribeLentCallable(*callable) : std::nullopt;
+                                      seen += info ? info->pythonModule + ":" + info->pythonQualname + ";" : std::string("none;");
+                                      return Value();
+                                  },
+                                  { ArgInfo{ "fn" } }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% macro m() %}{% endmacro %}{{ describe(range) }}{{ describe(dict) }}{{ describe(cycler) }}{{ describe(joiner) }}"
+                         "{{ describe(namespace) }}{{ describe(lipsum) }}{{ describe(m) }}{% for x in [1] %}{{ describe(loop.cycle) }}{% endfor %}")
+                    .has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("builtins:range;builtins:dict;jinja2.utils:Cycler;jinja2.utils:Joiner;jinja2.utils:Namespace;jinja2.utils:generate_lorem_ipsum;:;:;", seen);
+}
+
 TEST(CallSiteTest, TemplateNameFromEnvironmentAndInline)
 {
     auto probe = std::make_shared<SiteProbe>();
