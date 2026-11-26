@@ -45,6 +45,8 @@ CONSTANTS
     \* @type: Bool;
     FixShareNested,
     \* @type: Bool;
+    FixGlobalOuterCell,
+    \* @type: Bool;
     FixMarkOrder,
     \* @type: Bool;
     FixSortMutableFirst,
@@ -75,6 +77,12 @@ CONSTANTS
     \* @type: Bool;
     FixLinksOwn,
     \* @type: Bool;
+    FixSnapshotLinks,
+    \* @type: Bool;
+    FixAtomicLink,
+    \* @type: Bool;
+    FixAtomicPin,
+    \* @type: Bool;
     HostHandoff,
     \* @type: Int;
     MaxCallId,
@@ -92,13 +100,13 @@ CONSTANTS
     BorrowedJson
 
 \* @typeAlias: reg = <<Str, Int>>;
-\* @typeAlias: ad = {idn: Str, inc: Int, held: Bool, generic: Bool, cell: Int, seen: Int, alive: Bool};
+\* @typeAlias: ad = {idn: Str, inc: Int, held: Bool, generic: Bool, cell: Int, seen: Int, snap: Bool, blk: Set(Int), alive: Bool};
 \* @typeAlias: cell = {idn: Str, inc: Int, reg: $reg, stor: Int, retired: Int, source: Int, owned: Bool, frozen: Bool, exp: Int, links: Set(Int), inTable: Bool, alive: Bool};
 \* @typeAlias: gen = {val: Int, child: Int, alive: Bool, acc: Bool};
 \* @typeAlias: table = {tbl: Str -> Int, call: Int, last: Int};
 \* @typeAlias: frame = {kind: Str, reg: $reg, outer: Int, call: Int, ads: Set(Int), phase: Str, bkind: Str, bad: Int, bgen: Int, bvals: Int};
 \* @typeAlias: export = {kind: Str, gen: Int, ad: Int, cell: Int, idn: Str, thr: Str, depth: Int, reg: $reg, done: Bool, snap: Seq(Int), pin: Bool, pg: Int, cg: Int, alive: Bool};
-\* @typeAlias: flags = {uaf: Bool, foreign: Bool, stale: Bool, undef: Bool, late: Bool, lost: Bool};
+\* @typeAlias: flags = {uaf: Bool, foreign: Bool, stale: Bool, undef: Bool, late: Bool, lost: Bool, torn: Bool, glost: Bool};
 \* @typeAlias: write = {k: Str, cl: Int -> $cell, st: Int -> $gen, nGen: Int, gen: Int};
 \* @typeAlias: get = {c: Int, A2: $ad, link: Int, failed: Bool};
 CellAliases == TRUE

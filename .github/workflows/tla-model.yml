@@ -36,6 +36,9 @@ env:
   # the pinned hash. Change TLA_URL and TLA_SHA256 together, here and in linux-build.yml
   TLA_URL: https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
   TLA_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
+  # The Apalache release tla/apalache.py names (APALACHE_URL); change the two together
+  APALACHE_URL: https://github.com/apalache-mc/apalache/releases/download/v0.51.1/apalache-0.51.1.tgz
+  APALACHE_SHA256: 517fab97dec08509e83d66c1ff6b1f0bca3abad49ff3596a82b45fec8b436cfa
 
 jobs:
   plan:
@@ -194,3 +197,36 @@ jobs:
           /tmp/tlc-collector-*/*/tlc.out
           /tmp/tlc-collector-*/*/MC.cfg
         if-no-files-found: ignore
+
+  # The Apalache harness (tla/apalache.py, CellApalache.tla, CellInductive.tla) is not what TLC
+  # runs, so a change to the spec can break it silently: between 0338 F and 0363 it stopped
+  # parsing, and once parsed its IndInit had no state, which makes every inductive query pass.
+  # A minute of checks keeps it usable: the types, Init => IndInv and a state of IndInit
+  apalache:
+    needs: plan
+    if: needs.plan.outputs.shards != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Fetch Apalache
+      run: |
+        set -euo pipefail
+        curl -sSfL --retry 3 -o "$RUNNER_TEMP/apalache.tgz" "$APALACHE_URL"
+        echo "$APALACHE_SHA256  $RUNNER_TEMP/apalache.tgz" | sha256sum -c -
+        tar xzf "$RUNNER_TEMP/apalache.tgz" -C "$RUNNER_TEMP"
+        grep -qF "$APALACHE_URL" tla/apalache.py
+
+    - name: Check the harness
+      env:
+        APALACHE_HOME: ${{ runner.temp }}/apalache-0.51.1
+        JVM_ARGS: -Xmx6g
+      run: |
+        set -euo pipefail
+        bounds="--set MaxAd=6 MaxCell=2 MaxGen=2 MaxEx=1"
+        python3 tla/apalache.py typecheck
+        # shellcheck disable=SC2086 # bounds is a list of words
+        python3 tla/apalache.py init $bounds
+        # shellcheck disable=SC2086
+        python3 tla/apalache.py sat $bounds

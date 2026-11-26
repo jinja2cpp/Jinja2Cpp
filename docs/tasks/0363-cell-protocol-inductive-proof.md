@@ -1,10 +1,11 @@
 ---
-status: open
+status: in-progress
 pr:
 priority: low
 area: robustness
 depends: [0338, 0351]
 touches: [tla/CellInductive.tla, tla/CellApalache.tla, tla/apalache.py, tla/CellProtocol.tla, tla/README.md]
+shares: [.github/workflows/tla-model.yml]
 ---
 # Prove the cell protocol's invariants inductively
 
@@ -45,3 +46,28 @@ of the thread reduction would close them.
 **Done when** `IndInv` is shown inductive for at least the `module` scope (per action is
 enough) and implies `Safety` (`apalache.py safety`), or the README states why the cutoff
 argument and the exhaustive runs of 0351 are the final answer.
+
+## Result (2026-11-26)
+
+Closed by the second branch of the done-when: tla/README.md, "The inductive proof: why the
+exhaustive runs are the answer", gives the reasons; the proof itself is task 0586.
+
+- **The harness had rotted.** Since 0338 F, steps D, 0346 and 0463 added constants
+  (`FixGlobalOuterCell`, `FixSnapshotLinks`, `FixAtomicLink`, `FixAtomicPin`), adapter fields
+  (`snap`, `blk`), flags (`torn`, `glost`) and hosts (`GI`, `J`) that `CellApalache.tla`,
+  `CellInductive.tla` and `apalache.py` never learned: the type check failed, and once fixed,
+  `IndInit` had no state at all (Gen sized each registry for 3 hosts of 5), so every inductive
+  query would have passed. Fixed; `apalache.py` reads `Hosts` from the spec, `Safety` lists
+  `NoTornStep`, `NestedGlobalKept` and `CallScopedBounded`, and the weekly `tla-model` workflow
+  gains an `apalache` job (type check, `Init => IndInv`, `IndInit` has a state) so it cannot rot
+  silently again.
+- **Lever 1 measured, and a better one found.** One inductive query per action and per
+  conjunct of `IndInv` (`apalache.py sweep`, `--hyp`): a part takes 20 s to a few minutes, the
+  conjunction of the same parts in one query over 15 minutes. 65 of the first 70 queries hold;
+  4 reads through an adapter time out at 10 minutes; `Read => NoForeignCell'` gives the first
+  counterexample to induction (an adapter attached to a cell of other data, in a render
+  registry of a scope without renders).
+- **Cutoff gaps.** Two threads at `MaxDepth=2` reach their fixed point with no error
+  (`threads-exhaustive` 219,938 states, `threads-module-exhaustive` 19,304,429). The identity
+  cutoff is exact for the exhaustive bounds: `MaxAd / 2` calls name at most that many addresses,
+  and the three-address run of `module-0332-exhaustive` (13,018,093 states) covers its bounds. Left on paper: the thread reduction (TLAPS, task 0586).
