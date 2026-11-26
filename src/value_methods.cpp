@@ -1204,7 +1204,8 @@ struct StrOps
         }
         else
         {
-            return Str(str.begin(), str.end());
+            const std::string owned = std::move(str);
+            return Str(owned.begin(), owned.end());
         }
     }
 

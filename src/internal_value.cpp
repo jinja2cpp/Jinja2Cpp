@@ -781,17 +781,19 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         }
         // A built-in method's __name__ and __qualname__ (tuple.count), from the name it keeps,
         // so that binding one allocates nothing more (docs/tasks/0571)
-        const char* method = callable.GetBoundMethod();
         const auto self = attributes->find("__self__");
-        if (method && !callable.GetBoundReceiver() && self != attributes->end())
+        if (const char* method = callable.GetBoundMethod())
         {
-            if (field == "__name__")
+            if (!callable.GetBoundReceiver() && self != attributes->end())
             {
-                return InternalValue(std::string(method));
-            }
-            if (field == "__qualname__")
-            {
-                return InternalValue(std::string(Apply<visitors::PythonTypeNameGetter>(self->second)) + "." + method);
+                if (field == "__name__")
+                {
+                    return InternalValue(std::string(method));
+                }
+                if (field == "__qualname__")
+                {
+                    return InternalValue(std::string(Apply<visitors::PythonTypeNameGetter>(self->second)) + "." + method);
+                }
             }
         }
         return InternalValue();

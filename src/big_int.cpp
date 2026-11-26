@@ -547,7 +547,7 @@ std::string WordsDigits(LimbSpan words, int base)
     const auto count = (totalBits + bitsPerDigit - 1) / bitsPerDigit;
     const auto mask = static_cast<uint64_t>(base - 1);
     std::string result(count, '0');
-    static constexpr const char* Alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+    constexpr std::string_view alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
     if (32 % bitsPerDigit == 0)
     {
         // Bases 2, 4 and 16: a word holds whole digits, so each word gives its digits in a
@@ -560,7 +560,7 @@ std::string WordsDigits(LimbSpan words, int base)
             auto rest = word;
             for (size_t n = 0; n != perWord && left != 0; ++n, --left)
             {
-                *--out = Alphabet[rest & mask];
+                *--out = alphabet[rest & mask];
                 rest >>= bitsPerDigit;
             }
         }
@@ -577,7 +577,7 @@ std::string WordsDigits(LimbSpan words, int base)
         {
             window |= uint64_t{ words[word + 1] } << (32 - shift);
         }
-        result[count - 1 - idx] = Alphabet[window & mask];
+        result[count - 1 - idx] = alphabet[window & mask];
     }
     return result;
 }
