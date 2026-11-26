@@ -1013,6 +1013,10 @@ TEST(BigIntTemplate, FoldBudgetBoundsDeadConstants)
     EXPECT_EQ("[True, 'a']", loadError("{{ [(" + past + ") is odd, " + big + "] }}"));
     EXPECT_EQ("aTrue", loadError("{{ " + big + " ~ ((" + past + ") is odd) }}"));
     EXPECT_TRUE(fails(loadError("{{ " + big + " ~ ([1][5] ~ 'x') }}", &strict), "a constant expression gives a strict undefined"));
+    // Steps counted only to poll the host (UINT64_MAX, the Python module's default) are no limit of its own
+    Settings polled;
+    polled.limits.maxRenderSteps = UINT64_MAX;
+    EXPECT_EQ("ok", loadError("{% if false %}{{ 10 ** 30000 }}{% endif %}ok", &polled));
     // A template with limits of its own folds under those, as it renders
     Settings limited;
     limited.limits.maxRenderSteps = 1000000;

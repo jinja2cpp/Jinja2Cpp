@@ -30,7 +30,8 @@ by the whole Load, items or characters per operation 2^16, 16 MB of values, and 
 bits (`RenderLimits::maxIntBits`, read by big_int.cpp instead of MaxBigIntBits). Any limit reached under the budget
 makes the candidate Impossible in every check (`FoldEvaluator::m_limitIsImpossible`), so a literal past 4300 digits
 still fails the Load however many roots come first, while a computation past the budget is left to the render.
-A template with limits of its own folds under those, as before. Release, boost: the two templates above load in
+A template with limits of its own folds under those, as before; `maxRenderSteps` of UINT64_MAX, which only counts
+steps for a host's poll (the Python module sets it for Ctrl-C), is no limit there. Release, boost: the two templates above load in
 0.4 ms and 2.4 ms. A candidate whose evaluation, or a step it reads, reaches a limit does not fold and reports no strict undefined
 (`FoldEvaluator::LimitedOutcomeOf`; verifier round 1 found a limit escaping `LetsUndefinedOut` and
 `ConditionalOf` under StrictUndefined and failing the Load). Once the check's steps or memory are spent
