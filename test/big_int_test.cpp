@@ -900,6 +900,20 @@ TEST(BigIntTemplate, StrDigitsConstantsFailTheLoad)
     // In volatile code Jinja2 folds nothing: a power stays an operator (verifier round 1; a statement's expression
     // there is docs/tasks/0570)
     EXPECT_TRUE(loads("{% autoescape x %}{{ [2 ** 20000]|length }}{% if 0 %}{{ 2 ** 20000 }}{% endif %}{% endautoescape %}", big_int_toy::Backend()));
+    // and a statement's expressions there neither (docs/tasks/0570); a block's body is not volatile, as Jinja2
+    // compiles it on its own, and neither is a constant autoescape
+    for (const char* source : { "{% autoescape x %}{% set q = 10 ** 4300 %}{% endautoescape %}", "{% autoescape x %}{% if 10 ** 4300 %}{% endif %}{% endautoescape %}",
+                                "{% autoescape x %}{% for i in [10 ** 4300] %}{% endfor %}{% endautoescape %}", "{% autoescape x %}{% with q = 10 ** 4300 %}{% endwith %}{% endautoescape %}",
+                                "{% autoescape x %}{% macro m(a=10 ** 4300) %}{% endmacro %}{% endautoescape %}",
+                                "{% autoescape x %}{% filter upper %}{% set q = 10 ** 4300 %}{% endfilter %}{% endautoescape %}" })
+    {
+        EXPECT_TRUE(loads(source, big_int_toy::Backend())) << source;
+    }
+    for (const char* source : { "{% set q = 10 ** 4300 %}", "{% autoescape x %}{% block b %}{% set q = 10 ** 4300 %}{% endblock %}{% endautoescape %}",
+                                "{% autoescape true %}{% set q = 10 ** 4300 %}{% endautoescape %}" })
+    {
+        EXPECT_FALSE(loads(source, big_int_toy::Backend())) << source;
+    }
     // str() of an output refuses the item past the limit whatever the other items are
     EXPECT_FALSE(loads("{% if false %}{{ [(1).y, " + past + "] }}{% endif %}"));
     // A filter's value error in an `and` around a watched product is Impossible, not a Load error
@@ -917,6 +931,73 @@ TEST(BigIntTemplate, StrDigitsConstantsFailTheLoad)
         EXPECT_TRUE(loaded.has_value()) << source << ": " << loaded.error().ToString();
         EXPECT_EQ("", tpl.RenderAsString({}).value());
     }
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+// Task 0569: Jinja2 folds constants when it compiles, in code that never renders too, so the Load's fold check
+// computes them; without limits of the template's own it does under a budget (FoldBudget), past which a candidate
+// does not fold and its value is left to the render
+TEST(BigIntTemplate, FoldBudgetBoundsDeadConstants)
+{
+    const auto loadError = [](const std::string& source, const Settings* settings = nullptr) {
+        TemplateEnv env;
+        env.SetBigIntBackend(big_int_toy::Backend());
+        if (settings)
+        {
+            env.SetSettings(*settings);
+        }
+        Template tpl(&env);
+        const auto loaded = tpl.Load(source);
+        if (!loaded)
+        {
+            return loaded.error().ToString().substr(0, 200);
+        }
+        const auto rendered = tpl.RenderAsString({});
+        return rendered ? rendered.value() : "render: " + rendered.error().ToString().substr(0, 200);
+    };
+    const auto fails = [](const std::string& error, const char* what) { return error.find(what) != std::string::npos; };
+    const std::string past = "0x" + std::string(3572, 'f');
+    // A power past 2^16 bits is not computed: this one took a second. One past the 4300-digit limit then stays
+    // unfolded, and fails the Load only under the budget's bits
+    EXPECT_EQ("ok", loadError("{% if false %}{{ 1 if 3 ** 600000 else 2 }}{% endif %}ok"));
+    EXPECT_EQ("ok", loadError("{% if false %}{{ 10 ** 30000 }}{% endif %}ok"));
+    EXPECT_TRUE(fails(loadError("{% if false %}{{ (" + past + ") * 1 }}{% endif %}ok"), "Exceeds the limit (4300 digits)"));
+    // A repetition past 2^16 items is not built: 100 of these took 64 MB each
+    std::string repeated;
+    for (int root = 0; root != 100; ++root)
+    {
+        repeated += "{% if false %}{{ ('a'|upper) * 67108864 }}{% endif %}";
+    }
+    EXPECT_EQ("ok", loadError(repeated + "ok"));
+    // Each root has steps of its own for its literals, however many roots come before
+    std::string cheap;
+    for (int root = 0; root != 2000; ++root)
+    {
+        cheap += "{% if false %}{{ 2 * 3 }}{% endif %}";
+    }
+    EXPECT_TRUE(fails(loadError(cheap + "{% if false %}{{ " + past + " }}{% endif %}ok"), "Exceeds the limit (4300 digits)"));
+    // Past them a root draws on the Load's steps: once roots before it spent them, it does not fold. A tuple-slice
+    // subscript it should fold away then fails the Load, as one past the budget's sizes does
+    std::string chain = "(2 * 3)";
+    for (int filter = 0; filter != 300; ++filter)
+    {
+        chain += "|abs";
+    }
+    const std::string folding = "{{ ()[:, :] ~ (" + chain + ") }}";
+    EXPECT_EQ("6", loadError(folding));
+    std::string spent;
+    for (int root = 0; root != 60; ++root)
+    {
+        spent += "{% if false %}{{ " + chain + " }}{% endif %}";
+    }
+    EXPECT_TRUE(fails(loadError(spent + folding), "']' expected"));
+    EXPECT_EQ("a", loadError("{{ ()[:, :] ~ ('a' * 1000)|first }}"));
+    EXPECT_TRUE(fails(loadError("{{ ()[:, :] ~ ('a' * 100000)|first }}"), "']' expected"));
+    // A template with limits of its own folds under those, as it renders
+    Settings limited;
+    limited.limits.maxRenderSteps = 1000000;
+    EXPECT_EQ("a", loadError("{{ ()[:, :] ~ ('a' * 100000)|first }}", &limited));
+    EXPECT_EQ("6", loadError(spent + folding, &limited));
     EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 

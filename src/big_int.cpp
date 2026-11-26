@@ -1316,10 +1316,18 @@ InternalValue FloorDivide(const BigIntBackend& backend, const BackendObject& lef
     return ToValue(backend, fixed);
 }
 
+static_assert(detail::RenderLimits{}.maxIntBits == MaxBigIntBits);
+
+// The bits a product or power may have: MaxBigIntBits, or the Load's fold budget (docs/tasks/0569)
+size_t IntBitsCap()
+{
+    return detail::t_renderLimits.maxIntBits;
+}
+
 // The bits of a product of factors of `leftBits` and `rightBits` bits: at least their sum less one
 void CheckProductBits(size_t leftBits, size_t rightBits)
 {
-    if (leftBits != 0 && rightBits != 0 && leftBits + rightBits - 1 > MaxBigIntBits)
+    if (leftBits != 0 && rightBits != 0 && leftBits + rightBits - 1 > IntBitsCap())
     {
         ThrowTooManyBits();
     }
@@ -1353,7 +1361,7 @@ InternalValue Power(const BigIntBackend* backend, const IntOperand& base, const 
     BackendObject acc(*backend);
     Load(*backend, acc, base);
     const size_t baseBits = backend->bitLength(backend, acc.Get());
-    if (exp.big || (baseBits - 1) * static_cast<uint64_t>(exp.small) >= MaxBigIntBits)
+    if (exp.big || (baseBits - 1) * static_cast<uint64_t>(exp.small) >= IntBitsCap())
     {
         ThrowTooManyBits();
     }

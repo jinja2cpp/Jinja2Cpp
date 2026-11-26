@@ -1,3 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the literals area (cases/literals.py).
 # Format and kinds: test/parity/README.md.
 
+literals.int_power_past_fold_budget_unrendered accepts 0569 deliberate: past the Load's fold budget (2^16-bit products and powers) the power stays unfolded and its repr() past 4300 digits is not checked; Jinja2 computes it at compile. Without a backend it overflows unfolded

@@ -407,7 +407,9 @@ void UnknownCallables::DropFoldCandidates()
 
 void ExpressionParser::AddFoldCandidate(NodeRef<Expression> node, unsigned from, bool output)
 {
-    if (!InFoldRoot())
+    // In volatile code Jinja2's optimizer folds nothing (compiler.py optimizeconst): only an output's value, which
+    // visit_Output folds whole itself (docs/tasks/0570)
+    if (!InFoldRoot() || (m_volatile && !output))
     {
         return;
     }
@@ -2250,11 +2252,11 @@ FoldSummary Summarize(const FoldValue& value)
 class FoldEvaluator
 {
 public:
-    FoldEvaluator(const FoldCheck& check, RenderContext& context)
+    FoldEvaluator(const FoldCheck& check, RenderContext& context, bool budgeted)
         : m_check(check)
         , m_context(context)
         , m_steps(check.candidates.size())
-        , m_limitIsImpossible(check.to - check.from == check.marks.size())
+        , m_limitIsImpossible(budgeted || check.to - check.from == check.marks.size())
     {
         LinkSteps();
     }
@@ -2315,11 +2317,11 @@ private:
                 return ConditionalOf(nodes[full]);
             }
         }
-        if (candidate.leadingOperands != 0 && LeadingOperandFails(index))
+        if (candidate.leadingOperands != 0 && Decides([this, index] { return LeadingOperandFails(index); }))
         {
             return FoldOutcome::FailsLoad;
         }
-        if (candidate.fold == 0 || !FoldsAt(index))
+        if (candidate.fold == 0 || !Decides([this, index] { return FoldsAt(index); }))
         {
             return FoldOutcome::DoesNotFold;
         }
@@ -2796,7 +2798,7 @@ private:
         CheckStack();
         const auto& nodes = m_context.Nodes();
         const auto& conditional = nodes[full.GetTester()];
-        if (!conditional.TestFoldsAt(m_context))
+        if (!Decides([this, &conditional] { return conditional.TestFoldsAt(m_context); }))
         {
             return FoldOutcome::DoesNotFold;
         }
@@ -2812,7 +2814,7 @@ private:
             return FoldOutcome::FailsLoad;
         }
         const bool truth = ConvertToBool(test.value);
-        if (!conditional.BranchFoldsAt(m_context, full.GetExpression(), truth))
+        if (!Decides([this, &conditional, &full, truth] { return conditional.BranchFoldsAt(m_context, full.GetExpression(), truth); }))
         {
             return FoldOutcome::DoesNotFold;
         }
@@ -2830,7 +2832,8 @@ private:
     }
 
     // TryFoldValue, and in a check of marks only (no tuple-slice subscript) a limit too is Impossible: such a check
-    // only watches what its folds give, so a limit the fold reaches is left to the render, as without the check
+    // only watches what its folds give, so a limit the fold reaches is left to the render, as without the check.
+    // Under FoldBudget every limit is the budget's, which makes the candidate Impossible in any check
     template<typename Evaluate>
     FoldValue TryFold(Evaluate&& evaluate)
     {
@@ -2845,6 +2848,26 @@ private:
         catch (const ResourceLimitError&)
         {
             return FoldValue{ InternalValue(), true };
+        }
+    }
+
+    // Whether a candidate folds (Expression::IsFoldableAt), which evaluates the truth of an `and`, `or` or
+    // conditional's left operand and lets its limit errors out (TryFoldTruth): in a check of marks only a limit
+    // there leaves the value unfolded, as TryFold does (docs/tasks/0570)
+    template<typename Decide>
+    bool Decides(Decide&& decide)
+    {
+        if (!m_limitIsImpossible)
+        {
+            return std::forward<Decide>(decide)();
+        }
+        try
+        {
+            return std::forward<Decide>(decide)();
+        }
+        catch (const ResourceLimitError&)
+        {
+            return false;
         }
     }
 
@@ -2950,14 +2973,26 @@ FoldCheckResult CoverageOf(const FoldCheck& check, const std::vector<FoldOutcome
 }
 } // namespace
 
-FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context)
+const Settings::Limits& FoldBudget::Limits()
+{
+    static const Settings::Limits limits = [] {
+        Settings::Limits result;
+        result.maxRenderSteps = steps;
+        result.maxSequenceSize = sequenceSize;
+        result.maxRenderMemory = memory;
+        return result;
+    }();
+    return limits;
+}
+
+FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context, bool budgeted)
 {
     // The candidates were recorded as their parse ended, so an expression comes after the ones
     // inside it, which start where it starts or later. Walked outermost first, the candidates
     // inside one that folds need no evaluation of their own: their subscripts are covered, and
     // nested brackets do not evaluate the inner levels again and again
     std::vector<FoldOutcome> outcomes(check.candidates.size(), FoldOutcome::DoesNotFold);
-    FoldEvaluator evaluator(check, context);
+    FoldEvaluator evaluator(check, context, budgeted);
     FoldWalk walk(check);
     for (std::size_t index = check.candidates.size(); index-- != 0;)
     {

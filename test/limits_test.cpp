@@ -324,6 +324,15 @@ TEST_F(LimitsEnvTest, FoldsAtLoad)
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << ErrorToString(loaded.error());
     EXPECT_EQ("a", tpl.RenderAsString({}).value());
 
+    // And one the truth of an `and`, `or` or conditional's test reaches, which decides whether it folds
+    // (TryFoldTruth, docs/tasks/0570)
+    for (const char* source : { "{{ ()[:, :] ~ (('a' * 99999999) and x) }}", "{{ ()[:, :] ~ (('a' * 99999999) or x) }}", "{{ ()[:, :] ~ (x if ('a' * 99999999) else 1) }}" })
+    {
+        loaded = tpl.Load(source);
+        ASSERT_FALSE(loaded.has_value()) << source;
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, loaded.error().GetCode()) << source << ": " << ErrorToString(loaded.error());
+    }
+
     // A fold that fails leaves the subscript unfolded: invalid Python, a Load error
     loaded = tpl.Load("{{ ()[0][:, :] }}");
     ASSERT_FALSE(loaded.has_value());

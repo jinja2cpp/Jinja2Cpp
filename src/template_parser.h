@@ -620,6 +620,8 @@ private:
     StatementBodies& m_bodies;
     // Where the tag starts in the source
     std::size_t m_tagOffset;
+    // The tag is in volatile code (InVolatileCode), set by Parse: its expressions are not folded
+    bool m_volatile = false;
 };
 
 // `{{ name }}` inside `{% trans %}`: Jinja2 allows a plain name only. The result is the name

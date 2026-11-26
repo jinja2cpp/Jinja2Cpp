@@ -20,6 +20,8 @@ CASES = [
     ("int_hex_past_str_digit_limit_set", "{% set x = 0x" + "f" * 3572 + " %}b"),
     ("int_hex_past_str_digit_limit_folded", "{{ (0x" + "f" * 3572 + ") is odd }}"),
     ("int_filter_past_str_digit_limit_folded_set", "{% set x = ('f' * 3600)|int(base=16) %}b"),
+    # Past the Load's fold budget (docs/tasks/0569) a power stays unfolded, rather than computed as Jinja2 does
+    ("int_power_past_fold_budget_unrendered", "{% if false %}{{ 10 ** 30000 }}{% endif %}b"),
     ("float", "{{ 1.5 }}"),
     ("float_whole", "{{ 2.0 }}"),
     ("float_exponent", "{{ 1e3 }}"),

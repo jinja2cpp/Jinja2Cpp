@@ -92,6 +92,11 @@ CASES = [
     ("tuple_of_slices_failing_part", "[{{ [1 / 0][:, :] }}|{{ ()[:, 1 / 0] }}]"),
     ("subscript_slice_trailing_comma", "{{ [1][1:2,] }}"),
     ("tuple_of_slices_folded_branch", "[{{ ()[:, :] if true else x }}|{{ ()[:, :] if false else 5 }}|{% autoescape x %}{{ ()[:, :] }}{% endautoescape %}]"),
+    # In volatile code Jinja2's optimizer folds nothing, a statement's expressions and those inside an output
+    # included; an output's value still folds whole (0570)
+    ("tuple_of_slices_volatile_statement", "[{% autoescape x %}{% set q = ()[:, :] ~ 'a' %}{% endautoescape %}]"),
+    ("tuple_of_slices_volatile_output_part", "[{% autoescape x %}{{ (()[:, :] ~ 'a') ~ s }}{% endautoescape %}]"),
+    ("tuple_of_slices_volatile_print", "[{% autoescape s %}{% print ()[:, :] ~ 'a' %}{{ [()[:, :] ~ 'b'] }}{% endautoescape %}]"),
     # Jinja2 folds a conditional whose test folds by the branch it picks; the engine decides that
     # only when it renders, so at load it rejects an unfolded tuple of slices there (0471)
     ("tuple_of_slices_fold_by_choice", "[{{ (()[:, :] if 1 > 0) is undefined and '' }}|{{ (()[:, :] if 1 > 0 else x) is undefined and '' }}]"),

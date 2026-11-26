@@ -107,7 +107,24 @@ class RenderContext;
 // stringifies or tests the undefined such a subscript gives, so any candidate whose evaluation
 // fails fails the check. An integer past MaxIntStrDigits digits that a fold gives and no fold
 // around it takes away fails it too
-FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context);
+// `budgeted`: the context runs under FoldBudget, whose limits make a candidate Impossible rather than fail the Load
+FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context, bool budgeted = false);
+
+// What the Load's fold checks may compute in a template without limits of its own (Settings::Limits): Jinja2 folds
+// constants when it compiles, even in code that never renders, so template text decides how long a Load takes. A
+// candidate the budget stops does not fold, which Jinja2's optimizer would only after computing it (docs/tasks/0569).
+// Each check (a root) has a few steps of its own, enough for a literal; past them it draws on `steps`, which are the
+// whole Load's, so many cheap roots cannot add up either. Sizes and memory are each check's
+struct FoldBudget
+{
+    static constexpr std::uint64_t steps = std::uint64_t{ 1 } << 14;
+    static constexpr std::uint64_t checkSteps = 64;
+    static constexpr std::uint64_t sequenceSize = std::uint64_t{ 1 } << 16;
+    static constexpr std::uint64_t memory = std::uint64_t{ 1 } << 24;
+    // A product or power past it costs milliseconds (boost backend); Python's repr fails from 14286 bits on
+    static constexpr std::size_t intBits = std::size_t{ 1 } << 16;
+    static const Settings::Limits& Limits();
+};
 // The ValueError CPython's repr() raises for an integer past MaxIntStrDigits digits, at `tok`
 ParseError StrDigitsError(const Token& tok);
 // FoldCheckResult::Undefined's error, at `tok`
