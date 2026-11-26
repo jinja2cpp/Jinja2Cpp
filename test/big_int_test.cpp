@@ -993,6 +993,18 @@ TEST(BigIntTemplate, FoldBudgetBoundsDeadConstants)
     EXPECT_TRUE(fails(loadError(spent + folding), "']' expected"));
     EXPECT_EQ("a", loadError("{{ ()[:, :] ~ ('a' * 1000)|first }}"));
     EXPECT_TRUE(fails(loadError("{{ ()[:, :] ~ ('a' * 100000)|first }}"), "']' expected"));
+    // Under StrictUndefined every filter of a constant is a candidate: one the budget stops neither folds nor fails
+    // the Load as the undefined it would have reached (verifier round 1)
+    Settings strict;
+    strict.undefinedPolicy = UndefinedPolicy::Strict;
+    std::string items = "'a'|upper";
+    for (int item = 1; item != 2000; ++item)
+    {
+        items += ", 'a'|upper";
+    }
+    EXPECT_EQ("ok", loadError("{% set v = [" + items + "] %}ok", &strict));
+    EXPECT_EQ("ok", loadError(spent + "{% set v = [" + items.substr(0, 9 + 11 * 300) + "] %}ok", &strict));
+    EXPECT_TRUE(fails(loadError("{% if false %}{{ " + past + " }}{% endif %}{% set v = [" + items + "] %}ok", &strict), "Exceeds the limit (4300 digits)"));
     // A template with limits of its own folds under those, as it renders
     Settings limited;
     limited.limits.maxRenderSteps = 1000000;

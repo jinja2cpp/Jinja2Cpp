@@ -31,7 +31,12 @@ bits (`RenderLimits::maxIntBits`, read by big_int.cpp instead of MaxBigIntBits).
 makes the candidate Impossible in every check (`FoldEvaluator::m_limitIsImpossible`), so a literal past 4300 digits
 still fails the Load however many roots come first, while a computation past the budget is left to the render.
 A template with limits of its own folds under those, as before. Release, boost: the two templates above load in
-0.4 ms and 2.4 ms. Deliberate divergences, past the budget only: a power or product past 2^16 bits whose value has
-more than 4300 digits loads (corpus `literals.int_power_past_fold_budget_unrendered`, accepts), and a tuple-slice
-subscript whose covering fold exceeds the budget fails the Load as unfolded where Jinja2 computes the fold
-(`BigIntTemplate.FoldBudgetBoundsDeadConstants`).
+0.4 ms and 2.4 ms. Once a check reaches a limit, its later candidates do not fold either (`FoldEvaluator::LimitedOutcomeOf`):
+their steps' values are gone, and under StrictUndefined a strict undefined they would have reached is not reported
+(verifier round 1 found a limit escaping `LetsUndefinedOut` and `ConditionalOf` there and failing the Load).
+Deliberate divergences, past the budget only: a power or product past 2^16 bits whose value has more than 4300
+digits loads (corpus `literals.int_power_past_fold_budget_unrendered`, accepts); a tuple-slice subscript, or an
+integer literal past 4300 digits, whose covering fold exceeds the budget fails the Load as unfolded where Jinja2
+computes the fold (`{{ ()[:, :] ~ ('a' * 100000)|first }}`; after roots that drained the pool,
+`{{ (0x<3572 f>)|abs|...80 filters... is odd }}`; and `{{ (0x<20000 f>) * 1 > 5 }}`, an 80,000-bit product, which
+master's 2^20-bit cap allowed). Charging big-integer work by its size is 0586.

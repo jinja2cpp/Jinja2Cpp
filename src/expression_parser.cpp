@@ -2263,7 +2263,7 @@ public:
 
     FoldOutcome Of(std::size_t index)
     {
-        const auto outcome = OutcomeOf(index);
+        const auto outcome = LimitedOutcomeOf(index);
         Done(index);
         return outcome;
     }
@@ -2303,6 +2303,31 @@ private:
         FoldSummary summary;
     };
     static constexpr std::size_t NoStep = static_cast<std::size_t>(-1);
+
+    // OutcomeOf, where a limit reached is Impossible (m_limitIsImpossible): once the check reached one, the
+    // candidate does not fold, and neither does any after it, whose evaluation the limit stops or whose steps'
+    // values it took. A strict undefined it would have reached is not reported either (docs/tasks/0569)
+    FoldOutcome LimitedOutcomeOf(std::size_t index)
+    {
+        if (!m_limitIsImpossible)
+        {
+            return OutcomeOf(index);
+        }
+        if (m_limitReached)
+        {
+            return FoldOutcome::DoesNotFold;
+        }
+        try
+        {
+            const auto outcome = OutcomeOf(index);
+            return m_limitReached ? FoldOutcome::DoesNotFold : outcome;
+        }
+        catch (const ResourceLimitError&)
+        {
+            m_limitReached = true;
+            return FoldOutcome::DoesNotFold;
+        }
+    }
 
     FoldOutcome OutcomeOf(std::size_t index)
     {
@@ -2847,6 +2872,7 @@ private:
         }
         catch (const ResourceLimitError&)
         {
+            m_limitReached = true;
             return FoldValue{ InternalValue(), true };
         }
     }
@@ -2867,13 +2893,14 @@ private:
         }
         catch (const ResourceLimitError&)
         {
+            m_limitReached = true;
             return false;
         }
     }
 
     // ReprOf, whose walk of a repeated list costs a render step an item: in a check of marks only a limit it
     // reaches leaves the value unfolded, as TryFold does (Codex on #987)
-    Repr ReprOfValue(const InternalValue& value) const
+    Repr ReprOfValue(const InternalValue& value)
     {
         if (!m_limitIsImpossible)
         {
@@ -2885,6 +2912,7 @@ private:
         }
         catch (const ResourceLimitError&)
         {
+            m_limitReached = true;
             return Repr::Unsafe;
         }
     }
@@ -2898,6 +2926,8 @@ private:
     std::unordered_map<const void*, bool> m_letsOut;
     std::unordered_map<const void*, FoldSummary> m_operands;
     bool m_limitIsImpossible = false;
+    // A limit was reached in the check (LimitedOutcomeOf)
+    bool m_limitReached = false;
 };
 } // namespace
 
