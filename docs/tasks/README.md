@@ -432,7 +432,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | done |
 | [0361](0361-failed-call-top-view-reads-empty.md) | A failed module call's view of a module cell reads no items | lifetime | low | done |
 | [0362](0362-host-object-python-errors.md) | Host objects: Python's errors where generic filters guess | parity | low | done |
-| [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | open |
+| [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | in-progress |
 | [0364](0364-frozen-version-deep-validation.md) | Validate a frozen version deeply, from time to time | robustness | medium | open |
 | [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | done |
 | [0366](0366-bound-loop-method-repr-after-break.md) | A kept `loop.cycle` prints `?` for the length of a lazily filtered loop it broke out of | parity | low | done |
@@ -618,14 +618,14 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0557](0557-make-module-filter-policies.md) | Macros of a module keep the filter policies of the load | parity | low | done |
 | [0558](0558-python-derived-context-in-loop-bodies.md) | `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context | parity | low | open |
 | [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | open |
-| [0560](0560-ended-block-in-stored-macro-sees-inner-frames.md) | A block in a macro stored by a nested render that failed renders nothing | parity | low | open |
-| [0561](0561-engine-set-hash-index-and-live-loop.md) | The engine's set has no hash index, and a loop over a set changed in its body goes on | robustness | low | open |
+| [0560](0560-ended-block-in-stored-macro-sees-inner-frames.md) | A block in a macro stored by a nested render that failed renders nothing | parity | low | done |
+| [0561](0561-engine-set-hash-index-and-live-loop.md) | The engine's set has no hash index, and a loop over a set changed in its body goes on | robustness | low | done |
 | [0562](0562-pprint-self-containing-container.md) | pprint of a list or dict that contains itself fails with a recursion error | parity | low | done |
 | [0563](0563-key-value-pair-tuple-methods.md) | A dictsort or items pair has no tuple methods | parity | low | done |
 | [0564](0564-reject-constants-past-str-digit-limit.md) | Reject integer constants past 4300 digits that survive folding | parity | low | done |
 | [0565](0565-set-methods-slow-on-msvc-debug.md) | Set methods over a big range are thousands of times slower in MSVC Debug than in a GCC Debug build | performance | medium | open |
 | [0566](0566-huge-host-big-int-converts-per-access.md) | Stop converting a huge host BigInt on every access | robustness | low | open |
-| [0567](0567-stored-closure-reaching-module-through-capture.md) | A stored closure that reaches a call's module only through its capture keeps the module | parity | low | open |
+| [0567](0567-stored-closure-reaching-module-through-capture.md) | A stored closure that reaches a call's module only through its capture keeps the module | parity | low | done |
 | [0568](0568-huge-int-index-and-range-bound.md) | Render a huge integer used as a list index or a range() bound as Python does | robustness | low | open |
 | [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | open |
 | [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | open |
@@ -638,9 +638,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0577](0577-big-int-radix-ops-slower-than-python.md) | Huge-integer bit_count and power-of-two formatting are slower than Python | perf | medium | done |
 | [0578](0578-loop-dict-view-fixed-cost.md) | Win back the for-loop start cost that the live dict views added | perf | medium | open |
 | [0579](0579-render-fixed-cost-creep-2026-11.md) | Render rows crept +1-2% in the week to 2026-11-23, in steps under the bar | perf | low | open |
-| [0580](0580-stored-block-of-an-extending-include-lost.md) | A block stored from inside an extending include renders nothing two calls later | parity | low | open |
-| [0581](0581-failed-include-kept-self-loses-frame-names.md) | A `self` an include stored before it failed reads the include's names as undefined | parity | low | open |
+| [0580](0580-stored-block-of-an-extending-include-lost.md) | A block stored from inside an extending include renders nothing two calls later | parity | low | done |
+| [0581](0581-failed-include-kept-self-loses-frame-names.md) | A `self` an include stored before it failed reads the include's names as undefined | parity | low | done |
 | [0582](0582-host-operator-followups.md) | Host operators: the leftovers of task 0381 | parity | low | open |
 | [0585](0585-int-format-zero-pad-prefix-grouping.md) | Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base | parity | low | open |
+| [0586](0586-closure-in-module-top-level-with-loses-outer-names.md) | A closure defined in a `with` at a module's top level reads the module's names as undefined on later calls | parity | low | open |
+| [0587](0587-set-erase-and-update-stay-linear.md) | The engine's set still spends O(n) per remove, pop and update | robustness | low | open |
 | [0589](0589-ext-debug-extension.md) | `jinja2.ext.debug`: implement `{% debug %}` or record it as deliberate | parity | low | open |
 | [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | open |
+| [0591](0591-cell-protocol-inductive-invariant.md) | Find the cell protocol's inductive invariant | robustness | low | open |
