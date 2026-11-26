@@ -1003,7 +1003,7 @@ TEST(BigIntTemplate, FoldBudgetBoundsDeadConstants)
         items += ", 'a'|upper";
     }
     EXPECT_EQ("ok", loadError("{% set v = [" + items + "] %}ok", &strict));
-    EXPECT_EQ("ok", loadError(spent + "{% set v = [" + items.substr(0, 9 + 11 * 300) + "] %}ok", &strict));
+    EXPECT_EQ("ok", loadError(spent + "{% set v = [" + items.substr(0, 9 + (11 * 300)) + "] %}ok", &strict));
     EXPECT_TRUE(fails(loadError("{% if false %}{{ " + past + " }}{% endif %}{% set v = [" + items + "] %}ok", &strict), "Exceeds the limit (4300 digits)"));
     // A size limit stops only the candidate that reaches it: a fold beside it still folds, and a strict undefined
     // after it still fails the Load (verifier round 2)
