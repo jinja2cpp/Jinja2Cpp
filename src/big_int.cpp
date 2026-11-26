@@ -522,13 +522,15 @@ size_t MagnitudeBits(std::string_view magnitude)
 // The set bits of a magnitude in base 2^32
 size_t WordsBitCount(LimbSpan words) noexcept
 {
+    // A portable SWAR popcount (C++17 has no std::popcount): a constant 12 operations a word,
+    // where clearing one set bit at a time took 32 rounds for an all-ones word (docs/tasks/0577)
     size_t count = 0;
     for (const auto word : words)
     {
-        for (auto rest = word; rest != 0; rest &= rest - 1)
-        {
-            ++count;
-        }
+        auto bits = word - ((word >> 1U) & 0x55555555U);
+        bits = (bits & 0x33333333U) + ((bits >> 2U) & 0x33333333U);
+        bits = (bits + (bits >> 4U)) & 0x0F0F0F0FU;
+        count += static_cast<size_t>((bits * 0x01010101U) >> 24U);
     }
     return count;
 }
@@ -545,6 +547,25 @@ std::string WordsDigits(LimbSpan words, int base)
     const auto count = (totalBits + bitsPerDigit - 1) / bitsPerDigit;
     const auto mask = static_cast<uint64_t>(base - 1);
     std::string result(count, '0');
+    static constexpr const char* Alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+    if (32 % bitsPerDigit == 0)
+    {
+        // Bases 2, 4 and 16: a word holds whole digits, so each word gives its digits in a
+        // fixed loop, from the least significant end; the top word gives only those it has
+        const auto perWord = 32 / bitsPerDigit;
+        auto out = result.end();
+        size_t left = count;
+        for (const auto word : words)
+        {
+            auto rest = word;
+            for (size_t n = 0; n != perWord && left != 0; ++n, --left)
+            {
+                *--out = Alphabet[rest & mask];
+                rest >>= bitsPerDigit;
+            }
+        }
+        return result;
+    }
     // Digit `idx` from the least significant end holds the bits from idx * bitsPerDigit up
     for (size_t idx = 0; idx != count; ++idx)
     {
@@ -556,7 +577,7 @@ std::string WordsDigits(LimbSpan words, int base)
         {
             window |= uint64_t{ words[word + 1] } << (32 - shift);
         }
-        result[count - 1 - idx] = "0123456789abcdefghijklmnopqrstuvwxyz"[window & mask];
+        result[count - 1 - idx] = Alphabet[window & mask];
     }
     return result;
 }

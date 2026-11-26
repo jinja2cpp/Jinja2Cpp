@@ -169,19 +169,46 @@ int64_t IntArg(const InternalValue& val, const char* name)
     Raise(std::string(name) + "(): '" + TypeName(val) + "' object cannot be interpreted as an integer");
 }
 
-// Python's slice bounds: a negative index counts from the end, then it is clamped
-size_t SliceIndex(const InternalValue* val, size_t len, size_t def, const char* name)
+// Python's slice bounds: a negative index counts from the end, then it is clamped. A bound
+// past int64 clamps too, as Python's _PyEval_SliceIndex does. str's methods take None for an
+// omitted bound; list.index and tuple.index do not (`allowNone` false)
+size_t SliceIndex(const InternalValue* val, size_t len, size_t def, bool allowNone = true)
 {
-    if (!val || val->IsNone())
+    if (!val)
     {
         return def;
     }
-    auto idx = IntArg(*val, name);
+    if (val->IsNone() && allowNone)
+    {
+        return def;
+    }
+    if (const auto big = AsBigInt(*val))
+    {
+        return big->Sign() < 0 ? 0 : len;
+    }
+    const auto* i = GetIf<int64_t>(val);
+    const auto* b = GetIf<bool>(val);
+    if (!i && !b)
+    {
+        Raise(allowNone ? "slice indices must be integers or None or have an __index__ method" : "slice indices must be integers or have an __index__ method");
+    }
+    auto idx = i ? *i : (*b ? 1 : 0);
     if (idx < 0)
     {
         idx += static_cast<int64_t>(len);
     }
     return static_cast<size_t>(std::min<int64_t>(std::max<int64_t>(idx, 0), static_cast<int64_t>(len)));
+}
+
+// Whether str's start argument lies past the end, where Python's find and startswith match
+// nothing, not even an empty string; a positive bound past int64 does too
+bool StartPastEnd(const InternalValue& start, size_t len, const char* name)
+{
+    if (const auto big = AsBigInt(start))
+    {
+        return big->Sign() > 0;
+    }
+    return IntArg(start, name) > static_cast<int64_t>(len);
 }
 
 InternalValue MakeTuple(InternalValueList items)
@@ -626,10 +653,10 @@ struct StrOps
     }
 
     // self[start:end] for the methods that take optional start and end arguments
-    static View Window(View self, const Chars& chars, const CallParams& params, size_t firstIdx, const char* name, size_t* startChar = nullptr)
+    static View Window(View self, const Chars& chars, const CallParams& params, size_t firstIdx, size_t* startChar = nullptr)
     {
-        auto start = SliceIndex(Arg(params, firstIdx), chars.size(), 0, name);
-        auto end = SliceIndex(Arg(params, firstIdx + 1), chars.size(), chars.size(), name);
+        auto start = SliceIndex(Arg(params, firstIdx), chars.size(), 0);
+        auto end = SliceIndex(Arg(params, firstIdx + 1), chars.size(), chars.size());
         if (startChar)
         {
             *startChar = start;
@@ -649,13 +676,12 @@ struct StrOps
         // A start beyond the end matches nothing, not even an empty affix
         if (const auto* startArg = ArgOrNone(params, 1))
         {
-            auto start = IntArg(*startArg, name);
-            if (start > static_cast<int64_t>(chars.size()))
+            if (StartPastEnd(*startArg, chars.size(), name))
             {
                 return InternalValue(false);
             }
         }
-        auto window = Window(self, chars, params, 1, name);
+        auto window = Window(self, chars, params, 1);
         auto matches = [&](const InternalValue& affixVal) {
             auto affix = GetAsSameString(self, affixVal);
             if (!affix || !IsStringValue(affixVal))
@@ -696,14 +722,13 @@ struct StrOps
         auto chars = SplitCodePoints(self);
         if (const auto* startArg = ArgOrNone(params, 1))
         {
-            auto start = IntArg(*startArg, name);
-            if (start > static_cast<int64_t>(chars.size()))
+            if (StartPastEnd(*startArg, chars.size(), name))
             {
                 return -1;
             }
         }
         size_t startChar = 0;
-        auto window = Window(self, chars, params, 1, name, &startChar);
+        auto window = Window(self, chars, params, 1, &startChar);
         if (sub.empty())
         {
             return static_cast<int64_t>(fromRight ? CharIndex(self, chars, static_cast<size_t>(window.data() - self.data()) + window.size()) : startChar);
@@ -743,12 +768,12 @@ struct StrOps
         auto chars = SplitCodePoints(self);
         if (const auto* startArg = ArgOrNone(params, 1))
         {
-            if (IntArg(*startArg, "count") > static_cast<int64_t>(chars.size()))
+            if (StartPastEnd(*startArg, chars.size(), "count"))
             {
                 return static_cast<int64_t>(0);
             }
         }
-        auto window = Window(self, chars, params, 1, "count");
+        auto window = Window(self, chars, params, 1);
         if (sub.empty())
         {
             return static_cast<int64_t>(CodePointCount(window) + 1);
@@ -1170,6 +1195,18 @@ struct StrOps
     }
 
     static Str Ascii(const std::string& str) { return Str(str.begin(), str.end()); }
+    // The same for a string the caller gives up: a narrow one moves rather than being copied
+    static Str Ascii(std::string&& str)
+    {
+        if constexpr (std::is_same_v<CharT, char>)
+        {
+            return std::move(str);
+        }
+        else
+        {
+            return Str(str.begin(), str.end());
+        }
+    }
 
     // Python's ascii(): the repr with every non-ASCII character escaped as \\xhh, \\uhhhh or
     // \\Uhhhhhhhh
@@ -1350,6 +1387,7 @@ struct StrOps
             digits.push_back(static_cast<char>(d < 10 ? '0' + d : (type == 'X' ? 'A' : 'a') + d - 10));
             magnitude /= static_cast<uint64_t>(base);
         } while (magnitude != 0);
+        std::reverse(digits.begin(), digits.end());
         return DecorateDigits(std::move(digits), base, spec);
     }
 
@@ -1371,34 +1409,37 @@ struct StrOps
                 std::transform(digits.begin(), digits.end(), digits.begin(), [](char ch) { return ch >= 'a' && ch <= 'f' ? static_cast<char>(ch - 'a' + 'A') : ch; });
             }
         }
-        std::reverse(digits.begin(), digits.end());
         return DecorateDigits(std::move(digits), base, spec);
     }
 
-    // Groups digits, given least significant first, and adds the prefix
+    // Groups digits, given most significant first and never empty, and adds the prefix; digits
+    // with nothing to add come back as they are, uncopied (docs/tasks/0577)
     static std::string DecorateDigits(std::string digits, int base, const FormatSpec& spec)
     {
-        const auto type = spec.type;
-        if (spec.grouping != 0)
+        const bool prefix = spec.alternate && base != 10;
+        if (spec.grouping == 0 && !prefix)
         {
-            size_t groupSize = base == 10 ? 3 : 4;
-            std::string grouped;
-            for (size_t n = 0; n < digits.size(); ++n)
+            return digits;
+        }
+        const size_t groupSize = base == 10 ? 3 : 4;
+        const size_t separators = spec.grouping != 0 ? (digits.size() - 1) / groupSize : 0;
+        std::string result;
+        result.reserve(digits.size() + separators + (prefix ? 2 : 0));
+        if (prefix)
+        {
+            result.push_back('0');
+            result.push_back(static_cast<char>(spec.type));
+        }
+        // Groups count from the least significant digit
+        for (size_t n = 0; n < digits.size(); ++n)
+        {
+            if (spec.grouping != 0 && n != 0 && (digits.size() - n) % groupSize == 0)
             {
-                if (n != 0 && n % groupSize == 0)
-                {
-                    grouped.push_back(static_cast<char>(spec.grouping));
-                }
-                grouped.push_back(digits[n]);
+                result.push_back(static_cast<char>(spec.grouping));
             }
-            digits = grouped;
+            result.push_back(digits[n]);
         }
-        std::reverse(digits.begin(), digits.end());
-        if (spec.alternate && base != 10)
-        {
-            digits = std::string(1, '0') + static_cast<char>(type) + digits;
-        }
-        return digits;
+        return result;
     }
 
     // Digits of a non-negative double for the float presentation types
@@ -1470,12 +1511,14 @@ struct StrOps
     }
 
     // Pads sign and body to the spec's width; '=' puts the padding between them
-    static Str PadFormatted(const FormatSpec& spec, const Str& signStr, const Str& body, bool numeric)
+    static Str PadFormatted(const FormatSpec& spec, const Str& signStr, Str body, bool numeric)
     {
-        auto len = static_cast<int64_t>(CodePointCount(View(signStr)) + CodePointCount(View(body)));
+        // No width: the body moves out with its sign, rather than being counted and copied
+        auto len = spec.width <= 0 ? 0 : static_cast<int64_t>(CodePointCount(View(signStr)) + CodePointCount(View(body)));
         if (spec.width <= len)
         {
-            return signStr + body;
+            body.insert(0, signStr);
+            return body;
         }
         auto pad = spec.width - len;
         CharT align = spec.align;
@@ -1621,7 +1664,7 @@ struct StrOps
         {
             signStr = Str(1, static_cast<CharT>(spec.sign));
         }
-        return PadFormatted(spec, signStr, out.body, out.numeric);
+        return PadFormatted(spec, signStr, std::move(out.body), out.numeric);
     }
 
     static std::string Narrow(View str) { return ConvertString<std::string>(str); }
@@ -2489,8 +2532,8 @@ InternalValue ListIndex(const InternalValue& self, const CallParams& params, Ren
 {
     CheckArgs(params, "index", 1, 3);
     auto items = ListOf(self).ToValueList();
-    auto start = SliceIndex(Arg(params, 1), items.size(), 0, "index");
-    auto end = SliceIndex(Arg(params, 2), items.size(), items.size(), "index");
+    auto start = SliceIndex(Arg(params, 1), items.size(), 0, false);
+    auto end = SliceIndex(Arg(params, 2), items.size(), items.size(), false);
     for (auto n = start; n < end; ++n)
     {
         if (ItemEquals(items[n], params.posParams[0]))
@@ -2553,7 +2596,14 @@ InternalValue ListInsert(const InternalValue& self, const CallParams& params, Re
 {
     CheckArgs(params, "insert", 2, 2);
     auto& items = MutableItems(self);
-    auto idx = SliceIndex(params.posParams.data(), items.size(), 0, "insert");
+    // An index, not a slice bound: None and a huge integer are errors, as in Python
+    auto pos = IntArg(params.posParams[0], "insert");
+    const auto len = static_cast<int64_t>(items.size());
+    if (pos < 0)
+    {
+        pos += len;
+    }
+    const auto idx = static_cast<size_t>(std::min<int64_t>(std::max<int64_t>(pos, 0), len));
     CheckSequenceSize(uint64_t{ items.size() } + 1, "a list");
     ReserveCounted(items, items.size() + 1);
     NoteContainerStore(self, params.posParams[1]);
@@ -2803,8 +2853,8 @@ InternalValue PairIndex(const InternalValue& self, const CallParams& params, Ren
 {
     CheckArgs(params, "index", 1, 3);
     const auto items = PairItems(self);
-    const auto start = SliceIndex(Arg(params, 1), items.size(), 0, "index");
-    const auto end = SliceIndex(Arg(params, 2), items.size(), items.size(), "index");
+    const auto start = SliceIndex(Arg(params, 1), items.size(), 0, false);
+    const auto end = SliceIndex(Arg(params, 2), items.size(), items.size(), false);
     for (auto n = start; n < end; ++n)
     {
         if (ItemEquals(*items[n], params.posParams[0]))

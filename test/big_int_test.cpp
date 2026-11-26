@@ -255,6 +255,10 @@ const BigIntCase BigIntCases[] = {
     { "{% set h = hs|int(base=16) %}{{ h > big }}|{{ big < h }}|{{ -h < nbig }}|{{ h > 1e308 }}|{{ -h < -1e308 }}|{{ h < inf }}|{{ h > nan }}|{{ h == 1e308 }}", "True|True|True|True|True|True|False|False", Expect::Python },
     { "{{ (p14284|int(base=2))|string|length }}|{{ (p14285|int(base=2)).bit_length() }}|{{ (p14285m1|int(base=2)).bit_count() }}|{{ (p14285m1|int(base=2)) is odd }}|{{ (p14285|int(base=2)) is odd }}|{{ (p14285|int(base=2)) > (p14285m1|int(base=2)) }}", "4300|14286|14285|True|False|True", Expect::Python },
     { "{% set h = hs|int(base=16) %}{{ (o8|int(base=8)) == h }}|{{ (o32|int(base=32)) == h }}|{{ (o4|int(base=4)) == h }}|{{ (o32|int(base=32)).bit_count() }}|{{ ('-' ~ hs)|int(base=16) == -h }}|{{ (('-' ~ hs)|int(base=16)).bit_length() }}|{{ (h|round(-5)).bit_length() }}|{{ (h|round(-5)) > h }}", "True|True|True|14400|True|14400|14400|False", Expect::Python },
+    // Task 0577: the SWAR bit count and the whole-word digits of bases 2, 4 and 16, on words with the
+    // top bit set (hm), a single bit (2^14285) and zero, and grouping and prefixes after digits stopped
+    // being reversed twice. Outputs from Python Jinja2 3.1.6
+    { "{% set m = hm|int(base=16) %}{% set p = p14285|int(base=2) %}{{ m.bit_count() }}|{{ p.bit_count() }}|{{ (0).bit_count() }}|{{ '{:x}'.format(m) == hm }}|{{ ('{:#_x}'.format(m))[:12] }}|{{ ('{:#_x}'.format(m))[-10:] }}|{{ '{:#_x}'.format(m)|length }}|{{ '{:b}'.format(p)|length }}|{{ ('{:o}'.format(p))[:3] }}|{{ ('{:x}'.format(p))[:2] }}|{{ '{:#_x}|{:#_b}|{:_o}|{:x}|{:#o}'.format(0, 5, 4095, 255, 8) }}|{{ ('{:#_X}'.format(-m))[:8] }}|{{ ('{:+x}'.format(m))[:3] }}|{{ ('{:>4000x}'.format(m))[:1] == ' ' }}", "7201|1|0|True|0x8_f0e1_d2c|_b4a5_9687|4503|14286|400|20|0x0|0b101|7777|ff|0o10|-0X8_F0E|+8f|True", Expect::Python },
     { "{{ (p14285m1|int(base=2))|string }}", nullptr, Expect::Python },
     { "{{ (p14285|int(base=2))|string }}", nullptr, Expect::Python },
     { "{{ hs|int(base=16) }}", nullptr, Expect::Python },
@@ -265,12 +269,23 @@ const BigIntCase BigIntCases[] = {
     { "{% set h = hs|int(base=16) %}{{ (h + 1).bit_length() }}|{{ (h * h).bit_count() }}|{{ h - hbig }}|{{ h // hbig }}|{{ (h + 1) is even }}|{{ (h * -1) == -h }}|{{ {h + 0: 2}[hbig] }}|{{ {(p14285m1|int(base=2)): 3}[(p14285|int(base=2)) - 1] }}", "14401|14400|0|1|True|True|2|3", Expect::OverflowWithoutBackend },
 };
 
+// 3601 hex digits (14404 bits, huge): words with the top bit set and every nibble value
+std::string HugeMixedHex()
+{
+    std::string result = "8";
+    for (int n = 0; n < 225; ++n)
+    {
+        result += "f0e1d2c3b4a59687";
+    }
+    return result;
+}
+
 ValuesMap BigIntParams()
 {
     BigInt nbig;
     BigInt::TryParse("-18446744073709551615", nbig);
     const std::string hs(3600, 'f');
-    return { { "big", std::numeric_limits<uint64_t>::max() }, { "nbig", nbig }, { "nan", std::nan("") }, { "inf", HUGE_VAL }, { "small", BigInt(5) }, { "hs", hs }, { "hbig", BigInt::FromDigits(hs, 16, false) }, { "o8", BigInt::FromDigits(hs, 16, false).ToDigits(8) }, { "o32", BigInt::FromDigits(hs, 16, false).ToDigits(32) }, { "o4", BigInt::FromDigits(hs, 16, false).ToDigits(4) }, { "p14284", "1" + std::string(14284, '0') }, { "p14285m1", std::string(14285, '1') }, { "p14285", "1" + std::string(14285, '0') } };
+    return { { "big", std::numeric_limits<uint64_t>::max() }, { "nbig", nbig }, { "nan", std::nan("") }, { "inf", HUGE_VAL }, { "small", BigInt(5) }, { "hs", hs }, { "hbig", BigInt::FromDigits(hs, 16, false) }, { "o8", BigInt::FromDigits(hs, 16, false).ToDigits(8) }, { "o32", BigInt::FromDigits(hs, 16, false).ToDigits(32) }, { "o4", BigInt::FromDigits(hs, 16, false).ToDigits(4) }, { "p14284", "1" + std::string(14284, '0') }, { "p14285m1", std::string(14285, '1') }, { "p14285", "1" + std::string(14285, '0') }, { "hm", HugeMixedHex() } };
 }
 
 template<typename CharT>
