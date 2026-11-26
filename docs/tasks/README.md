@@ -306,7 +306,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | done |
 | [0233](0233-cpp-only-filter-stubs.md) | C++-only filters `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` do nothing | api | medium | done |
 | [0234](0234-github-tracker-cleanup.md) | Close GitHub issues that master already fixes, before 2.0 | release | medium | open |
-| [0235](0235-parity-feature-rows-drift.md) | `docs/parity.md` feature rows contradict master | parity | medium | open |
+| [0235](0235-parity-feature-rows-drift.md) | `docs/parity.md` feature rows contradict master | parity | medium | done |
 | [0236](0236-meta-find-undeclared-variables.md) | Template introspection: `meta.find_undeclared_variables`, `Template.module` | api | low | done |
 | [0237](0237-python-bindings.md) | Python bindings, so Jinja2's own test suite can run against Jinja2C++ | parity | low | dropped |
 | [0238](0238-msvc-static-debug-info.md) | Installed MSVC static Debug library has no usable debug information | build | low | open |
@@ -642,3 +642,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0581](0581-failed-include-kept-self-loses-frame-names.md) | A `self` an include stored before it failed reads the include's names as undefined | parity | low | open |
 | [0582](0582-host-operator-followups.md) | Host operators: the leftovers of task 0381 | parity | low | open |
 | [0585](0585-int-format-zero-pad-prefix-grouping.md) | Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base | parity | low | open |
+| [0589](0589-ext-debug-extension.md) | `jinja2.ext.debug`: implement `{% debug %}` or record it as deliberate | parity | low | open |
+| [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | open |

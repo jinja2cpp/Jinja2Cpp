@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (2797 templates rendered by both engines, see
+`test/parity/` (3977 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -22,7 +22,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Nov 2026):
 | calls | 83 | 82 | 1 | 0 | 0 | 0 | 0 | 0 | 0214 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | errors | 129 | 129 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| filters | 477 | 473 | 2 | 1 | 1 | 0 | 0 | 0 | 0101, 0571 |
+| filters | 495 | 494 | 1 | 0 | 0 | 0 | 0 | 0 | 0101 |
 | fuzz | 34 | 34 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | globals | 105 | 104 | 0 | 1 | 0 | 0 | 0 | 0 | 0178 |
 | i18n | 73 | 73 | 0 | 0 | 0 | 0 | 0 | 0 |  |
@@ -40,7 +40,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Nov 2026):
 | tests | 74 | 73 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
 | undefined | 168 | 168 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 59 | 59 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **3959** | **3925** | **15** | **12** | **7** | **0** | **0** | **0** | |
+| **total** | **3977** | **3946** | **14** | **11** | **6** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -70,7 +70,7 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0012](tasks/0012-python-value-stringification.md) | Print values the way Python `str()` does | high | done |
 | [0013](tasks/0013-literal-syntax.md) | Literal syntax: `none`, numeric forms, dict and tuple literals | high | done |
 | [0014](tasks/0014-operator-and-postfix-grammar.md) | Operator and postfix grammar: chained compare, `not in`, `is not`, slices | high | done |
-| [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | 4 |
+| [0015](tasks/0015-arithmetic-and-logic-semantics.md) | Python arithmetic, comparison and `and`/`or` semantics | high | done |
 | [0016](tasks/0016-strings-as-sequences.md) | Strings behave as sequences | high | done |
 | [0017](tasks/0017-builtin-tests.md) | Complete the builtin tests | medium | done |
 | [0018](tasks/0018-missing-builtin-filters.md) | Missing builtin filters (`string`, `safe`, `indent`, ...) | high | done |
@@ -86,23 +86,23 @@ came from printing lists and from `join` over numbers, which this corpus isolate
 | [0028](tasks/0028-delimiters-and-line-statements.md) | Custom delimiters, line statements | low | done |
 | [0029](tasks/0029-i18n-extension.md) | i18n extension | low | done |
 | [0030](tasks/0030-global-functions.md) | Global functions: `cycler`, `joiner`, `lipsum`, `range` | medium | done |
-| [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | 2 |
+| [0031](tasks/0031-insertion-ordered-mappings.md) | Mappings keep insertion order | medium | done |
 | [0032](tasks/0032-custom-filters-and-tests.md) | Register custom filters and tests | medium | done |
-| [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | API |
+| [0033](tasks/0033-wide-string-parity.md) | Run the corpus through the wide-string API | low | done |
 | [0034](tasks/0034-none-versus-undefined.md) | Tell `None` apart from undefined | high | done |
-| [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | 2 |
-| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | 5 |
-| [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | 2 |
-| [0041](tasks/0041-string-literal-escapes.md) | String literal escape sequences (`\x`, `\u`, octal, `\N{}`, `\v`) | low | 3 |
-| [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | 6 |
-| [0043](tasks/0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | medium | 4 |
-| [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | 1 |
-| [0045](tasks/0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | low | 0 |
-| [0047](tasks/0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | medium | 3 |
-| [0048](tasks/0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | low | 11 |
-| [0049](tasks/0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | low | 1 |
-| [0051](tasks/0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | low | 6 |
-| [0052](tasks/0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | low | 10 |
+| [0036](tasks/0036-non-string-mapping-keys.md) | Mapping keys that are not strings | low | done |
+| [0037](tasks/0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups (non-ASCII sort, string self-subscript, `sum`, mapping `is sequence`, zero-width errors) | medium | done |
+| [0038](tasks/0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | medium | done |
+| [0041](tasks/0041-string-literal-escapes.md) | String literal escape sequences (`\x`, `\u`, octal, `\N{}`, `\v`) | low | done |
+| [0042](tasks/0042-loop-cycle-magic-number.md) | Global function follow-ups: `loop.cycle` is the integer 2, globals are maps | low | done |
+| [0043](tasks/0043-ordered-valuesmap-2-0.md) | Insertion-ordered `ValuesMap` (2.0.0) | medium | done |
+| [0044](tasks/0044-lstrip-blocks-leftovers.md) | `lstrip_blocks` and modifier leftovers | low | done |
+| [0045](tasks/0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | low | done |
+| [0047](tasks/0047-none-leftovers.md) | None and undefined: JSON null, `Undefined` repr, string filters on None | medium | done |
+| [0048](tasks/0048-filter-behaviour-leftovers.md) | Filter leftovers: Unicode case, HTML entities, big ints, unused JSON serializers | low | done |
+| [0049](tasks/0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | low | done |
+| [0051](tasks/0051-markup-leftovers.md) | Markup leftovers: `~` under autoescape, Markup methods and repr, Markup from C++ | low | done |
+| [0052](tasks/0052-undefined-in-filters.md) | Undefined in filters, tests and `range()`: what 0026 left behind | low | done |
 
 Order: `python3 scripts/task_batches.py --area parity` groups the tasks into waves that
 can run side by side (Oct 2026: 0012 0013 0016 0022 0033 → 0014 0018 0023 0024 0030 0031
