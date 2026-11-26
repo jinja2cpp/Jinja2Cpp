@@ -167,6 +167,12 @@ inline thread_local RenderLimits t_renderLimits;
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
 
+// Whether every later step of the running render fails: its steps or memory are spent (StepsSlow)
+inline bool StepsSpent()
+{
+    return t_renderLimits.chunk == 0;
+}
+
 // The steps the running render took, of one with a step limit: those of the countdowns before the current one
 // and of it. Past the limit, the limit (StepsSlow leaves chunk 0 and one step left)
 inline std::uint64_t StepsTaken()

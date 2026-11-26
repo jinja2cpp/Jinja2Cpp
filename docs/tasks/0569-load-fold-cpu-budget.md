@@ -31,9 +31,11 @@ bits (`RenderLimits::maxIntBits`, read by big_int.cpp instead of MaxBigIntBits).
 makes the candidate Impossible in every check (`FoldEvaluator::m_limitIsImpossible`), so a literal past 4300 digits
 still fails the Load however many roots come first, while a computation past the budget is left to the render.
 A template with limits of its own folds under those, as before. Release, boost: the two templates above load in
-0.4 ms and 2.4 ms. Once a check reaches a limit, its later candidates do not fold either (`FoldEvaluator::LimitedOutcomeOf`):
-their steps' values are gone, and under StrictUndefined a strict undefined they would have reached is not reported
-(verifier round 1 found a limit escaping `LetsUndefinedOut` and `ConditionalOf` there and failing the Load).
+0.4 ms and 2.4 ms. A candidate whose evaluation, or a step it reads, reaches a limit does not fold and reports no strict undefined
+(`FoldEvaluator::LimitedOutcomeOf`; verifier round 1 found a limit escaping `LetsUndefinedOut` and
+`ConditionalOf` under StrictUndefined and failing the Load). Once the check's steps or memory are spent
+(`detail::StepsSpent`), every later candidate of the check does not fold either; a size limit stops only the
+candidate that reached it, so a fold beside it still folds (verifier round 2).
 Deliberate divergences, past the budget only: a power or product past 2^16 bits whose value has more than 4300
 digits loads (corpus `literals.int_power_past_fold_budget_unrendered`, accepts); a tuple-slice subscript, or an
 integer literal past 4300 digits, whose covering fold exceeds the budget fails the Load as unfolded where Jinja2

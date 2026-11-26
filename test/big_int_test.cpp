@@ -1005,6 +1005,14 @@ TEST(BigIntTemplate, FoldBudgetBoundsDeadConstants)
     EXPECT_EQ("ok", loadError("{% set v = [" + items + "] %}ok", &strict));
     EXPECT_EQ("ok", loadError(spent + "{% set v = [" + items.substr(0, 9 + 11 * 300) + "] %}ok", &strict));
     EXPECT_TRUE(fails(loadError("{% if false %}{{ " + past + " }}{% endif %}{% set v = [" + items + "] %}ok", &strict), "Exceeds the limit (4300 digits)"));
+    // A size limit stops only the candidate that reaches it: a fold beside it still folds, and a strict undefined
+    // after it still fails the Load (verifier round 2)
+    const std::string big = "('a' * 100000)|first";
+    EXPECT_EQ("['a', 'a']", loadError("{{ [" + big + ", ()[:, :] ~ 'a'] }}"));
+    EXPECT_EQ("['a', 'a']", loadError("{{ [()[:, :] ~ 'a', " + big + "] }}"));
+    EXPECT_EQ("[True, 'a']", loadError("{{ [(" + past + ") is odd, " + big + "] }}"));
+    EXPECT_EQ("aTrue", loadError("{{ " + big + " ~ ((" + past + ") is odd) }}"));
+    EXPECT_TRUE(fails(loadError("{{ " + big + " ~ ([1][5] ~ 'x') }}", &strict), "a constant expression gives a strict undefined"));
     // A template with limits of its own folds under those, as it renders
     Settings limited;
     limited.limits.maxRenderSteps = 1000000;

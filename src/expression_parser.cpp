@@ -2136,6 +2136,8 @@ struct FoldValue
     bool failed = false;
     // It failed with OverflowError (IntegerOutOfRangeError): with no big-integer backend, what Python computes
     bool overflow = false;
+    // It failed with a limit that FoldEvaluator::TryFold makes Impossible (docs/tasks/0569)
+    bool limit = false;
 };
 
 // A filter's value error the render reports as an ErrorInfo (RendererCallback::ThrowRuntimeError): `|abs` of
@@ -2304,29 +2306,36 @@ private:
     };
     static constexpr std::size_t NoStep = static_cast<std::size_t>(-1);
 
-    // OutcomeOf, where a limit reached is Impossible (m_limitIsImpossible): once the check reached one, the
-    // candidate does not fold, and neither does any after it, whose evaluation the limit stops or whose steps'
-    // values it took. A strict undefined it would have reached is not reported either (docs/tasks/0569)
+    // OutcomeOf, where a limit reached is Impossible (m_limitIsImpossible): a candidate whose evaluation, or that of
+    // a step it reads, reached one does not fold, and a strict undefined it would have reached is not reported. Once
+    // the check's steps or memory are spent, every later step fails, so no later candidate folds either
+    // (docs/tasks/0569)
     FoldOutcome LimitedOutcomeOf(std::size_t index)
     {
         if (!m_limitIsImpossible)
         {
             return OutcomeOf(index);
         }
-        if (m_limitReached)
+        if (m_spent)
         {
             return FoldOutcome::DoesNotFold;
         }
+        m_limitReached = false;
+        auto outcome = FoldOutcome::DoesNotFold;
         try
         {
-            const auto outcome = OutcomeOf(index);
-            return m_limitReached ? FoldOutcome::DoesNotFold : outcome;
+            outcome = OutcomeOf(index);
         }
         catch (const ResourceLimitError&)
         {
             m_limitReached = true;
-            return FoldOutcome::DoesNotFold;
         }
+        if (!m_limitReached)
+        {
+            return outcome;
+        }
+        m_spent = detail::StepsSpent();
+        return FoldOutcome::DoesNotFold;
     }
 
     FoldOutcome OutcomeOf(std::size_t index)
@@ -2791,6 +2800,8 @@ private:
     {
         if (previous.failed)
         {
+            // A step after one a limit stopped is not computed either (LimitedOutcomeOf)
+            m_limitReached = m_limitReached || previous.limit;
             return previous;
         }
         const auto& nodes = m_context.Nodes();
@@ -2873,7 +2884,7 @@ private:
         catch (const ResourceLimitError&)
         {
             m_limitReached = true;
-            return FoldValue{ InternalValue(), true };
+            return FoldValue{ InternalValue(), true, false, true };
         }
     }
 
@@ -2926,8 +2937,9 @@ private:
     std::unordered_map<const void*, bool> m_letsOut;
     std::unordered_map<const void*, FoldSummary> m_operands;
     bool m_limitIsImpossible = false;
-    // A limit was reached in the check (LimitedOutcomeOf)
+    // A limit was reached in the candidate's outcome, and the check's steps or memory are spent (LimitedOutcomeOf)
     bool m_limitReached = false;
+    bool m_spent = false;
 };
 } // namespace
 
