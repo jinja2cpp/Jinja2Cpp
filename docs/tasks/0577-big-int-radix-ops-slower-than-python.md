@@ -1,8 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: perf
 depends: []
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1008
 touches: [src/big_int.cpp, src/value_methods.cpp, test/big_int_test.cpp]
 ---
 # Huge-integer bit_count and power-of-two formatting are slower than Python
@@ -46,3 +47,10 @@ in the same thread.
 instruction count at least -50% in `bench/count.py`, no other row above +0.3%. `bit_count` and
 `{:x}`/`{:o}`/`{:b}`/`{:#_x}` results are unchanged in test/big_int_test.cpp for both character
 types, including a word with the top bit set, a single-bit value and zero.
+
+**Result.** `WordsBitCount` counts with a SWAR popcount, `WordsDigits` emits whole words for bases 2, 4 and 16, and
+integer formatting no longer reverses a huge digit string twice, decorates (and copies) only when the spec groups or
+prefixes, and moves the body out when the spec has no width. `bench/count.py` on Release: `Render/big_int_radix`
+308.3 M to 146.6 M instructions (-52.5%), every other row within +-0.05%. Wall-clock parity with Python
+(`bench/run.py`) was not measured in the cloud container; the remaining cost is mostly the one `int(base=16)` parse
+and the `|length` count over the 65,536-digit strings.
