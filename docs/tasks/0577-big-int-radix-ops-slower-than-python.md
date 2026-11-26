@@ -3,6 +3,7 @@ status: in-progress
 priority: medium
 area: perf
 depends: []
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1008
 touches: [src/big_int.cpp, src/value_methods.cpp, test/big_int_test.cpp]
 ---
 # Huge-integer bit_count and power-of-two formatting are slower than Python

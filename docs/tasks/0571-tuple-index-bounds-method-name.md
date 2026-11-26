@@ -3,6 +3,7 @@ status: in-progress
 priority: low
 area: parity
 depends: []
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1008
 touches: [src/value_methods.cpp#ListIndex, src/value_methods.cpp#SliceIndex]
 shares: [test/parity/cases/filters.py, test/parity/divergences/filters.txt]
 ---
