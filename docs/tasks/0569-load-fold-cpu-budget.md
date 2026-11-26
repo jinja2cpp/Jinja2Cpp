@@ -41,4 +41,4 @@ digits loads (corpus `literals.int_power_past_fold_budget_unrendered`, accepts);
 integer literal past 4300 digits, whose covering fold exceeds the budget fails the Load as unfolded where Jinja2
 computes the fold (`{{ ()[:, :] ~ ('a' * 100000)|first }}`; after roots that drained the pool,
 `{{ (0x<3572 f>)|abs|...80 filters... is odd }}`; and `{{ (0x<20000 f>) * 1 > 5 }}`, an 80,000-bit product, which
-master's 2^20-bit cap allowed). Charging big-integer work by its size is 0586.
+master's 2^20-bit cap allowed). Charging big-integer work by its size is 0588.
