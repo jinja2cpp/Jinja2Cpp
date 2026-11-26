@@ -84,3 +84,7 @@ jobs:
     # alone and the merge steward regenerates it after a merge batch (docs/tasks/0157).
     - name: Compare the index with the task files
       run: python3 scripts/task_index.py --check
+
+    # Hand-written gap rows of docs/parity.md must cite an open task or a divergence line (docs/tasks/0235)
+    - name: Check the parity feature rows
+      run: python3 scripts/check_parity_rows.py
