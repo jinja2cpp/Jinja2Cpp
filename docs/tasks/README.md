@@ -627,8 +627,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0566](0566-huge-host-big-int-converts-per-access.md) | Stop converting a huge host BigInt on every access | robustness | low | open |
 | [0567](0567-stored-closure-reaching-module-through-capture.md) | A stored closure that reaches a call's module only through its capture keeps the module | parity | low | done |
 | [0568](0568-huge-int-index-and-range-bound.md) | Render a huge integer used as a list index or a range() bound as Python does | robustness | low | open |
-| [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | open |
-| [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | open |
+| [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | done |
+| [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | done |
 | [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | done |
 | [0572](0572-nested-item-cells-never-dropped.md) | A template module keeps the cell of every nested item it wrote, one per call | robustness | medium | open |
 | [0573](0573-cycle-through-owned-argument-cell.md) | A cycle through the cell of a module call's owned argument keeps it for the module's life | robustness | medium | open |
@@ -644,6 +644,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0585](0585-int-format-zero-pad-prefix-grouping.md) | Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base | parity | low | open |
 | [0586](0586-closure-in-module-top-level-with-loses-outer-names.md) | A closure defined in a `with` at a module's top level reads the module's names as undefined on later calls | parity | low | open |
 | [0587](0587-set-erase-and-update-stay-linear.md) | The engine's set still spends O(n) per remove, pop and update | robustness | low | open |
+| [0588](0588-fold-budget-charges-big-int-work.md) | Charge the Load's fold budget for the size of big-integer work | robustness | low | open |
 | [0589](0589-ext-debug-extension.md) | `jinja2.ext.debug`: implement `{% debug %}` or record it as deliberate | parity | low | open |
 | [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | open |
 | [0591](0591-cell-protocol-inductive-invariant.md) | Find the cell protocol's inductive invariant | robustness | low | open |
