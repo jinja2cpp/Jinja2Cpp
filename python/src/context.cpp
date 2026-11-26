@@ -162,19 +162,28 @@ const jinja2::GenericMap& ContextHandle::Live() const
 jinja2::Value ContextHandle::View(Part part) const
 {
     const auto& context = Live();
+    jinja2::ContextNames names{};
     switch (part)
     {
     case Part::Vars:
-        return jinja2::ContextView(jinja2::Value(context), jinja2::ContextNames::TopLevel);
+        names = jinja2::ContextNames::TopLevel;
+        break;
     case Part::Parent:
-        return jinja2::ContextView(jinja2::Value(context), jinja2::ContextNames::Parent);
+        names = jinja2::ContextNames::Parent;
+        break;
     case Part::Body:
-        return jinja2::ContextView(jinja2::Value(context), jinja2::ContextNames::BodyVars);
+        names = jinja2::ContextNames::BodyVars;
+        break;
     case Part::All:
     case Part::Resolve:
-        break;
+        return jinja2::Value(context);
     }
-    return jinja2::Value(context);
+    auto& view = m_views.at(static_cast<std::size_t>(part) - static_cast<std::size_t>(Part::Vars));
+    if (!view)
+    {
+        view = jinja2::ContextView(jinja2::Value(context), names);
+    }
+    return *view;
 }
 
 nb::object ContextHandle::Lookup(const std::string& name, Part part, bool& found) const

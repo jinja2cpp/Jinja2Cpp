@@ -5,7 +5,9 @@
 
 #include <jinja2cpp/value.h>
 
+#include <array>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace jinja2cpp_py
@@ -61,6 +63,9 @@ private:
     const jinja2::GenericMap& Live() const;
 
     std::shared_ptr<CallLease> m_lease;
+    // The views of Vars, Parent and Body, made at their first read: a view reads the render as it goes and expires
+    // with the call, so one per part serves every lookup of the call (each view allocates its mapper)
+    mutable std::array<std::optional<jinja2::Value>, 3> m_views;
 };
 
 void BindContext(nb::module_& module);
