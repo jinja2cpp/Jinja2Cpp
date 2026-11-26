@@ -50,7 +50,7 @@ argument and the exhaustive runs of 0351 are the final answer.
 ## Result (2026-11-26)
 
 Closed by the second branch of the done-when: tla/README.md, "The inductive proof: why the
-exhaustive runs are the answer", gives the reasons; the proof itself is task 0586.
+exhaustive runs are the answer", gives the reasons; the proof itself is task 0591.
 
 - **The harness had rotted.** Since 0338 F, steps D, 0346 and 0463 added constants
   (`FixGlobalOuterCell`, `FixSnapshotLinks`, `FixAtomicLink`, `FixAtomicPin`), adapter fields
@@ -70,4 +70,4 @@ exhaustive runs are the answer", gives the reasons; the proof itself is task 058
 - **Cutoff gaps.** Two threads at `MaxDepth=2` reach their fixed point with no error
   (`threads-exhaustive` 219,938 states, `threads-module-exhaustive` 19,304,429). The identity
   cutoff is exact for the exhaustive bounds: `MaxAd / 2` calls name at most that many addresses,
-  and the three-address run of `module-0332-exhaustive` (13,018,093 states) covers its bounds. Left on paper: the thread reduction (TLAPS, task 0586).
+  and the three-address run of `module-0332-exhaustive` (13,018,093 states) covers its bounds. Left on paper: the thread reduction (TLAPS, task 0591).

@@ -419,7 +419,7 @@ on, the C++; the three mutants find their counterexamples again in 2 to 49 secon
 Step F was to replace "bounded" with inductive invariants checked by Apalache plus a cutoff
 argument for the sizes. Apalache now runs the model, but the inductive check is out of reach as
 the spec is written. Task 0363 measured it again and closed it without the proof (see "The
-inductive proof: why the exhaustive runs are the answer" below); the proof itself is task 0586.
+inductive proof: why the exhaustive runs are the answer" below); the proof itself is task 0591.
 This section records what was built, what it costs, and the argument that stands in for the
 proof.
 
@@ -559,7 +559,7 @@ rest, so they test the argument's assumptions rather than prove them.
 
 Task 0363 came back to the proof with the harness repaired and one query per action. It closes
 with the exhaustive runs and the cutoff argument as the answer, and files the proof itself as
-task 0586. The reasons, in order:
+task 0591. The reasons, in order:
 
 1. **For fixed constants the proof adds nothing the exhaustive runs lack.** Every scope is finite
    ("Depth: every scope is finite"), so a run that reaches its fixed point has checked every
@@ -587,7 +587,7 @@ task 0586. The reasons, in order:
    cell is of its data, in a registry its frame may use". Each such lemma is a new part that
    every action must preserve: a sweep of the module scope is about 260 queries, 4 to 8 hours
    at these speeds, and the proof needs many rounds before `Start`, `End`, `GC` and `DropUnheld`,
-   the costly actions, are reached. Task 0586 has the plan: lemmas from the counterexamples,
+   the costly actions, are reached. Task 0591 has the plan: lemmas from the counterexamples,
    the flattening of indirect reads, and a heap lemma for `GC`.
 3. **The cutoff gaps that runs can close are closed** (the runs below). What is left is on paper:
    the thread reduction of "Sizes: the cutoff argument", which a TLAPS proof would mechanize.
@@ -619,7 +619,7 @@ finite, so a run without the level bound that completes covers every behaviour o
 the exhaustive runs do that for small allocation bounds, and the simulation samples deeper
 behaviours of the larger ones (task 0351); the cutoff argument above, on paper, carries the results to more threads and
 identities, with the limits it states. Task 0363 closed the mechanized proof on that basis
-(above); the proof itself is task 0586. The path
+(above); the proof itself is task 0591. The path
 from here to a safety argument for the implementation is task 0338.
 
 ## Not modelled
