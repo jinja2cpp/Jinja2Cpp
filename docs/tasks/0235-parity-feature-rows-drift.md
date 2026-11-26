@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 touches: [docs/parity.md#features, scripts/check_parity_rows.py]
@@ -21,3 +21,11 @@ or when a ❌/🟡 row cites no task.
 
 **Done when.** Every ❌/🟡 row cites an open task or a divergence line, the check runs in
 CI, and the rows above are corrected.
+
+**Result.** All 27 stale ❌/🟡 rows and the stale prose (sequences, methods, autoescape, errors)
+of `docs/parity.md` were re-checked against the corpus expectations and the divergence lists
+and corrected; every case a row cites matches Python. Four gap rows remain, each with a
+citation: big integers (0178), `select` single pass (0101), `jinja2.ext.debug` (0583) and
+`ChoiceLoader` (0584). `scripts/check_parity_rows.py` runs in the format-check workflow. Left
+alone for the merge steward: the corpus size in the page's first paragraph and the Tasks table's
+Cases column.

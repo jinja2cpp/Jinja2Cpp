@@ -115,17 +115,17 @@ repr look the same.
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | Integers, floats, strings, `\n` `\r` `\t` escapes, unicode | ✅ | `int`, `float`, `string_*` | |
-| `\xHH`, `\uHHHH`, octal, `\N{...}` and `\a` `\b` `\f` `\v` `\0` escapes | ❌ backslash dropped, rest kept | `string_escape_hex_octal`, `string_escape_control`, `string_escape_named` | 0041 |
-| `true`/`false`/`True`/`False` | 🟡 parse; print as `true` | `bool_lower`, `bool_title` | 0012 |
+| `\xHH`, `\uHHHH`, octal, `\N{...}` and `\a` `\b` `\f` `\v` `\0` escapes | ✅ | `string_escape_hex_octal`, `string_escape_control`, `string_escape_named` | |
+| `true`/`false`/`True`/`False` | ✅ parse; print as `True`/`False` | `bool_lower`, `bool_title` | |
 | `none`/`None` | ✅ | `none_lower`, `none_title` | |
 | `1_000`, `0x1F`, `0o17`, `0b101` | ✅ | `int_underscore`, `int_hex`, ... | |
-| Exponent floats `1e3` | 🟡 prints `1000` | `float_exponent` | 0012 |
+| Exponent floats `1e3` | ✅ prints `1000.0` | `float_exponent` | |
 | Integers beyond 64 bits | ✅ printed, compared and converted exactly; arithmetic past int64 is exact with a big-integer backend and raises without one (build option, see Big integers) | `int_big` | 0178 |
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
-| List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
+| List literals, trailing comma | ✅ | `list_trailing_comma` | |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
-| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` is rejected like Jinja2 since 0094); print as empty | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
-| Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
+| Dict literals `{'a': 1}`, `{key_expr: v}` | ✅ (`{'a'=1}` is rejected like Jinja2) | `dict`, `dict_expression_key`, `dict_nested` | |
+| Non-string dict keys | ✅ | `dict_int_key` | |
 
 ## Printing values (`output`)
 
@@ -133,12 +133,12 @@ repr look the same.
 |---|---|---|---|
 | Strings, integers | ✅ | `string_var`, `int_var` | |
 | `None` | ✅ prints `None`; undefined prints empty | `none_var`, `none_in_concat` | |
-| Booleans | ❌ `true`/`false` | `true_var`, `bool_expr` | 0012 |
-| Whole floats `3.0` | ❌ `3` | `float_whole_var`, `float_division_whole` | 0012 |
-| Float precision (`0.1 + 0.2`, `1/3`) | ❌ 8 significant digits | `float_precision`, `float_repr_third` | 0012 |
-| Lists, tuples, dicts (`[1, 2]`, `{'a': 1}`) | ❌ print empty | `list_var`, `dict_var`, `nested_var` | 0012 |
+| Booleans | ✅ `True`/`False` | `true_var`, `bool_expr` | |
+| Whole floats `3.0` | ✅ | `float_whole_var`, `float_division_whole` | |
+| Float precision (`0.1 + 0.2`, `1/3`) | ✅ shortest round-trip repr, as Python | `float_repr_third`, `float_exponent_large`, `float_exponent_small` | |
+| Lists, tuples, dicts (`[1, 2]`, `{'a': 1}`) | ✅ | `list_var`, `dict_var`, `nested_var` | |
 | `range(3)` | ✅ `range(0, 3)` | `range_object` | |
-| `~` with non-strings | 🟡 same str() gaps | `bool_in_concat`, `list_in_concat` | 0012 |
+| `~` with non-strings | ✅ | `bool_in_concat`, `list_in_concat` | |
 
 ## Operators (`operators`)
 
@@ -151,7 +151,7 @@ repr look the same.
 | Division by zero raises | ✅ | `div_by_zero`, `floordiv_by_zero`, `mod_by_zero` | |
 | Big integers | 🟡 build option: exact with a backend (`-DJINJA2CPP_WITH_BIGINT=boost`, or `TemplateEnv::SetBigIntBackend`); the default build raises IntegerOutOfRange when arithmetic leaves int64 | `int_overflow_mul`, `int_big_pow` | 0178 |
 | `str * int`, `int * str`, `bool` as an int (`1 + true`) | ✅ | `string_times`, `int_times_string`, `int_plus_bool` | |
-| `list + list`, `list * int` | 🟡 compute; print empty | `list_plus`, `list_times` | 0012 |
+| `list + list`, `list * int` | ✅ | `list_plus`, `list_times` | |
 | Type errors raise (`str + int`, `1 < 'a'`, `x()` on a number) | ✅ | `string_plus_int`, `compare_mixed_types`, `errors.call_non_callable` | |
 | `==`, `<` on numbers and strings | ✅ | `eq`, `lt_gt`, `compare_strings` | |
 | `==`, `<` on lists, `==` on dicts | ✅ | `eq_list`, `compare_lists`, `eq_dict*` | |
@@ -186,9 +186,9 @@ A string is a sequence of characters wherever Python iterates one: `for`, indexi
 `sequence` tests. A character is a Unicode code point, as in Python: narrow strings are
 read as UTF-8 and wide ones as UTF-16 or UTF-32 by the size of `wchar_t`, so `'héllo'|length`
 is 5. Malformed UTF-8 does not fail; a stray continuation byte stays with the character
-before it. Still open (0037): `sort`, `min` and `max` order non-ASCII narrow characters by
-signed bytes; `join(attribute=)` over characters sees the character as its own attribute;
-`s|sum` does not raise; `mapping is sequence` is false.
+before it. `sort`, `min` and `max` order non-ASCII characters by code point, `s|sum` raises
+and `mapping is sequence` is true, as in Python (`sequences.sort_utf8`, `sum_string`,
+`mapping_is_sequence`).
 
 ## Methods on values (`methods`)
 
@@ -203,9 +203,11 @@ center/ljust/rjust, partition/rpartition, removeprefix/removesuffix) and `%` for
 shared, so a mutation is seen through every name; a context list is copied on its first
 mutation and stored back in its variable (the caller's data never changes).
 
-Left: dict views print as lists and context mappings iterate in hash order (0043), an
-alias of a context list taken before the list is changed keeps the old list (0049), and
-storing a container in itself raises instead of printing `[...]` (deliberate, 0049).
+Dict views are live views that print as `dict_keys([...])` and so on, mappings iterate in
+insertion order, an alias of a context list sees later mutations, and a container stored in
+itself prints `[...]`, all as in Python (`operators.dict_views_repr`, `methods.context_alias`,
+`methods.alias_self_append`). The remaining differences are the deliberate lines in
+`test/parity/divergences/` (dict walks that grow under a lazy filter, 0545).
 
 ## Tests (`tests`)
 
@@ -215,10 +217,10 @@ storing a container in itself raises instead of printing `[...]` (deliberate, 00
 | `divisibleby(n)`, `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `in`, `sameas` with parentheses | ✅ | |
 | ... the same with a space-separated argument (`is eq 3`) | ✅ | |
 | `is not test` | ✅ | |
-| `none`, `true`, `false` | ❌ parse, but the tests are missing | 0017 |
-| `boolean`, `callable`, `escaped`, `filter`, `test`, `float`, `integer`, `sameas`, `divisibleby` (in `select`) | ❌ missing | 0017 |
+| `none`, `true`, `false` | ✅ | |
+| `boolean`, `callable`, `escaped`, `filter`, `test`, `float`, `integer`, `sameas`, `divisibleby` (in `select`) | ✅ | |
 | `iterable`, `sequence` on strings | ✅ | |
-| Unknown test is a compile error | ❌ silently false | 0017 |
+| Unknown test is a compile error (also in an uncalled macro; not in a branch never taken) | ✅ | |
 | `x is odd and y` precedence | ✅ | |
 
 ## Filters (`filters`)
@@ -240,7 +242,7 @@ storing a container in itself raises instead of printing `[...]` (deliberate, 00
 | `float`, `int` | ✅ within the int64 range, Unicode digits and spaces as in Python; beyond int64 `int` gives the default (deliberate) | `float*`, `int*` | 0015 |
 | `format` | ✅ printf-style only, as in Python (2.0 dropped the C++ `{}` syntax; use `'{}'.format(x)`) | `format_*` | |
 | `groupby` | ✅ | `groupby*` | |
-| `join` | 🟡 drops non-string items | `join_numbers` | 0012 |
+| `join` | ✅ numbers and other non-strings are converted with `str()` | `join_numbers` | |
 | `length` | ✅ on strings (code points) and dicts | `length`, `sequences.utf8_length` | |
 | `list` | ✅ on strings | `list_string` | |
 | `pprint` | ✅ | `pprint`, `pprint_dict_literal` | |
@@ -248,8 +250,8 @@ storing a container in itself raises instead of printing `[...]` (deliberate, 00
 | `reverse` | ✅ a string reverses into a string | `reverse_string`, `sequences.utf8_reverse` | |
 | `round` | ✅ | `round*` | |
 | `sort(attribute='a,b')`, dotted attributes | ✅ | `sort_multi_attribute`, `sort_dotted_attribute` | |
-| `striptags` | 🟡 a few named entities only | `striptags*` | 0048 |
-| `title`, `upper`, `lower`, `capitalize` | 🟡 ASCII letters only | `title*`, `case_non_ascii` | 0048 |
+| `striptags` | ✅ | `striptags*` | |
+| `title`, `upper`, `lower`, `capitalize` | ✅ Unicode case mapping | `title*`, `case_non_ascii` | |
 | `tojson` | ✅ | `tojson*` | |
 | `trim(chars)` | ✅ | `trim*` | |
 | `truncate` | ✅ | `truncate*` | |
@@ -268,7 +270,7 @@ Jinja2 (0233).
 | Feature | Status | Evidence | Task |
 |---|---|---|---|
 | `for` with `else`, filter, unpacking, nesting, `range`, strings | ✅ | `for*` | |
-| Iterating a dict | 🟡 literals and kwargs in insertion order, context dicts in hash order | `for_dict_literal_order`, `macro_kwargs_order`, `for_dict_keys` | 0031 / 0043 |
+| Iterating a dict | ✅ insertion order | `for_dict_literal_order`, `macro_kwargs_order`, `for_dict_keys` | |
 | `for (a, b) in`, `for x in 1, 2`, nested targets `for (a, b), c in` | ✅ | `for_unpack_parens`, `for_implicit_tuple`, `for_nested_target*` | |
 | `loop.index/index0/first/last/length/cycle/previtem/nextitem` | ✅ | `loop_*` | |
 | `loop.revindex/revindex0`, `loop.changed`, `loop.depth` | ✅ | `loop_revindex*`, `loop_changed*`, `loop_depth*` | |
@@ -279,13 +281,13 @@ Jinja2 (0233).
 | `set`, block `set`, `set` with filter | ✅ | `set*` | |
 | `set a, b = ...`, `set (a, b), c = ...` | ✅ | `set_multiple`, `set_unpack_list`, `set_nested_target` | |
 | `namespace()` and `set ns.attr` | ✅ | `namespace*` | |
-| `namespace()` as an opaque object (not a mapping, not iterable, printed `<Namespace ...>`) | ❌ it is a mapping | `namespace_is_mapping`, `namespace_iterate`, `namespace_print` | 0042 |
+| `namespace()` as an opaque object (not a mapping, not iterable, printed `<Namespace ...>`) | ✅ | `namespace_is_mapping`, `namespace_iterate`, `namespace_print` | |
 | `with` | ✅ | `with*` | |
 | Macros: defaults, keywords, `varargs`, `kwargs`, `caller`, recursion | ✅ | `macro*`, `caller*` | |
 | Argument validation (too many, unknown keyword, unused `caller`) | ✅ | `macro_too_many_args`, `caller_not_used` | |
 | Defaults that name an argument see it; others use the definition scope | ✅ | `macro_default_refers_arg`, `macro_default_lexical`, `import_macro_default` | |
 | `macro.name`, `macro.arguments`, `catch_kwargs`, `catch_varargs`, `caller` | ✅ | `macro_name`, `macro_catch_flags`, `caller_attributes` | |
-| Names in a macro resolve where it is defined; defaults see later reassignments | ❌ dynamic scoping | `macro_body_lexical_scope`, `macro_default_reassigned_global` | 0038 |
+| Names in a macro resolve where it is defined; defaults see later reassignments | ✅ | `macro_body_lexical_scope`, `macro_default_reassigned_global` | |
 | `filter` blocks, `raw`, comments | ✅ | `filter_block*`, `raw` | |
 | `do` | ✅ | `do` | |
 | `autoescape` block | ✅ | `autoescape_block*`, `autoescape.block_*` | |
@@ -312,15 +314,14 @@ Jinja2 (0233).
 | Function | Status | Task |
 |---|---|---|
 | `range(stop)`, `range(start, stop[, step])` | ✅ | |
-| `range` with negative step | ❌ stops early | 0030 |
 | `dict(...)` | ✅ | |
-| `cycler`, `joiner`, `lipsum` | ❌ missing | 0030 |
 | `range(stop)`, `range(start, stop[, step])`, negative steps | ✅ | |
 | `cycler`, `joiner` | ✅ | |
+| `cycler`/`joiner` objects test as neither mapping nor iterable | ✅ | |
 | `lipsum` | ✅ same shape (the text is random in Jinja2 too) | |
-| Calling an integer inside a loop | ❌ `2` acts as `loop.cycle` | 0042 |
-| `cycler`/`joiner` objects, `range` argument types | 🟡 objects test as mappings; `range(1.5)` renders | 0042 |
-| `namespace` | ✅ (a mapping, not an opaque object) | 0042 |
+| Calling an integer inside a loop is a `TypeError` (`2` is not `loop.cycle`) | ✅ | |
+| `range` argument types (`1.5`, strings and `none` raise; `true` is 1) | ✅ | |
+| `namespace` | ✅ an opaque object | |
 
 ## Whitespace control (`whitespace`)
 
@@ -333,7 +334,7 @@ Jinja2 (0233).
 | `keep_trailing_newline` option (`Settings::keepTrailingNewline`) | ✅ | `keep_trailing_newline*` | |
 | `trim_blocks` inside `raw`, modifiers on `raw` | ✅ | `raw_trim_blocks`, `raw_minus_and_trim_blocks`, `raw_plus_lstrip`, `raw_body_starts_with_modifier` | |
 | `lstrip_blocks` keeps trailing and mid-line whitespace, `{% raw +%}` rejected | ✅ | `lstrip_*`, `raw_plus_close_rejected` | |
-| Unicode whitespace after `-` | ❌ | `minus_strips_unicode_space` | 0044 |
+| Unicode whitespace after `-` | ✅ | `minus_strips_unicode_space` | |
 | `\r\n` and `\r` normalised to `newline_sequence` (`Settings::newlineSequence`), in text, string literals and the default `wordwrap` separator | ✅ | `crlf_*`, `cr_text`, `newline_sequence*` | |
 
 ## Autoescape (`autoescape`)
@@ -342,9 +343,8 @@ Off by default in both engines. Since 0025 Jinja2C++ has `Settings::autoescape`,
 `{% autoescape %}` block and Markup: a string value carries a markup flag that `safe`,
 `escape`, `forceescape`, `tojson`, macros and block `set` set, that the `escaped` test reads,
 and that `+`, `%`, `format`, `join`, `replace` and the case and padding filters follow as
-Markup does. Blocks, includes and macro bodies escape as where they are defined. Left
-for 0051: `~` on a Markup variable, `truncate`/`reverse`/`last`, string methods on Markup,
-the `Markup('...')` repr and Markup values from C++.
+Markup does. Blocks, includes and macro bodies escape as where they are defined. String methods on
+Markup, `truncate` and the `Markup('...')` repr follow Python too (`autoescape.markup_*`).
 
 ## Undefined values (`undefined`)
 
@@ -357,12 +357,10 @@ the `Markup('...')` repr and Markup values from C++.
 
 ## Errors (`errors`)
 
-Jinja2C++ rejects most malformed templates (23 of 42 match: missing operands, unclosed
-subscripts and strings, stray end tags, unknown filters, invalid macro signatures). It
-accepts what Jinja2 rejects in some cases, task 0027 unless noted: unclosed
-blocks/expressions/comments, `else` after `else`, `set` without a value, double `extends` (0023),
-unpacking count mismatches, invalid filter arguments, unknown tests (0017). Only the fact of an
-error is compared, not the message or the line.
+Jinja2C++ rejects what Jinja2 rejects across the 129 cases of the `errors` area (unclosed
+blocks, expressions and comments, `else` after `else`, `set` without a value, double
+`extends`, unpacking count mismatches, invalid filter arguments, unknown tests and filters).
+Only the fact of an error is compared, not the message or the line.
 
 ## Environment options and extensions (`options`)
 
@@ -371,20 +369,20 @@ error is compared, not the message or the line.
 | `trim_blocks`, `lstrip_blocks` | ✅ | |
 | `keep_trailing_newline`, `newline_sequence` | ✅ | |
 | `autoescape` | ✅ bool (`Settings::autoescape`) or by template name (`Settings::autoescapeSelector`, `SelectAutoescape`) | 0051, 0181 |
-| `undefined` | ❌ | 0026 |
+| `undefined` | ✅ `Settings::undefinedPolicy` (see Undefined values) | |
 | `block_/variable_/comment_start_string` and `_end_string` | ✅ | |
 | `line_statement_prefix`, `line_comment_prefix` | ✅ | |
 | `jinja2.ext.do` | ✅ | |
 | `jinja2.ext.loopcontrols` | ✅ (`Settings::Extensions::loopControls`) | |
 | `jinja2.ext.i18n` (`trans`, `gettext`, `_`) | ✅ newstyle (`Settings::Extensions::i18n`, `TemplateEnv::InstallGettextCallables`); no `ext.i18n.trimmed` policy | |
-| `jinja2.ext.debug` | ❌ (not in corpus: output is not deterministic) | |
+| `jinja2.ext.debug` | ❌ `{% debug %}` is not implemented (not in corpus: output is not deterministic) | 0583 |
 
 ## API level (not corpus-checked)
 
 | Jinja2 feature | Jinja2C++ | Status | Task |
 |---|---|---|---|
 | `DictLoader`, `FileSystemLoader`, `PrefixLoader` | `MemoryFileSystem`, `RealFileSystem`, `AddFilesystemHandler(prefix, ...)` | ✅ | |
-| `ChoiceLoader` | several handlers on one prefix | 🟡 not verified | |
+| `ChoiceLoader` | several handlers on one prefix: tried in registration order, the first that opens the name wins | 🟡 read from `TemplateEnv::LoadTemplate`, no test pins it | 0584 |
 | `FunctionLoader`, `PackageLoader` | custom `IFilesystemHandler` | ➖ | |
 | `env.globals` | `AddGlobal`/`RemoveGlobal` | ✅ | |
 | `env.from_string` | `TemplateEnv::FromString` | ✅ | |
@@ -436,7 +434,8 @@ Bump checklist (one PR):
 
 When a PR fixes a divergence, the parity suite fails until the case's line is removed
 from `test/parity/divergences/<area>.txt`. Update the affected feature rows here in the
-same PR. The summary table and the corpus size above are a snapshot that parity PRs leave
+same PR; `python3 scripts/check_parity_rows.py` (run in the format-check workflow) fails a
+❌/🟡 row that cites no open task and no divergence line. The summary table and the corpus size above are a snapshot that parity PRs leave
 alone: the integration branch that lands a wave regenerates them with
 `python3 test/parity/generate.py --report`, so parallel PRs do not conflict on them. New gaps found
 later get a corpus case first, then a row here.
