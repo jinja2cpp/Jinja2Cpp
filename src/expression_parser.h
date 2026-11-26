@@ -113,16 +113,16 @@ FoldCheckResult FoldCheckPasses(const FoldCheck& check, RenderContext& context, 
 // What the Load's fold checks may compute in a template without limits of its own (Settings::Limits): Jinja2 folds
 // constants when it compiles, even in code that never renders, so template text decides how long a Load takes. A
 // candidate the budget stops does not fold, which Jinja2's optimizer would only after computing it (docs/tasks/0569).
-// Each check (a root) has a few steps of its own, enough for a literal; past them it draws on `steps`, which are the
+// Each check (a root) has a few steps of its own, enough for a literal; past them it draws on `Steps`, which are the
 // whole Load's, so many cheap roots cannot add up either. Sizes and memory are each check's
 struct FoldBudget
 {
-    static constexpr std::uint64_t steps = std::uint64_t{ 1 } << 14;
-    static constexpr std::uint64_t checkSteps = 64;
-    static constexpr std::uint64_t sequenceSize = std::uint64_t{ 1 } << 16;
-    static constexpr std::uint64_t memory = std::uint64_t{ 1 } << 24;
+    static constexpr std::uint64_t Steps = std::uint64_t{ 1 } << 14;
+    static constexpr std::uint64_t CheckSteps = 64;
+    static constexpr std::uint64_t SequenceSize = std::uint64_t{ 1 } << 16;
+    static constexpr std::uint64_t Memory = std::uint64_t{ 1 } << 24;
     // A product or power past it costs milliseconds (boost backend); Python's repr fails from 14286 bits on
-    static constexpr std::size_t intBits = std::size_t{ 1 } << 16;
+    static constexpr std::size_t IntBits = std::size_t{ 1 } << 16;
     static const Settings::Limits& Limits();
 };
 // The ValueError CPython's repr() raises for an integer past MaxIntStrDigits digits, at `tok`

@@ -2977,9 +2977,9 @@ const Settings::Limits& FoldBudget::Limits()
 {
     static const Settings::Limits limits = [] {
         Settings::Limits result;
-        result.maxRenderSteps = steps;
-        result.maxSequenceSize = sequenceSize;
-        result.maxRenderMemory = memory;
+        result.maxRenderSteps = Steps;
+        result.maxSequenceSize = SequenceSize;
+        result.maxRenderMemory = Memory;
         return result;
     }();
     return limits;
