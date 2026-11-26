@@ -300,6 +300,9 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     // a loop's `else` has one (docs/tasks/0202)
     m_names.SetInBranch(!statementsInfo.empty() && !StatementInfo::OwnsFrame(statementsInfo.back().type) && !IsLoopElse(statementsInfo));
 
+    // In volatile code Jinja2 folds none of the statement's expressions (compiler.py optimizeconst, docs/tasks/0570)
+    m_volatile = InVolatileCode(m_root, m_nodes, statementsInfo);
+
     auto keyword = tok.keyword;
     // Jinja2: required blocks can only contain comments or whitespace
     if (keyword != Keyword::EndBlock && !statementsInfo.empty() && statementsInfo.back().type == StatementInfo::BlockStatement && m_nodes.Get<BlockStatement>(statementsInfo.back().renderer).IsRequired())
@@ -567,6 +570,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     }
 
     ExpressionParser exprPraser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprPraser.SetVolatile(m_volatile);
     auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
     {
@@ -894,6 +898,7 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
 {
     const auto& pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     // Jinja2 checks the filters and tests of the condition when they run, as those of the branches
     CheckGuard deferred(m_unknown, UnknownCallables::Check::Deferred);
     // Jinja2 parses the test without a conditional expression: `{% if 1 if x else 2 %}` is an error
@@ -940,6 +945,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
 
     const auto& pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
     {
@@ -1008,6 +1014,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     const auto vars = target->target;
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     if (lexer.EatIfEqual('='))
     {
         const auto expr = exprParser.ParseTupleOrExpression(lexer);
@@ -1207,6 +1214,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     }
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1345,6 +1353,7 @@ nonstd::expected<MacroParamsInfo, ParseError> StatementsParser::ParseMacroParams
     const RestoreFrame restoreFrame(m_names, outerFrame);
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     do
     {
         Token name = lexer.NextToken();
@@ -1500,6 +1509,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     const auto exprBegin = lexer.GetState().m_cur;
     const auto beforeCall = m_nodes.Marks();
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1576,6 +1586,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     // auto operTok = lexer.NextToken();
     NodeRef<Expression> valueExpr;
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1661,6 +1672,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
 
     NodeRef<Expression> valueExpr;
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1786,6 +1798,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 
     NodeRef<Expression> valueExpr;
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1886,6 +1899,7 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
 {
     NodeRef<Expression> valueExpr;
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1904,9 +1918,8 @@ StatementsParser::ParseResult StatementsParser::ParsePrint(LexScanner& lexer, St
 {
     m_root.lastTagIsOutput = true;
     const auto check = OutputCheckOf(m_root, statementsInfo);
-    const bool isVolatile = InVolatileCode(m_root, m_nodes, statementsInfo);
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
-    exprParser.SetVolatile(isVolatile);
+    exprParser.SetVolatile(m_volatile);
     // Each is an output's value, which Jinja2 folds whole (FoldCandidate::output)
     exprParser.SetOutputExpressions(true);
     bool first = true;
@@ -1929,7 +1942,7 @@ StatementsParser::ParseResult StatementsParser::ParsePrint(LexScanner& lexer, St
             continue;
         }
         // A print tag is rare: it walks its expression for the fold (FoldedExpressionRenderer)
-        auto output = MakeExpressionRenderer(m_nodes, *expr, exprParser.GetFinalize(), isVolatile, true);
+        auto output = MakeExpressionRenderer(m_nodes, *expr, exprParser.GetFinalize(), m_volatile, true);
         m_bodies.Add(check == OutputCheck::Guard ? m_nodes.Make<OutputCheckStatement>(output) : output, m_tagOffset);
     }
     return {};
@@ -1942,6 +1955,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     const auto selfBefore = m_nodes.FirstSelfUse();
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto nameTok = lexer.NextToken();
@@ -2052,6 +2066,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndGeneration(LexScanner& /
 StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     // The filters of a filter block are in its frame, which Jinja2 checks even in an `if`
     CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
@@ -2095,6 +2110,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
 StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     // Jinja2 checks the value of `autoescape` even in an `if`
     CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
     auto valueExpr = exprParser.ParseFullExpression(lexer);
@@ -2147,6 +2163,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
 
     // The parameters, as Jinja2's InternationalizationExtension.parse reads them
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     while (lexer.PeekNextToken() != Token::Eof)
     {
         if (!trans->variables.empty() && !lexer.EatIfEqual(','))
@@ -2431,6 +2448,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     }
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(m_volatile);
     if (m_names.ReadsOpen())
     {
         m_names.AddReadOfName(fnName);

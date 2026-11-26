@@ -47,6 +47,9 @@ apply to both tiers.
 - Counted render work is bounded by `maxRenderSteps`; wall-clock time by `maxRenderTime`, when
   the host sets it. Both are checked between engine steps and are cooperative: a step is not a
   bounded amount of CPU (a filter over a long string is one step), and Load runs under neither.
+  Load does evaluate the constant expressions Jinja2 folds when it compiles, also in code that
+  never renders: under the template's limits, or, when it sets none, under a small built-in budget
+  past which an expression is left unfolded ([0569](tasks/0569-load-fold-cpu-budget.md)).
   `UntrustedLimits()` sets a step budget but leaves `maxRenderTime` and `maxTemplateSize` unset;
   set `maxTemplateSize` when template sources come from users, and enforce a host timeout over
   Load and Render wherever availability matters (see [Containment](#containment)).

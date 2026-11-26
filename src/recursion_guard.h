@@ -119,6 +119,9 @@ struct RenderLimits
     std::uint64_t maxSteps = 0;
     // The built-in cap (MaxSequenceSize in internal_value.h) or a lower maxSequenceSize
     std::uint64_t maxSequenceSize = std::uint64_t{ 1 } << 26;
+    // Bits of an integer a product or power may compute: MaxBigIntBits (big_int.h), or less in the Load's fold
+    // check (FoldBudget, docs/tasks/0569)
+    std::size_t maxIntBits = std::size_t{ 1 } << 20;
     std::uint64_t maxRange = UINT64_MAX;
     std::uint64_t loadsLeft = UINT64_MAX;
     // Bytes the render's strings, lists and dicts may still take (maxRenderMemory, docs/tasks/0459), and the budget
@@ -163,6 +166,20 @@ inline thread_local RenderLimits t_renderLimits;
 
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
+
+// Whether every later step of the running render fails: its steps or memory are spent (StepsSlow)
+inline bool StepsSpent()
+{
+    return t_renderLimits.chunk == 0;
+}
+
+// The steps the running render took, of one with a step limit: those of the countdowns before the current one
+// and of it. Past the limit, the limit (StepsSlow leaves chunk 0 and one step left)
+inline std::uint64_t StepsTaken()
+{
+    const auto& limits = t_renderLimits;
+    return std::min(limits.stepsTaken + (limits.chunk - limits.stepsLeft), limits.maxSteps);
+}
 
 // A host's poll of the renders on this thread (RenderOptions::poll, docs/tasks/0357 B3; the
 // Python module checks for signals there, so Ctrl-C stops a long render, 0353). A render with
