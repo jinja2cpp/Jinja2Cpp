@@ -575,9 +575,10 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   a `{% set %}` there, and any call in a `scoped` block, gets Jinja2's derived context (`vars` empty, the
   names the body stored and the block's call site sees on top in `parent`). When a body both sets a
   name and defines a macro or imports a name under it, the context shows the name's current value,
-  where Jinja2's shows the value the `set` stored; and a call in a loop body after an inner loop that
-  set names sees the outer body's names, where Jinja2's sees the inner loop's last pass (its
-  `_loop_vars` is one variable the inner loop overwrote). `eval_ctx.volatile` is always False.
+  where Jinja2's shows the value the `set` stored; a call in a loop body after an inner loop ran sees
+  the outer body's names, where Jinja2's sees those of the inner loop's last pass (its `_loop_vars` is
+  one variable each inner pass starts again); and a body with more than 65535 distinct `set` names
+  shows the first 65535 only. `eval_ctx.volatile` is always False.
   `Context.derived`, `blocks` and `exported_vars` (empty) are not there.
 - A Python callable gets Python's own `range` and `dict` for the template's globals, and Jinja2's
   `jinja2.utils.Cycler`, `Joiner`, `Namespace` and `generate_lorem_ipsum` for `cycler`, `joiner`, `namespace` and

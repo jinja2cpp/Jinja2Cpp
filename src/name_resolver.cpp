@@ -250,11 +250,13 @@ void NameResolver::ResolveFrameBodySets(NodeArena& nodes, const BodyCall* first,
         counts.push_back(names.size());
     }
     const auto all = nodes.MakeSpan(names);
+    // The counts only grow: the last call has the longest prefix, and checks the items for all (CallExpression::VisitRefs)
+    const auto* const longest = last - 1;
     for (const auto* call = first; call != last; ++call)
     {
         if (const auto count = counts[static_cast<std::size_t>(call - first)]; count != 0)
         {
-            nodes.Get<CallExpression>(call->call).SetBodySets(NodeArena::Prefix(all, count));
+            nodes.Get<CallExpression>(call->call).SetBodySets(NodeArena::Prefix(all, count), call == longest);
         }
     }
 }

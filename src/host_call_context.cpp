@@ -167,12 +167,17 @@ private:
     [[nodiscard]] std::vector<std::string> BodyVarNames(const RenderContext& context) const
     {
         std::vector<std::string> names;
+        if (!m_bodyScope)
+        {
+            return names;
+        }
+        // The list holds each name once (NameResolver): no scan of it per name
         for (const auto& set : m_bodySets)
         {
-            const std::string name(context.Nodes().Text(set.name));
-            if (FindBodyVar(context, name))
+            std::string name(context.Nodes().Text(set.name));
+            if (RenderContext::FindStoredName(*m_bodyScope, name))
             {
-                names.push_back(name);
+                names.push_back(std::move(name));
             }
         }
         std::sort(names.begin(), names.end());
