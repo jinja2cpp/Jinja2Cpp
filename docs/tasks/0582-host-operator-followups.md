@@ -65,8 +65,13 @@ Fixed, each with a regression row (`test/public_host_object_test.cpp`: `ListConc
   (appended); the Python module runs `abs()` and `round(x, n)`. `ceil` and `floor` are recorded, not fixed: Python runs
   `math.ceil(x * 10**n) / 10**n` on the object, which needs the host's `*`, `**` and `/` composed in the filter.
 - pprint orders dict keys that are host objects by the host's `<`, falling back to the type-name order as Python does.
-- The Python module names a static C type by its module (`decimal.Decimal`), as the TypeError of Python's own operators
-  does (`PyHost::TypeName`); the test suites of both modules are unchanged.
+- pprint of a dict mixing a host key with another type (`{'a': 1, Fraction(7, 2): 2}`) orders by type where the host's
+  `<` fails, as `_safe_key` catches its TypeError. Recorded: that fallback compares the type's `__name__`, where
+  Python compares `str(type(obj))`, so a host type of another module (`<class 'fractions.Fraction'>`) can sort
+  differently against a built-in one (`{None: 1, Fraction(7, 2): 2}` puts the Fraction first).
+- Not changed: the module-qualified type name (`'decimal.Decimal'`) of the Markup message. Python uses `tp_name` in its
+  operators' TypeErrors but `__name__` elsewhere (`tojson`), and `tp_name` is not in the limited API; the messages that
+  name the type keep `__name__`.
 
 Not fixed: `Markup * x` with an `__index__` object. The repeat check is `CheckMarkupRepeatCount` in
 `src/expression_evaluator.cpp`, which this task's file list does not include; the fix is to ask the host (`host::Operate`

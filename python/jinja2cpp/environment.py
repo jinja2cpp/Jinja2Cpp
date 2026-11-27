@@ -234,7 +234,7 @@ class Template(_jinja2cpp.Template):
             params.update(vars)
         if locals:
             params.update(locals)
-        body, exports = self._make_module(params, shared)
+        body, exports = self._make_module(params, bool(shared))
         return TemplateModule(self, body, exports)
 
     @property

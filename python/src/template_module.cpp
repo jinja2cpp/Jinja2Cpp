@@ -486,13 +486,17 @@ public:
         }
         struct Leave
         {
+            explicit Leave(PyObject* entered)
+                : object(entered)
+            {
+            }
             PyObject* object;
             ~Leave() { Py_ReprLeave(object); }
             Leave(const Leave&) = delete;
             Leave& operator=(const Leave&) = delete;
             Leave(Leave&&) = delete;
             Leave& operator=(Leave&&) = delete;
-        } leave{ self.ptr() };
+        } leave(self.ptr());
         nb::dict attributes = Read([&] {
             nb::dict result;
             const auto* map = m_value.GetIf<jinja2::GenericMap>();
@@ -522,6 +526,11 @@ public:
             {
                 return cls;
             }
+        }
+        // Not installed, or without the class; anything else (KeyboardInterrupt) is raised
+        if (!PyErr_ExceptionMatches(PyExc_ImportError) && !PyErr_ExceptionMatches(PyExc_AttributeError))
+        {
+            throw nb::python_error();
         }
         PyErr_Clear();
         return nb::borrow(reinterpret_cast<PyObject*>(Py_TYPE(self.ptr())));

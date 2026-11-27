@@ -496,6 +496,9 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
     renders the truncated float, where Python raises. `'%c'` and a `Markup` format do not ask the object.
   - `round` with the method `ceil` or `floor` of an object (`Fraction`, `Decimal`) is not asked and raises, where Python
     runs `math.ceil` on it.
+  - `pprint` orders keys of types that cannot be compared by the type's `__name__`, where Python compares
+    `str(type(key))`: a `Fraction` key sorts before a `None` key, as `Fraction` < `NoneType`, where Python's
+    `<class 'fractions.Fraction'>` sorts after `<class 'NoneType'>`.
 
 ## Differences from Jinja2
 

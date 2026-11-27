@@ -201,6 +201,8 @@ CASES = [
     # pprint orders host keys by their own `<` (task 0582)
     ("{{ {f: 1, g: 2, h: 3}|pprint }}", {"f": FRAC(7, 2), "g": FRAC(1, 3), "h": FRAC(-1)}),
     ("{{ {d: 1, e: 2, 1: 3}|pprint }}", {"d": DEC("3.7"), "e": DEC("-1")}),
+    # ... and by type where `<` fails, as _safe_key does (task 0582)
+    ("{{ {'a': 1, f: 2}|pprint }}", {"f": FRAC(7, 2)}),
     # bytes, bytearray, array and deque repeat as Python repeats them
     ("{{ b * 3 }} {{ 3 * b }} {{ ba * 2 }} {{ ar * 2 }} {{ dq * 2 }} {{ b * 0 }} {{ b + b }}",
      {"b": b"ab", "ba": bytearray(b"a"), "ar": array.array("i", [1]), "dq": collections.deque([1])}),

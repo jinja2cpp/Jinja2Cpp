@@ -249,23 +249,8 @@ const char* PyHost::TypeName() const
 {
     if (m_typeName.empty())
     {
-        // tp_name, as the TypeError of Python's own operators names a type: 'decimal.Decimal' for a static C type of a
-        // module, the bare name for a builtin or a class of Python (task 0582). The limited API has no tp_name: it is
-        // the module and the name of a static type
         auto* type = reinterpret_cast<PyObject*>(Py_TYPE(m_object));
         m_typeName = Utf8(Steal(PyObject_GetAttrString(type, "__name__")));
-        if ((PyType_GetFlags(Py_TYPE(m_object)) & Py_TPFLAGS_HEAPTYPE) == 0)
-        {
-            const auto module = Steal(PyObject_GetAttrString(type, "__module__"));
-            if (PyUnicode_Check(module.ptr()))
-            {
-                const auto moduleName = Utf8(module);
-                if (moduleName != "builtins")
-                {
-                    m_typeName = moduleName + "." + m_typeName;
-                }
-            }
-        }
     }
     return m_typeName.c_str();
 }

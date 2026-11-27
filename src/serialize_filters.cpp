@@ -84,7 +84,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         const auto isSequence = [](const InternalValue& val) { return val.Kind() == ValueKind::List || val.Kind() == ValueKind::KeyValuePair; };
         // A host object is ordered by its own `<` (and the other operand's reflected one), as Python's `self.obj < other.obj`
         // does; one that declines falls back to the type names (task 0582)
-        if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)) || GetHostObject(left) || GetHostObject(right))
+        const bool host = GetHostObject(left) || GetHostObject(right);
+        if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)) || host)
         {
             try
             {
@@ -93,6 +94,19 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             catch (const TemplateRuntimeError&) // NOLINT(bugprone-empty-catch): the fallback below is the handling
             {
                 // Tuples with items Python cannot order: ordered by type like the rest
+            }
+            catch (const std::bad_alloc&)
+            {
+                throw;
+            }
+            catch (...)
+            {
+                // A host's `<` that fails (Python's TypeError of a Fraction and a str, which _safe_key catches) is ordered
+                // by type too; the engine cannot tell a host's TypeError from its other errors
+                if (!host)
+                {
+                    throw;
+                }
             }
         }
         return std::strcmp(Apply<visitors::PythonTypeNameGetter>(left), Apply<visitors::PythonTypeNameGetter>(right)) < 0;

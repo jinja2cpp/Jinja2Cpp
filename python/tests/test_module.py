@@ -65,6 +65,9 @@ def test_vars_locals_and_shared():
         out = env.from_string("{{ a }}-{{ g }}").make_module({"a": 1})
         assert str(out) == "1-G"
         assert str(env.from_string("{{ a }}-{{ g }}").make_module({"a": 1}, shared=True)) == "1-"
+        # any truth value, as Jinja2 takes it
+        assert str(env.from_string("{{ a }}-{{ g }}").make_module({"a": 1}, shared=1)) == "1-"
+        assert str(env.from_string("{{ a }}-{{ g }}").make_module({"a": 1}, shared=None)) == "1-G"
 
 
 SHARED_TEMPLATES = {
