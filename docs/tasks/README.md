@@ -658,9 +658,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0597](0597-import-with-context-in-loop-loses-loop.md) | A module imported with context in a loop does not see the loop's `loop` | parity | low | open |
 | [0598](0598-failure-in-module-top-level-with-drops-stored-closure.md) | A failure inside a module's top-level `with` drops the names its stored closure reads | parity | low | open |
 | [0599](0599-public-big-int-words-form.md) | A words form in the public BigInt | robustness | low | open |
-| [0600](0600-whole-tree-tidy-backlog.md) | clang-tidy: 304 hits on master; the weekly whole-tree job has never been green | style | high | open |
-| [0601](0601-tidy-ratchet-leaks.md) | clang-tidy ratchet: hits on unchanged lines pass the pull-request job, and a red weekly run is silent | ci | high | open |
+| [0600](0600-whole-tree-tidy-backlog.md) | clang-tidy: 304 hits on master; the weekly whole-tree job has never been green | style | high | done |
+| [0601](0601-tidy-ratchet-leaks.md) | clang-tidy ratchet: hits on unchanged lines pass the pull-request job, and a red weekly run is silent | ci | high | done |
 | [0602](0602-tidy-python-fuzz-bench.md) | clang-tidy never sees `python/src/`, `fuzz/` or `bench/` | ci | medium | open |
 | [0603](0603-tidy-memory-safety-checks.md) | clang-tidy does not check the memory-safety style the project asks for | style | medium | open |
 | [0604](0604-reflected-shared-ptr-cell-never-dropped.md) | A module keeps the cell of a reflected `shared_ptr` it wrote, one per call | robustness | low | open |
 | [0605](0605-pprint-safe-key-host-errors.md) | pprint's `_safe_key` with host objects: catch only the TypeError, also inside a tuple key | parity | low | open |
+| [0606](0606-bindings-tidy-whole-file-mode.md) | clang-tidy ratchet for the bindings job: it still reports changed lines only | ci | medium | open |

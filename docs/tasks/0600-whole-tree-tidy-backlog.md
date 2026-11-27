@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1026
 priority: high
 area: style
 depends: []
