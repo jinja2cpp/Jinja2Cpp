@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_NAME_RESOLVER_H
 #define JINJA2CPP_SRC_NAME_RESOLVER_H
 
+#include "internal_value.h"
 #include "node_arena.h"
 #include "slot_frame.h"
 #include "small_vector.h"
@@ -341,7 +342,9 @@ private:
     // The slot `ref` reads, Dynamic when it is looked up by name
     [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frame, const StoreIndex* stores) const;
     // Find in the frame of a macro's unit
-    [[nodiscard]] std::pair<SlotIndex, UnitId> FindInMacro(const NodeArena& nodes, const HashedName& name, FrameId frame, const StoreIndex* stores) const;
+    [[nodiscard]] std::pair<SlotIndex, UnitId> FindInMacro(const NodeArena& nodes, const HashedName& name, FrameId frameId, const StoreIndex* stores) const;
+    static constexpr std::size_t NoSlot = ~std::size_t{ 0 };
+    [[nodiscard]] static std::size_t LoopSlotOf(const NodeArena& nodes, const HashedName& name, const Frame& loop, bool isFilter);
 
     // Inline room for a template with a few loops, so that most parses allocate nothing here
     SmallVector<Frame, 8> m_frames;
