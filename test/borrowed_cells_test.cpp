@@ -1398,7 +1398,8 @@ TEST(BorrowedCellsSingle, ModuleCallFreesACycleThroughTheCellOfAFreshArgument)
 TEST(BorrowedCellsSingle, ModuleCallsGrowingAKeptArgument)
 {
     // 0573: a kept argument the module's later calls append to: the cell's own items are not walked again at each
-    // call's end while it only grows, by itself too (verifier of 0573: quadratic in the calls otherwise)
+    // call's end while it only grows, by itself too (verifier of 0573: quadratic in the calls otherwise). Kept to 300
+    // calls: the trace check (tla/trace_check.py --mutants) replays this test's trace, and 3000 calls ran past CI's hour
     Template tpl;
     ASSERT_TRUE(!!tpl.Load("{% set store = [] %}{% macro init(d) %}{% set _ = store.append(d) %}{% endmacro %}"
                            "{% macro add(x) %}{% set _ = store[0].append(x) %}{% set _ = store[0].append(store[0]) %}{% endmacro %}"
@@ -1410,11 +1411,11 @@ TEST(BorrowedCellsSingle, ModuleCallsGrowingAKeptArgument)
         return module.exports[name].As<UserCallable>().callable(params).AsString();
     };
     call("init", ValuesList{ Value(ValuesList{}) });
-    for (int64_t i = 0; i != 3000; ++i)
+    for (int64_t i = 0; i != 300; ++i)
     {
         call("add", ValuesList{ i });
     }
-    EXPECT_EQ("6000", call("size", {}));
+    EXPECT_EQ("600", call("size", {}));
 }
 
 TEST(BorrowedCellsSingle, ModuleKeepsTheCellOfAGenericListTheHostLendsAgain)
