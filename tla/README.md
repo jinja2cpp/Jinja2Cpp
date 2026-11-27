@@ -814,7 +814,7 @@ trace can show it. The events and what the spec checks at each:
 | `unshare`, `copied` | Unshare's outcome is one `CellRules!UnshareOutcomes` allows (`MarkRule`) |
 | `write` (`MutableItems`/`MutableDict`) | never a frozen cell (`FrozenUnwritten`); in place only to an unmarked cell (`MarkRule`); never to a storage a value of an ended call shares (`SnapshotStable`) |
 | `begin`, `end` (`BeginCall`, `EndCall`) | call numbers and the call restored (`CallsAgree`); nested calls on the thread holding the lock |
-| `drop`, `dropped` (`DropUnheld`) | `CellRules!MayDrop` on the spec's state: owned data, live cell, no link but its source's (`DropRule`); the code's list is the global's links |
+| `drop`, `dropped` (`DropUnheld`) | `CellRules!MayDrop` on the spec's state: owned data, live cell, no link but its source's, or, for a cell its own items hold (`items`, 0573), no listed link (`DropRule`); the code's list is the global's links |
 | `cfreeze`, `cfrozen` (`FreezeCallScoped`, 0402) | a live table cell of a module registry whose only running call is ending, so its outermost (`CallsAgree`); the links as at `freeze`; the cell leaves the table and freezes, and the live count follows (`LiveCount`) |
 | `freeze`, `finish`, `finished` (`Finish`) | the code's list of each cell is the spec's global links, every other link owns (`LinksAgree`); a global's links detach (`FinishDetaches`), the rest keep the frozen cell; every table cell freezes |
 | `free` (`~BorrowedCell`) | no table lists the cell and no adapter is attached to it (`NoUseAfterFree`) |

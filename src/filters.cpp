@@ -24,6 +24,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
@@ -2895,6 +2896,14 @@ InternalValue ValueConverter::Abs(const InternalValue& baseVal, RenderContext& c
     {
         return std::fabs(*dblVal);
     }
+    if (const auto* hostObject = GetHostObject(baseVal))
+    {
+        // abs(x) of a host object is its __abs__; a host that declines is no number to the filter (task 0582)
+        if (auto result = hostObject->Operate(HostOperator::Absolute, InternalValue(NoneValue()), HostOperandSide::Left))
+        {
+            return std::move(*result);
+        }
+    }
     // Python's abs() of anything else is a TypeError
     context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
     return InternalValue();
@@ -2971,6 +2980,14 @@ InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext&
     const auto* dblVal = GetIf<double>(&baseVal);
     if (!asInt && !dblVal)
     {
+        if (const auto* hostObject = method == "common" ? GetHostObject(baseVal) : nullptr)
+        {
+            // round(x, n) of a host object is its __round__ (round(x) for round(none)); ceil and floor are not asked
+            if (auto result = hostObject->Operate(HostOperator::Round, precVal, HostOperandSide::Left))
+            {
+                return std::move(*result);
+            }
+        }
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
     }
     if (noPrecision)

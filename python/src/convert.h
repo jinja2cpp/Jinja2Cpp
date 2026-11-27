@@ -105,19 +105,10 @@ public:
     // The lease of the innermost call on this thread, made on first use; null outside a call
     static std::shared_ptr<CallLease> Current();
 
-    // A global the engine lent to the innermost call on this thread (`range`, `cycler`) went to Python as Python's own
-    // object `python` (docs/tasks/0559): while the call runs, that object comes back to the template as `lent`, so
-    // that `{{ f(range) is sameas range }}` holds
-    static void NoteLentGlobal(nb::handle python, const jinja2::Value& lent);
-    // The template's global that `python` stands for in a call running on this thread; null for any other object
-    [[nodiscard]] static const jinja2::Value* LentGlobalOf(PyObject* python) noexcept;
-
 private:
     const jinja2::UserCallableParams& m_params;
     std::shared_ptr<CallLease> m_lease;
     LeaseScope* m_outer;
-    // NoteLentGlobal's: a handful at most, one per global the call was given
-    std::vector<std::pair<nb::object, jinja2::Value>> m_lentGlobals;
 };
 
 // A value of the template that has no Python type of its own, seen from Python: a macro, `caller`,

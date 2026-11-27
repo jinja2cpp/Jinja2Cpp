@@ -1424,9 +1424,10 @@ BuiltinGlobals MakeBuiltinGlobals()
     const UncountedMemoryScope uncounted;
     BuiltinGlobals result;
     SetupGlobals(result.plain);
-    SetupGlobals(result.withI18n);
+    // The same objects in every table, so that `lipsum` is one object with i18n on or off, as the classes are (PythonGlobal)
+    result.withI18n = result.plain;
     SetupI18nGlobals(result.withI18n, true);
-    SetupGlobals(result.withOldI18n);
+    result.withOldI18n = result.plain;
     SetupI18nGlobals(result.withOldI18n, false);
     return result;
 }
@@ -1450,6 +1451,22 @@ const InternalValueMap& GetBuiltinGlobals(const Settings::Extensions& extensions
         return globals.plain;
     }
     return extensions.i18nNewstyle ? globals.withI18n : globals.withOldI18n;
+}
+
+std::optional<InternalValue> PythonGlobalOf(std::string_view module, std::string_view qualname)
+{
+    if (auto global = ClassGlobalOf(module, qualname))
+    {
+        return global;
+    }
+    if (module == "jinja2.utils" && qualname == "generate_lorem_ipsum")
+    {
+        static const Settings::Extensions plain{};
+        const auto& builtins = GetBuiltinGlobals(plain);
+        const auto found = builtins.find("lipsum");
+        return found == builtins.end() ? std::nullopt : std::optional<InternalValue>(found->second);
+    }
+    return std::nullopt;
 }
 } // namespace v2
 } // namespace jinja2

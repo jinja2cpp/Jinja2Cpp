@@ -50,9 +50,11 @@ MarkAfterPin == SHARED
 \* every other link keeps the frozen cell (CellProtocol's FinishFreeze with FixFreeze)
 FinishDetaches(isHeld) == isHeld
 
-\* BorrowedCell::IsUnheld, the part the protocol sees (the reference counts are the host's):
+\* BorrowedCell::FindHolders, the part the protocol sees (the reference counts are the host's):
 \* data that lives only as long as its adapters, a live cell, and no link (owning or listed) but
-\* the source's
-MayDrop(owned, frozen, links, source) == owned /\ ~frozen /\ links \subseteq {source}
+\* the source's, or, for a cell its own items alone hold (`byItems`, docs/tasks/0573), no listed
+\* link: the owning links of its items' adapters are what the walk from its storage frees
+MayDrop(owned, frozen, links, source, byItems) ==
+    owned /\ ~frozen /\ (links \subseteq {source} \/ byItems)
 
 =============================================================================

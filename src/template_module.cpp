@@ -832,7 +832,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         callback = std::make_unique<Callback>(impl.get());
         callback->SetGlobals(&globals);
         callback->SetFilterPolicies(filterPolicies.get());
-        module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(), &GetBuiltinGlobals(impl->m_settings->settings.extensions));
+        module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(),
+                                                  builtinGlobals ? &GetBuiltinGlobals(impl->m_settings->settings.extensions) : nullptr);
 
         OutStream stream(body);
         if (impl->m_settings->hasRenderLimits)
@@ -1061,6 +1062,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     bool exportObjects = false;
     // ModuleOptions::waitForTurn: how a thread waits for another thread's run in the module
     std::function<void(const std::function<void()>&)> waitForTurn;
+    // ModuleOptions::builtinGlobals
+    bool builtinGlobals = true;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
@@ -1322,6 +1325,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     {
         state->exportObjects = module->exports == ModuleExports::Objects;
         state->waitForTurn = module->waitForTurn;
+        state->builtinGlobals = module->builtinGlobals;
     }
     BasicTemplateModule<CharT> result;
     try

@@ -73,6 +73,11 @@ const char* TypeName(const InternalValue& val)
     }
     if (val.Kind() == ValueKind::Map)
     {
+        // A host object is its own type, as Python's message names it
+        if (const auto* hostObject = GetHostObject(val))
+        {
+            return hostObject->TypeName();
+        }
         return "dict";
     }
     if (auto list = AsList(val))
@@ -947,6 +952,15 @@ private:
             AppendDigits(out, *d < 0, "", fmt::format("{:.0f}", std::fabs(*d)), spec);
             return;
         }
+        // A host number (np.int64, Fraction, a class with __index__) is the integer int() of it gives (task 0582)
+        if (const auto* hostObject = GetHostObject(arg))
+        {
+            if (auto number = hostObject->ToInt(); number && (number->Kind() == ValueKind::Int || number->Kind() == ValueKind::BigInt))
+            {
+                ConvertInteger(out, *number, conversion, spec);
+                return;
+            }
+        }
         throw TemplateRuntimeError(PyClass::TypeError, fmt::format("%{} format: {} is required, not {}", conversion, isDecimal ? "a real number" : "an integer", TypeName(arg)));
     }
 
@@ -972,6 +986,15 @@ private:
         {
             AppendFloat(out, BigIntToDouble(*big), conversion, spec);
             return;
+        }
+        // A host number is the float float() of it gives
+        if (const auto* hostObject = GetHostObject(arg))
+        {
+            if (auto number = hostObject->ToFloat(); number && GetIf<double>(&*number))
+            {
+                ConvertFloat(out, *number, conversion, spec);
+                return;
+            }
         }
         throw TemplateRuntimeError(PyClass::TypeError, fmt::format("must be real number, not {}", TypeName(arg)));
     }
