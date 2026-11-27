@@ -1022,7 +1022,14 @@ std::string TemplateValue::Repr() const
         // Jinja2's LoopContext.__repr__: <LoopContext index/length>
         return "<LoopContext " + map->GetValueByName("index").ToString() + "/" + map->GetValueByName("length").ToString() + ">";
     }
-    return "<" + TypeName() + " " + m_value.ToString() + ">";
+    // A namespace, a cycler and a joiner print as themselves: <Namespace {...}>, <jinja2.utils.Cycler object at ...>
+    // (ValueRendererBase)
+    const auto type = TypeName();
+    if (type == "Namespace" || type == "Cycler" || type == "Joiner")
+    {
+        return m_value.ToString();
+    }
+    return "<" + type + " " + m_value.ToString() + ">";
 }
 
 namespace

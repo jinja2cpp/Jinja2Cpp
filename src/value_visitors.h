@@ -876,6 +876,21 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
     // An object prints as Python's repr of it: <Namespace {...}> wraps its attributes, the
     // rest have the default <module.Class object at 0x...>
     const char* objectClass = map.GetObjectClass();
+    // A module's namespace, cycler or joiner the host passes back prints as the object (docs/tasks/0575)
+    const char* hostClass = objectClass ? nullptr : map.GetHostObjectClass();
+    if (hostClass && std::string_view(hostClass) == "Namespace")
+    {
+        objectClass = hostClass;
+    }
+    else if (hostClass && (std::string_view(hostClass) == "Cycler" || std::string_view(hostClass) == "Joiner"))
+    {
+        AppendAscii("<jinja2.utils.");
+        AppendAscii(hostClass);
+        AppendAscii(" object at ");
+        AppendAscii(fmt::format("{}", map.GetIdentity()).c_str());
+        AppendAscii(">");
+        return;
+    }
     if (const auto* reprArgument = objectClass ? map.GetReprArgument() : nullptr)
     {
         // A class (x.__class__, docs/tasks/0476) prints as <class 'str'>
@@ -886,7 +901,7 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
         AppendAscii(">");
         return;
     }
-    if (objectClass && !map.IsNamespace())
+    if (objectClass && !map.IsNamespace() && objectClass != hostClass)
     {
         AppendAscii("<jinja2.utils.");
         AppendAscii(objectClass);

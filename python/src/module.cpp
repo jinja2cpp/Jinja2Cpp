@@ -101,6 +101,7 @@ const PyNames& Names()
         names->numberType = nb::module_::import_("numbers").attr("Number");
         names->dequeType = nb::module_::import_("collections").attr("deque");
         names->arrayType = nb::module_::import_("array").attr("array");
+        names->liveModuleObjects = nb::module_::import_("weakref").attr("WeakValueDictionary")();
         g_names = names.release();
     }
     return *g_names;

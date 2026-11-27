@@ -4821,6 +4821,7 @@ public:
     // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
     // reflected struct, are its attributes
     [[nodiscard]] bool HasAttributes() const override { return m_node == nullptr; }
+    [[nodiscard]] const char* GetHostObjectClass() const override { return m_node ? nullptr : m_values.Get().GetObjectClass(); }
     [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor(), m_link); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {

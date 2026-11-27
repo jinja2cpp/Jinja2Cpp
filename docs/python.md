@@ -521,12 +521,19 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   stay themselves (`module.o is o`), an `Undefined` is the environment's `Undefined` class, a tuple and a `dictsort`
   entry are tuples, and a dict keeps its own keys (0411). A `namespace`, a `cycler` and a `joiner` are the module's own
   objects: `module.ns.count` is what a macro set last, `module.cyc.next()` advances the cycler the macros read, `next(module.cyc)`
-  and `module.j()` work, and `repr(module.ns)` is `<Namespace {'count': 1}>`. They outlive the template, as a macro does. Still
-  different: a `range` is a list; the object is a `ModuleObject`, not a `jinja2.utils.Namespace` (`isinstance` is false, `callable()`
-  is true of every one); Python cannot set an attribute of `module.ns` and an exported list or dict is a copy, not shared with the macros (deliberate: no shared mutable host data, 0575); each read of a nested namespace
-  (`module.ns.inner`) is a new object, though one the module shares; a namespace the module holds itself (`ns.me = ns`)
-  reprs to a `RecursionError` where Jinja2 prints `{...}`; and one passed back to a macro as an argument is the module's object,
-  but inside a list or dict argument it is a copy (a cycler or joiner there cannot be called). The params of a module are
+  and `module.j()` work, and `repr(module.ns)` is `<Namespace {'count': 1}>`, `{...}` where a namespace holds itself. They outlive the template, as a
+  macro does. They are of Jinja2's classes as `isinstance` and `__class__` see them (`jinja2.utils.Namespace`, `Cycler`, `Joiner`,
+  without the module importing Jinja2 before it is asked), only a joiner is `callable()`, and `type()` is the module's class of
+  that name; a nested namespace read twice is one object (`module.ns.inner is module.ns.inner`), as is one exported under two
+  names; `module.cyc.next` prints as Jinja2's bound method; and a module object passed to a render prints as Jinja2's (0575).
+  Still different: a `range` is a list; `module.j.__call__` is the module's own method; a module object passed to another
+  render is read there as a dict (`|length`, `|pprint` and iteration as on a dict, and a joiner there cannot be called, 0594); and one passed
+  back to a macro as an argument is the module's object, but inside a list or dict argument it is a copy, so a cycler or joiner
+  there cannot be called: the host's list would hold the module's own object where the module's cycle collector cannot walk
+  it. Deliberate, by the design principle that host data stays copied and renders independent (0575): Python cannot set an
+  attribute of `module.ns` (`AttributeError`), and an exported list or dict is a copy, not shared with the macros (a macro's
+  `{% do l.append(1) %}` does not show in `module.l`, nor Python's `module.l.append(2)` in the macros); a module's own
+  namespaces are live because the module is one context whose macros already share them. The params of a module are
   copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`).
   Calls and reads of one module from several threads take turns, waiting with the GIL released; a Python callable in
   a macro that joins a thread using the same module, or two modules whose macros call each other from two threads, deadlock (0411).

@@ -289,6 +289,16 @@ TEST_F(TemplateModuleTest, ObjectsExports)
 
 // What leaves in Objects mode owns its strings: a key from the template's source and a name the undefined carries stay valid
 // after the template is loaded with another source and the module's params are gone (ASan checks the views)
+// A live object of the module passed to another render prints as the object does in Jinja2 (docs/tasks/0575)
+TEST_F(TemplateModuleTest, ObjectsPrintAsObjectsInAnotherRender)
+{
+    auto module = Load("{% set ns = namespace(a=1, inner=namespace(b=2)) %}{% set c = cycler(1) %}").MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module) << module.error().ToString();
+    const jinja2::ValuesMap params{ { "ns", module->exports.at("ns") }, { "c", module->exports.at("c") } };
+    EXPECT_EQ("<Namespace {'a': 1, 'inner': <Namespace {'b': 2}>}>|[<Namespace {'b': 2}>]|1", Render("{{ ns }}|{{ [ns.inner] }}|{{ c.next() }}", params));
+    EXPECT_EQ(0u, Render("{{ c }}", params).rfind("<jinja2.utils.Cycler object at ", 0));
+}
+
 TEST_F(TemplateModuleTest, ObjectsExportsOwnTheirStrings)
 {
     auto tpl = Load("{% set ds = {'a_key_in_the_source': 'a value in the source'}|dictsort %}{% set u = missing_name_in_source %}{% set t = ('a tuple text', param) %}{% set d = {1: 'k text', 'm': 'v'} %}");
