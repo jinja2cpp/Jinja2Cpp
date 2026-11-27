@@ -474,6 +474,34 @@ TEST_F(SuspendableRenderLimitsTest, LimitsCountPerRenderAcrossSuspensions)
     EXPECT_TRUE(ReleaseThreadCaches());
 }
 
+// Two suspended renders each keep the huge host BigInt they converted, charged to their own budget, while the other runs
+// on the same thread (docs/tasks/0566): the cache moves with the render's collector. Twenty converted copies of the 28 KB
+// integer would pass the 256 KB budget; one shared object does not
+TEST_F(SuspendableRenderLimitsTest, HugeHostItemIsConvertedOncePerSuspendedRender)
+{
+    TemplateEnv env;
+    env.GetSettings().limits.maxRenderMemory = std::uint64_t{ 256 } << 10;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set acc = [] %}{% for i in range(20) %}{{ acc.append(l[0]) }}{% endfor %}|{{ acc|length }}|{{ acc[19] == l[0] }}"));
+    // 2^65535 + 12345: 19729 digits
+    const ValuesMap params{ { "l", ValuesList{ BigInt::FromDigits("8" + std::string(16379, '0') + "3039", 16, false) } } };
+    LazyRender<char> a(tpl, params);
+    LazyRender<char> b(tpl, params);
+    std::string textA;
+    std::string textB;
+    while (!a.Done() || !b.Done())
+    {
+        textA += a.Next().value_or(std::string());
+        textB += b.Next().value_or(std::string());
+        textB += b.Next().value_or(std::string());
+    }
+    EXPECT_EQ(ErrorText(a.Outcome()), "");
+    EXPECT_EQ(ErrorText(b.Outcome()), "");
+    EXPECT_NE(std::string::npos, textA.find("|20|True"));
+    EXPECT_EQ(textA, textB);
+    EXPECT_TRUE(ReleaseThreadCaches());
+}
+
 TEST_F(SuspendableRenderLimitsTest, PollRunsForItsRenderOnlyAndMayStopIt)
 {
     Template tpl;

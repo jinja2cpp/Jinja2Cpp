@@ -1,6 +1,7 @@
 #include "big_int.h"
 
 #include "contracts.h"
+#include "cycle_collector.h"
 #include "decimal_number.h"
 #include "engine_errors.h"
 #include "internal_value.h"
@@ -746,6 +747,45 @@ InternalValue MakeBigInt(std::string_view decimal, bool withinBitCap)
 InternalValue MakeBigIntValue(std::string_view decimal)
 {
     return MakeBigInt(decimal, false);
+}
+
+InternalValue HostBigIntValue(std::string_view decimal)
+{
+    const auto magnitude = decimal.substr(decimal.empty() || decimal.front() != '-' ? 0 : 1);
+    auto* const collector = CycleCollector::Current();
+    if (magnitude.size() <= MaxIntStrDigits || !collector)
+    {
+        return MakeBigInt(decimal, false);
+    }
+    // The budget that pays for an object made now: a hit is an object that budget paid for. Under an
+    // UncountedMemoryScope or without a budget it is null, and then only uncharged objects are shared
+    const bool counted = RenderMemoryCounted();
+    const void* const key = counted ? detail::t_renderLimits.collector : nullptr;
+    if (counted && !key)
+    {
+        return MakeBigInt(decimal, false);
+    }
+    auto& cache = collector->HugeHostIntsForWrite();
+    if (auto* object = cache.Find(decimal, key))
+    {
+        return BigIntValue(BigIntView(*object));
+    }
+    auto value = MakeBigInt(decimal, false);
+    const auto* handle = std::get_if<detail::BigIntHandle>(&detail::InternalValueAccess::Data(value));
+    if (!handle || !handle->object)
+    {
+        return value;
+    }
+    const auto* object = handle->object;
+    JINJA2CPP_EXPECTS(!object->Decimal().empty());
+    // A fourth of the budget at most, so that the cache cannot starve the template of it
+    if (key && cache.ChargedBytes() + object->ChargedBytes() > detail::t_renderLimits.memoryBudget / 4)
+    {
+        return value;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): MakeBigInt made the object, which is not const
+    cache.Insert(IntrusivePtr<detail::BigIntObject>(const_cast<detail::BigIntObject*>(object)), key);
+    return value;
 }
 
 BigIntView BigIntView::FromText(std::string_view decimal)

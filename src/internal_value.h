@@ -264,6 +264,9 @@ protected:
     void SetBorrowed() noexcept { m_bits |= BorrowedBit; }
     // Set by the maker, in the branch that charged the object's memory (docs/tasks/0483)
     void MarkCharged() noexcept { m_bits |= ChargedBit; }
+    // Gives up the claim to credit the object's bytes when it is freed, for an owner that credited them itself
+    // (BigIntObject::ForgetCharge)
+    void ClearCharged() noexcept { m_bits = static_cast<uint8_t>(m_bits & ~ChargedBit); }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
@@ -1317,6 +1320,11 @@ struct BigIntObject final : ValueObject
     }
 
     [[nodiscard]] static constexpr std::uint64_t Bytes(size_t words, size_t digits) noexcept { return std::uint64_t{ sizeof(BigIntObject) } + (std::uint64_t{ words } * sizeof(uint32_t)) + digits; }
+    // What the render's memory budget counts for this object
+    [[nodiscard]] std::uint64_t ChargedBytes() const noexcept { return Bytes(m_words, m_digits); }
+    // For the owner that holds the only reference and credits ChargedBytes itself (HugeHostInts): the destructor then
+    // credits nothing (docs/tasks/0566)
+    void ForgetCharge() noexcept { ClearCharged(); }
 
 private:
     // The parts for Make to fill

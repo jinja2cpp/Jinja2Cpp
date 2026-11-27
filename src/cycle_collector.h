@@ -9,8 +9,10 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <utility>
 #include <unordered_map>
 #include <unordered_set>
@@ -281,6 +283,90 @@ struct ModuleScope
     KeptObjects& kept;
     LiveRootsFn liveRoots = nullptr;
     const void* state = nullptr;
+};
+
+// The huge BigInts a render converted from the host's decimal text, held so that reading the same host item again
+// shares the object instead of converting again (docs/tasks/0566): four, content-keyed, replaced round-robin. An
+// entry made under a memory budget records the render whose budget paid for it. Touched by the render's thread only
+class HugeHostInts
+{
+public:
+    static constexpr size_t Size = 4;
+    struct Entry
+    {
+        IntrusivePtr<detail::BigIntObject> object;
+        // The collector whose budget paid for `object`; null when nothing was charged
+        const void* chargedTo = nullptr;
+    };
+    HugeHostInts() = default;
+    ~HugeHostInts()
+    {
+        for (auto& entry : m_entries)
+        {
+            Drop(entry);
+        }
+    }
+    HugeHostInts(const HugeHostInts&) = delete;
+    HugeHostInts& operator=(const HugeHostInts&) = delete;
+    HugeHostInts(HugeHostInts&&) = delete;
+    HugeHostInts& operator=(HugeHostInts&&) = delete;
+
+    // The object for `decimal` made under `chargedTo`'s budget (null for none), or null
+    [[nodiscard]] detail::BigIntObject* Find(std::string_view decimal, const void* chargedTo) const noexcept
+    {
+        for (const auto& entry : m_entries)
+        {
+            if (entry.object && entry.chargedTo == chargedTo)
+            {
+                const auto held = entry.object->Decimal();
+                if (held.size() == decimal.size() && std::memcmp(held.data(), decimal.data(), decimal.size()) == 0)
+                {
+                    return entry.object.get();
+                }
+            }
+        }
+        return nullptr;
+    }
+    // The bytes of the entries that took budget
+    [[nodiscard]] std::uint64_t ChargedBytes() const noexcept
+    {
+        std::uint64_t total = 0;
+        for (const auto& entry : m_entries)
+        {
+            if (entry.chargedTo && entry.object)
+            {
+                total += entry.object->ChargedBytes();
+            }
+        }
+        return total;
+    }
+    // Takes `object` into the next slot, dropping the one it had
+    void Insert(IntrusivePtr<detail::BigIntObject> object, const void* chargedTo) noexcept
+    {
+        auto& slot = m_entries[m_next];
+        m_next = (m_next + 1) % Size;
+        Drop(slot);
+        slot.object = std::move(object);
+        slot.chargedTo = chargedTo;
+    }
+
+private:
+    // Lets go of the entry. When it held the last reference to an object that took budget, the cache credits those
+    // bytes to the budget that paid (nothing once that render ended) and the object credits none; otherwise
+    // whoever frees the object credits them
+    static void Drop(Entry& entry) noexcept
+    {
+        if (entry.object && entry.chargedTo && entry.object->use_count() == 1 && entry.object->IsCharged())
+        {
+            const auto bytes = entry.object->ChargedBytes();
+            entry.object->ForgetCharge();
+            detail::ReleaseRenderMemoryOf(entry.chargedTo, bytes);
+        }
+        entry = Entry{};
+    }
+
+    std::array<Entry, Size> m_entries;
+    size_t m_next = 0;
 };
 
 // Frees the reference cycles among the values a render makes (docs/tasks/0110, 0251). Lists,
@@ -599,8 +685,23 @@ private:
         std::shared_ptr<const void> exportToken;
         // KeepForOuter's; null when this render shares no outer render's globals
         CycleCollector* keeper = nullptr;
+        // The huge host BigInts the render converted (docs/tasks/0566); made on the first
+        std::unique_ptr<HugeHostInts> hugeInts;
     };
 
+public:
+    // The cache of huge host BigInts, made now if there is none. Throws std::bad_alloc (docs/tasks/0566)
+    HugeHostInts& HugeHostIntsForWrite()
+    {
+        auto& notes = NotesForKeep();
+        if (!notes.hugeInts)
+        {
+            notes.hugeInts = std::make_unique<HugeHostInts>();
+        }
+        return *notes.hugeInts;
+    }
+
+private:
     // The notes, made now if there are none. Throws std::bad_alloc
     Notes& NotesForKeep();
 

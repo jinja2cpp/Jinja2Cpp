@@ -912,6 +912,46 @@ TEST(LimitsCachesTest, FreeingUncountedObjectsGivesNoBudget)
     // The adapter's own size comes back, the 32 KB the render added does not
     EXPECT_LE(t_renderLimits.memoryLeft, afterGrowth + 256);
 }
+
+// A nested render's cache of huge host BigInts ends after its limits do, and then credits no budget: the render that
+// called the host callable keeps the memory it had left (docs/tasks/0566). Bytes the cache's objects took from the
+// nested budget must not come back to the outer one
+TEST(LimitsCachesTest, NestedRenderHugeHostIntsCreditNoOuterBudget)
+{
+    using detail::t_renderLimits;
+    Settings innerSettings;
+    innerSettings.limits.maxRenderMemory = std::uint64_t{ 256 } << 10;
+    TemplateEnv innerEnv;
+    innerEnv.SetSettings(innerSettings);
+    Template inner(&innerEnv);
+    ASSERT_TRUE(inner.Load("{% set acc = [] %}{% for i in range(20) %}{{ acc.append(l[0]) }}{% endfor %}{{ acc|length }}"));
+    // 2^65535 + 12345: 19729 digits, 28 KB converted
+    const ValuesList list{ BigInt::FromDigits("8" + std::string(16379, '0') + "3039", 16, false) };
+    std::uint64_t before = 0;
+    std::uint64_t after = 0;
+    std::uint64_t budget = 0;
+    std::string innerText;
+    Settings outerSettings;
+    outerSettings.limits.maxRenderMemory = std::uint64_t{ 1 } << 20;
+    TemplateEnv outerEnv;
+    outerEnv.SetSettings(outerSettings);
+    Template outer(&outerEnv);
+    ASSERT_TRUE(outer.Load("{% set s = 'x' * 1000 %}{{ run() }}{{ s|length }}"));
+    const ValuesMap params{ { "run", MakeCallable([&] {
+                                  before = t_renderLimits.memoryLeft;
+                                  budget = t_renderLimits.memoryBudget;
+                                  auto result = inner.RenderAsString({ { "l", list } });
+                                  after = t_renderLimits.memoryLeft;
+                                  innerText = result ? result.value() : result.error().ToString();
+                                  return Value(std::string());
+                              }) } };
+    const auto result = outer.RenderAsString(params);
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("1000", result.value());
+    EXPECT_EQ("20", innerText.substr(innerText.size() - 2));
+    EXPECT_LT(before, budget);
+    EXPECT_EQ(before, after);
+}
 #endif
 
 // UntrustedLimits() bounds what a render keeps: the template of docs/tasks/0459 kept about 1 GB before the step

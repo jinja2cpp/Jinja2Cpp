@@ -2091,3 +2091,23 @@ TEST_F(TemplateModuleTest, ObjectExportsWide)
     EXPECT_EQ(jinja2::Value(std::wstring(L"a")), Call(Attr(exports.at("cyc"), "next")));
     EXPECT_EQ(L"1", Call(exports.at("show"), { exports.at("ns") }).AsWString());
 }
+
+// A macro that reads an item of the host's list holding a huge BigInt shares one converted object per call instead of
+// making one per read, so that the call's memory budget holds (docs/tasks/0566); every call starts anew
+TEST_F(TemplateModuleTest, HugeHostItemConvertsOncePerCall)
+{
+    jinja2::Settings settings;
+    settings.limits.maxRenderMemory = std::uint64_t{ 640 } * 1024;
+    jinja2::TemplateEnv env;
+    env.SetSettings(settings);
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% macro read() %}{% set acc = [] %}{% for i in range(20) %}{% set _ = acc.append(hl[0]) %}{% endfor %}{{ acc|length }}|{{ acc[19] == hl[0] }}{% endmacro %}"));
+    // 2^262143 + 12345: 111 KB once converted
+    const jinja2::ValuesMap params{ { "hl", jinja2::ValuesList{ jinja2::BigInt::FromDigits("8" + std::string(65531, '0') + "3039", 16, false) } } };
+    auto module = tpl.MakeModule(params);
+    ASSERT_TRUE(!!module) << module.error().ToString();
+    for (int n = 0; n != 50; ++n)
+    {
+        EXPECT_EQ("20|True", Call(module->exports["read"]).AsString()) << n;
+    }
+}
