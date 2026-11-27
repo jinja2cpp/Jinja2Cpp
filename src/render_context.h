@@ -1279,12 +1279,12 @@ public:
 
         return { *this, GetScopesCount() };
     }
-    // A context of its own, which sees `external` and the global names: an imported module's
-    // (docs/tasks/0167). It refers to `external`, which must outlive it, and to nothing else
-    // of this context but what the render keeps
     // Whether the engine's own globals are the last scope (ModuleOptions::builtinGlobals leaves them out)
     [[nodiscard]] bool HasBuiltins() const noexcept { return m_builtinScope != nullptr; }
     void SetBuiltins(const InternalValueMap* builtins) noexcept { m_builtinScope = builtins; }
+    // A context of its own, which sees `external` and the global names: an imported module's
+    // (docs/tasks/0167). It refers to `external`, which must outlive it, and to nothing else
+    // of this context but what the render keeps
     [[nodiscard]] RenderContext CloneWith(const InternalValueMap& external) const
     {
         RenderContext result(external, *m_globalScope, m_rendererCallback, m_builtinScope);

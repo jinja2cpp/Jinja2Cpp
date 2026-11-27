@@ -3698,6 +3698,16 @@ void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopH
     }
 }
 
+// A context without the caller's names sees the engine's globals also in a module that leaves them out
+// (ModuleOptions::builtinGlobals), as Jinja2's include and import without context read the environment's
+static void RestoreBuiltins(RenderContext& context)
+{
+    if (const auto* callback = context.GetRendererCallback(); callback && !context.HasBuiltins())
+    {
+        context.SetBuiltins(&GetBuiltinGlobals(callback->GetSettings().extensions));
+    }
+}
+
 // Renders `tpl` for `include` in `innerContext`, made from `values`: the names it sets stay its own
 template<typename CharT>
 JINJA2CPP_ALWAYS_INLINE void RenderIncludedIn(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values, RenderContext& innerContext, LoopHiding& hidden)
@@ -3729,6 +3739,10 @@ template<typename CharT>
 void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
 {
     RenderContext innerContext = values.Clone(withContext);
+    if (!withContext)
+    {
+        RestoreBuiltins(innerContext);
+    }
     // Its macros and `self` kept past the include see what it saw (0323)
     innerContext.SetEndsBeforeRender();
     // Declared after the context: the loop is put back once the closures of the include took what it saw
@@ -3902,11 +3916,9 @@ ImportedModule::ImportedModule(const RenderContext& importer, bool withContext)
     , m_context(importer.CloneWith(m_importerNames))
 {
     m_context.SetModuleImports(&m_imports);
-    // Without context it sees the engine's globals also from a module that leaves them out (ModuleOptions::builtinGlobals),
-    // as Jinja2's import reads the environment's
-    if (const auto* callback = m_context.GetRendererCallback(); !withContext && callback && !m_context.HasBuiltins())
+    if (!withContext)
     {
-        m_context.SetBuiltins(&GetBuiltinGlobals(callback->GetSettings().extensions));
+        RestoreBuiltins(m_context);
     }
     // Its context ends with a render an outer one outlives: RenderCore closes over it (CaptureModuleClosures)
     if (const auto* callback = m_context.GetRendererCallback(); callback && callback->EndsBeforeOuterRender())

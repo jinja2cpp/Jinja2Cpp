@@ -88,6 +88,7 @@ SHARED_TEMPLATES = {
         "{{ x }}{{ range is defined }}{{ namespace is defined }}{{ gettext is defined }}",
         "{% macro m() %}{{ range is defined }}{% endmacro %}{{ m() }}",
         '{% include "inc" %}',
+        '{% include "inc" without context %}',
         '{% import "imp" as i %}{{ i.m() }}',
         '{% import "imp" as i with context %}{{ i.m() }}',
         '{% from "imp" import m %}{{ m() }}',
@@ -95,7 +96,7 @@ SHARED_TEMPLATES = {
 )
 def test_shared_module_leaves_out_the_builtin_globals(source):
     # Jinja2's shared=True renders with the vars alone: range, dict, cycler, joiner, namespace and lipsum are undefined,
-    # also in an include and an import with context; an import without context sees the environment's (0574)
+    # also in an include and an import with context; an include or import without context sees the environment's (0574)
     results = []
     for module in (jinja2cpp, jinja2):
         env = module.Environment(loader=module.DictLoader(SHARED_TEMPLATES))

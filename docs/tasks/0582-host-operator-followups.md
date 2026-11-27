@@ -69,6 +69,8 @@ Fixed, each with a regression row (`test/public_host_object_test.cpp`: `ListConc
   `<` fails, as `_safe_key` catches its TypeError. Recorded: that fallback compares the type's `__name__`, where
   Python compares `str(type(obj))`, so a host type of another module (`<class 'fractions.Fraction'>`) can sort
   differently against a built-in one (`{None: 1, Fraction(7, 2): 2}` puts the Fraction first).
+  Filed as task 0605: the fallback catches every error of a host's `<`, not only its TypeError, and a tuple key holding
+  an incomparable host raises.
 - Not changed: the module-qualified type name (`'decimal.Decimal'`) of the Markup message. Python uses `tp_name` in its
   operators' TypeErrors but `__name__` elsewhere (`tojson`), and `tp_name` is not in the limited API; the messages that
   name the type keep `__name__`.

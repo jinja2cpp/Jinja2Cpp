@@ -6,6 +6,7 @@
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/host_object.h>
+#include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -132,7 +133,7 @@ TEST_F(TemplateModuleTest, ExportsAndBody)
 }
 
 // ModuleOptions::builtinGlobals off is Jinja2's make_module(vars, shared=True): the params alone, also in an include
-// and an import with context; an import without context sees the engine's globals (docs/tasks/0574)
+// and an import with context; an include or import without context sees the engine's globals (docs/tasks/0574)
 TEST_F(TemplateModuleTest, WithoutBuiltinGlobals)
 {
     AddFile("inc", "{{ x }}:{{ range is defined }}");
@@ -141,6 +142,7 @@ TEST_F(TemplateModuleTest, WithoutBuiltinGlobals)
         { "{{ x }}{{ range is defined }}{{ dict is defined }}{{ namespace is defined }}{{ lipsum is defined }}", "1FalseFalseFalseFalse" },
         { "{% macro m() %}{{ cycler is defined }}{{ joiner is defined }}{% endmacro %}{{ m() }}", "FalseFalse" },
         { R"({% include "inc" %})", "1:False" },
+        { R"({% include "inc" without context %})", ":True" },
         { R"({% import "imp" as i %}{{ i.m() }})", "[0, 1]False" },
         { R"({% import "imp" as i with context %}{{ i.m() }})", "" },
         { R"({% from "imp" import m %}{{ m() }})", "[0, 1]False" },
@@ -161,6 +163,11 @@ TEST_F(TemplateModuleTest, WithoutBuiltinGlobals)
         }
         ASSERT_TRUE(!!module) << module.error().ToString();
         EXPECT_EQ(body, module->body);
+        jinja2::TemplateW wide(&m_env);
+        ASSERT_TRUE(!!wide.Load(jinja2::ConvertString<std::wstring>(std::string(source))));
+        auto wideModule = wide.MakeModule({ { "x", int64_t{ 1 } } }, {}, options);
+        ASSERT_TRUE(!!wideModule) << wideModule.error().ToString();
+        EXPECT_EQ(jinja2::ConvertString<std::wstring>(std::string(body)), wideModule->body);
     }
     // On by default
     auto module = Load("{{ range(2)|list }}").MakeModule({}, {}, jinja2::ModuleOptions());
@@ -287,8 +294,6 @@ TEST_F(TemplateModuleTest, ObjectsExports)
     }
 }
 
-// What leaves in Objects mode owns its strings: a key from the template's source and a name the undefined carries stay valid
-// after the template is loaded with another source and the module's params are gone (ASan checks the views)
 // A live object of the module passed to another render prints as the object does in Jinja2 (docs/tasks/0575)
 TEST_F(TemplateModuleTest, ObjectsPrintAsObjectsInAnotherRender)
 {
@@ -299,6 +304,8 @@ TEST_F(TemplateModuleTest, ObjectsPrintAsObjectsInAnotherRender)
     EXPECT_EQ(0u, Render("{{ c }}", params).rfind("<jinja2.utils.Cycler object at ", 0));
 }
 
+// What leaves in Objects mode owns its strings: a key from the template's source and a name the undefined carries stay valid
+// after the template is loaded with another source and the module's params are gone (ASan checks the views)
 TEST_F(TemplateModuleTest, ObjectsExportsOwnTheirStrings)
 {
     auto tpl = Load("{% set ds = {'a_key_in_the_source': 'a value in the source'}|dictsort %}{% set u = missing_name_in_source %}{% set t = ('a tuple text', param) %}{% set d = {1: 'k text', 'm': 'v'} %}");

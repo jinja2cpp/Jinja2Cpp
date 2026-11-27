@@ -1079,15 +1079,22 @@ const Value* PythonGlobalValue(PyObject* object)
             PyErr_Clear();
             return nullptr;
         }
+        // Latched only once every object is there: a module blocked with None or still being imported is looked up again
+        bool complete = true;
         for (auto& entry : utils)
         {
+            if (entry.object)
+            {
+                continue;
+            }
             entry.object = PyObject_GetAttrString(module.ptr(), entry.qualname);
             if (!entry.object)
             {
                 PyErr_Clear();
+                complete = false;
             }
         }
-        found = true;
+        found = complete;
     }
     for (const auto& entry : utils)
     {
