@@ -642,15 +642,18 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0581](0581-failed-include-kept-self-loses-frame-names.md) | A `self` an include stored before it failed reads the include's names as undefined | parity | low | done |
 | [0582](0582-host-operator-followups.md) | Host operators: the leftovers of task 0381 | parity | low | open |
 | [0583](0583-python-own-globals-outside-a-lent-call.md) | Python module: Python's `range` given to a template outside a lent call is not the template's `range` | parity | low | open |
-| [0584](0584-block-in-scoped-block-loses-loop-names.md) | An unscoped block nested in a scoped block does not see the loop around them | parity | low | open |
+| [0584](0584-block-in-scoped-block-loses-loop-names.md) | An unscoped block nested in a scoped block does not see the loop around them | parity | low | done |
 | [0585](0585-int-format-zero-pad-prefix-grouping.md) | Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base | parity | low | open |
-| [0586](0586-closure-in-module-top-level-with-loses-outer-names.md) | A closure defined in a `with` at a module's top level reads the module's names as undefined on later calls | parity | low | open |
+| [0586](0586-closure-in-module-top-level-with-loses-outer-names.md) | A closure defined in a `with` at a module's top level reads the module's names as undefined on later calls | parity | low | done |
 | [0587](0587-set-erase-and-update-stay-linear.md) | The engine's set still spends O(n) per remove, pop and update | robustness | low | open |
 | [0588](0588-fold-budget-charges-big-int-work.md) | Charge the Load's fold budget for the size of big-integer work | robustness | low | open |
 | [0589](0589-ext-debug-extension.md) | `jinja2.ext.debug`: implement `{% debug %}` or record it as deliberate | parity | low | done |
 | [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | done |
 | [0591](0591-cell-protocol-inductive-invariant.md) | Find the cell protocol's inductive invariant | robustness | low | open |
-| [0592](0592-load-reads-after-many-sets-quadratic.md) | Load: name reads after many `set`s in one body cost reads x sets | robustness | low | open |
+| [0592](0592-load-reads-after-many-sets-quadratic.md) | Load: name reads after many `set`s in one body cost reads x sets | robustness | low | done |
+| [0596](0596-stored-self-block-of-scoped-block-loses-derived-context.md) | A `self` block or `super` stored in a scoped block and called after the loop loses the derived context | parity | low | open |
+| [0597](0597-import-with-context-in-loop-loses-loop.md) | A module imported with context in a loop does not see the loop's `loop` | parity | low | open |
+| [0598](0598-failure-in-module-top-level-with-drops-stored-closure.md) | A failure inside a module's top-level `with` drops the names its stored closure reads | parity | low | open |
 | [0600](0600-whole-tree-tidy-backlog.md) | clang-tidy: 304 hits on master; the weekly whole-tree job has never been green | style | high | open |
 | [0601](0601-tidy-ratchet-leaks.md) | clang-tidy ratchet: hits on unchanged lines pass the pull-request job, and a red weekly run is silent | ci | high | open |
 | [0602](0602-tidy-python-fuzz-bench.md) | clang-tidy never sees `python/src/`, `fuzz/` or `bench/` | ci | medium | open |
