@@ -373,8 +373,8 @@ private:
     // The names stored in frames, in parse order; most templates store a few
     SmallVector<Store, 8, SmallVectorDoubling> m_stores;
     std::vector<EntryName> m_entryNames;
-    // Heap only for a template with calls after a `set` in a loop or block body, which most have none of
-    std::vector<BodyCall> m_bodyCalls;
+    // The calls after a `set` of their loop or block body; most templates have a few, none on the heap
+    SmallVector<BodyCall, 32, SmallVectorDoubling> m_bodyCalls;
     std::uint32_t m_noBodyCalls = 0;
     // Out of line: the parse of every name expression inlines the check of AddRead
     void RecordRead(std::size_t hash);
