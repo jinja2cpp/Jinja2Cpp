@@ -58,13 +58,49 @@ def test_vars_locals_and_shared():
     for kwargs in ({"vars": {"a": 1, "b": 2}}, {"vars": {"a": 1}, "locals": {"b": 5}}, {"vars": {"a": 1, "b": 2}, "shared": False}):
         ours, theirs = [m.Environment().from_string(source).make_module(**kwargs) for m in (jinja2cpp, jinja2)]
         assert (str(ours), ours.total) == (str(theirs), theirs.total), kwargs
-    # a global is visible, unless the context is shared (the engine adds its own builtins only)
+    # a global is visible, unless the context is shared
     for module in (jinja2cpp, jinja2):
         env = module.Environment()
         env.globals["g"] = "G"
         out = env.from_string("{{ a }}-{{ g }}").make_module({"a": 1})
         assert str(out) == "1-G"
         assert str(env.from_string("{{ a }}-{{ g }}").make_module({"a": 1}, shared=True)) == "1-"
+
+
+SHARED_TEMPLATES = {
+    "inc": "{{ x }}:{{ range is defined }}",
+    "imp": "{% macro m() %}{{ range(2)|list }}{{ x is defined }}{% endmacro %}",
+}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ range(2)|list }}",
+        "{% set ns = namespace(a=1) %}{{ ns.a }}",
+        "{{ dict(a=1) }}",
+        "{{ cycler(1, 2).next() }}",
+        "{{ joiner()() }}",
+        "{{ lipsum(1) }}",
+        "{{ x }}{{ range is defined }}{{ namespace is defined }}{{ gettext is defined }}",
+        "{% macro m() %}{{ range is defined }}{% endmacro %}{{ m() }}",
+        '{% include "inc" %}',
+        '{% import "imp" as i %}{{ i.m() }}',
+        '{% import "imp" as i with context %}{{ i.m() }}',
+        '{% from "imp" import m %}{{ m() }}',
+    ],
+)
+def test_shared_module_leaves_out_the_builtin_globals(source):
+    # Jinja2's shared=True renders with the vars alone: range, dict, cycler, joiner, namespace and lipsum are undefined,
+    # also in an include and an import with context; an import without context sees the environment's (0574)
+    results = []
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader(SHARED_TEMPLATES))
+        try:
+            results.append(str(env.from_string(source).make_module({"x": 1}, shared=True)))
+        except module.UndefinedError as error:
+            results.append(("UndefinedError", str(error)))
+    assert results[0] == results[1], source
 
 
 def test_module_globals_and_filters_of_the_environment():

@@ -527,8 +527,7 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   (`module.ns.inner`) is a new object, though one the module shares; a namespace the module holds itself (`ns.me = ns`)
   reprs to a `RecursionError` where Jinja2 prints `{...}`; and one passed back to a macro as an argument is the module's object,
   but inside a list or dict argument it is a copy (a cycler or joiner there cannot be called). The params of a module are
-  copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
-  globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`).
+  copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`).
   Calls and reads of one module from several threads take turns, waiting with the GIL released; a Python callable in
   a macro that joins a thread using the same module, or two modules whose macros call each other from two threads, deadlock (0411).
 - A dict view (`keys()`, `values()`, `items()`) or a set (`d.keys() - []`) of the engine reaches a Python callable as a real
@@ -583,9 +582,8 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
 - A Python callable gets Python's own `range` and `dict` for the template's globals, and Jinja2's
   `jinja2.utils.Cycler`, `Joiner`, `Namespace` and `generate_lorem_ipsum` for `cycler`, `joiner`, `namespace` and
   `lipsum`, as Jinja2 passes them (when Jinja2 is not installed, those four are lent as the other template callables
-  are). Given back while that call runs, such an object is the template's global again (`f(range) is sameas range`);
-  given to the template elsewhere (`render(r=range)`, or kept and given back later), it stays Python's, so that
-  `r is sameas range` is False, where Jinja2's is True (0583). Calling `cycler` or `namespace` in Python makes
+  are). Wherever such an object reaches the template, it is the template's global, as in Jinja2: given back by the call
+  (`f(range) is sameas range`), kept and given back later, or passed to a render (`render(r=range)`). Calling `cycler` or `namespace` in Python makes
   Jinja2's object, a Python object to the template. A macro or `loop.cycle` prints as Jinja2's object does (0439), but
   its `type()` is the module's `TemplateValue`, as the module has no `jinja2.runtime.Macro`.
 - Sandbox (0412, 0413, 0414): `intercepted_binops` and `intercepted_unops` raise

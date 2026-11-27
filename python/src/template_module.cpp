@@ -719,7 +719,7 @@ PyEnvironment& PyTemplate::LiveEnvironment() const
     return env;
 }
 
-nb::tuple PyTemplate::MakeModule(nb::handle params) const
+nb::tuple PyTemplate::MakeModule(nb::handle params, bool shared) const
 {
     auto& env = LiveEnvironment();
     const auto entry = env.Enter();
@@ -736,8 +736,11 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
             values[std::string(Utf8View(name))] = convert.Convert(value);
         }
     }
-    // The globals are among the params here (Template.make_module)
-    env.AddUninstalledGettext(values);
+    // The globals are among the params here (Template.make_module); shared, Jinja2's module sees the params alone
+    if (!shared)
+    {
+        env.AddUninstalledGettext(values);
+    }
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
     state.environment = m_environment.ptr();
@@ -757,6 +760,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         jinja2::ModuleOptions moduleOptions;
         moduleOptions.exports = jinja2::ModuleExports::Objects;
         moduleOptions.waitForTurn = &WaitWithoutGil;
+        moduleOptions.builtinGlobals = !shared;
         auto made = m_template.MakeModule(values, options, moduleOptions);
         // In the scope, which an undefined value needs for its class
         if (made)

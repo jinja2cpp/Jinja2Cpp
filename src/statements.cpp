@@ -3902,6 +3902,12 @@ ImportedModule::ImportedModule(const RenderContext& importer, bool withContext)
     , m_context(importer.CloneWith(m_importerNames))
 {
     m_context.SetModuleImports(&m_imports);
+    // Without context it sees the engine's globals also from a module that leaves them out (ModuleOptions::builtinGlobals),
+    // as Jinja2's import reads the environment's
+    if (const auto* callback = m_context.GetRendererCallback(); !withContext && callback && !m_context.HasBuiltins())
+    {
+        m_context.SetBuiltins(&GetBuiltinGlobals(callback->GetSettings().extensions));
+    }
     // Its context ends with a render an outer one outlives: RenderCore closes over it (CaptureModuleClosures)
     if (const auto* callback = m_context.GetRendererCallback(); callback && callback->EndsBeforeOuterRender())
     {

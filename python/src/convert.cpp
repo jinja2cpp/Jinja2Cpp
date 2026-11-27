@@ -349,7 +349,7 @@ nb::object ToPythonImpl(const Value& value, Memo& memo);
 // Python's own object for a global the engine lent (`range` is builtins.range, `cycler` jinja2.utils.Cycler, `lipsum`
 // jinja2.utils.generate_lorem_ipsum), as Jinja2 passes them (docs/tasks/0559); none for any other callable, and when
 // the module that holds it does not import (Jinja2 not installed)
-nb::object LentGlobalToPython(const Value& value, const jinja2::UserCallable& callable)
+nb::object LentGlobalToPython(const jinja2::UserCallable& callable)
 {
     auto info = jinja2::DescribeLentCallable(callable);
     if (!info || info->pythonModule.empty())
@@ -368,7 +368,6 @@ nb::object LentGlobalToPython(const Value& value, const jinja2::UserCallable& ca
         PyErr_Clear();
         return {};
     }
-    LeaseScope::NoteLentGlobal(object, value);
     return object;
 }
 
@@ -620,7 +619,7 @@ nb::object ToPythonImpl(const Value& value, Memo& memo)
                 {
                     return nb::borrow(own->object);
                 }
-                if (auto global = LentGlobalToPython(value, *data))
+                if (auto global = LentGlobalToPython(*data))
                 {
                     return global;
                 }
@@ -785,30 +784,6 @@ LeaseScope::~LeaseScope()
         m_lease->active = false;
         m_lease->context = Value();
     }
-}
-
-void LeaseScope::NoteLentGlobal(nb::handle python, const jinja2::Value& lent)
-{
-    if (auto* scope = t_lease; scope && !LentGlobalOf(python.ptr()))
-    {
-        scope->m_lentGlobals.emplace_back(nb::borrow(python), lent);
-    }
-}
-
-const jinja2::Value* LeaseScope::LentGlobalOf(PyObject* python) noexcept
-{
-    // The calls around this one still run: what they were lent is still the template's
-    for (const auto* scope = t_lease; scope; scope = scope->m_outer)
-    {
-        for (const auto& [object, lent] : scope->m_lentGlobals)
-        {
-            if (object.ptr() == python)
-            {
-                return &lent;
-            }
-        }
-    }
-    return nullptr;
 }
 
 std::shared_ptr<CallLease> LeaseScope::Current()
@@ -1052,6 +1027,71 @@ std::string TemplateValue::Repr() const
 
 namespace
 {
+// The engine's global for Python's own object of it, which a template callable got (LentGlobalToPython) or a host passes
+// (`render(r=range)`): `builtins.range` and `dict`, and `jinja2.utils.Cycler`, `Joiner`, `Namespace` and
+// `generate_lorem_ipsum` once Jinja2 is imported (docs/tasks/0583); null for any other object. Only a callable can be
+// one, so other objects cost a slot check
+const Value* PythonGlobalValue(PyObject* object)
+{
+    if (PyCallable_Check(object) == 0)
+    {
+        return nullptr;
+    }
+    const auto global = [](const char* module, const char* qualname) {
+        auto callable = jinja2::PythonGlobal(module, qualname);
+        return callable ? Value(std::move(*callable)) : Value();
+    };
+    static const Value range = global("builtins", "range");
+    static const Value dict = global("builtins", "dict");
+    if (object == reinterpret_cast<PyObject*>(&PyRange_Type))
+    {
+        return &range;
+    }
+    if (object == reinterpret_cast<PyObject*>(&PyDict_Type))
+    {
+        return &dict;
+    }
+    struct Utils
+    {
+        const char* qualname;
+        Value value;
+        // Kept for the life of the process, as Python keeps jinja2.utils once imported
+        PyObject* object = nullptr;
+    };
+    static Utils utils[] = { { "Cycler", global("jinja2.utils", "Cycler") },
+                             { "Joiner", global("jinja2.utils", "Joiner") },
+                             { "Namespace", global("jinja2.utils", "Namespace") },
+                             { "generate_lorem_ipsum", global("jinja2.utils", "generate_lorem_ipsum") } };
+    // Looked up once Jinja2 is imported, never importing it: an object of jinja2.utils means it is
+    static bool found = false;
+    if (!found)
+    {
+        auto module = nb::steal(PyImport_GetModule(nb::str("jinja2.utils").ptr()));
+        if (!module)
+        {
+            PyErr_Clear();
+            return nullptr;
+        }
+        for (auto& entry : utils)
+        {
+            entry.object = PyObject_GetAttrString(module.ptr(), entry.qualname);
+            if (!entry.object)
+            {
+                PyErr_Clear();
+            }
+        }
+        found = true;
+    }
+    for (const auto& entry : utils)
+    {
+        if (entry.object == object)
+        {
+            return &entry.value;
+        }
+    }
+    return nullptr;
+}
+
 // The common part of ToEngine and WriteToEngine: what `object` is to the engine, written by `sink`
 // (Value(...) for ToEngine, HostResult::Set for WriteToEngine)
 template<typename Sink>
@@ -1119,9 +1159,9 @@ auto Classify(nb::handle handle, Sink&& sink)
     {
         return sink.Engine(UndefinedToEngine(object));
     }
-    // Python's `range` (or `jinja2.utils.Cycler`, ...) that a running call was given for the template's own goes back
-    // as the template's (LentGlobalToPython)
-    if (const auto* global = LeaseScope::LentGlobalOf(object))
+    // Python's `range` (or `jinja2.utils.Cycler`, ...) goes back as the template's: one a call was given for the
+    // template's own (LentGlobalToPython) and one the host passes (docs/tasks/0583)
+    if (const auto* global = PythonGlobalValue(object))
     {
         return sink.Engine(*global);
     }

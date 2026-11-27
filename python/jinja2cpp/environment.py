@@ -234,7 +234,7 @@ class Template(_jinja2cpp.Template):
             params.update(vars)
         if locals:
             params.update(locals)
-        body, exports = self._make_module(params)
+        body, exports = self._make_module(params, shared)
         return TemplateModule(self, body, exports)
 
     @property
@@ -361,7 +361,8 @@ class FallbackTemplate:
 
         return list(jinja2.meta.find_referenced_templates(self._jinja2_ast()))
 
-    def _make_module(self, params: t.Dict[str, t.Any]) -> t.Tuple[str, t.Dict[str, t.Any]]:
+    def _make_module(self, params: t.Dict[str, t.Any], shared: bool = False) -> t.Tuple[str, t.Dict[str, t.Any]]:
+        # The globals are among `params` unless `shared`; Jinja2's shared module sees `params` alone either way
         with fallback.mapped():
             module = self._jinja2_template.make_module(params, True)
         return str(module), {k: v for k, v in vars(module).items() if not k.startswith("_")}

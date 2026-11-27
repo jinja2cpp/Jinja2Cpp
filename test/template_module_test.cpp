@@ -131,6 +131,43 @@ TEST_F(TemplateModuleTest, ExportsAndBody)
     }
 }
 
+// ModuleOptions::builtinGlobals off is Jinja2's make_module(vars, shared=True): the params alone, also in an include
+// and an import with context; an import without context sees the engine's globals (docs/tasks/0574)
+TEST_F(TemplateModuleTest, WithoutBuiltinGlobals)
+{
+    AddFile("inc", "{{ x }}:{{ range is defined }}");
+    AddFile("imp", "{% macro m() %}{{ range(2)|list }}{{ x is defined }}{% endmacro %}");
+    const std::pair<const char*, const char*> cases[] = {
+        { "{{ x }}{{ range is defined }}{{ dict is defined }}{{ namespace is defined }}{{ lipsum is defined }}", "1FalseFalseFalseFalse" },
+        { "{% macro m() %}{{ cycler is defined }}{{ joiner is defined }}{% endmacro %}{{ m() }}", "FalseFalse" },
+        { R"({% include "inc" %})", "1:False" },
+        { R"({% import "imp" as i %}{{ i.m() }})", "[0, 1]False" },
+        { R"({% import "imp" as i with context %}{{ i.m() }})", "" },
+        { R"({% from "imp" import m %}{{ m() }})", "[0, 1]False" },
+    };
+    jinja2::ModuleOptions options;
+    options.builtinGlobals = false;
+    for (const auto& [source, body] : cases)
+    {
+        SCOPED_TRACE(source);
+        auto tpl = Load(source);
+        auto module = tpl.MakeModule({ { "x", int64_t{ 1 } } }, {}, options);
+        if (*body == 0)
+        {
+            // range is undefined in the imported macro: an UndefinedError, as Jinja2's
+            ASSERT_FALSE(!!module);
+            EXPECT_EQ(jinja2::ErrorCode::UndefinedError, module.error().GetCode());
+            continue;
+        }
+        ASSERT_TRUE(!!module) << module.error().ToString();
+        EXPECT_EQ(body, module->body);
+    }
+    // On by default
+    auto module = Load("{{ range(2)|list }}").MakeModule({}, {}, jinja2::ModuleOptions());
+    ASSERT_TRUE(!!module) << module.error().ToString();
+    EXPECT_EQ("[0, 1]", module->body);
+}
+
 TEST_F(TemplateModuleTest, Values)
 {
     auto module = Make(R"({% set ns = namespace(a=1) %}{% set l = [1,{"k":2}] %}{% set u = nothing %}{% set blk %}x<y{% endset %})");

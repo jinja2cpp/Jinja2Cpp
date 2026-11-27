@@ -1962,6 +1962,9 @@ std::optional<InternalValue> ClassObjectAttribute(const InternalValue& value, st
 // The global that is the class `name` of `module` in Jinja2 (range, dict, cycler, joiner, namespace), the same object
 // for every render (global_functions.cpp); nullopt for another class
 std::optional<InternalValue> ClassGlobalOf(std::string_view module, std::string_view name);
+// The global Python Jinja2 has as `module.qualname`: the class globals and `lipsum` (jinja2.utils.generate_lorem_ipsum),
+// one object for every render (\ref PythonGlobal); nullopt for any other name
+std::optional<InternalValue> PythonGlobalOf(std::string_view module, std::string_view qualname);
 // What calling the class `className` does (`(1).__class__('5')`, docs/tasks/0490): Python's constructor for the classes the
 // engine has one for, the error Python gives for the rest (global_functions.cpp)
 InternalValue CallPythonClass(std::string_view className, const CallParams& params, RenderContext& context);
