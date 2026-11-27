@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run, before a push, the pull-request checks that a cloud session can run itself, in the
 # form CI runs them: clang-format (whole src/ and include/ files, changed lines in test/),
-# clang-tidy and the null-comparison query on changed lines (headers analysed on their
-# own), the task files, a pattern CodeQL flags, and with --perf the instruction-count gate.
+# clang-tidy on the whole changed files (a header on its own), the null-comparison query on
+# changed lines, the task files, a pattern CodeQL flags, and with --perf the instruction-count gate.
 # Twelve of the 19 red-push causes in PRs #346-#445 were one of these checks run locally
 # in a narrower form (docs/tasks/0157). What stays out: MSVC, Apple Clang, sanitizers and
 # the test suite itself (the verifier and CI cover those).
@@ -35,16 +35,6 @@ changed() { git diff --name-only --diff-filter=d "$base" -- "$@"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 fmt=clang-format-18; have $fmt || fmt=clang-format
-# The default build tests the nlohmann_json binding only, so the Boost components have no
-# include path (docs/tasks/0311); test/big_int_test.cpp covers the big-integer adapter (0272)
-tidy_excludes=(':!bindings/boost_*' ':!test/binding/boost_json*'
-  ':!include/jinja2cpp/polymorphic_value/*' ':!src/ankerl/*' ':!src/lexertk.h'
-  ':!src/unicode_tables.h'
-  # Generated test data, included by a test; the installed-package consumers, which
-  # check_package.cmake builds outside this build's compile database; the 1.x migration
-  # fixture (does not compile until migrated) and its golden copy
-  ':!test/*.inc' ':!test/package/*' ':!test/migration/*')
-
 # 1. clang-format, as .github/workflows/format-check.yml
 mapfile -t whole < <(changed 'src/**.h' 'src/**.cpp' 'include/**.h' 'bindings/**.h')
 if [ ${#whole[@]} -gt 0 ] && ! $fmt --dry-run --Werror "${whole[@]}" > "$logs/preflight-format.log" 2>&1; then
@@ -60,7 +50,7 @@ else
   fi
 fi
 
-# 2. clang-tidy on changed lines, as .github/workflows/clang-tidy.yml
+# 2. clang-tidy on the whole changed files, as .github/workflows/clang-tidy.yml (docs/tasks/0601)
 tidy_dir=$(python3 -c 'import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__), "data", "bin"))' 2>/dev/null)
 if [ -z "$(changed src include bindings test)" ]; then
   record SKIP "clang-tidy: no C++ changes"
@@ -74,16 +64,13 @@ else
   [ -f "$build/CMakeCache.txt" ] && init=()
   cmake -S . -B "$build" -G Ninja "${init[@]}" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null 2>&1 \
     || record WARN "cmake configure of $build failed"
-  git diff -U0 --no-color "$base" -- src include bindings test "${tidy_excludes[@]}" \
-    | python3 "$tidy_dir/clang-tidy-diff.py" -p1 -path "$build" -j "$(nproc)" -quiet \
-        -clang-tidy-binary "$tidy_dir/clang-tidy" -extra-arg=-Wno-unknown-warning-option \
-        -extra-arg=-I"$(realpath "$build")/generated/include" \
-    > "$logs/preflight-tidy.log" 2>&1
+  scripts/tidy_changed.sh --base "$base" --build "$build" --clang-tidy "$tidy_dir/clang-tidy" \
+    --log "$logs/preflight-tidy.log" > /dev/null 2>&1
   tidy_status=$?
   grep -E ': (warning|error): ' "$logs/preflight-tidy.log" | sort -u | head -30
   # CI fails on the exit status (errors and WarningsAsErrors checks), not on plain warnings
   if [ $tidy_status = 0 ]; then
-    record PASS "clang-tidy (changed lines, headers on their own)"
+    record PASS "clang-tidy (whole changed files)"
   else
     record FAIL "clang-tidy: see $logs/preflight-tidy.log"
   fi

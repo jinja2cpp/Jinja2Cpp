@@ -1,10 +1,14 @@
 name: clang-tidy
 
 # Static analysis with the checks in .clang-tidy (docs/tasks/0054).
-# Pull requests: only diagnostics on lines the PR changes are reported, as annotations.
-# The job fails only for checks listed in WarningsAsErrors, which grows batch by batch
-# as each check is cleaned from the whole tree (a ratchet).
-# Weekly and on demand: the whole tree, with per-check counts in the job summary.
+# Pull requests: every file the PR touches is analysed whole (scripts/tidy_changed.sh), as
+# annotations. Changed lines were not enough: several checks report a function's or an
+# #include's own line, and a type change moves hits into unchanged callers (docs/tasks/0601).
+# The job fails on any hit: master is clean (docs/tasks/0600), so a hit in a touched file is
+# the PR's.
+# Weekly and on demand: the whole tree, with per-check counts in the job summary. A red
+# weekly run opens (or updates) one issue labelled `clang-tidy`, and the next green run
+# closes it. The merge steward dispatches this workflow on a train branch before merging.
 
 on:
   pull_request:
@@ -19,6 +23,7 @@ on:
       - '.clang-tidy'
       - 'test/.clang-tidy'
       - 'scripts/null_compare.*'
+      - 'scripts/tidy_changed.sh'
       - 'scripts/use_count*'
       - '.github/workflows/clang-tidy.yml'
   schedule:
@@ -27,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  issues: write # the weekly run reports a red result as an issue
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -76,31 +82,15 @@ jobs:
           -DJINJA2CPP_DEPS_MODE=internal \
           -DJINJA2CPP_CXX_STANDARD=17
 
-    - name: clang-tidy on changed lines
+    - name: clang-tidy on the changed files
       if: github.event_name == 'pull_request'
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
       run: |
-        set -o pipefail
         status=0
-        # The Boost components (bindings/boost_*) and the Boost.JSON binding test have no
-        # include path in this build, which tests the nlohmann_json binding only, so
-        # clang-tidy can only report "file not found" for them (docs/tasks/0311).
-        # Vendored headers stay out, as in ExcludeHeaderFilterRegex: clang-tidy-diff
-        # checks a changed header as its own file, past the header filter.
-        # A header borrows the flags of the most similar file in the database, which can be a
-        # dependency's source file, so the generated include directory (jinja2cpp/version.h)
-        # is passed explicitly. test/migration holds a 1.x fixture that compiles only once
-        # migrated (docs/tasks/0077).
-        git diff -U0 --no-color "$BASE_SHA" -- src include bindings test \
-            ':!bindings/boost_*' ':!test/binding/boost_json*' \
-            ':!include/jinja2cpp/polymorphic_value/*' ':!src/ankerl/*' ':!src/lexertk.h' \
-            ':!src/unicode_tables.h' ':!test/*.inc' ':!test/package/*' ':!test/migration/*' \
-          | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \
-              -clang-tidy-binary "$CLANG_TIDY" \
-              -extra-arg=-Wno-unknown-warning-option \
-              -extra-arg=-I"$GITHUB_WORKSPACE/build/generated/include" \
-          | tee tidy.log || status=$?
+        # Whole files, translation units and headers alike (a header on its own, with the
+        # flags of the most similar file in the database); the exclusions are in the script
+        scripts/tidy_changed.sh --base "$BASE_SHA" --build build --clang-tidy "$CLANG_TIDY" --log tidy.log || status=$?
         # Annotate each diagnostic once, on the line it names.
         grep -E '^/[^ ]+:[0-9]+:[0-9]+: (warning|error): ' tidy.log | sort -u \
           | sed -E "s#^$GITHUB_WORKSPACE/##; s#^([^:]+):([0-9]+):([0-9]+): (warning|error): (.*)#::\4 file=\1,line=\2,col=\3::\5#" || true
@@ -147,7 +137,7 @@ jobs:
             | sed -E 's#/src/binding/\.\./#/src/#; s#/test/\.\./#/#' | sort -u \
             | sed -E 's/.*\[([a-z0-9.,-]+)\]$/\1/' | tr ',' '\n' | sort | uniq -c | sort -rn \
             | awk '{ printf "| %s | %s |\n", $1, $2 }'
-        } >> "$GITHUB_STEP_SUMMARY"
+        } | tee tidy-summary.md >> "$GITHUB_STEP_SUMMARY"
         exit "${status:-0}"
 
     - name: Comparisons with nullptr in conditions (whole tree)
@@ -158,6 +148,36 @@ jobs:
     - name: shared_ptr use_count() calls (whole tree)
       if: github.event_name != 'pull_request'
       run: python scripts/use_count_check.py -p build --github --clang-query clang-query-18
+
+    # A red weekly run reached no one for eight weeks (docs/tasks/0600): open or update one issue
+    # per repository, and close it on the next green run. The backlog routine and the stall
+    # sweep read open issues with the label `clang-tidy`.
+    - name: Report the weekly result as an issue
+      if: always() && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch && job.status != 'cancelled'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RESULT: ${{ job.status }}
+      run: |
+        run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        gh label create clang-tidy --color d93f0b --description 'Whole-tree clang-tidy run is red' 2>/dev/null || true
+        number=$(gh issue list --label clang-tidy --state open --limit 1 --json number --jq '.[0].number // empty')
+        if [ "$RESULT" = success ]; then
+          [ -n "$number" ] && gh issue close "$number" --comment "Green again: $run_url" || true
+          exit 0
+        fi
+        {
+          echo "The whole-tree clang-tidy run on \`$GITHUB_SHA\` failed: $run_url"
+          echo
+          [ -f tidy-summary.md ] && cat tidy-summary.md
+          echo
+          echo 'The full log is the `clang-tidy-log` artifact of the run. A hit in a file nobody touched'
+          echo 'is a regression the pull-request job missed (docs/tasks/0601): fix it or file a task.'
+        } > issue-body.md
+        if [ -n "$number" ]; then
+          gh issue comment "$number" --body-file issue-body.md
+        else
+          gh issue create --label clang-tidy --title "clang-tidy: the whole-tree run is red on ${GITHUB_REF_NAME}" --body-file issue-body.md
+        fi
 
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       if: always()

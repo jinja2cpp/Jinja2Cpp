@@ -19,7 +19,8 @@ Usage:
 
 Exit status: 0 train built; 2 a merge conflicted (tree left conflicted: resolve, `git commit`,
 rerun with the same arguments plus --resume; PRs already in the branch are skipped); 1 any other error.
-After 0: push the branch, open the draft train PR, subscribe, and wait for CI.
+After 0: push the branch, dispatch clang-tidy.yml on it (whole tree, docs/steward-checklist.md
+step 7), open the draft train PR, subscribe, and wait for CI.
 """
 import argparse
 import pathlib
@@ -146,7 +147,7 @@ def main():
         git("commit", "-m", msg, "--", *paths)
         print("committed task status and index")
     print(f"train branch {args.branch} at {git('rev-parse', '--short', 'HEAD').stdout.strip()}; "
-          "next: push, open the draft train PR, subscribe, arm a send_later wake")
+          "next: push, dispatch clang-tidy.yml on the branch, open the draft train PR, subscribe, arm a send_later wake")
 
 
 if __name__ == "__main__":

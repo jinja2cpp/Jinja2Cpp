@@ -66,7 +66,7 @@ Recipes (corrected from PRs #293-#345, measured in docs/tasks/0004):
   pre-push checks. Run it before marking an implementation PR ready and paste its
   verdict into the PR conversation.
 - Before every push of `src/`, `include/` or `test/`: `scripts/preflight.sh` (add
-  `--perf` when `src/` changed). It runs CI's changed-line checks as CI runs them; 12 of
+  `--perf` when `src/` changed). It runs CI's changed-line and changed-file checks as CI runs them; 12 of
   the 19 red-push causes in #346-#445 were those checks run locally in a narrower form.
 - A red CI event: hand the job to `ci-triage` first and read its summary, not the log.
   A log read into the main session is paid for again on every later wake.

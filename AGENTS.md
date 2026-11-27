@@ -122,7 +122,7 @@ Match any targeted compiler workaround to the documented CI configuration.
   checks. Malformed templates must report an error rather than crash. Check lifetime
   and concurrency changes under the appropriate sanitizer when supported.
 - Run `scripts/preflight.sh` before pushing implementation changes; add `--perf` for
-  `src/` changes. It checks changed-line style/tidy, headers, task metadata and, when
+  `src/` changes. It checks changed-line style, whole-file tidy of every touched file, headers, task metadata and, when
   requested, the instruction-count gate. It does not replace builds or tests.
 - For documentation-only changes, run preflight and check affected links/commands;
   do not rebuild unrelated configurations merely to produce a test count. Distinguish
@@ -134,7 +134,7 @@ Match any targeted compiler workaround to the documented CI configuration.
   include hand-aligned tables, so format only changed test lines. Use
   `git clang-format origin/master` before committing C++ changes.
 - `.clang-tidy` is based on clang-tidy 22.1.8 (`pip install clang-tidy==22.1.8`;
-  older distribution packages lack many checks). CI reports hits on changed lines and
+  older distribution packages lack many checks). CI reports every hit in the files a PR touches (whole files, since 0601) and
   fails on checks in `WarningsAsErrors`. Use
   `scripts/clang_tidy_fix.py --checks <check>`, not `run-clang-tidy -fix`, which can
   apply header edits twice. For pointer conditions use `if (p)`/`if (!p)` rather

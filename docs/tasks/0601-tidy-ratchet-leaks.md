@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: high
 area: ci
 depends: [0600]
@@ -41,3 +41,9 @@ only full check is the weekly job, and its failure reaches no one: it has failed
 **Done when.** A PR that adds one branch to a function at score 25, or removes the last use of an
 included header, fails the clang-tidy job; preflight reports the same; a red scheduled run opens an
 issue.
+
+**Outcome.** The PR job and `scripts/preflight.sh` both run `scripts/tidy_changed.sh`: clang-tidy on every
+changed `.cpp`/`.h` as a whole file (a translation unit with its own flags, a header with the flags of the
+nearest file in the database, as the weekly job does). A red weekly run opens or comments on one issue labelled
+`clang-tidy` and a green one closes it; the steward's train dispatches `clang-tidy.yml` on the train branch
+(`docs/steward-checklist.md`, step 7). `bindings.yml` keeps its changed-lines job: follow-up 0606.

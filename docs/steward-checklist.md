@@ -66,7 +66,13 @@ when the PR is marked ready (`ready_for_review`) and on every push after that. C
 6. A train of one is normal when the base is stale, the PR overlaps a merged one (same `src/`
    file) or task statuses need flipping. If a new FINAL arrives within about 20 minutes of a
    train's start and touches the same files, restack; otherwise queue it behind the train.
-7. Open the train PR as a draft, subscribe, mark it ready, merge with `merge_method` merge and the
+7. Run the whole tree through clang-tidy before merging: `gh workflow run clang-tidy.yml --ref
+   <train branch>` (or `actions_run_trigger` with `run_workflow`, workflow `clang-tidy.yml`), once
+   the branch is pushed. The pull-request job tidies the files the train changes, whole; the
+   dispatch also catches a hit in a file nobody touched (a type change in one PR moving a hit
+   into a caller another PR left alone; 0600/0601). A red dispatch is a culprit to bisect like a
+   red train job. It opens no issue: only the weekly run on master does.
+8. Open the train PR as a draft, subscribe, mark it ready, merge with `merge_method` merge and the
    full 40-character `expectedHeadSha`, then unsubscribe. The merge message names perf
    exceptions, re-run gaps and any MSVC story.
 
