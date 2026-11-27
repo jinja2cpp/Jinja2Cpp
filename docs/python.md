@@ -475,6 +475,27 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   `bytearray`, `array` or `deque` it returns is then checked.
 - The cost of a number's own arithmetic (`Fraction ** 10**8`) is not capped by `MaxBigIntBits`; Python Jinja2 behaves
   the same (task 0412).
+- `abs`, `round` (method `common`), `%` formatting of a number and the order of a `dict`'s keys in `pprint` ask the
+  object: `__abs__`, `__round__`, `int()` and `float()`, `__lt__` (task 0582). The documented differences of these
+  operators, all from task 0582:
+  - An `int`, `float` or `str` subclass is converted to the engine's own scalar, so an overridden `__add__` or `__lt__`
+    is not run. Keeping it a host object would make the scalar filters (`int`, `round`, `upper`) and every conversion
+    pay for the lookups.
+  - A `list` or `tuple` subclass that overrides `__add__` or `__lt__` is read as a list: the engine's list path runs
+    before the host is asked, and routing every Python list through Python's operators would cost every list operation.
+  - A template macro as an operand reaches the object as `None`. Nothing of the template is kept, but an `__add__` that
+    accepts `None` answers where Python hands it the macro.
+  - The order of `unique`'s native-order scope (hash and `==` only, never a host's `<`) is a `thread_local` flag: a
+    host `__eq__` that renders a template which sorts host objects inside that call gets a `TypeError` from its `<`.
+  - The `Markup` flag of an operand is dropped when the object is asked (`x + m`, `m + x`, `x < m`, `max`): `__add__`
+    sees a `str` where Python passes a `Markup`. The result is escaped more, never less.
+  - `len()` and `__index__` of the count are called by the size guard before Python calls them, so `bytes * n` with a
+    user `__index__` runs it twice.
+  - `'%x'`, `'%o'` and `'%X'` of an object accept what `int()` accepts, where Python wants `__index__`: a `Decimal` or a
+    `Fraction` renders in the engine and is a `TypeError` in Python. `'%d'` of an object that has only `__float__`
+    renders the truncated float, where Python raises. `'%c'` and a `Markup` format do not ask the object.
+  - `round` with the method `ceil` or `floor` of an object (`Fraction`, `Decimal`) is not asked and raises, where Python
+    runs `math.ceil` on it.
 
 ## Differences from Jinja2
 

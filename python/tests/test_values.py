@@ -124,6 +124,16 @@ class Stops:
         raise StopIteration
 
 
+class Index:
+    """Has __index__ and __float__ only: np.int64's way to be a number to %d, %x and %f"""
+
+    def __index__(self):
+        return 5
+
+    def __float__(self):
+        return 2.5
+
+
 DEC = decimal.Decimal
 FRAC = fractions.Fraction
 
@@ -182,6 +192,15 @@ CASES = [
     ("{{ ks|sort }} {{ ks|sort(reverse=true) }} {{ ks|max }} {{ ks|min }} {{ ks[0] < ks[1] }} {{ ks[0] > ks[1] }}", {"ks": [Key(2), Key(1), Key(3)]}),
     ("{% for k, g in hs|groupby('key') %}{{ k }}:{{ g|map(attribute='key')|list|length }};{% endfor %}", {"hs": [Holder(Key(2)), Holder(Key(1)), Holder(Key(2))]}),
     ("{{ hs|sort(attribute='key')|map(attribute='key')|list }} {{ hs|max(attribute='key') }}", {"hs": [Holder(Key(2)), Holder(Key(1))]}),
+    # a host number is the number to `%` formatting, as a tuple item too (task 0582)
+    ("{{ '%d' % f }} {{ '%i' % d }} {{ '%f' % f }} {{ '%5.1f' % d }} {{ '%e' % d }} {{ '%g' % f }} {{ '%s' % f }}", {"f": FRAC(7, 2), "d": DEC("3.7")}),
+    ("{{ '%d %d' % (f, 1) }} {{ '%d %f' % (d, d) }} {{ '%d' % x }} {{ '%x' % x }} {{ '%f' % x }} {{ '%o' % x }}", {"f": FRAC(7, 2), "d": DEC("3.7"), "x": Index()}),
+    # abs and round ask the host: __abs__ and __round__ (task 0582)
+    ("{{ f|abs }} {{ (-f)|abs }} {{ d|abs }} {{ (-d)|abs }} {{ f|round }} {{ f|round(1) }} {{ f|round(none) }}", {"f": FRAC(-7, 2), "d": DEC("-3.75")}),
+    ("{{ d|round }} {{ d|round(1) }} {{ d|round(none) }} {{ d|round(precision=2, method='common') }} {{ (d|round) + 1 }}", {"d": DEC("3.75")}),
+    # pprint orders host keys by their own `<` (task 0582)
+    ("{{ {f: 1, g: 2, h: 3}|pprint }}", {"f": FRAC(7, 2), "g": FRAC(1, 3), "h": FRAC(-1)}),
+    ("{{ {d: 1, e: 2, 1: 3}|pprint }}", {"d": DEC("3.7"), "e": DEC("-1")}),
     # bytes, bytearray, array and deque repeat as Python repeats them
     ("{{ b * 3 }} {{ 3 * b }} {{ ba * 2 }} {{ ar * 2 }} {{ dq * 2 }} {{ b * 0 }} {{ b + b }}",
      {"b": b"ab", "ba": bytearray(b"a"), "ar": array.array("i", [1]), "dq": collections.deque([1])}),
@@ -209,6 +228,14 @@ TYPE_ERRORS = [
     ("{{ d - 'a' }}", {"d": DEC("1")}, TypeError),
     ("{{ k <= k }}", {"k": Key(1)}, TypeError),
     ("{{ k + 1 }}", {"k": Key(1)}, TypeError),
+    # list and tuple concatenation names the left type, as Python's does (task 0582)
+    ("{{ [1] + d }}", {"d": DEC("1")}, TypeError),
+    ("{{ (1, 2) + d }}", {"d": DEC("1")}, TypeError),
+    ("{{ l + k }}", {"l": [1], "k": Key(1)}, TypeError),
+    ("{{ t + k }}", {"t": (1,), "k": Key(1)}, TypeError),
+    # a host that is no number does not format as one; the name of a C type is its tp_name
+    ("{{ '%d' % k }}", {"k": Key(1)}, TypeError),
+    ("{{ '%f' % k }}", {"k": Key(1)}, TypeError),
     ("{{ -k }}", {"k": Key(1)}, TypeError),
 ]
 

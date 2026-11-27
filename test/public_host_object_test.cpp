@@ -343,6 +343,11 @@ public:
                 return Value(mine < *theirs);
             }
             return std::nullopt;
+        case HostOperator::Absolute:
+            return WithValue(mine < 0 ? -mine : mine);
+        case HostOperator::Round:
+            // __round__(n), or __round__() for round(x, none)
+            return Value(other.IsInt() ? "round:" + std::to_string(other.AsInt()) : std::string("round:none"));
         default:
             return std::nullopt;
         }
@@ -2212,6 +2217,86 @@ TEST(PublicHostObjectTest, ArithmeticAndOrderingAskTheObjectThenTheOther)
     ExpectBothError("unsupported operand type(s) for +: 'Toy' and 'int'", "{{ p + 1 }}", plain);
     ExpectBothError("'>' not supported between instances of 'Toy' and 'Toy'", "{{ [p, q]|max }}", plain);
     ExpectBothError("bad operand type for unary -: 'Toy'", "{{ -p }}", plain);
+}
+
+TEST(PublicHostObjectTest, ListConcatenationOfADecliningObjectNamesTheLeftType)
+{
+    // Python Jinja2 3.1.6: `[1] + x` is `can only concatenate list (not "Toy") to list`, a tuple the same (task 0582)
+    const ValuesMap params{ { "x", MakeToy(Numbered(3)) }, { "p", MakeToy() }, { "l", ValuesList{ Value(static_cast<int64_t>(1)) } } };
+    ExpectBothError("can only concatenate list (not \"Toy\") to list", "{{ [1] + p }}", params);
+    ExpectBothError("can only concatenate list (not \"Toy\") to list", "{{ [1] + x }}", params);
+    ExpectBothError("can only concatenate list (not \"Toy\") to list", "{{ l + p }}", params);
+    ExpectBothError("can only concatenate tuple (not \"Toy\") to tuple", "{{ (1, 2) + p }}", params);
+    // A host that answers is asked as before, and str keeps its form
+    ExpectBoth("T4", "{{ x + 1 }}", params);
+    ExpectBothError("can only concatenate str (not \"Toy\") to str", "{{ 'a' + p }}", params);
+    ExpectBothError("unsupported operand type(s) for -: 'list' and 'Toy'", "{{ [1] - p }}", params);
+}
+
+TEST(PublicHostObjectTest, PercentFormatReadsAHostNumberAsPythonDoes)
+{
+    // Python Jinja2 3.1.6 with a class whose __int__ is 7 and __float__ 2.5 (Fraction, Decimal, np.int64 read alike)
+    ToySpec number;
+    number.number = true;
+    number.toInt = Value(static_cast<int64_t>(7));
+    number.toFloat = Value(2.5);
+    ToySpec floatOnly;
+    floatOnly.toFloat = Value(3.75);
+    const ValuesMap params{ { "h", MakeToy(number) }, { "f", MakeToy(floatOnly) }, { "n", MakeToy() } };
+    const std::pair<const char*, const char*> rows[] = {
+        { "'%d' % h", "7" },
+        { "'%i|%u' % (h, h)", "7|7" },
+        { "'%5d|%-3d|' % (h, h)", "    7|7  |" },
+        { "'%x %X %o' % (h, h, h)", "7 7 7" },
+        { "'%f' % h", "2.500000" },
+        { "'%5.1f|%e|%g' % (h, h, h)", "  2.5|2.500000e+00|2.5" },
+        { "'%d %d' % (h, 1)", "7 1" },
+        { "'%d %f' % (1, f)", "1 3.750000" },
+        { "'%s' % h", "Тоу" },
+    };
+    for (const auto& [source, expected] : rows)
+    {
+        ExpectBoth(expected, std::string("{{ ") + source + " }}", params);
+    }
+    // An object with no integer or float value is no number: Python's TypeError
+    ExpectBothError("%d format: a real number is required, not Toy", "{{ '%d' % n }}", params);
+    ExpectBothError("%x format: an integer is required, not Toy", "{{ '%x' % n }}", params);
+    ExpectBothError("must be real number, not Toy", "{{ '%f' % n }}", params);
+    ExpectBothError("%d format: a real number is required, not Toy", "{{ '%d %d' % (n, 1) }}", params);
+}
+
+TEST(PublicHostObjectTest, AbsAndRoundAskTheObject)
+{
+    // Python Jinja2 3.1.6 with a class whose __abs__ is a Toy of |v| and whose __round__(n) is 'round:n' ('round:none'
+    // for round(x, None)); the filter's precision is 0 when the template gives none (task 0582)
+    const ValuesMap params{ { "x", MakeToy(Numbered(-3)) }, { "p", MakeToy() } };
+    const std::pair<const char*, const char*> rows[] = {
+        { "x|abs", "T3" },
+        { "(x|abs) + 1", "T4" },
+        { "x|round", "round:0" },
+        { "x|round(2)", "round:2" },
+        { "x|round(-1)", "round:-1" },
+        { "x|round(none)", "round:none" },
+        { "x|round(precision=3, method='common')", "round:3" },
+    };
+    for (const auto& [source, expected] : rows)
+    {
+        ExpectBoth(expected, std::string("{{ ") + source + " }}", params);
+    }
+    // An object that declines keeps the filters' own error; ceil and floor are not asked
+    const auto absError = Render("{{ p|abs }}", params);
+    EXPECT_NE(std::string::npos, absError.find("error:")) << absError;
+    const auto roundError = Render("{{ p|round }}", params);
+    EXPECT_NE(std::string::npos, roundError.find("error:")) << roundError;
+    const auto ceilError = Render("{{ x|round(1, 'ceil') }}", params);
+    EXPECT_NE(std::string::npos, ceilError.find("error:")) << ceilError;
+}
+
+TEST(PublicHostObjectTest, PprintOrdersHostKeysByTheirOwnLessThan)
+{
+    // Python's pprint sorts a dict by _safe_key, which tries `a < b` (task 0582): {x: 'a', y: 'b'} prints y first
+    const ValuesMap params{ { "x", MakeToy(Numbered(3)) }, { "y", MakeToy(Numbered(1)) }, { "z", MakeToy(Numbered(2)) }, { "p", MakeToy() }, { "q", MakeToy() } };
+    ExpectBoth("{T(1): 'b', T(2): 'c', T(3): 'a'}", "{{ {x: 'a', y: 'b', z: 'c'}|pprint }}", params);
 }
 
 TEST(PublicHostObjectTest, OrderingHandsTheObjectTheKeyIgnoreCaseMakes)

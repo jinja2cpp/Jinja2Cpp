@@ -82,7 +82,9 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             return val.Kind() == ValueKind::Int || val.Kind() == ValueKind::BigInt || val.Kind() == ValueKind::Double || val.Kind() == ValueKind::Bool;
         };
         const auto isSequence = [](const InternalValue& val) { return val.Kind() == ValueKind::List || val.Kind() == ValueKind::KeyValuePair; };
-        if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)))
+        // A host object is ordered by its own `<` (and the other operand's reflected one), as Python's `self.obj < other.obj`
+        // does; one that declines falls back to the type names (task 0582)
+        if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)) || GetHostObject(left) || GetHostObject(right))
         {
             try
             {

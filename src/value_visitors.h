@@ -1403,6 +1403,14 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             throw TemplateRuntimeError("can only concatenate str (not \"" + rightType + "\") to str");
         }
+        // A list or tuple on the left, as Python's sq_concat says it (a host object that declined `+`, task 0582)
+        if constexpr (std::is_same_v<L, ListRef>)
+        {
+            if (m_oper == BinaryExpression::Plus && !left.GetRangeInfo() && left.GetIteratorKind() == IteratorKind::None)
+            {
+                throw TemplateRuntimeError("can only concatenate "s + leftType + " (not \"" + rightType + "\") to " + leftType);
+            }
+        }
         // Python tries the left operand's sequence repeat, then the right's (docs/tasks/0420); an
         // int beyond int64 is an OverflowError there
         constexpr bool hasBigInt = std::is_same_v<L, BigIntView> || std::is_same_v<R, BigIntView>;

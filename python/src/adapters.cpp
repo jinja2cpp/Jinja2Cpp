@@ -249,9 +249,23 @@ const char* PyHost::TypeName() const
 {
     if (m_typeName.empty())
     {
+        // tp_name, as the TypeError of Python's own operators names a type: 'decimal.Decimal' for a static C type of a
+        // module, the bare name for a builtin or a class of Python (task 0582). The limited API has no tp_name: it is
+        // the module and the name of a static type
         auto* type = reinterpret_cast<PyObject*>(Py_TYPE(m_object));
-        const auto name = Steal(PyObject_GetAttrString(type, "__name__"));
-        m_typeName = Utf8(name);
+        m_typeName = Utf8(Steal(PyObject_GetAttrString(type, "__name__")));
+        if ((PyType_GetFlags(Py_TYPE(m_object)) & Py_TPFLAGS_HEAPTYPE) == 0)
+        {
+            const auto module = Steal(PyObject_GetAttrString(type, "__module__"));
+            if (PyUnicode_Check(module.ptr()))
+            {
+                const auto moduleName = Utf8(module);
+                if (moduleName != "builtins")
+                {
+                    m_typeName = moduleName + "." + m_typeName;
+                }
+            }
+        }
     }
     return m_typeName.c_str();
 }
@@ -1123,6 +1137,16 @@ std::optional<jinja2::Value> PyHost::Operate(jinja2::HostOperator op, const jinj
     if (op == HostOperator::Positive)
     {
         return ToEngine(Steal(PyNumber_Positive(m_object)));
+    }
+    if (op == HostOperator::Absolute)
+    {
+        return ToEngine(Steal(PyNumber_Absolute(m_object)));
+    }
+    if (op == HostOperator::Round)
+    {
+        // round(x, n); an empty `other` is None, for which round() is round(x)
+        const auto roundFunction = nb::module_::import_("builtins").attr("round");
+        return ToEngine(Steal(PyObject_CallFunctionObjArgs(roundFunction.ptr(), m_object, ToPython(other).ptr(), nullptr)));
     }
     const auto pyOther = ToPython(other);
     PyObject* left = m_object;
