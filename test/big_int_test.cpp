@@ -1307,11 +1307,14 @@ BigInt HostHuge262144()
     return BigInt::FromDigits("8" + std::string(65531, '0') + "3039", 16, false);
 }
 
-// A huge integer of 4400 digits whose first digit is `lead` and whose digits are otherwise 1
+#ifndef JINJA2CPP_LINK_AS_SHARED
+// A huge integer of 4400 digits whose first digit is `lead` and whose digits are otherwise 1 (for the test of the
+// cache itself, which a shared build cannot run)
 std::string HugeText(char lead)
 {
     return std::string(1, lead) + std::string(4399, '1');
 }
+#endif
 } // namespace
 
 TEST(BigIntTemplate, HugeHostItemConvertsOncePerRender)
