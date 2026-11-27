@@ -1337,7 +1337,7 @@ TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfANestedItemOfAGenericArgument)
     // lends it over a holder that keeps the struct alive (WithOwner): nothing else holds the list's
     // accessor, so nothing can lend it again, and its cell goes once the host let go, not one per call.
     // The struct's map field (`d.innerStruct`, a shared_ptr) is reflected over an aliasing accessor of
-    // the host's kind, which may be lent again: its cell stays, as for such an argument (docs/tasks/0593)
+    // the host's kind, which may be lent again: its cell stays, as for such an argument (docs/tasks/0604)
     auto mapToken = std::make_shared<TestInnerStruct>();
     Template tpl;
     ASSERT_TRUE(!!tpl.Load("{% macro consume(d) %}{% set l = d.innerStructList %}{% set _ = l.append(1) %}"

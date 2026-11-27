@@ -46,4 +46,4 @@ JSON value keyed by a node identity stays call-scoped (the "related gap" above i
 Tests: `ModuleCallsOfAnOwnedDocument`'s expiry rows now run for every binding (they failed for the toy
 traits before), `BorrowedCellsSingle.ModuleCallFreesTheCellOfANestedItemOfAGenericArgument`.
 Left: a reflected `shared_ptr<T>` is lent over the host-side aliasing holder of `Reflector::CreateFromPtr`,
-which still counts as lent again (docs/tasks/0593).
+which still counts as lent again (docs/tasks/0604).
