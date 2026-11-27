@@ -5,3 +5,8 @@ methods.str_encode_bytes               rejects     0403 deliberate: the engine h
 methods.int_to_bytes                   rejects     0403 deliberate: the engine has no bytes type, so int.to_bytes is not a method (docs/python.md)
 methods.float_fromhex                  rejects     0403 deliberate: float.fromhex is an alternate constructor, not a method templates call on a value (docs/python.md)
 methods.int_methods_big                rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
+methods.set_lazy_map_sees_add          output      0587 deliberate: the engine's map, select, reject, unique and batch are eager (as select is since 0101 and 0206): they read a set or list when the filter runs, not when its result is read, so a later add() or append() is not in the result
+methods.set_lazy_map_loop_add_raises   accepts     0587 deliberate: an eager map read the set before the loop began, so an add() in the loop body changes no walk in progress (see methods.set_lazy_map_sees_add)
+methods.set_lazy_select_sees_add       output      0587 deliberate: an eager select read the set before the add() (see methods.set_lazy_map_sees_add)
+methods.list_lazy_map_sees_append      output      0587 deliberate: an eager map read the list before the append() (see methods.set_lazy_map_sees_add)
+methods.set_distinct_nans              output      0587 deliberate: a float has no identity in the engine, so two NaN objects Python keeps apart are one set item, as one NaN key of the engine's dict; the same NaN added twice, the common case, matches (methods.set_same_nan_once)

@@ -484,9 +484,9 @@ bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
             ThrowUnhashable(unhashable);
         }
         // Through the index beside the set's items (docs/tasks/0561)
-        if (auto* index = list->GetSetIndex(); index && list->GetMutableItems())
+        if (auto* index = list->GetSetIndex(); index && list->GetSetSlots())
         {
-            return index->Find(*list->GetMutableItems(), *token, [&baseVal](const InternalValue& item) { return IsInEqual(item, baseVal); }) != SetIndex::NotFound;
+            return index->Find(*list->GetSetSlots(), *token, [&baseVal](const InternalValue& item) { return IsInEqual(item, baseVal); }) != SetIndex::NotFound;
         }
     }
     if (const auto* items = list->GetMutableItems())

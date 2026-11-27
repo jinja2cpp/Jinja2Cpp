@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: []
-touches: [src/value_methods.cpp#FormatValue, src/value_methods.cpp#PadFormatted]
+touches: [src/value_methods.cpp#FormatValue, src/value_methods.cpp#PadFormatted, src/internal_value.cpp#SubscriptCallable]
 shares: [test/parity/cases/filters.py, test/parity/divergences/filters.txt]
 ---
 # Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base
@@ -22,3 +22,11 @@ padding with grouping Python's grouped fill (CPython's `_PyUnicode_InsertThousan
 reject `,` with b/o/x/X, and answer `__name__`/`__qualname__` for receiver-bound methods from `GetBoundMethod`.
 
 **Done when** each form above matches Python in narrow and wide runs, with corpus cases under `filters.format_*`.
+
+**Resolution (batch 14 D).** The prefix goes with the sign (`Formatted::prefix`); grouped zero padding follows CPython's
+`_PyUnicode_InsertThousandsGrouping` with a minimum width (`GroupDigits`), for floats' integer part too; `,` and `_`
+are checked against the type as CPython's parser does (`CheckGrouping`, also for strings: "Cannot specify ',' with
+'s'."). Found on the way and fixed: a `0` before the width fills with zeros under an explicit align and for strings
+(`'{:<010}'`, `'{:010}'.format('ab')`), a bool formats as its int under any non-empty spec (`'{:>5}'.format(true)`),
+and string specs raise Python's messages. `__name__`/`__qualname__` of receiver-bound methods (`loop.cycle`,
+`loop.changed`, `cycler.next`) come from the receiver's class. Corpus: `filters.format_spec_*`.

@@ -338,4 +338,13 @@ CASES = [
     ("set_add_during_loop", "{% set s = {1: 0, 2: 0}.keys() - [] %}{% for x in s %}{% do s.add(3) %}{{ x }}{% endfor %}", {"env": {"extensions": ["do"]}}),
     ("set_add_existing_during_loop", "{% set s = {1: 0, 2: 0}.keys() - [] %}{% for x in s %}{% do s.add(x) %}{{ x }}{% endfor %}", {"env": {"extensions": ["do"]}}),
     ("set_remove_during_loop", "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% for x in s %}{% do s.discard(3) %}{{ x }}{% endfor %}", {"env": {"extensions": ["do"]}}),
+    # task 0587: a set changed by its methods in a loop, and the lazy filters over a set
+    ("set_erase_then_read", "{% set s = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}.keys() - [] %}{% do s.discard(2) %}{% do s.pop() %}{{ s|sort }}|{{ s|length }}|{% do s.add(9) %}{{ s|sort }}|{{ 3 in s }}|{{ 2 in s }}", {"env": {"extensions": ["do"]}}),
+    ("set_update_through_index", "{% set s = {1: 0, 2: 0}.keys() - [] %}{% for i in range(5) %}{% do s.update([i], (i + 10,)) %}{% do s.difference_update([i + 10]) %}{% endfor %}{{ s|sort }}|{% do s.symmetric_difference_update([0, 0, 7]) %}{{ s|sort }}", {"env": {"extensions": ["do"]}}),
+    ("set_same_nan_once", "{% set n = w|float %}{% set s = {}.keys() - [] %}{% do s.add(n) %}{% do s.add(n) %}{% do s.update([n, n]) %}{{ s|length }}|{{ n in s }}", {"env": {"extensions": ["do"]}, "ctx": {"w": "nan"}}),
+    ("set_distinct_nans", "{% set a = w|float %}{% set b = w|float %}{% set s = {}.keys() - [] %}{% do s.add(a) %}{% do s.add(b) %}{{ s|length }}|{{ b in s }}", {"env": {"extensions": ["do"]}, "ctx": {"w": "nan"}}),
+    ("set_lazy_map_sees_add", "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% set it = s|map('string') %}{% do s.add(9) %}{{ it|list }}", {"env": {"extensions": ["do"]}}),
+    ("set_lazy_map_loop_add_raises", "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% for x in s|map('string') %}{% do s.add(x|int + 10) %}{% endfor %}", {"env": {"extensions": ["do"]}}),
+    ("set_lazy_select_sees_add", "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% set it = s|select %}{% do s.add(9) %}{{ it|list }}", {"env": {"extensions": ["do"]}}),
+    ("list_lazy_map_sees_append", "{% set l = [1, 2] %}{% set it = l|map('string') %}{% do l.append(9) %}{{ it|list }}", {"env": {"extensions": ["do"]}}),
 ]
