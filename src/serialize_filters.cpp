@@ -33,6 +33,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -84,7 +85,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         const auto isSequence = [](const InternalValue& val) { return val.Kind() == ValueKind::List || val.Kind() == ValueKind::KeyValuePair; };
         // A host object is ordered by its own `<` (and the other operand's reflected one), as Python's `self.obj < other.obj`
         // does; one that declines falls back to the type names (task 0582)
-        const bool host = GetHostObject(left) || GetHostObject(right);
+        const bool host = GetHostObject(left) != nullptr || GetHostObject(right) != nullptr;
         if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)) || host)
         {
             try
