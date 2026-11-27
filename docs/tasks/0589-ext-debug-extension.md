@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1016
 priority: low
 area: parity
 touches: [docs/parity.md#options, docs/release-2.0.md]

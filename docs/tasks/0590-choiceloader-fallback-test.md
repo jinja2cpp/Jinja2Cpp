@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1016
 priority: low
 area: parity
 touches: [test/filesystem_handler_test.cpp, docs/parity.md#api-level]
