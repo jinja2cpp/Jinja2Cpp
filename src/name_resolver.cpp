@@ -481,11 +481,27 @@ void NameResolver::ResolveSlots(NodeArena& nodes)
         }
     }
 
+    // A read looks for a store of its name in each frame around it, up to its slot: with many stores, in an index
+    // made once, so that a body of many `set`s and reads loads in linear time (docs/tasks/0592); a few are searched
+    // where they are, which allocates nothing
+    constexpr std::size_t IndexedStores = 64;
+    StoreIndex storeIndex;
+    const StoreIndex* index = nullptr;
+    if (m_stores.size() > IndexedStores && !m_uses.empty())
+    {
+        storeIndex.reserve(m_stores.size());
+        for (const auto& store : m_stores)
+        {
+            storeIndex.emplace(store.frame, store.name);
+        }
+        index = &storeIndex;
+    }
+
     // The names each macro's body reads, itself and not from a frame inside it, from the
     // slots of its own arguments, which every call binds (MacroStatement::SetReadsSlotsOnly)
     for (const auto& [ref, frameId] : m_uses)
     {
-        const auto [slot, unit] = Find(nodes, ref, frameId);
+        const auto [slot, unit] = Find(nodes, ref, frameId, index);
         if (!slot.IsDynamic())
         {
             nodes[ref].SetSlot(slot, unit);
@@ -576,16 +592,24 @@ void NameResolver::SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner,
     }
 }
 
-bool NameResolver::IsStored(FrameId frame, std::string_view name) const
+bool NameResolver::IsStored(FrameId frame, std::string_view name, const StoreIndex* index) const
 {
     const auto& stores = m_frames[frame];
-    return stores.hasStores && std::any_of(m_stores.begin() + stores.firstStore, m_stores.end(), [frame, name](const Store& store) { return store.frame == frame && store.name == name; });
+    if (!stores.hasStores)
+    {
+        return false;
+    }
+    if (index)
+    {
+        return index->count({ frame, name }) != 0;
+    }
+    return std::any_of(m_stores.begin() + stores.firstStore, m_stores.end(), [frame, name](const Store& store) { return store.frame == frame && store.name == name; });
 }
 
 // From the frame the name is read in out to its unit: a store of the name on the way makes
 // it a lookup, since the scope the store writes hides the slot; so does a frame where no
 // slot can be bound. The first loop or macro that binds the name has its slot
-std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId) const
+std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId, const StoreIndex* stores) const
 {
     const auto name = nodes[ref].GetHashedName(nodes);
     const auto isName = [&name, &nodes](const SlotName& binder) { return binder.hash == name.hash && nodes.Text(binder.name) == name.name; };
@@ -599,13 +623,13 @@ std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<
             // A macro's arguments are its frame's first slots; a name it does not bind is
             // read from another unit, and one its body stores from the macro's scope
             const auto* const pos = std::find_if(frame.binders.begin(), frame.binders.end(), isName);
-            if (pos == frame.binders.end() || IsStored(id, name.name))
+            if (pos == frame.binders.end() || IsStored(id, name.name, stores))
             {
                 return dynamic;
             }
             return { SlotIndex{ static_cast<std::uint16_t>(pos - frame.binders.begin()) }, frame.unitId };
         }
-        if (frame.kind == Kind::Unit || frame.kind == Kind::Dynamic || frame.isDynamicRegion || IsStored(id, name.name) || (isFilter && frame.loop == NoFrame))
+        if (frame.kind == Kind::Unit || frame.kind == Kind::Dynamic || frame.isDynamicRegion || IsStored(id, name.name, stores) || (isFilter && frame.loop == NoFrame))
         {
             return dynamic;
         }

@@ -4,10 +4,12 @@
 #include "../src/node_arena.h"
 #include "../src/template_parser.h"
 
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
 #include "gtest/gtest.h"
 
+#include <chrono>
 #include <string>
 
 using namespace jinja2;
@@ -99,4 +101,36 @@ INSTANTIATE_TEST_SUITE_P(Slots, NameResolverTest, testing::Values(
     NameResolverCase{ "{% macro m(a=b, b=1) %}{{ a }}{{ b }}{% endmacro %}", "a:0 b:1" },
     NameResolverCase{ "{% call(item) m() %}{{ item }}{{ x }}{% endcall %}", "item:0 x:-" }));
 // clang-format on
+
+// Name reads after many `set`s in one body load in time linear in the template, which may be untrusted
+// (docs/tasks/0592): each read searched the body's stores, so 30000 sets and 30000 reads took 7 s in a Debug build
+namespace
+{
+std::chrono::steady_clock::duration LoadSetsThenReads(int count)
+{
+    std::string source = "{% for x in [1] %}";
+    for (int i = 0; i != count; ++i)
+    {
+        source += "{% set s" + std::to_string(i) + " = 1 %}";
+    }
+    for (int i = 0; i != count; ++i)
+    {
+        source += "{{ q }}";
+    }
+    source += "{% endfor %}";
+    TemplateEnv env;
+    Template tpl(&env);
+    const auto start = std::chrono::steady_clock::now();
+    EXPECT_TRUE(tpl.Load(source).has_value());
+    return std::chrono::steady_clock::now() - start;
+}
+} // namespace
+
+TEST(NameResolverLoadTest, ReadsAfterManySetsLoadInLinearTime)
+{
+    // Four times the template: four times the time when linear, sixteen when quadratic; slack for a noisy runner
+    const auto small = LoadSetsThenReads(10000);
+    const auto large = LoadSetsThenReads(40000);
+    EXPECT_LT(large, small * 9 + std::chrono::milliseconds(100));
+}
 #endif
