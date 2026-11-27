@@ -250,8 +250,7 @@ const char* PyHost::TypeName() const
     if (m_typeName.empty())
     {
         auto* type = reinterpret_cast<PyObject*>(Py_TYPE(m_object));
-        const auto name = Steal(PyObject_GetAttrString(type, "__name__"));
-        m_typeName = Utf8(name);
+        m_typeName = Utf8(Steal(PyObject_GetAttrString(type, "__name__")));
     }
     return m_typeName.c_str();
 }
@@ -1123,6 +1122,16 @@ std::optional<jinja2::Value> PyHost::Operate(jinja2::HostOperator op, const jinj
     if (op == HostOperator::Positive)
     {
         return ToEngine(Steal(PyNumber_Positive(m_object)));
+    }
+    if (op == HostOperator::Absolute)
+    {
+        return ToEngine(Steal(PyNumber_Absolute(m_object)));
+    }
+    if (op == HostOperator::Round)
+    {
+        // round(x, n); an empty `other` is None, for which round() is round(x)
+        const auto roundFunction = nb::module_::import_("builtins").attr("round");
+        return ToEngine(Steal(PyObject_CallFunctionObjArgs(roundFunction.ptr(), m_object, ToPython(other).ptr(), nullptr)));
     }
     const auto pyOther = ToPython(other);
     PyObject* left = m_object;

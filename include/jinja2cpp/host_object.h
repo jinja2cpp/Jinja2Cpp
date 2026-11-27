@@ -127,7 +127,10 @@ enum class HostOperator : unsigned char
     Greater,      //!< `>`
     GreaterEqual, //!< `>=`
     Negative,     //!< unary `-`
-    Positive      //!< unary `+`
+    Positive,     //!< unary `+`
+    Absolute,     //!< `abs(x)`, for the `abs` filter: `__abs__`; `other` is None and the side Left, as for the unary operators
+    Round         //!< `round(x, n)`, for the `round` filter with method `common`: `__round__`; `other` is the precision `n`, an empty
+                  //!< \ref Value for `round(x)` (`|round(none)`); the filter passes 0 when the template gives none
 };
 
 //! Which operand of a binary operator the object is, for \ref IHostObject::Operate
@@ -168,6 +171,8 @@ enum class HostOperandSide : unsigned char
  * - `+ - * / // % **`, `< <= > >=`, unary `-` and `+`, `is odd`, `is even`, `sum`, and the order `sort`, `min`, `max`,
  *   `dictsort` and `groupby` use: \ref Operate of the left operand, then of the right one (`__lt__` and `__add__`, then the
  *   reflected `__gt__` and `__radd__`)
+ * - `abs`, and `round` with the method `common`: \ref Operate with \ref HostOperator::Absolute and \ref HostOperator::Round
+ *   (`ceil` and `floor` are not asked)
  * - `+ * < <= > >=`, `str % x`, tojson arrays: a \ref IsSequence object is read as the list \ref Iterate gives,
  *   printed as a tuple when \ref IsTuple
  *

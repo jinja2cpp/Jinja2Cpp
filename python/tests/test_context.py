@@ -100,19 +100,37 @@ def test_a_lent_global_read_through_the_context_is_pythons_own_object():
     assert env.from_string("{{ get() }}").render() == "True"
 
 
-def test_python_range_given_back_after_the_call_stays_pythons():
-    # Past the call it was lent to, Python's range is a Python object to the template, which calls it as Jinja2 does;
-    # `back() is sameas range` is True in Jinja2 only (task 0583)
-    kept = []
+def test_python_range_given_back_after_the_call_is_the_templates():
+    # Past the call it was lent to, Python's range is still the template's, as in Jinja2 (task 0583)
+    for module in (jinja2cpp, jinja2):
+        kept = []
 
-    def keep(x):
-        kept.append(x)
-        return ""
+        def keep(x):
+            kept.append(x)
+            return ""
 
-    source = "{{ keep(range) }}{{ back()(2)|list }} {{ back() is sameas range }}"
-    assert jinja2cpp.Template(source).render(keep=keep, back=lambda: kept[0]) == "[0, 1] False"
-    kept.clear()
-    assert jinja2.Template(source).render(keep=keep, back=lambda: kept[0]) == "[0, 1] True"
+        source = "{{ keep(range) }}{{ back()(2)|list }} {{ back() is sameas range }}"
+        assert module.Template(source).render(keep=keep, back=lambda: kept[0]) == "[0, 1] True", module
+
+
+@pytest.mark.parametrize("name", ["range", "dict", "cycler", "joiner", "namespace", "lipsum"])
+def test_pythons_own_global_given_to_a_render_is_the_templates(name):
+    # render(r=range) and a global: Python's object is the template's global in Jinja2, which is Python's (task 0583)
+    import jinja2.utils
+
+    objects = {"range": range, "dict": dict, "cycler": jinja2.utils.Cycler, "joiner": jinja2.utils.Joiner}
+    objects.update({"namespace": jinja2.utils.Namespace, "lipsum": jinja2.utils.generate_lorem_ipsum})
+    source = f"{{{{ r is sameas {name} }}}} {{{{ g is sameas {name} }}}} {{{{ [r] == [{name}] }}}}"
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        env.globals["g"] = objects[name]
+        assert env.from_string(source).render(r=objects[name]) == "True True True", (module, name)
+    calls = {"range": "{{ r(1, 7, 2)|list }}", "dict": "{{ r(a=1) }}", "cycler": "{{ r(1, 2).next() }}{{ r(1, 2).current }}"}
+    calls.update({"joiner": "{% set j = r('-') %}{{ j() }}{{ j() }}", "namespace": "{% set n = r(a=2) %}{{ n.a }}"})
+    calls["lipsum"] = "{{ r(2, false).count(\"\\n\") }}"
+    for source in (calls[name], "{{ r is callable }}", "{{ r.__name__ }}"):
+        results = [module.Template(source).render(r=objects[name]) for module in (jinja2cpp, jinja2)]
+        assert results[0] == results[1], (name, source)
 
 
 def test_lipsum_lent_to_python_prints_as_a_function():

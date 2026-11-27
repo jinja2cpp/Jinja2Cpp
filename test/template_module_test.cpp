@@ -7,6 +7,7 @@
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/host_object.h>
+#include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -132,6 +133,49 @@ TEST_F(TemplateModuleTest, ExportsAndBody)
     }
 }
 
+// ModuleOptions::builtinGlobals off is Jinja2's make_module(vars, shared=True): the params alone, also in an include
+// and an import with context; an include or import without context sees the engine's globals (docs/tasks/0574)
+TEST_F(TemplateModuleTest, WithoutBuiltinGlobals)
+{
+    AddFile("inc", "{{ x }}:{{ range is defined }}");
+    AddFile("imp", "{% macro m() %}{{ range(2)|list }}{{ x is defined }}{% endmacro %}");
+    const std::pair<const char*, const char*> cases[] = {
+        { "{{ x }}{{ range is defined }}{{ dict is defined }}{{ namespace is defined }}{{ lipsum is defined }}", "1FalseFalseFalseFalse" },
+        { "{% macro m() %}{{ cycler is defined }}{{ joiner is defined }}{% endmacro %}{{ m() }}", "FalseFalse" },
+        { R"({% include "inc" %})", "1:False" },
+        { R"({% include "inc" without context %})", ":True" },
+        { R"({% import "imp" as i %}{{ i.m() }})", "[0, 1]False" },
+        { R"({% import "imp" as i with context %}{{ i.m() }})", "" },
+        { R"({% from "imp" import m %}{{ m() }})", "[0, 1]False" },
+    };
+    jinja2::ModuleOptions options;
+    options.builtinGlobals = false;
+    for (const auto& [source, body] : cases)
+    {
+        SCOPED_TRACE(source);
+        auto tpl = Load(source);
+        auto module = tpl.MakeModule({ { "x", int64_t{ 1 } } }, {}, options);
+        if (*body == 0)
+        {
+            // range is undefined in the imported macro: an UndefinedError, as Jinja2's
+            ASSERT_FALSE(!!module);
+            EXPECT_EQ(jinja2::ErrorCode::UndefinedError, module.error().GetCode());
+            continue;
+        }
+        ASSERT_TRUE(!!module) << module.error().ToString();
+        EXPECT_EQ(body, module->body);
+        jinja2::TemplateW wide(&m_env);
+        ASSERT_TRUE(!!wide.Load(jinja2::ConvertString<std::wstring>(std::string(source))));
+        auto wideModule = wide.MakeModule({ { "x", int64_t{ 1 } } }, {}, options);
+        ASSERT_TRUE(!!wideModule) << wideModule.error().ToString();
+        EXPECT_EQ(jinja2::ConvertString<std::wstring>(std::string(body)), wideModule->body);
+    }
+    // On by default
+    auto module = Load("{{ range(2)|list }}").MakeModule({}, {}, jinja2::ModuleOptions());
+    ASSERT_TRUE(!!module) << module.error().ToString();
+    EXPECT_EQ("[0, 1]", module->body);
+}
+
 TEST_F(TemplateModuleTest, Values)
 {
     auto module = Make(R"({% set ns = namespace(a=1) %}{% set l = [1,{"k":2}] %}{% set u = nothing %}{% set blk %}x<y{% endset %})");
@@ -249,6 +293,16 @@ TEST_F(TemplateModuleTest, ObjectsExports)
         ASSERT_TRUE(!!copies);
         EXPECT_FALSE(jinja2::UndefinedOf(copies->exports.at("v")).has_value());
     }
+}
+
+// A live object of the module passed to another render prints as the object does in Jinja2 (docs/tasks/0575)
+TEST_F(TemplateModuleTest, ObjectsPrintAsObjectsInAnotherRender)
+{
+    auto module = Load("{% set ns = namespace(a=1, inner=namespace(b=2)) %}{% set c = cycler(1) %}").MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module) << module.error().ToString();
+    const jinja2::ValuesMap params{ { "ns", module->exports.at("ns") }, { "c", module->exports.at("c") } };
+    EXPECT_EQ("<Namespace {'a': 1, 'inner': <Namespace {'b': 2}>}>|[<Namespace {'b': 2}>]|1", Render("{{ ns }}|{{ [ns.inner] }}|{{ c.next() }}", params));
+    EXPECT_EQ(0u, Render("{{ c }}", params).rfind("<jinja2.utils.Cycler object at ", 0));
 }
 
 // What leaves in Objects mode owns its strings: a key from the template's source and a name the undefined carries stay valid

@@ -4851,6 +4851,7 @@ public:
     // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
     // reflected struct, are its attributes
     [[nodiscard]] bool HasAttributes() const override { return m_node == nullptr; }
+    [[nodiscard]] const char* GetHostObjectClass() const override { return m_node ? nullptr : m_values.Get().GetObjectClass(); }
     [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor(), m_link); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
@@ -6628,6 +6629,25 @@ namespace visitors
 
 namespace
 {
+// The host's form of an engine global (PythonGlobal): converted back for a render it is the global, which the host's
+// call cannot run outside one
+struct PythonGlobalCall
+{
+    InternalValue global;
+    std::string name;
+
+    Value operator()(const UserCallableParams& /*params*/) const
+    {
+        ErrorInfo::Data errorData;
+        errorData.code = ErrorCode::TemplateRuntimeError;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.col = 1;
+        errorData.extraParams.emplace_back("the engine's global " + name + " runs in a template only");
+        errorData.extraParams.emplace_back(std::string("TypeError"));
+        throw ErrorInfo(std::move(errorData));
+    }
+};
+
 // The function of a callable converted from a jinja2::UserCallable, which Callable::IsSame
 // reads the identity of
 struct UserCallableBody
@@ -6727,6 +6747,11 @@ struct UserCallableBody
 
 InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
 {
+    // The engine's own global a host named (PythonGlobal): the global itself
+    if (const auto* global = val.callable.target<PythonGlobalCall>())
+    {
+        return global->global;
+    }
     std::vector<ArgumentInfo> args;
     args.reserve(val.argsInfo.size());
     for (const auto& pi : val.argsInfo)
@@ -6763,6 +6788,16 @@ Value HostCallableOf(const Callable& callable)
         return LendToHost(InternalValue(callable), *frame->lease->context, *frame->scope);
     }
     return Value();
+}
+
+std::optional<UserCallable> PythonGlobal(std::string_view pythonModule, std::string_view pythonQualname)
+{
+    auto global = PythonGlobalOf(pythonModule, pythonQualname);
+    if (!global)
+    {
+        return std::nullopt;
+    }
+    return UserCallable(visitors::PythonGlobalCall{ std::move(*global), std::string(pythonQualname) }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) });
 }
 
 void TraverseBoxed(const KeyValuePair& pair, const TraverseFn& fn)

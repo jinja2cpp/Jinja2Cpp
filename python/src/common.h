@@ -94,6 +94,8 @@ struct PyNames
     nb::object numberType;  // numbers.Number
     nb::object dequeType;   // collections.deque
     nb::object arrayType;   // array.array
+    // A weakref.WeakValueDictionary of the module objects Python holds (template_module.cpp, LiveModuleObjects)
+    nb::object liveModuleObjects;
 };
 const PyNames& Names();
 // Drops the references Names() holds, when the module is freed

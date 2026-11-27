@@ -840,8 +840,8 @@ TEST(BorrowedCellsKept, ModuleCellInsideALazyValue)
     const Row rows[] = {
         { "{'k': l}|dictsort", "[{'key': 'k', 'value': [0, 1, 10]}]" },
         { "{'k': l}.items()", "[['k', [0, 1, 10]]]" },
-        { "namespace(x=l)", "{'x': [0, 1, 10]}" },
-        { "[namespace(x=l)]", "[{'x': [0, 1, 10]}]" },
+        { "namespace(x=l)", "<Namespace {'x': [0, 1, 10]}>" },
+        { "[namespace(x=l)]", "[<Namespace {'x': [0, 1, 10]}>]" },
         { "l|map('string')", "['0', '1']" },
         { "l|select", "[1]" },
         { "l|batch(2)", "[[0, 1]]" },
@@ -916,7 +916,7 @@ TEST(BorrowedCellsKept, ModuleCellInsideAKeptListReadFromThreads)
     const Row rows[] = {
         { "[l]", "[[0, 1]]" },
         { "{'k': l}|dictsort", "[{'key': 'k', 'value': [0, 1]}]" },
-        { "namespace(x=l)", "{'x': [0, 1]}" },
+        { "namespace(x=l)", "<Namespace {'x': [0, 1]}>" },
         { "[l]|select", "[[0, 1]]" },
     };
     for (const auto& row : rows)

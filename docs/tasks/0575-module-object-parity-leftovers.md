@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1025
 priority: low
 area: parity
 depends: [0411]
@@ -34,3 +35,19 @@ docs/python.md.
 **Done when** pytest rows compare the reads above with Jinja2 (Python subclasses or `__class__` registered with
 `jinja2.utils` types if that keeps `isinstance` true without importing Jinja2 at module load, a per-module cache of
 nested views, the render repr), and docs/python.md lists the two out-of-scope cases as deliberate divergences.
+
+## Outcome
+
+- Fixed: the objects are `Namespace`, `Cycler` and `Joiner` classes of the module whose `__class__` is Jinja2's
+  (`isinstance` holds; `jinja2.utils` is imported only when `__class__` is read), only a joiner is callable, nested
+  namespaces and aliases are one Python object (a weak per-process cache by the engine object's identity),
+  `m.cyc.next` and `m.cyc.reset` print as Jinja2's bound methods, a self-holding namespace prints `{...}`, and a module
+  object passed to a render prints as `<Namespace {...}>` or `<jinja2.utils.Cycler object at ...>`
+  (`IMapAccessor::GetHostObjectClass`, printing only).
+- Recorded in docs/python.md: a cycler or joiner inside a list or dict argument of a macro stays a copy. Making it the
+  module's object needs the host's list to hold an engine object where the module's cycle collector cannot walk it
+  (`ns.l = [cyc]` with `cyc` holding `ns` would leak); `module.j.__call__` is the module class's own method.
+- Kept: the C++ size contract of a map with keys that spell alike (`GetSize()` and `GetKeys()` follow the `str()`-spelled
+  keys, `GetItems()` has every entry, `TemplateDictTest.PublicMapSpellsKeys`). Python builds its dict from `GetItems()`
+  and is not affected; changing what `GetSize()` means for every C++ host is a public contract change for no Python gain.
+- Found and filed: 0594 (a module object passed to another render is read there as a dict).
