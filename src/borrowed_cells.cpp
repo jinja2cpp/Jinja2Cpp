@@ -6,6 +6,7 @@
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 #include "render_workspace.h"
+#include "small_vector.h"
 #include "template_dict.h"
 
 #include <jinja2cpp/generic_list.h>
@@ -1004,6 +1005,86 @@ void ForEachItem(const InternalValue& container, const Fn& fn)
 }
 } // namespace
 
+namespace
+{
+// What holds the adapters of a cell's items (BorrowedCell::IsHeldByItsItems): the references of the
+// source's adapter the items hold, and the adapters attached to the cell, with the items that hold each
+// and their links (an adapter holds one; a block of item adapters holds one for each slot)
+class ItemHolders
+{
+public:
+    ItemHolders(const BorrowedCell& cell, const ValueObject& source) noexcept
+        : m_cell(&cell)
+        , m_source(&source)
+    {
+    }
+
+    // Throws std::bad_alloc
+    void Add(const InternalValue& item)
+    {
+        const auto [owner, link] = AdapterOf(item);
+        if (owner == m_source)
+        {
+            ++m_sourceUses;
+            return;
+        }
+        if (!owner || !link || link->Current() != m_cell)
+        {
+            return;
+        }
+        auto* const known = std::find_if(m_owners.begin(), m_owners.end(), [owner = owner](const Attached& entry) { return entry.owner == owner; });
+        if (known == m_owners.end())
+        {
+            m_owners.push_back(Attached{ owner, 1 });
+        }
+        else
+        {
+            ++known->uses;
+        }
+        if (std::find(m_links.begin(), m_links.end(), link) == m_links.end())
+        {
+            m_links.push_back(link);
+        }
+    }
+
+    // The references to the source's adapter, counting the cell's own
+    [[nodiscard]] size_t SourceUses() const noexcept { return m_sourceUses; }
+    // The links of the items' adapters attached to the cell
+    [[nodiscard]] size_t Links() const noexcept { return m_links.size(); }
+    // Whether the items alone hold the adapters attached to the cell
+    [[nodiscard]] bool OwnersHeldByItems() const noexcept
+    {
+        return std::all_of(m_owners.begin(), m_owners.end(), [](const Attached& entry) { return entry.owner->use_count() == entry.uses; });
+    }
+
+private:
+    struct Attached
+    {
+        const ValueObject* owner;
+        size_t uses;
+    };
+
+    static std::pair<const ValueObject*, const CellLink*> AdapterOf(const InternalValue& item) noexcept
+    {
+        if (auto list = AsList(item))
+        {
+            return { list->GetOwner(), list->GetAccessor() ? list->GetAccessor()->GetCellLink() : nullptr };
+        }
+        if (auto map = AsMap(item))
+        {
+            return { map->GetOwner(), map->GetAccessor() ? map->GetAccessor()->GetCellLink() : nullptr };
+        }
+        return { nullptr, nullptr };
+    }
+
+    const BorrowedCell* m_cell;
+    const ValueObject* m_source;
+    size_t m_sourceUses = 1;
+    SmallVector<Attached, 4> m_owners;
+    SmallVector<const CellLink*, 4> m_links;
+};
+} // namespace
+
 bool BorrowedCell::IsHeldByItsItems(const ValueObject& source, size_t links) const noexcept
 {
     // A value the host keeps that shares the storage (CallExports::Pin) reads the items: they are not the
@@ -1013,69 +1094,19 @@ bool BorrowedCell::IsHeldByItsItems(const ValueObject& source, size_t links) con
     {
         return false;
     }
-    // The adapters of the items attached to this cell: an adapter's own references, and the links
-    // (an adapter holds one; a block of item adapters holds one for each slot)
-    struct Attached
+    bool alone = false;
+    try
     {
-        const ValueObject* owner;
-        size_t uses;
-    };
-    SmallVector<Attached, 4> owners;
-    SmallVector<const CellLink*, 4> attached;
-    size_t sourceUses = 1;
-    bool foreign = false;
-    const auto visit = [&](const InternalValue& item) {
-        const ValueObject* owner = nullptr;
-        const CellLink* link = nullptr;
-        if (auto list = AsList(item))
-        {
-            owner = list->GetOwner();
-            link = list->GetAccessor() ? list->GetAccessor()->GetCellLink() : nullptr;
-        }
-        else if (auto map = AsMap(item))
-        {
-            owner = map->GetOwner();
-            link = map->GetAccessor() ? map->GetAccessor()->GetCellLink() : nullptr;
-        }
-        if (owner == &source)
-        {
-            ++sourceUses;
-            return;
-        }
-        if (!owner || !link || link->m_cell != this)
-        {
-            return;
-        }
-        if (!link->Owns())
-        {
-            foreign = true;
-            return;
-        }
-        try
-        {
-            const auto known = std::find_if(owners.begin(), owners.end(), [owner](const Attached& entry) { return entry.owner == owner; });
-            if (known == owners.end())
-            {
-                owners.push_back(Attached{ owner, 1 });
-            }
-            else
-            {
-                ++known->uses;
-            }
-            if (std::find(attached.begin(), attached.end(), link) == attached.end())
-            {
-                attached.push_back(link);
-            }
-        }
-        catch (const std::bad_alloc&)
-        {
-            // Out of memory: the cell stays, as a cell something else holds does
-            foreign = true;
-        }
-    };
-    ForEachItem(m_storage, visit);
-    ForEachItem(m_retired, visit);
-    const bool alone = !foreign && source.use_count() == sourceUses && use_count() == links + attached.size() && std::all_of(owners.begin(), owners.end(), [](const Attached& entry) { return entry.owner->use_count() == entry.uses; });
+        ItemHolders holders(*this, source);
+        const auto add = [&holders](const InternalValue& item) { holders.Add(item); };
+        ForEachItem(m_storage, add);
+        ForEachItem(m_retired, add);
+        // Every attached link owns the cell: no listed one (FindHolders asks for none)
+        alone = source.use_count() == holders.SourceUses() && use_count() == links + holders.Links() && holders.OwnersHeldByItems();
+    }
+    catch (...) // NOLINT(bugprone-empty-catch): out of memory, the cell stays as a cell something else holds does
+    {
+    }
     if (!alone)
     {
         // Not again while the counts stay (FindHolders): a module that keeps many values walks none of them at each call's end
