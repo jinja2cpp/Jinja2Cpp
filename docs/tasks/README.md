@@ -651,3 +651,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | done |
 | [0591](0591-cell-protocol-inductive-invariant.md) | Find the cell protocol's inductive invariant | robustness | low | open |
 | [0592](0592-load-reads-after-many-sets-quadratic.md) | Load: name reads after many `set`s in one body cost reads x sets | robustness | low | open |
+| [0600](0600-whole-tree-tidy-backlog.md) | clang-tidy: 304 hits on master; the weekly whole-tree job has never been green | style | high | open |
+| [0601](0601-tidy-ratchet-leaks.md) | clang-tidy ratchet: hits on unchanged lines pass the pull-request job, and a red weekly run is silent | ci | high | open |
+| [0602](0602-tidy-python-fuzz-bench.md) | clang-tidy never sees `python/src/`, `fuzz/` or `bench/` | ci | medium | open |
+| [0603](0603-tidy-memory-safety-checks.md) | clang-tidy does not check the memory-safety style the project asks for | style | medium | open |
