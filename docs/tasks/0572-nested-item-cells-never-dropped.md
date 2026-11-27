@@ -1,6 +1,6 @@
 ---
 status: in-progress
-pr: claude/project-thread-5hdynk (batch 14 A)
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1021
 priority: medium
 area: robustness
 depends: [0336, 0402]
