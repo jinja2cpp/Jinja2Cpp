@@ -604,7 +604,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0540](0540-str-format-host-dunder-format.md) | str.format ignores a host object's __format__ outside the sandbox | parity | low | done |
 | [0541](0541-shared-module-importing-modules-per-change.md) | A replaced shared module that imported modules at its top level stays for the module's life | robustness | low | done |
 | [0542](0542-self-in-a-container-keeps-its-capture.md) | A `self` inside a list or dict at an include's top level keeps every replaced tree | robustness | low | done |
-| [0543](0543-big-int-binary-form-for-huge-values.md) | Keep a binary form for big integers past the decimal string limit | robustness | low | in-progress |
+| [0543](0543-big-int-binary-form-for-huge-values.md) | Keep a binary form for big integers past the decimal string limit | robustness | low | done |
 | [0544](0544-callable-int-params-truncate.md) | A user callable's narrow integer parameter silently truncates its argument | robustness | medium | done |
 | [0545](0545-dict-view-set-and-module-leftovers.md) | Sets, module host views and the indent message after 0538 | parity | low | done |
 | [0546](0546-tuple-of-slices-fold-check-leftovers.md) | Tuple-of-slices fold check: argument steps, subscript levels, kept values and the per-render constant | parity | low | done |
@@ -624,9 +624,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0563](0563-key-value-pair-tuple-methods.md) | A dictsort or items pair has no tuple methods | parity | low | done |
 | [0564](0564-reject-constants-past-str-digit-limit.md) | Reject integer constants past 4300 digits that survive folding | parity | low | done |
 | [0565](0565-set-methods-slow-on-msvc-debug.md) | Set methods over a big range are thousands of times slower in MSVC Debug than in a GCC Debug build | performance | medium | open |
-| [0566](0566-huge-host-big-int-converts-per-access.md) | Stop converting a huge host BigInt on every access | robustness | low | open |
+| [0566](0566-huge-host-big-int-converts-per-access.md) | Stop converting a huge host BigInt on every access | robustness | low | done |
 | [0567](0567-stored-closure-reaching-module-through-capture.md) | A stored closure that reaches a call's module only through its capture keeps the module | parity | low | done |
-| [0568](0568-huge-int-index-and-range-bound.md) | Render a huge integer used as a list index or a range() bound as Python does | robustness | low | open |
+| [0568](0568-huge-int-index-and-range-bound.md) | Render a huge integer used as a list index or a range() bound as Python does | robustness | low | done |
 | [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | done |
 | [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | done |
 | [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | done |
@@ -646,7 +646,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0585](0585-int-format-zero-pad-prefix-grouping.md) | Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base | parity | low | done |
 | [0586](0586-closure-in-module-top-level-with-loses-outer-names.md) | A closure defined in a `with` at a module's top level reads the module's names as undefined on later calls | parity | low | done |
 | [0587](0587-set-erase-and-update-stay-linear.md) | The engine's set still spends O(n) per remove, pop and update | robustness | low | done |
-| [0588](0588-fold-budget-charges-big-int-work.md) | Charge the Load's fold budget for the size of big-integer work | robustness | low | open |
+| [0588](0588-fold-budget-charges-big-int-work.md) | Charge the Load's fold budget for the size of big-integer work | robustness | low | done |
 | [0589](0589-ext-debug-extension.md) | `jinja2.ext.debug`: implement `{% debug %}` or record it as deliberate | parity | low | done |
 | [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | done |
 | [0591](0591-cell-protocol-inductive-invariant.md) | Find the cell protocol's inductive invariant | robustness | low | open |
@@ -655,6 +655,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0596](0596-stored-self-block-of-scoped-block-loses-derived-context.md) | A `self` block or `super` stored in a scoped block and called after the loop loses the derived context | parity | low | open |
 | [0597](0597-import-with-context-in-loop-loses-loop.md) | A module imported with context in a loop does not see the loop's `loop` | parity | low | open |
 | [0598](0598-failure-in-module-top-level-with-drops-stored-closure.md) | A failure inside a module's top-level `with` drops the names its stored closure reads | parity | low | open |
+| [0599](0599-public-big-int-words-form.md) | A words form in the public BigInt | robustness | low | open |
 | [0600](0600-whole-tree-tidy-backlog.md) | clang-tidy: 304 hits on master; the weekly whole-tree job has never been green | style | high | open |
 | [0601](0601-tidy-ratchet-leaks.md) | clang-tidy ratchet: hits on unchanged lines pass the pull-request job, and a red weekly run is silent | ci | high | open |
 | [0602](0602-tidy-python-fuzz-bench.md) | clang-tidy never sees `python/src/`, `fuzz/` or `bench/` | ci | medium | open |
