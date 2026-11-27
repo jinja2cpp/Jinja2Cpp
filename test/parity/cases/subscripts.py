@@ -46,6 +46,9 @@ CASES = [
     ('dict_subscript_missing_non_string', "[{{ {1: 'a'}[2] }}][{{ {1: 'a'}[none] }}]"),
     # task 0270: an index beyond int64 finds nothing; slice bounds clip by their sign
     ('big_index_and_slice', "[{{ l[18446744073709551615] }}]|{{ l[18446744073709551615:] }}|{{ l[:18446744073709551615] }}|{{ l[-18446744073709551615:] }}|{{ {18446744073709551615: 'k'}[18446744073709551615] }}"),
+    # task 0568: an integer past 4300 digits indexes nothing (IndexError, KeyError: undefined), and
+    # the undefined's message does not print it
+    ('huge_index_context', "{% set h = hs|int(base=16) %}[{{ [1, 2, 3][h] }}][{{ [1, 2, 3][-h] }}][{{ (1, 2, 3)[h] }}][{{ 'abc'[h] }}][{{ 'abc'[-h] }}][{{ {'a': 1}[h] }}][{{ {'a': 1}[-h] }}][{{ [1, 2, 3][h] is defined }}]", {"ctx": {"hs": "f" * 3600}}),
     # task 0362: a slice goes to __getitem__ without getitem's fallback, so what has no items
     # raises; a slice of literals folds through getitem, which makes it undefined
     ("slice_int_variable", "{{ x[1:2] }}", {"ctx": {"x": 5}}),

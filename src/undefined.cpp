@@ -1,5 +1,6 @@
 #include "undefined.h"
 
+#include "big_int.h"
 #include "engine_errors.h"
 #include "host_object.h"
 #include "internal_value.h"
@@ -154,6 +155,18 @@ InternalValue MakeCondExprUndefined(unsigned line)
 
 namespace
 {
+// The name of a missing key. An integer past MaxIntStrDigits digits has no decimal text to print
+// (Python's IndexError message never prints it), so it is named by its size (docs/tasks/0568)
+std::string KeyName(const InternalValue& key)
+{
+    if (const auto big = AsBigInt(key);
+        big && (big->IsHuge() || big->InlineDecimal().size() - (big->Sign() < 0 ? 1 : 0) > MaxIntStrDigits))
+    {
+        return "<integer of " + std::to_string(BitLength(*big)) + " bits>";
+    }
+    return Repr(key);
+}
+
 std::string HintOf(const UndefinedInfo& info)
 {
     if (info.condExprLine)
@@ -188,7 +201,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
     info.policy = PolicyOf(context);
     // Python looks up a string item as an attribute too, and names it so
     info.isAttr = IsStringValue(key);
-    info.name = info.isAttr ? AsString(key) : Repr(key);
+    info.name = info.isAttr ? AsString(key) : KeyName(key);
     info.objType = ObjectTypeRepr(obj);
     return MakeUndefinedValue(std::move(info));
 }
