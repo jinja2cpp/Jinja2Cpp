@@ -697,6 +697,9 @@ public:
     // Whether the code runs in a `scoped` block of its own template: an include or an import with context has a top
     // level of its own, deeper than the block's scopes
     [[nodiscard]] bool InDerivedBlock() const { return m_derivedDepth > TopLevelDepth(); }
+    // The scopes a `scoped` block's derived context holds, when InDerivedBlock: an unscoped block called in its body sees
+    // them, as Jinja2 calls it with that context (docs/tasks/0584)
+    [[nodiscard]] size_t DerivedDepth() const { return m_derivedDepth; }
 
     // A frame bound names at its entry in a scope of this context (BindUndefinedStatement)
     void SetHasEntryBindings() { m_hasEntryBindings = true; }

@@ -605,6 +605,14 @@ CASES = [
     ('macro_closure_in_set_block_of_call', "{% set ns = namespace(f=none) %}{% macro o(a) %}{% set r %}{% macro m() %}{{ a }}{% endmacro %}{% set ns.f = m %}{% endset %}{% endmacro %}{{ o(1) }}|{{ ns.f() }}"),
     # an unscoped block inside a scoped one reads the names of the loop around both (docs/tasks/0584)
     ('block_in_scoped_block_reads_loop', '{% for i in [1] %}{% block x scoped %}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}'),
+    ('block_in_scoped_block_skips_its_locals', '{% for i in [1] %}{% block x scoped %}{% set k = 3 %}{% for j in [2] %}{% block y %}[{{ i }}{{ j }}{{ k }}]{% endblock %}{% endfor %}{% endblock %}{% endfor %}'),
+    ('block_in_block_in_scoped_block_reads_loop', '{% for i in [1] %}{% block x scoped %}{% block y %}{% block z %}[{{ i }}]{% endblock %}{% endblock %}{% endblock %}{% endfor %}'),
+    ('block_in_nested_scoped_blocks_reads_loops', '{% for i in [1] %}{% block x scoped %}{% for j in [2] %}{% block y scoped %}{% block z %}[{{ i }}{{ j }}]{% endblock %}{% endblock %}{% endfor %}{% endblock %}{% endfor %}'),
+    ('self_block_in_scoped_block_reads_loop', '{% for i in [1] %}{% block x scoped %}{{ self.y() }}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}'),
+    ('child_block_in_scoped_block_reads_loop', '{% extends "base" %}{% block y %}C{{ i }}{{ super() }}{% endblock %}', {"templates": {"base": "{% for i in [1] %}{% block x scoped %}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}"}}),
+    ('include_in_scoped_block_sees_loop', '{% for i in [1, 2] %}{% block x scoped %}{% include "t" %}{% endblock %}{% endfor %}', {"templates": {"t": "<{{ i }}|{{ loop is defined }}|{{ loop.index if loop is defined }}>"}}),
+    ('include_in_inner_loop_of_scoped_block_sees_outer_loop', '{% for i in [1, 2] %}{% block x scoped %}{% for j in "ab" %}{% include "t" %}{% endfor %}{% endblock %}{% endfor %}', {"templates": {"t": "<{{ j }}{{ loop.index if loop is defined }}>"}}),
+    ('include_in_scoped_block_outside_loops', '{% block x scoped %}{% include "t" %}{% endblock %}', {"templates": {"t": "{{ loop is defined }}"}}),
     ('macro_closure_in_scoped_block_of_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}'),
     # A kept closure keeps only the names it and the closures it sees read (0375): a namespace it
     # sets an attribute of, a sibling it calls, a parameter's default, varargs, a name set later

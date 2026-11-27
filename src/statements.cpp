@@ -3313,8 +3313,9 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
     }
 
     // An unscoped block sees the template-level names only, not the loop variables or
-    // other locals around it
-    RenderContext blockContext = m_isScoped ? RenderContext(values, values.GetScopesCount()) : RenderContext(values, frame->baseDepth);
+    // other locals around it; in a scoped block's body, what that block's derived context holds (docs/tasks/0584)
+    const size_t unscopedDepth = values.InDerivedBlock() ? std::max<size_t>(values.DerivedDepth(), frame->baseDepth) : frame->baseDepth;
+    RenderContext blockContext = m_isScoped ? RenderContext(values, values.GetScopesCount()) : RenderContext(values, unscopedDepth);
     if (m_isScoped)
     {
         // Jinja2 calls the block with context.derived(locals), which a host's callable then sees (docs/tasks/0558)

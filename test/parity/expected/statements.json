@@ -22329,6 +22329,334 @@
    "output": "[1]"
   },
   {
+   "id": "statements.block_in_scoped_block_skips_its_locals",
+   "template": "{% for i in [1] %}{% block x scoped %}{% set k = 3 %}{% for j in [2] %}{% block y %}[{{ i }}{{ j }}{{ k }}]{% endblock %}{% endfor %}{% endblock %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "statements.block_in_block_in_scoped_block_reads_loop",
+   "template": "{% for i in [1] %}{% block x scoped %}{% block y %}{% block z %}[{{ i }}]{% endblock %}{% endblock %}{% endblock %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "statements.block_in_nested_scoped_blocks_reads_loops",
+   "template": "{% for i in [1] %}{% block x scoped %}{% for j in [2] %}{% block y scoped %}{% block z %}[{{ i }}{{ j }}]{% endblock %}{% endblock %}{% endfor %}{% endblock %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "statements.self_block_in_scoped_block_reads_loop",
+   "template": "{% for i in [1] %}{% block x scoped %}{{ self.y() }}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1][1]"
+  },
+  {
+   "id": "statements.child_block_in_scoped_block_reads_loop",
+   "template": "{% extends \"base\" %}{% block y %}C{{ i }}{{ super() }}{% endblock %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "base": "{% for i in [1] %}{% block x scoped %}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}"
+   },
+   "output": "C1[1]"
+  },
+  {
+   "id": "statements.include_in_scoped_block_sees_loop",
+   "template": "{% for i in [1, 2] %}{% block x scoped %}{% include \"t\" %}{% endblock %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "<{{ i }}|{{ loop is defined }}|{{ loop.index if loop is defined }}>"
+   },
+   "output": "<1|True|1><2|True|2>"
+  },
+  {
+   "id": "statements.include_in_inner_loop_of_scoped_block_sees_outer_loop",
+   "template": "{% for i in [1, 2] %}{% block x scoped %}{% for j in \"ab\" %}{% include \"t\" %}{% endfor %}{% endblock %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "<{{ j }}{{ loop.index if loop is defined }}>"
+   },
+   "output": "<a1><b1><a2><b2>"
+  },
+  {
+   "id": "statements.include_in_scoped_block_outside_loops",
+   "template": "{% block x scoped %}{% include \"t\" %}{% endblock %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "False"
+  },
+  {
    "id": "statements.macro_closure_in_scoped_block_of_loop",
    "template": "{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}",
    "context": {

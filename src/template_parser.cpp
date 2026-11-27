@@ -1138,6 +1138,13 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     }
 
     auto blockRenderer = m_nodes.Make<BlockStatement>(blockName, isScoped, isRequired);
+    // A scoped block is called with `context.derived(locals())`, which holds the `loop` of each loop around it: Jinja2
+    // makes those loops extended as if their bodies named `loop` (CodeGenerator.visit_For), and an include in the block
+    // sees that `loop` (docs/tasks/0584)
+    if (isScoped && std::any_of(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& info) { return info.type == StatementInfo::ForStatement; }))
+    {
+        m_nodes.NoteLoopRead();
+    }
     // Only `if` keeps Jinja2's frame at the top level (Frame.soft); every other statement
     // around the block opens an inner frame, where `visit_Block` calls the block unguarded
     const bool inPlace = std::any_of(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& info) {
