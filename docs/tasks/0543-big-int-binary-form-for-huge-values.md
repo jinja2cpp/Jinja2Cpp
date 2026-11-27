@@ -79,3 +79,14 @@ cache; phases P1a, P1b, P2, P4; the parity rejection of surviving constants is 0
   done-when targets (load < 50 ms, each operation < 10 ms) are met; P4 (backend word entries)
   remains. Tests: `HugeFromBinaryKeepsNoDecimal`, `HugeFromBinaryBuildsDecimalWithinTheBudget`.
   Filed 0568 (huge list index and `range()` bound, pre-existing).
+- P4 (backend words, plan Q5): `BigIntBackend` gains two optional entries after `divideTruncated`,
+  `fromWords` and `toWords` (32-bit words, least significant first). The table stays version 1; the
+  library uses an entry only when `structSize` covers it and it is not null, so older tables work
+  unchanged. A huge operand reaches the backend through `fromWords`, and a huge result comes back
+  through `toWords` and keeps only its words (no decimal form, as a power-of-two literal); words that
+  do not match the result's `bitLength` fail the render as a backend failure. `BoostCppIntBackend()`
+  implements both (`import_bits`/`export_bits`), as does the test toy backend
+  (`BigIntToyBackend.HugeOperandsAndResultsGoThroughWords`, which also runs a version-1-sized table).
+  Measured in Release (GCC 13 -O2, boost build, median of 7) with `h = ('f' * 262143)|int(base=16)` from
+  data: `(h - 1) is odd` renders in 2.1 ms with the entries and 1211 ms without; `(h * 3) % 7` in 2.1 ms
+  and 1320 ms (the bare `h is odd` render is 1.9 ms). `docs/api-2.0.md` records the entries.

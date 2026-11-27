@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0569]
@@ -20,3 +20,14 @@ and Load-wide steps, so that a candidate past them is Impossible as for any othe
 
 **Done when.** The 100-repeat template above loads in under 50 ms on the Release boost build, and the corpus and
 `BigIntTemplate.FoldBudgetBoundsDeadConstants` still pass.
+
+**Progress.** In the fold check (`RenderLimits::bigIntWorkPerStep`, set to
+`FoldBudget::WordProductsPerStep` = 1024 only there) a product or power step, a floor division or
+modulo, and a backend decimal conversion (`fromDecimal`/`toDecimal`) take one step per 1024 products
+of the operands' 64-bit words (`ChargeBigIntWork` in `src/big_int.cpp`, through the new
+`detail::ChargeSteps`), before the work; past the budget the candidate is Impossible as for any limit.
+Renders charge nothing new. With the 0543 P4 word entries the huge results of the template no longer
+convert to decimal either. Release, boost build, median of 7: the 100-repeat template (36.8 KB) loads
+in 15.7 ms (was 7.5 s), 400 repeats (147 KB) in 34 ms (was 31 s). Test
+`BigIntTemplate.FoldBudgetChargesBigIntWork` (roots of big products spend the Load's steps, roots of
+small ones do not; the 0588 template loads); `FoldBudgetBoundsDeadConstants` and the corpus pass.
