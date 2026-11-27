@@ -340,6 +340,8 @@ private:
     void ResolveSlots(NodeArena& nodes);
     // The slot `ref` reads, Dynamic when it is looked up by name
     [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frame, const StoreIndex* stores) const;
+    // Find in the frame of a macro's unit
+    [[nodiscard]] std::pair<SlotIndex, UnitId> FindInMacro(const NodeArena& nodes, const HashedName& name, FrameId frame, const StoreIndex* stores) const;
 
     // Inline room for a template with a few loops, so that most parses allocate nothing here
     SmallVector<Frame, 8> m_frames;

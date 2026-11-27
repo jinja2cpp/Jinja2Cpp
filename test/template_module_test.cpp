@@ -856,7 +856,12 @@ namespace
 // A closure a module defines in a `with` at its top level and stores, then called by later calls: 5, AM, CAM in Jinja2
 // 3.1.6 (docs/tasks/0586)
 // Each in a file of its own, `lib0` on: the environment caches the templates it loaded
-const std::pair<const char*, const char*> WithClosureLibs[] = {
+struct WithClosureLib
+{
+    const char* source;
+    const char* wanted;
+};
+constexpr WithClosureLib WithClosureLibs[] = {
     { "{% set v = 5 %}{% with q = 1 %}{% macro f() %}{{ v }}{% endmacro %}{% set ns.f = f %}{% endwith %}", "5" },
     { "{% import 'a' as x with context %}{% with q = 1 %}{% macro f() %}{{ x.am() }}{% endmacro %}{% set ns.f = f %}{% endwith %}", "AM" },
     { "{% import 'a' as x with context %}{% macro st() %}{% set ns.f = caller %}{% endmacro %}{% with q = 1 %}{% call st() %}C{{ x.am() }}{% endcall %}{% endwith %}",
