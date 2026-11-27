@@ -123,6 +123,9 @@ struct FoldBudget
     static constexpr std::uint64_t Memory = std::uint64_t{ 1 } << 24;
     // A product or power past it costs milliseconds (boost backend); Python's repr fails from 14286 bits on
     static constexpr std::size_t IntBits = std::size_t{ 1 } << 16;
+    // A big-integer product, division or decimal conversion takes a step for each this many products of 64-bit
+    // words it does, about a microsecond of work, so that its operands' size counts too (docs/tasks/0588)
+    static constexpr std::uint64_t WordProductsPerStep = 1024;
     static const Settings::Limits& Limits();
 };
 // The ValueError CPython's repr() raises for an integer past MaxIntStrDigits digits, at `tok`

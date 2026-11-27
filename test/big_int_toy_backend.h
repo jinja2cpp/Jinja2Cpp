@@ -215,10 +215,9 @@ inline int Compare(const jinja2::BigIntBackend*, const void* a, const void* b) n
     return x.negative ? -cmp : cmp;
 }
 
-inline size_t BitLength(const jinja2::BigIntBackend*, const void* obj) noexcept
+// The magnitude in base-2^32 limbs, least significant first, nine decimal digits at a time; empty for zero
+inline std::vector<uint32_t> ToLimbs(const std::string& digits)
 {
-    // Through base-2^32 limbs, nine decimal digits at a time
-    const std::string& digits = Get(obj).magnitude;
     std::vector<uint32_t> limbs;
     size_t pos = 0;
     while (pos != digits.size())
@@ -243,6 +242,12 @@ inline size_t BitLength(const jinja2::BigIntBackend*, const void* obj) noexcept
             limbs.push_back(static_cast<uint32_t>(carry));
         }
     }
+    return limbs;
+}
+
+inline size_t BitLength(const jinja2::BigIntBackend*, const void* obj) noexcept
+{
+    const auto limbs = ToLimbs(Get(obj).magnitude);
     if (limbs.empty())
     {
         return size_t{ 0 };
@@ -253,6 +258,54 @@ inline size_t BitLength(const jinja2::BigIntBackend*, const void* obj) noexcept
         ++bits;
     }
     return bits;
+}
+
+// The optional word entries (docs/tasks/0543 P4), counted so that a test can tell which path the library took
+inline int& WordCalls()
+{
+    static int count = 0;
+    return count;
+}
+
+inline jinja2::BigIntStatus FromWords(const jinja2::BigIntBackend*, void* out, const uint32_t* words, size_t count, int sign) noexcept
+{
+    ++WordCalls();
+    // Divides the limbs by 10^9 until they are zero, collecting nine digits each time
+    std::vector<uint32_t> limbs(words, words + count);
+    std::string reversed;
+    while (!limbs.empty())
+    {
+        uint64_t rem = 0;
+        for (size_t idx = limbs.size(); idx-- != 0;)
+        {
+            const uint64_t cur = (rem << 32) | limbs[idx];
+            limbs[idx] = static_cast<uint32_t>(cur / 1000000000U);
+            rem = cur % 1000000000U;
+        }
+        while (!limbs.empty() && limbs.back() == 0)
+        {
+            limbs.pop_back();
+        }
+        for (int digit = 0; digit != 9; ++digit)
+        {
+            reversed.push_back(static_cast<char>('0' + (rem % 10)));
+            rem /= 10;
+        }
+    }
+    std::reverse(reversed.begin(), reversed.end());
+    return Make(out, sign < 0, Trim(reversed));
+}
+
+inline jinja2::BigIntStatus ToWords(const jinja2::BigIntBackend*, const void* obj, uint32_t* out, size_t count) noexcept
+{
+    ++WordCalls();
+    const auto limbs = ToLimbs(Get(obj).magnitude);
+    if (limbs.size() != count)
+    {
+        return jinja2::BigIntStatus::BadInput;
+    }
+    std::copy(limbs.begin(), limbs.end(), out);
+    return jinja2::BigIntStatus::Ok;
 }
 
 inline jinja2::BigIntStatus Negate(const jinja2::BigIntBackend*, void* out, const void* x) noexcept
@@ -295,7 +348,9 @@ inline jinja2::BigIntStatus DivideTruncated(const jinja2::BigIntBackend*, void* 
     return jinja2::BigIntStatus::Ok;
 }
 
-inline jinja2::BigIntBackend MakeBackend()
+// `withWords`: with the optional fromWords and toWords; without, the table is version 1's as it was first compiled,
+// its structSize ending at divideTruncated
+inline jinja2::BigIntBackend MakeBackend(bool withWords = true)
 {
     using jinja2::BigIntBackend;
     BigIntBackend backend{};
@@ -317,6 +372,13 @@ inline jinja2::BigIntBackend MakeBackend()
     backend.subtract = Subtract;
     backend.multiply = Multiply;
     backend.divideTruncated = DivideTruncated;
+    backend.fromWords = FromWords;
+    backend.toWords = ToWords;
+    if (!withWords)
+    {
+        // The library reads nothing past structSize: a test checks that WordCalls stays 0
+        backend.structSize = static_cast<uint32_t>(offsetof(BigIntBackend, divideTruncated) + sizeof(backend.divideTruncated));
+    }
     return backend;
 }
 
@@ -324,6 +386,13 @@ inline jinja2::BigIntBackend MakeBackend()
 inline const jinja2::BigIntBackend* Backend()
 {
     static const jinja2::BigIntBackend backend = MakeBackend();
+    return &backend;
+}
+
+// The backend without the word entries, as a table compiled before them
+inline const jinja2::BigIntBackend* DecimalOnlyBackend()
+{
+    static const jinja2::BigIntBackend backend = MakeBackend(false);
     return &backend;
 }
 } // namespace big_int_toy

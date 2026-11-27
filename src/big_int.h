@@ -36,6 +36,11 @@ constexpr size_t MaxBigIntBits = size_t{ 1 } << 20;
 // int when it fits int64, else a big integer. Throws ResourceLimitError past MaxBigIntBits
 JINJA2CPP_EXPORT InternalValue MakeBigIntValue(std::string_view decimal);
 
+// MakeBigIntValue for the decimal text of a host's BigInt. A huge one that the running render's collector holds from
+// an earlier call shares its object, so that reading the same item of a host container again does not convert it
+// again (docs/tasks/0566)
+JINJA2CPP_EXPORT InternalValue HostBigIntValue(std::string_view decimal);
+
 // The viewed integer as a value: the view's object shared, a new one only for a view of text
 JINJA2CPP_EXPORT InternalValue BigIntValue(const BigIntView& val);
 

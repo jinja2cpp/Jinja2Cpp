@@ -629,7 +629,7 @@ struct InputValueConvertor
     result_t operator()(float val) const { return result_t(InternalValue(FloatAsDecimalDouble(val))); }
 
     // An integer outside int64 is a big integer; one that fits is an int (docs/tasks/0270)
-    result_t operator()(const BigInt& val) const { return MakeBigIntValue(val.ToString()); }
+    result_t operator()(const BigInt& val) const { return HostBigIntValue(val.ToString()); }
 
     template<typename T>
     result_t operator()(const T& val) const

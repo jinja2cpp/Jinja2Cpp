@@ -122,6 +122,10 @@ struct RenderLimits
     // Bits of an integer a product or power may compute: MaxBigIntBits (big_int.h), or less in the Load's fold
     // check (FoldBudget, docs/tasks/0569)
     std::size_t maxIntBits = std::size_t{ 1 } << 20;
+    // In the Load's fold check (FoldBudget::WordProductsPerStep), a big-integer product, division or decimal
+    // conversion takes a step for each this many products of 64-bit words it does, besides the step of its node
+    // (ChargeBigIntWork in big_int.cpp, docs/tasks/0588); 0 elsewhere, where it takes none
+    std::uint64_t bigIntWorkPerStep = 0;
     std::uint64_t maxRange = UINT64_MAX;
     std::uint64_t loadsLeft = UINT64_MAX;
     // Bytes the render's strings, lists and dicts may still take (maxRenderMemory, docs/tasks/0459), and the budget
@@ -180,6 +184,10 @@ inline std::uint64_t StepsTaken()
     const auto& limits = t_renderLimits;
     return std::min(limits.stepsTaken + (limits.chunk - limits.stepsLeft), limits.maxSteps);
 }
+
+// Counts `steps` steps of the running render at once, as that many checks would: ResourceLimitError past
+// maxRenderSteps. Only a render with limits counts them
+void ChargeSteps(std::uint64_t steps);
 
 // A host's poll of the renders on this thread (RenderOptions::poll, docs/tasks/0357 B3; the
 // Python module checks for signals there, so Ctrl-C stops a long render, 0353). A render with
