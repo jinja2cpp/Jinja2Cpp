@@ -2107,7 +2107,7 @@ TEST(CallSiteTest, PythonGlobalIsTheTemplatesGlobal)
     {
         const auto found = PythonGlobal(module, qualname);
         ASSERT_TRUE(found.has_value()) << qualname;
-        const UserCallable callable = found.value();
+        const UserCallable& callable = found.value();
         for (const bool i18n : { false, true })
         {
             TemplateEnv env;
