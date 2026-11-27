@@ -74,6 +74,17 @@ struct BigIntBackend
     //! Truncating division, as C++ divides: the quotient rounds toward zero and the remainder takes the sign of `a`.
     //! Either output may be null, and then is not made
     BigIntStatus (*divideTruncated)(const BigIntBackend* self, void* quotient, void* remainder, const void* a, const void* b) noexcept;
+
+    // Optional entries, still version 1 (docs/tasks/0543 P4). The library uses one only when `structSize` covers it
+    // and it is not null, so a table compiled against an older header, or one that leaves them null, still works.
+    // They spare the decimal conversion of an integer past 14285 bits, which the library keeps as binary words:
+    // without them each such operand and result goes through `fromDecimal`/`toDecimal`, about 0.1 s at 2^20 bits
+
+    //! The integer whose magnitude is `count` 32-bit `words`, least significant first, with a non-zero top word
+    //! (`count` >= 1), negated when `sign` is -1 (`sign` is -1 or 1)
+    BigIntStatus (*fromWords)(const BigIntBackend* self, void* out, const uint32_t* words, size_t count, int sign) noexcept;
+    //! Writes |x| into `count` 32-bit words, least significant first; `count` is `(bitLength + 31) / 32` and at least 1
+    BigIntStatus (*toWords)(const BigIntBackend* self, const void* obj, uint32_t* out, size_t count) noexcept;
 };
 
 //! The largest \ref BigIntBackend::objectSize the library accepts

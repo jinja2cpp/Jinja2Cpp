@@ -82,6 +82,8 @@ thread_local ExportWalk* ExportWalk::s_held = nullptr;
 
 void CycleCollector::Finish() noexcept
 {
+    // First: the cache credits the budgets that paid for its objects, before the walk (docs/tasks/0566)
+    m_notes->hugeInts.reset();
     // What the closures stored in the outer render's globals still need lives as long as that render (KeepForOuter)
     if (auto* keeper = m_notes->keeper)
     {

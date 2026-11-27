@@ -599,6 +599,7 @@ public:
                 budget.maxRenderSteps = FoldBudget::CheckSteps + pooledSteps;
                 checkScope.emplace(&budget, m_settings->bigIntBackend);
                 detail::t_renderLimits.maxIntBits = FoldBudget::IntBits;
+                detail::t_renderLimits.bigIntWorkPerStep = FoldBudget::WordProductsPerStep;
             }
             const auto result = FoldCheckPasses(checks[index], context, budgeted);
             if (budgeted)

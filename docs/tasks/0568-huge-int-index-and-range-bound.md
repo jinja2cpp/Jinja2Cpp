@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1020
 priority: low
 area: robustness
 depends: [0543]
@@ -22,3 +23,14 @@ string (not folded, see 0564).
 
 **Done when.** Both expressions render as pinned Jinja2 renders them, narrow and wide, or the
 range case is on a divergences list with its reason.
+
+**Progress.** Done-ready. `MakeUndefined` (src/undefined.cpp) names an integer key past 4300
+digits as `<integer of N bits>` instead of printing it through `Repr`, which raised ValueError;
+small keys keep `list object has no element 5`. `[1,2,3][h]`, `[1,2,3][-h]`, tuple, string and
+dict subscripts now render empty as in Python (`subscripts.huge_index_context`, narrow and
+wide). `range(h)|first` stays a deliberate divergence (`globals.range_huge_context_bound`, rejects):
+clamping the stop would make `|length` and the repr wrong where Python raises OverflowError or
+prints the bound, and ranges are int64 by 0178.
+A key that holds such an integer (`[1, 2, 3][(h, 1)]`, `{'a': 1}[(h,)]`, `(1, 2)[[h]]`) cannot be
+printed either, so the undefined's message names it `<key that cannot be printed>` (Python formats
+its message only when it is read): parity case `subscripts.huge_index_nested_context` (verifier round 1).
