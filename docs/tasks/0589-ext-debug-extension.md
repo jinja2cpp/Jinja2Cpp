@@ -20,3 +20,7 @@ this engine's own context and filter and test names, with a corpus case that che
 
 **Done when.** The `jinja2.ext.debug` row of `docs/parity.md` is ✅ or ➖ and
 `scripts/check_parity_rows.py` passes without a task citation for it.
+
+**Outcome.** Option (a): recorded as a deliberate divergence (`➖` row in `docs/parity.md`, line in
+`docs/release-2.0.md`). Taken because the task is low priority and the output cannot be pinned; option (b) can still be
+filed later if a host asks for it.
