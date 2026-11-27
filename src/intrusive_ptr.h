@@ -65,7 +65,7 @@ public:
         }
     }
 
-    IntrusivePtr& operator=(const IntrusivePtr& other) noexcept
+    IntrusivePtr& operator=(const IntrusivePtr& other) noexcept // NOLINT(bugprone-unhandled-self-assignment): copy and swap, a self-assignment copies and swaps itself
     {
         IntrusivePtr(other).swap(*this);
         return *this;

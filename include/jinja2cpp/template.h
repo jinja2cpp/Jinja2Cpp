@@ -542,7 +542,7 @@ JINJA2CPP_EXPORT Value ContextView(const Value& context, ContextNames names);
  * `Template` is immutable.
  */
 template<typename CharT>
-class BasicTemplate
+class BasicTemplate // NOLINT(cppcoreguidelines-special-member-functions): no move operations on purpose, a move copies (see the copy assignment)
 {
 public:
     using CharType = CharT;

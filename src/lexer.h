@@ -8,10 +8,10 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -241,6 +241,21 @@ enum : uint8_t
     NonAscii = 32,
 };
 
+// A template unit as an unsigned number. A narrow unit goes through unsigned char, so a
+// high byte is never sign-extended on its way to a wider type
+template<typename CharT>
+[[nodiscard]] constexpr auto CodeUnit(CharT ch) noexcept
+{
+    if constexpr (sizeof(CharT) == 1)
+    {
+        return static_cast<unsigned char>(ch);
+    }
+    else
+    {
+        return static_cast<std::make_unsigned_t<CharT>>(ch);
+    }
+}
+
 constexpr std::array<uint8_t, 256> MakeTable()
 {
     std::array<uint8_t, 256> table{};
@@ -272,7 +287,7 @@ inline constexpr std::array<uint8_t, 256> kTable = MakeTable();
 template<typename CharT>
 constexpr uint8_t Of(CharT ch)
 {
-    const auto unit = static_cast<std::make_unsigned_t<CharT>>(ch);
+    const auto unit = CodeUnit(ch);
     if constexpr (sizeof(CharT) == 1)
     {
         return kTable[unit];
@@ -392,7 +407,7 @@ public:
         {
             return false;
         }
-        for (char special : { '_', '.', '=', '<', '>', '*', '/', '-', '+', '\'', '"', '\\' })
+        for (char special : { '_', '.', '=', '<', '>', '*', '/', '-', '+', '\'', '"', '\\' }) // NOLINT(readability-use-anyofallof): unrolled, Load calls this for every delimiter (0600)
         {
             if (ch == static_cast<CharT>(special))
             {
@@ -410,7 +425,7 @@ private:
     {
         while (pos != end)
         {
-            const auto unit = static_cast<std::make_unsigned_t<CharT>>(m_src[pos]);
+            const auto unit = char_class::CodeUnit(m_src[pos]);
             if (unit == ' ' || (unit >= '\t' && unit <= '\r'))
             {
                 ++pos;
@@ -430,7 +445,7 @@ private:
     // The length of the space other than ' ' and \t-\r at `pos`, or 0
     [[nodiscard]] JINJA2CPP_OUTLINE_INLINE size_t OtherSpaceLength(size_t pos, size_t end) const
     {
-        const auto unit = static_cast<std::make_unsigned_t<CharT>>(m_src[pos]);
+        const auto unit = char_class::CodeUnit(m_src[pos]);
         if constexpr (sizeof(CharT) == 1)
         {
             if (unit >= 0x80)
@@ -470,7 +485,7 @@ private:
     }
 
     // Delimiters are short and the first character decides most calls: no compare call
-    bool IsAt(size_t pos, std::basic_string_view<CharT> str) const
+    [[nodiscard]] bool IsAt(size_t pos, std::basic_string_view<CharT> str) const
     {
         if (str.size() > m_src.size() - pos || m_src[pos] != str[0])
         {

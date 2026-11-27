@@ -190,7 +190,7 @@ JINJA2CPP_EXPORT std::optional<char32_t> LookupUnicodeName(std::string_view name
 
 // The escape after a backslash that first points at, written to out. False if it is malformed
 template<typename CharT, typename It, typename Out>
-bool DecodeEscape(It& first, It last, Out& out)
+bool DecodeEscape(It& first, It last, Out& out) // NOLINT(readability-function-cognitive-complexity): score 31, kept whole (task 0600)
 {
     auto ch = static_cast<char32_t>(*first++);
     if (ch == '\n')

@@ -245,7 +245,7 @@ private:
     static uint64_t NewLoopId();
 };
 
-class ElseBranchStatement;
+class ElseBranchStatement; // NOLINT(cppcoreguidelines-virtual-class-destructor): forward declaration of a final class
 
 class IfStatement final : public Statement
 {
@@ -259,7 +259,7 @@ public:
     }
 
     explicit IfStatement(NodeRef<Expression> expr)
-        : m_expr(std::move(expr))
+        : m_expr(expr)
     {
     }
 
@@ -291,7 +291,7 @@ public:
     }
 
     explicit ElseBranchStatement(NodeRef<Expression> expr)
-        : m_expr(std::move(expr))
+        : m_expr(expr)
     {
     }
 
@@ -497,7 +497,7 @@ public:
     }
 
     explicit ExtendsStatement(NodeRef<Expression> templateExpr)
-        : m_templateExpr(std::move(templateExpr))
+        : m_templateExpr(templateExpr)
     {
     }
 
@@ -509,7 +509,7 @@ private:
     NodeRef<Expression> m_templateExpr;
 };
 
-class TemplateRenderer;
+class TemplateRenderer; // NOLINT(cppcoreguidelines-virtual-class-destructor): forward declaration of a final class
 
 struct SelfBlocks;
 
@@ -786,7 +786,7 @@ public:
     // isConstant: the names are a constant, so a render loads them once (docs/tasks/0154)
     void SetIncludeNamesExpr(NodeRef<Expression> expr, bool isConstant)
     {
-        m_expr = std::move(expr);
+        m_expr = expr;
         m_isConstant = isConstant;
     }
 
@@ -822,7 +822,7 @@ public:
 
     void SetImportNameExpr(NodeRef<Expression> expr)
     {
-        m_nameExpr = std::move(expr);
+        m_nameExpr = expr;
     }
 
     // Where the statement is, as Jinja2 words it: `line 1`
@@ -1047,7 +1047,7 @@ public:
     }
 
     explicit DoStatement(NodeRef<Expression> expr)
-        : m_expr(std::move(expr)) {}
+        : m_expr(expr) {}
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
@@ -1207,7 +1207,7 @@ public:
     // isVolatile: the value is not constant, as Jinja2 decides it at compile time; the
     // code inside is volatile (RenderContext::IsVolatileAutoescape)
     AutoescapeStatement(NodeRef<Expression> expr, bool isVolatile)
-        : m_expr(std::move(expr))
+        : m_expr(expr)
         , m_isVolatile(isVolatile)
     {
     }

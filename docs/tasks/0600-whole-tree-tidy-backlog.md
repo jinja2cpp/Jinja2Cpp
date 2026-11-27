@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: high
 area: style
 depends: []
@@ -49,3 +49,18 @@ functions carry a cognitive-complexity NOLINT (none do).
 and `use_count` steps.
 
 **Next.** Without 0601 the count grows back: these hits got in through PRs that were green.
+
+**Progress.** The first PR (this branch) clears most of the 304 hits, in every file no open PR owned at
+the time, and leaves the rest in `big_int.cpp`, `borrowed_cells.cpp`, `cycle_collector.h`, `internal_value.*`,
+`name_resolver.*`, `recursion_guard.*`, `render_context.h`, `serialize_filters.cpp`, `statements.cpp`, `template_impl.h`,
+`template_parser.cpp`, `testers.cpp`, `undefined.cpp`, `value_methods.cpp` and `value_visitors.h`, which
+batch 14 PRs rewrote at the same time. A second PR takes them once those merge. Decisions:
+- `readability-function-cognitive-complexity` (21 here): NOLINT with the score, as 0061 left the rest;
+  a split of a flat case dispatch would only scatter it.
+- `performance-unnecessary-value-param` on `Reflector<shared_ptr<T>>::Create`: a false positive, the
+  by-value parameter is moved into the view (0487).
+- `bugprone-exception-escape` on `Value::GetIf`: `As` calls `DemoteMarkup` unchecked and relies on the
+  `std::get` throw, so the throw cannot go; `GetIf` checks the alternative first. NOLINT with the reason.
+- `bugprone-signed-char-misuse`: the lexer and parser read units through `char_class::CodeUnit`, which
+  widens a narrow unit through `unsigned char`. In `BigInt(I)` a unary plus promotes first, keeping the
+  sign extension the negation below needs.

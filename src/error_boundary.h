@@ -42,7 +42,7 @@ typename BasicErrorInfo<CharT>::Data CopyErrorData(const BasicErrorInfo<SrcCharT
 // for the caller to set). std::bad_alloc goes on unchanged, before anything allocates. Outside a
 // catch handler it needs stack for one throw only (ThrowRenderFailure)
 template<typename CharT>
-typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exception, bool& located)
+typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exception, bool& located) // NOLINT(readability-function-cognitive-complexity): score 26, kept whole (task 0600)
 {
     located = false;
     ErrorCode code = ErrorCode::UnexpectedException;

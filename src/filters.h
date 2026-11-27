@@ -60,7 +60,7 @@ class FilterBase : public ExpressionFilter::IExpressionFilter
     , public FunctionBase
 {
 public:
-    std::string GetArgumentsError() const override { return FunctionBase::GetArgumentsError(); }
+    [[nodiscard]] std::string GetArgumentsError() const override { return FunctionBase::GetArgumentsError(); }
     void VisitRefs(detail::RefChecker& refs) const override { FunctionBase::VisitRefs(refs); }
 };
 

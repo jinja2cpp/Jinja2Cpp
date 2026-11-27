@@ -28,7 +28,6 @@
 #include <exception>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -50,7 +49,7 @@ nonstd::unexpected_type<ParseError> MakeParseErrorMsg(ErrorCode code, Token tok,
 
 ParseError::ParseError(ParseError&& other) noexcept
     : errorCode(other.errorCode)
-    , errorToken(std::move(other.errorToken))
+    , errorToken(other.errorToken)
     , relatedTokens(std::move(other.relatedTokens))
     , message(std::move(other.message))
 {
@@ -107,7 +106,7 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value, std::
 
         // The literals of one template have one character type
         std::visit([&next](auto& text) { text += std::get<std::decay_t<decltype(text)>>(*next); }, *str);
-        value = InternalValue(std::move(*str));
+        value = InternalValue(*str);
     }
 
     return value;
@@ -739,7 +738,7 @@ JINJA2CPP_NOINLINE_INLINE NodeRef<Expression> MakeConcat(NodeArena& nodes, Small
 }
 } // namespace
 
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary(LexScanner& lexer, Precedence minPrecedence)
+ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary(LexScanner& lexer, Precedence minPrecedence) // NOLINT(readability-function-cognitive-complexity): score 34, kept whole (task 0600)
 {
     // The operators of one call combine like the old one-function-per-level chains: each
     // right operand starts counting from where this call started (OperatorChain)
@@ -1175,18 +1174,14 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFilter
     return result;
 }
 
-ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(LexScanner& lexer, NodeRef<Expression> valueRef)
+ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(LexScanner& lexer, NodeRef<Expression> valueRef) // NOLINT(readability-function-cognitive-complexity): score 28, kept whole (task 0600)
 {
     const bool negated = lexer.EatIfEqual(Keyword::LogicalNot);
 
     // none, true and false are keywords to the lexer but test names to Jinja2
     Token nameTok = lexer.NextToken();
     std::string name;
-    if (nameTok == Token::Identifier)
-    {
-        name = lexer.GetAsString(nameTok);
-    }
-    else if (nameTok == Token::True || nameTok == Token::False || nameTok == Token::None)
+    if (nameTok == Token::Identifier || nameTok == Token::True || nameTok == Token::False || nameTok == Token::None)
     {
         name = lexer.GetAsString(nameTok);
     }
@@ -1569,11 +1564,7 @@ SubscriptParseResult<DotSubscript> ParseDotSubscript(NodeArena& nodes, LexScanne
     DotSubscript result;
     // l.0 is l[0]; any other attribute is looked up by name
     const auto& tok = lexer.NextToken();
-    if (tok == Token::Identifier)
-    {
-        result.attrName = lexer.GetAsString(tok);
-    }
-    else if (tok == Token::True || tok == Token::False || tok == Token::None)
+    if (tok == Token::Identifier || tok == Token::True || tok == Token::False || tok == Token::None)
     {
         result.attrName = lexer.GetAsString(tok);
     }
@@ -1857,7 +1848,7 @@ void ExpressionParser::NoteChainStepFold(NodeRef<Expression> operand, NodeRef<Ex
     NoteFoldCandidate(step, foldFrom);
 }
 
-ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer)
+ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::ParseFilterExpression(LexScanner& lexer) // NOLINT(readability-function-cognitive-complexity): score 35, kept whole (task 0600)
 {
     NodeRef<ExpressionFilter> result;
 

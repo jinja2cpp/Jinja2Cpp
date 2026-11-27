@@ -9,6 +9,7 @@
 #include "render_context.h"
 #include "span.h"
 #include "undefined.h"
+#include "unicode_case.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
 
@@ -22,14 +23,11 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <locale>
 #include <optional>
 #include <regex>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -1647,7 +1645,7 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
     }
 }
 
-InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, RenderContext& context)
+InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 26, kept whole (task 0600)
 {
     // Jinja2's do_urlencode: a dict is a query string of its items, any other iterable one of
     // the pairs it gives (each unpacked as `k, v`), anything else (an object such as namespace()
@@ -1779,7 +1777,7 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
         const auto newStr = strOf(newVal);
         return PythonReplace<CharT>(srcStr, oldStr, newStr, count);
     });
-    InternalValue replaced(std::move(result));
+    InternalValue replaced(result);
     replaced.SetMarkup(isMarkup);
     return replaced;
 }
@@ -1941,9 +1939,9 @@ TargetString StringConverter::ApplyIndent(const InternalValue& baseVal, RenderCo
     });
 }
 
-TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderContext& context)
+TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 40, kept whole (task 0600)
 {
-    return ApplyStringConverter(baseVal, [this, &context, &baseVal](auto srcStr) -> TargetString {
+    return ApplyStringConverter(baseVal, [this, &context, &baseVal](auto srcStr) -> TargetString { // NOLINT(readability-function-cognitive-complexity): score 26, kept whole (task 0600)
         using CharT = typename decltype(srcStr)::value_type;
         using String = std::basic_string<CharT>;
         bool limitGiven = false;
@@ -2184,7 +2182,7 @@ InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderConte
     }
 }
 
-InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 29, kept whole (task 0600)
 {
     if (const auto* undef = GetIf<UndefinedValue>(&baseVal))
     {

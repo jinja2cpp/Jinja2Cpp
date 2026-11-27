@@ -556,7 +556,7 @@ private:
     }
 
     template<typename T>
-    Span<const T> Items(ArenaSpan<T> list) const noexcept
+    [[nodiscard]] Span<const T> Items(ArenaSpan<T> list) const noexcept
     {
         return { std::launder(reinterpret_cast<const T*>(m_base + list.m_offset)), list.m_size };
     }
@@ -648,10 +648,10 @@ const NodeOps& OpsOf(NodeKind kind);
 
 // The offsets of the nodes an arena made, in the order it made them. Small templates fit
 // in the inline part; the list is not movable, as the arena that holds it
-class OffsetList
+class OffsetList // NOLINT(cppcoreguidelines-pro-type-member-init): m_inline is raw storage, filled as nodes are made
 {
 public:
-    OffsetList() = default;
+    OffsetList() = default; // NOLINT(cppcoreguidelines-pro-type-member-init): m_inline is raw storage
     OffsetList(const OffsetList&) = delete;
     OffsetList(OffsetList&&) = delete;
     OffsetList& operator=(const OffsetList&) = delete;
@@ -797,7 +797,7 @@ public:
     // for a handle that crosses into this tree from another template's, at every level
     // but OFF. Throws InvalidNodeRef
     template<typename T>
-    T& Checked(NodeRef<T> ref) const
+    [[nodiscard]] T& Checked(NodeRef<T> ref) const
     {
         CheckRef(ref);
         if constexpr (NodeRefChecks >= 1)
@@ -1049,7 +1049,7 @@ constexpr bool NeedsNoContext(NodeKind kind)
 class NodeArena : public detail::ArenaAccess<NodeArena>
 {
 public:
-    NodeArena()
+    NodeArena() // NOLINT(cppcoreguidelines-pro-type-member-init): m_inline and m_inlineSymbols are raw storage
     {
         m_blocks.push_back({ m_inline.data(), m_used, nullptr });
     }
@@ -1417,7 +1417,7 @@ private:
         {
             return last.data + (offset - last.start);
         }
-        const auto next = std::upper_bound(m_blocks.begin(), m_blocks.end(), offset, [](std::uint32_t value, const Block& block) { return value < block.start; });
+        const auto* const next = std::upper_bound(m_blocks.begin(), m_blocks.end(), offset, [](std::uint32_t value, const Block& block) { return value < block.start; });
         const auto& block = *(next - 1);
         return block.data + (offset - block.start);
     }
@@ -1427,7 +1427,7 @@ private:
     template<typename List, typename F>
     void ForEachNodeNewestFirst(const List& list, const F& f) noexcept
     {
-        auto block = m_blocks.end() - 1;
+        auto* block = m_blocks.end() - 1;
         for (auto idx = list.size(); idx != 0; --idx)
         {
             const auto offset = list[idx - 1];

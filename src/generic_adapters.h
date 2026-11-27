@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_GENERIC_ADAPTERS_H
 
 #include "internal_value.h"
+#include <jinja2cpp/value_ptr.h>
 
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/utils/i_comparable.h>

@@ -12,13 +12,11 @@
 #include "slot_frame.h"
 #include "small_vector.h"
 
-#include <jinja2cpp/value.h>
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <initializer_list>
 #include <limits>
 #include <memory>
@@ -28,9 +26,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -289,7 +285,7 @@ struct ParsedArguments
 
     InternalValue operator[](std::string_view name) const
     {
-        auto p = args.find(name);
+        const auto* p = args.find(name);
         if (p == args.end())
         {
             return InternalValue();
@@ -337,11 +333,11 @@ public:
 
     void SetExpression(NodeRef<Expression> expr)
     {
-        m_expression = std::move(expr);
+        m_expression = expr;
     }
     void SetTester(NodeRef<IfExpression> expr)
     {
-        m_tester = std::move(expr);
+        m_tester = expr;
     }
     // The expression, or a null link when a condition guards it (`a if c`): for a tag that
     // names a template, whose names Jinja2 reads only when they are literal
@@ -478,7 +474,7 @@ public:
     }
 
     explicit SubscriptExpression(NodeRef<Expression> value)
-        : m_value(std::move(value))
+        : m_value(value)
     {
     }
     SubscriptExpression(const SubscriptExpression&) = delete;
@@ -769,7 +765,7 @@ public:
 
     UnaryExpression(Operation oper, NodeRef<Expression> expr)
         : m_oper(oper)
-        , m_expr(std::move(expr))
+        , m_expr(expr)
     {}
     InternalValue Evaluate(RenderContext&) override;
     // The operator on the evaluated operand
@@ -1080,10 +1076,10 @@ public:
     }
 
     SliceExpression(NodeRef<Expression> value, NodeRef<Expression> start, NodeRef<Expression> stop, NodeRef<Expression> step)
-        : m_value(std::move(value))
-        , m_start(std::move(start))
-        , m_stop(std::move(stop))
-        , m_step(std::move(step))
+        : m_value(value)
+        , m_start(start)
+        , m_stop(stop)
+        , m_step(step)
     {
     }
     InternalValue Evaluate(RenderContext&) override;
@@ -1307,8 +1303,8 @@ public:
     // own, so that this one owns nothing. It is no branch: it never folds and is not rendered as
     // one
     IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue, bool noElse)
-        : m_testExpr(std::move(testExpr))
-        , m_altValue(std::move(altValue))
+        : m_testExpr(testExpr)
+        , m_altValue(altValue)
         , m_noElse(noElse)
     {
     }

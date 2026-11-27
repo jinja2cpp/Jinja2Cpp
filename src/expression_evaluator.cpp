@@ -43,12 +43,10 @@
 #include <memory>
 #include <new>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 using namespace std::string_literals;
@@ -996,7 +994,7 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
     auto narrow = AsStringView<char>(leftVal);
     auto formatted = narrow ? PythonPercentFormat(*narrow, rightVal, markup, prompt)
                             : PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal, markup, prompt);
-    InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
+    InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(formatted);
     formattedVal.SetMarkup(leftVal.IsMarkup());
     return formattedVal;
 }
@@ -1898,7 +1896,7 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
     return result;
 }*/
 
-bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee)
+bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee) // NOLINT(readability-function-cognitive-complexity): score 45, kept whole (task 0600)
 {
     const auto nodes = values.Nodes();
     if (const auto loopAttr = nodes.As<LoopAttrExpression>(m_valueRef); loopAttr && nodes[loopAttr].TryCallCycle(values, m_params, result))
@@ -2207,7 +2205,7 @@ InternalValue InvokeCallable(RenderContext& values, const Callable& callable, co
     TargetString resultStr =
         RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { callable.GetStatementCallable()(callParams, stream, values); });
     // A macro returns Markup when autoescape is on where it is called, at run time
-    InternalValue result(std::move(resultStr));
+    InternalValue result(resultStr);
     result.SetMarkup(values.IsAutoescape());
     return result;
 }

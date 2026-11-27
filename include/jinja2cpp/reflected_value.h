@@ -2,6 +2,7 @@
 #define JINJA2CPP_REFLECTED_VALUE_H
 
 #include <jinja2cpp/fwd.h> // IWYU pragma: export
+#include <jinja2cpp/value_ptr.h>
 #include "markup.h"
 #include "value.h"
 
@@ -669,7 +670,7 @@ template<typename T>
 struct Reflector<std::shared_ptr<T>>
 {
     // By value: an rvalue moves in, so the view may hold the last reference (docs/tasks/0487)
-    static auto Create(std::shared_ptr<T> val)
+    static auto Create(std::shared_ptr<T> val) // NOLINT(performance-unnecessary-value-param): the move below is the point
     {
         return jinja2::Reflector<T>::CreateFromPtr(std::move(val));
     }

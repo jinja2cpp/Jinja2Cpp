@@ -111,7 +111,7 @@ private:
     }
 
     template<bool flushEach>
-    void RenderNodes(OutStream& os, RenderContext& values)
+    void RenderNodes(OutStream& os, RenderContext& values) // NOLINT(readability-function-cognitive-complexity): score 30, kept whole (task 0600)
     {
         const auto& nodes = values.Nodes();
         const auto children = Children();

@@ -5,12 +5,9 @@
 
 #include <jinja2cpp/template_env.h>
 
-#include <exception>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <utility>
-#include <variant>
 
 namespace jinja2
 {

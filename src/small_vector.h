@@ -574,6 +574,7 @@ public:
         Base::operator=(other);
         return *this;
     }
+    // NOLINTNEXTLINE(bugprone-exception-escape): the length_error of a growth cannot happen, `other` already holds fewer than max_size elements
     SmallVector& operator=(SmallVector&& other) noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_assignable_v<T>)
     {
         if (this != &other)

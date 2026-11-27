@@ -14,6 +14,7 @@
 #include "undefined.h"
 #include "value_visitors.h"
 
+#include <cctype>
 #include <fmt/format.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
@@ -29,7 +30,6 @@
 #include <optional>
 #include <random>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <string_view>
@@ -662,7 +662,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     InternalValue values = CreateMapAdapter(std::move(variables));
     auto formatted = PythonPercentFormat(ApplyStringConverter(translated, [](auto str) { return ConvertString<std::string>(str); }), values, context.IsAutoescape(),
                                          context.GetRendererCallback()->GetPromptEscaper());
-    InternalValue result = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
+    InternalValue result = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(formatted);
     result.SetMarkup(context.IsAutoescape());
     return result;
 }

@@ -8,7 +8,6 @@
 #include "shared_owner.h"
 #include "template_impl.h"
 
-#include <jinja2cpp/config.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/value.h>
 

@@ -1,7 +1,6 @@
 #include "template_dict.h"
 
 #include "big_int.h"
-#include "contracts.h"
 #include "engine_errors.h"
 #include "host_object.h"
 #include "internal_value.h"
@@ -21,7 +20,6 @@
 #include <limits>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -115,7 +113,7 @@ template<typename T>
 void AppendBytes(std::string& out, T value)
 {
     char bytes[sizeof(T)];
-    std::memcpy(bytes, &value, sizeof(T));
+    std::memcpy(bytes, static_cast<const void*>(&value), sizeof(T));
     out.append(bytes, sizeof(T));
 }
 
