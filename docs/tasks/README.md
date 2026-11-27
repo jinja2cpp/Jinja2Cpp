@@ -647,7 +647,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0586](0586-closure-in-module-top-level-with-loses-outer-names.md) | A closure defined in a `with` at a module's top level reads the module's names as undefined on later calls | parity | low | open |
 | [0587](0587-set-erase-and-update-stay-linear.md) | The engine's set still spends O(n) per remove, pop and update | robustness | low | open |
 | [0588](0588-fold-budget-charges-big-int-work.md) | Charge the Load's fold budget for the size of big-integer work | robustness | low | open |
-| [0589](0589-ext-debug-extension.md) | `jinja2.ext.debug`: implement `{% debug %}` or record it as deliberate | parity | low | open |
-| [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | open |
+| [0589](0589-ext-debug-extension.md) | `jinja2.ext.debug`: implement `{% debug %}` or record it as deliberate | parity | low | done |
+| [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | done |
 | [0591](0591-cell-protocol-inductive-invariant.md) | Find the cell protocol's inductive invariant | robustness | low | open |
 | [0592](0592-load-reads-after-many-sets-quadratic.md) | Load: name reads after many `set`s in one body cost reads x sets | robustness | low | open |
