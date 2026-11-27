@@ -34,6 +34,10 @@ runs:
           done
           return 1
         }
+        # The runner image's packages.microsoft.com source began answering 403
+        # ("no longer signed") on 2026-11-27 and failed apt-get update; no
+        # package installed here comes from it, so drop it before updating.
+        { sudo grep -lsr 'packages.microsoft.com' /etc/apt/sources.list.d || true; } | xargs -r sudo rm -f
         apt_get update -qq
         apt_get install -y --no-install-recommends ninja-build
         case "$family" in
