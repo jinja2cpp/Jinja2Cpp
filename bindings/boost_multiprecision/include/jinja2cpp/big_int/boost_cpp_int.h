@@ -16,11 +16,14 @@
 
 #include <boost/multiprecision/cpp_int.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <new>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
@@ -200,6 +203,45 @@ inline BigIntStatus DivideTruncated(const BigIntBackend* /*self*/, void* quotien
         return BigIntStatus::Unsupported;
     }
 }
+
+inline BigIntStatus FromWords(const BigIntBackend* /*self*/, void* out, const uint32_t* words, size_t count, int sign) noexcept
+{
+    return Make(out, [words, count, sign] {
+        Int x;
+        // Least significant word first
+        boost::multiprecision::import_bits(x, words, words + count, 32, false);
+        if (sign < 0)
+        {
+            x = -x;
+        }
+        return x;
+    });
+}
+
+inline BigIntStatus ToWords(const BigIntBackend* /*self*/, const void* obj, uint32_t* out, size_t count) noexcept
+{
+    try
+    {
+        // export_bits writes the magnitude, least significant word first when msv_first is false
+        std::vector<uint32_t> words;
+        words.reserve(count);
+        boost::multiprecision::export_bits(Get(obj), std::back_inserter(words), 32, false);
+        if (words.size() != count)
+        {
+            return BigIntStatus::BadInput;
+        }
+        std::copy(words.begin(), words.end(), out);
+        return BigIntStatus::Ok;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return BigIntStatus::OutOfMemory;
+    }
+    catch (...)
+    {
+        return BigIntStatus::Unsupported;
+    }
+}
 } // namespace detail::boost_cpp_int
 
 //! The backend over `boost::multiprecision::cpp_int`, named "boost-cpp_int"
@@ -225,6 +267,8 @@ inline const BigIntBackend* BoostCppIntBackend() noexcept
         &impl::Subtract,
         &impl::Multiply,
         &impl::DivideTruncated,
+        &impl::FromWords,
+        &impl::ToWords,
     };
     return &backend;
 }

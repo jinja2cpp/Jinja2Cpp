@@ -1,6 +1,7 @@
 #include "../src/big_int.h"
 #include "../src/contracts.h"
 #include "../src/internal_value.h"
+#include "../src/recursion_guard.h"
 #include "big_int_toy_backend.h"
 #include "gtest/gtest.h"
 
@@ -404,7 +405,7 @@ TEST(BigIntToyBackend, EnvironmentChecksTheTable)
         EXPECT_EQ(toy, env.GetBigIntBackend());
         return !accepted;
     };
-    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.structSize = sizeof(BigIntBackend) - sizeof(b.divideTruncated); }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.structSize = static_cast<uint32_t>(offsetof(BigIntBackend, divideTruncated)); }));
     EXPECT_TRUE(rejected([](BigIntBackend& b) { b.version = 2; }));
     EXPECT_TRUE(rejected([](BigIntBackend& b) { b.objectSize = MaxBigIntObjectSize + 1; }));
     EXPECT_TRUE(rejected([](BigIntBackend& b) { b.objectAlign = 32; }));
@@ -520,6 +521,84 @@ TEST(BigIntToyBackend, FailuresOfTheBackend)
     EXPECT_THROW((void)tpl.RenderAsString(BigIntParams()), std::bad_alloc);
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ big * 3 }}", FailingBackend<BigIntStatus::TooLarge>()));
     EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ big + 1 }}", FailingBackend<BigIntStatus::Unsupported>()));
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+// Task 0543 P4: a backend with fromWords and toWords takes and gives a huge integer (past 14285 bits) as words, and a
+// huge result keeps no decimal form; a table without them, or one whose structSize ends before them, converts
+// through decimal text as before, with the same results
+TEST(BigIntToyBackend, HugeOperandsAndResultsGoThroughWords)
+{
+    // h has 14401 bits; (h + 1) * 3 and the like stay huge, (h * 2) // 2 - h is small again
+    const std::string hex = "1" + std::string(3599, '0') + "f";
+    const std::string source = "{% set h = s|int(base=16) %}{{ (h * 2) // 2 - h }}|{{ (h + 1) is odd }}|{{ ((h * 3) % 1000000007) }}|{{ (-h - 1).bit_length() }}|{{ '{:x}'.format(h + 1)[-3:] }}|{{ (h * 3) > h }}";
+    const auto render = [&source, &hex](const BigIntBackend* backend, auto charType) -> std::string {
+        using CharT = decltype(charType);
+        TemplateEnv env;
+        EXPECT_TRUE(env.SetBigIntBackend(backend));
+        std::conditional_t<std::is_same_v<CharT, char>, Template, TemplateW> tpl(&env);
+        const auto loaded = tpl.Load(std::basic_string<CharT>(source.begin(), source.end()));
+        EXPECT_TRUE(loaded.has_value());
+        const auto result = tpl.RenderAsString({ { "s", hex } });
+        if (!result.has_value())
+        {
+            return "error";
+        }
+        return std::string(result.value().begin(), result.value().end());
+    };
+    // From Python
+    const std::string expected = "0|False|939304124|14401|010|True";
+    big_int_toy::WordCalls() = 0;
+    const auto withWords = render(big_int_toy::Backend(), char{});
+    EXPECT_GT(big_int_toy::WordCalls(), 0);
+    EXPECT_EQ(withWords, render(big_int_toy::Backend(), wchar_t{}));
+    big_int_toy::WordCalls() = 0;
+    EXPECT_EQ(withWords, render(big_int_toy::DecimalOnlyBackend(), char{}));
+    EXPECT_EQ(withWords, render(big_int_toy::DecimalOnlyBackend(), wchar_t{}));
+    EXPECT_EQ(0, big_int_toy::WordCalls());
+    EXPECT_EQ(expected, withWords);
+
+    // A huge result made through toWords keeps only its words
+    {
+        const auto h = jinja2::IntegerFromDigits(hex, 16, false);
+        // A render's limits, none set, with the backend
+        const jinja2::Settings::Limits limits;
+        jinja2::RenderLimitsScope scope(&limits, big_int_toy::Backend());
+        const auto sum = jinja2::BigIntBinary(jinja2::BigIntOp::Add, jinja2::AsBigInt(h).value(), int64_t{ 1 });
+        const auto view = jinja2::AsBigInt(sum).value();
+        ASSERT_TRUE(view.IsHuge());
+        EXPECT_TRUE(view.InlineDecimal().empty());
+        EXPECT_EQ(14401U, jinja2::BitLength(view));
+    }
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+namespace
+{
+// A backend whose toWords reports words that are not the value's magnitude: a zero top word
+const BigIntBackend* ZeroTopWordBackend()
+{
+    static const BigIntBackend backend = [] {
+        BigIntBackend b = *big_int_toy::Backend();
+        b.toWords = [](const BigIntBackend*, const void*, uint32_t* out, size_t count) noexcept {
+            std::fill(out, out + count, 0U);
+            return BigIntStatus::Ok;
+        };
+        return b;
+    }();
+    return &backend;
+}
+} // namespace
+
+TEST(BigIntToyBackend, WordsThatDoNotMatchTheBitLengthFailTheRender)
+{
+    TemplateEnv env;
+    ASSERT_TRUE(env.SetBigIntBackend(ZeroTopWordBackend()));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ ((s|int(base=16)) + 1) is odd }}"));
+    const auto result = tpl.RenderAsString({ { "s", "1" + std::string(3600, '0') } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_NE(std::string::npos, result.error().ToString().find("big-integer backend 'toy-decimal' failed")) << result.error().ToString();
     EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 
@@ -952,6 +1031,50 @@ TEST(BigIntTemplate, StrDigitsConstantsFailTheLoad)
 // Task 0569: Jinja2 folds constants when it compiles, in code that never renders too, so the Load's fold check
 // computes them; without limits of the template's own it does under a budget (FoldBudget), past which a candidate
 // does not fold and its value is left to the render
+// Task 0588: in the fold check a big-integer product, power or division takes steps for its operands' words, so
+// that roots of big arithmetic spend the Load's steps as other work does. Thirty roots of ten products of 15850-bit
+// powers spend them, and the tuple-slice subscript after them, which needs more than a root's own steps to fold,
+// then fails the Load; the same roots on small powers do not. The 0588 template (a hundred roots of ten products of 31700-bit powers) took 7.5 s to load (Release)
+TEST(BigIntTemplate, FoldBudgetChargesBigIntWork)
+{
+    const auto loadError = [](const std::string& source) {
+        TemplateEnv env;
+        env.SetBigIntBackend(BoostCppIntBackend());
+        Template tpl(&env);
+        const auto loaded = tpl.Load(source);
+        if (!loaded)
+        {
+            return loaded.error().ToString().substr(0, 200);
+        }
+        const auto rendered = tpl.RenderAsString({});
+        return rendered ? rendered.value() : "render: " + rendered.error().ToString().substr(0, 200);
+    };
+    const auto roots = [](int count, const std::string& power) {
+        std::string term = "((" + power + " * " + power + ") % 7)";
+        std::string sum = term;
+        for (int idx = 1; idx != 10; ++idx)
+        {
+            sum += " + " + term;
+        }
+        std::string result;
+        for (int root = 0; root != count; ++root)
+        {
+            result += "{% if false %}{{ " + sum + " }}{% endif %}";
+        }
+        return result;
+    };
+    // A fold that needs more than a root's own steps, as in FoldBudgetBoundsDeadConstants
+    std::string chain = "(2 * 3)";
+    for (int filter = 0; filter != 300; ++filter)
+    {
+        chain += "|abs";
+    }
+    const std::string folding = "{{ ()[:, :] ~ (" + chain + ") }}";
+    EXPECT_EQ("6", loadError(roots(30, "3 ** 100") + folding));
+    EXPECT_NE(std::string::npos, loadError(roots(30, "3 ** 10000") + folding).find("']' expected"));
+    EXPECT_EQ("ok", loadError(roots(100, "3 ** 20000") + "ok"));
+}
+
 TEST(BigIntTemplate, FoldBudgetBoundsDeadConstants)
 {
     const auto loadError = [](const std::string& source, const Settings* settings = nullptr) {
