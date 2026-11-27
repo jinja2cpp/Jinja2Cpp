@@ -2113,7 +2113,7 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     }
     // Markup under autoescape, a plain str otherwise. The Markup is safe for HTML: in prompt mode it is neutralized
     // first (docs/tasks/0358)
-    InternalValue resultVal(result);
+    InternalValue resultVal(TargetString(std::move(result)));
     auto* callback = context.GetRendererCallback();
     if (const auto* prompt = callback->GetPromptEscaper(); prompt && context.IsAutoescape())
     {

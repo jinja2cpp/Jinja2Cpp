@@ -994,7 +994,7 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
     auto narrow = AsStringView<char>(leftVal);
     auto formatted = narrow ? PythonPercentFormat(*narrow, rightVal, markup, prompt)
                             : PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal, markup, prompt);
-    InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(formatted);
+    InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted)); // NOLINT(performance-move-const-arg): a real move into the variant (clang-tidy misreads the converting constructor), task 0600
     formattedVal.SetMarkup(leftVal.IsMarkup());
     return formattedVal;
 }
