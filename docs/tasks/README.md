@@ -432,7 +432,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | done |
 | [0361](0361-failed-call-top-view-reads-empty.md) | A failed module call's view of a module cell reads no items | lifetime | low | done |
 | [0362](0362-host-object-python-errors.md) | Host objects: Python's errors where generic filters guess | parity | low | done |
-| [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | in-progress |
+| [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | done |
 | [0364](0364-frozen-version-deep-validation.md) | Validate a frozen version deeply, from time to time | robustness | medium | open |
 | [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | done |
 | [0366](0366-bound-loop-method-repr-after-break.md) | A kept `loop.cycle` prints `?` for the length of a lazily filtered loop it broke out of | parity | low | done |
