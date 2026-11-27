@@ -3698,15 +3698,18 @@ void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopH
     }
 }
 
+namespace
+{
 // A context without the caller's names sees the engine's globals also in a module that leaves them out
 // (ModuleOptions::builtinGlobals), as Jinja2's include and import without context read the environment's
-static void RestoreBuiltins(RenderContext& context)
+void RestoreBuiltins(RenderContext& context)
 {
     if (const auto* callback = context.GetRendererCallback(); callback && !context.HasBuiltins())
     {
         context.SetBuiltins(&GetBuiltinGlobals(callback->GetSettings().extensions));
     }
 }
+} // namespace
 
 // Renders `tpl` for `include` in `innerContext`, made from `values`: the names it sets stay its own
 template<typename CharT>
