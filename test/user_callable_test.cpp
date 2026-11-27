@@ -2102,38 +2102,37 @@ TEST(CallSiteTest, LentGlobalsNameTheirPythonObjects)
 // (docs/tasks/0583)
 TEST(CallSiteTest, PythonGlobalIsTheTemplatesGlobal)
 {
-    const char* const names[][3] = { { "builtins", "range", "range" },       { "builtins", "dict", "dict" },
-                                     { "jinja2.utils", "Cycler", "cycler" }, { "jinja2.utils", "Joiner", "joiner" },
-                                     { "jinja2.utils", "Namespace", "namespace" }, { "jinja2.utils", "generate_lorem_ipsum", "lipsum" } };
+    const char* const names[][3] = { { "builtins", "range", "range" }, { "builtins", "dict", "dict" }, { "jinja2.utils", "Cycler", "cycler" }, { "jinja2.utils", "Joiner", "joiner" }, { "jinja2.utils", "Namespace", "namespace" }, { "jinja2.utils", "generate_lorem_ipsum", "lipsum" } };
     for (const auto& [module, qualname, global] : names)
     {
-        const auto callable = PythonGlobal(module, qualname);
-        ASSERT_TRUE(callable.has_value()) << qualname;
+        const auto found = PythonGlobal(module, qualname);
+        ASSERT_TRUE(found.has_value()) << qualname;
+        const UserCallable callable = found.value();
         for (const bool i18n : { false, true })
         {
             TemplateEnv env;
             env.GetSettings().extensions.i18n = i18n;
-            env.AddGlobal("g", *callable);
+            env.AddGlobal("g", callable);
             Template tpl(&env);
             const std::string source = std::string("{{ r is sameas ") + global + " }} {{ g is sameas " + global + " }} {{ [r] == [" + global + "] }}";
             ASSERT_TRUE(tpl.Load(source).has_value());
-            const auto result = tpl.RenderAsString({ { "r", *callable } });
+            const auto result = tpl.RenderAsString({ { "r", callable } });
             ASSERT_TRUE(result.has_value()) << result.error().ToString();
             EXPECT_EQ("True True True", result.value()) << qualname << " i18n " << i18n;
         }
     }
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ r(3)|list }} {{ d(a=1) }}").has_value());
-    const auto result = tpl.RenderAsString({ { "r", *PythonGlobal("builtins", "range") }, { "d", *PythonGlobal("builtins", "dict") } });
+    const UserCallable range = PythonGlobal("builtins", "range").value();
+    const auto result = tpl.RenderAsString({ { "r", range }, { "d", PythonGlobal("builtins", "dict").value() } });
     ASSERT_TRUE(result.has_value()) << result.error().ToString();
     EXPECT_EQ("[0, 1, 2] {'a': 1}", result.value());
     // No other names, and the host itself cannot run one
     EXPECT_FALSE(PythonGlobal("builtins", "list"));
     EXPECT_FALSE(PythonGlobal("jinja2.utils", "range"));
-    const auto range = PythonGlobal("builtins", "range");
     try
     {
-        range->callable(UserCallableParams());
+        range.callable(UserCallableParams());
         ADD_FAILURE() << "a host's call of the global runs";
     }
     catch (const ErrorInfo& error)

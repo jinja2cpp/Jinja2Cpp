@@ -24,6 +24,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
