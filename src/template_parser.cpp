@@ -2069,6 +2069,8 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
     exprParser.SetVolatile(m_volatile);
     // The filters of a filter block are in its frame, which Jinja2 checks even in an `if`
     CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
+    // Jinja2 parses the arguments in the frame of the body, which is no loop or block body
+    const NameResolver::NoBodyCalls noBodyCalls(m_names);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
     {
@@ -2113,6 +2115,7 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
     exprParser.SetVolatile(m_volatile);
     // Jinja2 checks the value of `autoescape` even in an `if`
     CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
+    const NameResolver::NoBodyCalls noBodyCalls(m_names);
     auto valueExpr = exprParser.ParseFullExpression(lexer);
     if (!valueExpr)
     {
@@ -2453,7 +2456,10 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     {
         m_names.AddReadOfName(fnName);
     }
-    NodeRef<Expression> call = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
+    const auto gettext = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
+    // Jinja2's gettext is a Call node, which derives the context like any other
+    m_names.NoteCall(gettext);
+    NodeRef<Expression> call = gettext;
     if (!newstyle)
     {
         CallParamsInfo markParams;

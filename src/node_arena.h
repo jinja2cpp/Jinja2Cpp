@@ -1180,6 +1180,24 @@ public:
         std::uninitialized_copy(items.begin(), items.end(), data);
         return ArenaSpan<T>(offset, static_cast<std::uint32_t>(items.size()));
     }
+    // A list as the offset of its first item and a count, for a node that keeps no more than that of a list
+    template<typename T>
+    static std::uint32_t OffsetOf(ArenaSpan<T> list)
+    {
+        return list.m_offset;
+    }
+    template<typename T>
+    static ArenaSpan<T> SpanAt(std::uint32_t offset, std::size_t count)
+    {
+        return count == 0 ? ArenaSpan<T>() : ArenaSpan<T>(offset, static_cast<std::uint32_t>(count));
+    }
+    // The first `count` items of a list the arena keeps, which share its storage
+    template<typename T>
+    static ArenaSpan<T> Prefix(ArenaSpan<T> list, std::size_t count)
+    {
+        JINJA2CPP_ASSERT(count <= list.m_size);
+        return ArenaSpan<T>(list.m_offset, static_cast<std::uint32_t>(count));
+    }
     // A copy of characters the arena keeps
     ArenaText MakeText(std::string_view text) { return MakeSpan(Span<const char>(text.data(), text.size())); }
     // The symbol of `name`, whose hash is `hash`: made on its first use, with the cache slot

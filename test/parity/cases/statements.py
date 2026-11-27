@@ -603,6 +603,8 @@ CASES = [
     ('macro_closure_nested_call_reads_args', '{% set ns = namespace(f=none) %}{% macro o(v) %}{% set y = 1 %}{% macro k() %}{% macro c() %}{{ v }}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}{{ ns.f() }}{% endmacro %}{{ o(3) }}|{{ ns.f() }}'),
     ('macro_closure_in_block', "{% set ns = namespace(f=none) %}{% set q = 1 %}{% block b %}{% set a = 'A' %}{% macro m() %}{{ a }}{{ q }}{{ h() }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% macro h() %}H{% endmacro %}{% set q = 2 %}|{{ ns.f() }}"),
     ('macro_closure_in_set_block_of_call', "{% set ns = namespace(f=none) %}{% macro o(a) %}{% set r %}{% macro m() %}{{ a }}{% endmacro %}{% set ns.f = m %}{% endset %}{% endmacro %}{{ o(1) }}|{{ ns.f() }}"),
+    # an unscoped block inside a scoped one reads the names of the loop around both (docs/tasks/0584)
+    ('block_in_scoped_block_reads_loop', '{% for i in [1] %}{% block x scoped %}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}'),
     ('macro_closure_in_scoped_block_of_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}'),
     # A kept closure keeps only the names it and the closures it sees read (0375): a namespace it
     # sets an attribute of, a sibling it calls, a parameter's default, varargs, a name set later

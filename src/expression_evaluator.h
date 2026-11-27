@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
+#include <limits>
 #include <memory>
 #include <new>
 #include <optional>
@@ -1152,6 +1153,16 @@ public:
     {
         refs(m_valueRef);
         m_params.VisitRefs(refs);
+        // The calls of a frame share prefixes of one list (NameResolver::ResolveFrameBodySets): the one with the
+        // longest checks its items, the others where their prefix lies, so that Seal stays linear in the sets
+        if (m_visitsBodySets)
+        {
+            refs(BodySets(), [](detail::RefChecker& checker, const SlotName& name) { checker(name.name); });
+        }
+        else
+        {
+            refs(BodySets());
+        }
     }
 
     template<typename Params>
@@ -1161,6 +1172,7 @@ public:
         , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))
         , m_readOnlyContainers(detail::IsReadOnlyDialect(detail::t_parseLimits.dialect))
         , m_sandboxed(detail::t_parseLimits.sandboxed)
+        , m_visitsBodySets(false)
     {
     }
 
@@ -1171,7 +1183,20 @@ public:
     [[nodiscard]] const ArenaCallParams& GetParams() const { return m_params; }
     // Calls fnVal with arguments already evaluated, as a call written in the template would
     static InternalValue CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params);
+    // The names `set` stored before the call in the loop or block body it is written in (NameResolver::NoteCall),
+    // which a host's callable can see (ContextNames::BodyVars)
+    // Kept as the list's offset and a count, as the call grows no larger than it was (docs/tasks/0118: arena packing)
+    // `visitItems`: this call's prefix is the frame's longest, whose items VisitRefs checks
+    void SetBodySets(ArenaSpan<SlotName> names, bool visitItems)
+    {
+        m_visitsBodySets = visitItems;
+        m_bodySetsAt = NodeArena::OffsetOf(names);
+        m_bodySetCount = static_cast<std::uint16_t>(std::min<std::size_t>(names.size(), std::numeric_limits<std::uint16_t>::max()));
+    }
+    [[nodiscard]] ArenaSpan<SlotName> BodySets() const { return NodeArena::SpanAt<SlotName>(m_bodySetsAt, m_bodySetCount); }
 private:
+    // Calls an expression callable with the call's body names published (host_call::CallSite)
+    InternalValue InvokeAtSite(RenderContext& values, const Callable& callable, const CallParams& callParams) const;
     InternalValue CallArbitraryFn(RenderContext& values, InternalValue fnVal);
     InternalValue CallCallable(RenderContext& values, const Callable& callable);
     void RenderCallable(OutStream& stream, RenderContext& values, const Callable& callable);
@@ -1185,12 +1210,17 @@ private:
 
     NodeRef<Expression> m_valueRef;
     ArenaCallParams m_params;
-    bool m_isNamedCallee = false;
+    std::uint32_t m_bodySetsAt = 0;
+    std::uint16_t m_bodySetCount = 0;
+    // Bits, with the three below, so that the call stays 48 bytes
+    bool m_isNamedCallee : 1;
     // Whether the template was loaded in a dialect whose list and dict methods that change their receiver are unsafe
     // (methods::IsReadOnlyContainers): read once at Load, so a render without the preset asks nothing (docs/tasks/0384)
-    bool m_readOnlyContainers = false;
+    bool m_readOnlyContainers : 1;
     // Loaded for an environment with a sandbox policy (ParseLimits::sandboxed)
-    bool m_sandboxed = false;
+    bool m_sandboxed : 1;
+    // SetBodySets' visitItems
+    bool m_visitsBodySets : 1;
 };
 
 class ExpressionFilter final : public ArenaNode

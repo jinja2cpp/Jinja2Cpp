@@ -5,7 +5,9 @@
 
 #include <jinja2cpp/value.h>
 
+#include <array>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace jinja2cpp_py
@@ -38,12 +40,16 @@ public:
     explicit ContextHandle(std::shared_ptr<CallLease> lease);
 
     // Which names a lookup sees: all those the template sees at the call, or those of Jinja2's Context.vars (the
-    // template's top level) or Context.parent (the render arguments and globals), jinja2::ContextView
+    // template's top level) or Context.parent (the render arguments and globals), or the names a `set` stored so far
+    // in the loop or block body the call is written in (Jinja2's _loop_vars and _block_vars), jinja2::ContextView; or,
+    // for a lookup only, Jinja2's resolve: those of the body, then of vars, then of parent
     enum class Part
     {
         All,
         Vars,
         Parent,
+        Body,
+        Resolve,
     };
     // The value of `name` the template sees at the call among `part`, or None with `found` false
     nb::object Lookup(const std::string& name, Part part, bool& found) const;
@@ -57,6 +63,9 @@ private:
     const jinja2::GenericMap& Live() const;
 
     std::shared_ptr<CallLease> m_lease;
+    // The views of Vars, Parent and Body, made at their first read: a view reads the render as it goes and expires
+    // with the call, so one per part serves every lookup of the call (each view allocates its mapper)
+    mutable std::array<std::optional<jinja2::Value>, 3> m_views;
 };
 
 void BindContext(nb::module_& module);
