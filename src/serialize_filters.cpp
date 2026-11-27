@@ -34,7 +34,6 @@
 #include <memory>
 #include <optional>
 #include <new>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1208,7 +1207,7 @@ private:
         m_out.push_back(close);
     }
 
-    void WriteValue(const InternalValue& value, size_t level)
+    void WriteValue(const InternalValue& value, size_t level) // NOLINT(readability-function-cognitive-complexity): score 43, kept whole (task 0600)
     {
         // Python's json.dumps raises RecursionError on values nested deeper than its stack
         CheckStack();
@@ -2046,7 +2045,7 @@ XmlAttrFilter::XmlAttrFilter(const FilterParams& params)
     ParseParams(args, params);
 }
 
-InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 26, kept whole (task 0600)
 {
     // Python's do_xmlattr calls d.items(): an undefined value fails whatever its policy, and
     // anything that is not a mapping has no items
@@ -2114,7 +2113,7 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     }
     // Markup under autoescape, a plain str otherwise. The Markup is safe for HTML: in prompt mode it is neutralized
     // first (docs/tasks/0358)
-    InternalValue resultVal(std::move(result));
+    InternalValue resultVal(result);
     auto* callback = context.GetRendererCallback();
     if (const auto* prompt = callback->GetPromptEscaper(); prompt && context.IsAutoescape())
     {

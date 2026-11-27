@@ -50,9 +50,10 @@ and `use_count` steps.
 
 **Next.** Without 0601 the count grows back: these hits got in through PRs that were green.
 
-**Progress.** The first PR (#1026) clears every hit outside the files that batch 14 PRs #1021 and #1025
-still owned: `borrowed_cells.cpp`, `internal_value.cpp`/`.h`, `render_context.h`, `serialize_filters.cpp`,
-`statements.cpp` and `value_visitors.h` (about 35 hits). A second PR takes them once those merge. Decisions:
+**Progress.** One PR (#1026) clears every hit. The files that batch 14 PRs #1021 and #1025 still owned
+(`borrowed_cells.cpp`, `internal_value.cpp`/`.h`, `render_context.h`, `serialize_filters.cpp`, `statements.cpp`,
+`value_visitors.h`, 37 hits) were done after the train that merged them (#1027). Decisions:
+Decisions:
 - `readability-function-cognitive-complexity`: NOLINT with the score, as 0061 left the rest; a split of a
   flat case dispatch would only scatter it.
 - `performance-unnecessary-value-param` on `Reflector<shared_ptr<T>>::Create`: a false positive, the
@@ -68,3 +69,8 @@ still owned: `borrowed_cells.cpp`, `internal_value.cpp`/`.h`, `render_context.h`
   SBOM hashes it); `test/.clang-tidy` leaves it out of the header filter.
 - Two fix-its cost instructions on Load/plain_text (+1.26%): a zero-filled `CharRange` and a `std::none_of`
   in `UsableEnd`. Both stay as they were, with a NOLINT.
+- The last 37 hits: eleven cognitive-complexity NOLINTs with the score; `exception-escape` on two `noexcept`
+  `BorrowedCells` functions that swallow an allocation failure by contract; three rvalue-reference and one
+  forwarding-reference parameter whose signature is the API (swap or read-only use), and the forward
+  declaration of `TemplateRenderer`, with a NOLINT each; the rest (`c_str`, `const auto*`, member
+  initializers, unused includes, a redundant declaration, two `std::move` of a value copied anyway) fixed.
