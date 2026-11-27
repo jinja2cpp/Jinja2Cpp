@@ -8,6 +8,7 @@
 
 #include "gtest/gtest.h"
 
+#include <cstddef>
 #include <string>
 
 using namespace jinja2;
@@ -99,4 +100,41 @@ INSTANTIATE_TEST_SUITE_P(Slots, NameResolverTest, testing::Values(
     NameResolverCase{ "{% macro m(a=b, b=1) %}{{ a }}{{ b }}{% endmacro %}", "a:0 b:1" },
     NameResolverCase{ "{% call(item) m() %}{{ item }}{{ x }}{% endcall %}", "item:0 x:-" }));
 // clang-format on
+
+// Name reads after many `set`s in one body load in time linear in the template, which may be untrusted
+// (docs/tasks/0592): each read searched the body's stores, 30000 sets and 30000 reads 900 million of them
+TEST(NameResolverLoadTest, ReadsAfterManySetsLookAtFewStores)
+{
+    const int count = 30000;
+    std::string source = "{% for x in xs %}";
+    for (int i = 0; i != count; ++i)
+    {
+        source += "{% set s" + std::to_string(i) + " = 1 %}";
+    }
+    for (int i = 0; i != count; ++i)
+    {
+        source += "{{ q }}";
+    }
+    source += "{% endfor %}";
+    NodeArena nodes;
+    TemplateEnv env;
+    detail::LoadSettings settings{ env.GetSettings() };
+    const std::string templateName = "test";
+    TemplateParser<char> parser(&source, settings, &env, templateName, nodes);
+    ASSERT_TRUE(parser.Parse().has_value());
+    // A read looks once in each frame around it
+    EXPECT_LE(parser.GetNames().StoresScanned(), std::size_t{ 4 } * count);
+}
+
+// With many stores, the index finds the same ones as the search (a body of more than 64 stores)
+TEST(NameResolverLoadTest, ManyStoresResolveAsFew)
+{
+    std::string sets;
+    for (int i = 0; i != 70; ++i)
+    {
+        sets += "{% set s" + std::to_string(i) + " = 1 %}";
+    }
+    const std::string body = "{{ x }}{% for y in x %}{{ y }}{{ s3 }}{% set y = 2 %}{{ y }}{% endfor %}{% macro m(a) %}{{ a }}{% set a = 1 %}{% endmacro %}{% macro n(b) %}{{ b }}{{ s5 }}{% endmacro %}";
+    EXPECT_EQ(ResolveNames("{% for x in xs %}{% set s3 = 1 %}" + body + "{% endfor %}"), ResolveNames("{% for x in xs %}" + sets + body + "{% endfor %}"));
+}
 #endif

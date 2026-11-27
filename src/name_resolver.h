@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_NAME_RESOLVER_H
 #define JINJA2CPP_SRC_NAME_RESOLVER_H
 
+#include "internal_value.h"
 #include "node_arena.h"
 #include "slot_frame.h"
 #include "small_vector.h"
@@ -228,6 +229,9 @@ public:
     [[nodiscard]] std::vector<std::string_view> UndeclaredNames(const NodeArena& nodes) const;
     // The name expressions made where a slot may be bound, in parse order (for the tests)
     [[nodiscard]] Span<const std::pair<NodeRef<ValueRefExpression>, FrameId>> Uses() const { return m_uses; }
+    // How many stores the resolution of slots looked at, for a check that it stays linear in the template
+    // (docs/tasks/0592)
+    [[nodiscard]] std::size_t StoresScanned() const { return m_storesScanned; }
 
 private:
     enum class Kind : std::uint8_t
@@ -287,7 +291,6 @@ private:
     // Gives a macro's arguments the first slots of its frame
     static void PlaceMacroArgs(NodeArena& nodes, Frame& frame);
     static void SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner, UnitLayout layout);
-    [[nodiscard]] bool IsStored(FrameId frame, std::string_view name) const;
     void DoAddStore(FrameId frame, std::string_view name, StoreKind kind, bool bySet);
     void NoteBodyCall(NodeRef<CallExpression> call);
     // Gives the calls NoteBodyCall found the names of their frame's `set`s before them
@@ -323,6 +326,11 @@ private:
         std::unordered_set<FrameName, FrameNameHash> specialReads;
     };
     [[nodiscard]] DeclarationIndex MakeDeclarationIndex(const NodeArena& nodes) const;
+    // The frames' stored names, by frame, for a body of many stores (ResolveSlots, docs/tasks/0592)
+    using StoreIndex = std::unordered_set<FrameName, FrameNameHash>;
+    // Whether `frame` stores `name`; `index` holds every store when not null
+    [[nodiscard]] bool IsStored(FrameId frame, std::string_view name, const StoreIndex* index) const;
+    [[nodiscard]] const StoreIndex* IndexStores(StoreIndex& index) const;
     // Whether `name`, read or stored in `frame`, is declared there: the stores of the frame
     // before `storeEnd` (an index of m_stores) and every store of the frames around it count, as
     // Jinja2 analyses a frame's body in order and the frames inside it after it (idtracking)
@@ -336,7 +344,11 @@ private:
     NodeRef<BindUndefinedStatement> MakeEntryBinding(FrameId frameId, NodeArena& nodes);
     void ResolveSlots(NodeArena& nodes);
     // The slot `ref` reads, Dynamic when it is looked up by name
-    [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frame) const;
+    [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frame, const StoreIndex* stores) const;
+    // Find in the frame of a macro's unit
+    [[nodiscard]] std::pair<SlotIndex, UnitId> FindInMacro(const NodeArena& nodes, const HashedName& name, FrameId frameId, const StoreIndex* stores) const;
+    static constexpr std::size_t NoSlot = ~std::size_t{ 0 };
+    [[nodiscard]] static std::size_t LoopSlotOf(const NodeArena& nodes, const HashedName& name, const Frame& loop, bool isFilter);
 
     // Inline room for a template with a few loops, so that most parses allocate nothing here
     SmallVector<Frame, 8> m_frames;
@@ -386,6 +398,8 @@ private:
     FrameId m_current = NoFrame;
     bool m_inBranch = false;
     bool m_hasSlots = false;
+    // StoresScanned
+    mutable std::size_t m_storesScanned = 0;
 };
 } // namespace v2
 } // namespace jinja2

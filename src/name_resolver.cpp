@@ -458,6 +458,24 @@ void NameResolver::ResolveEntryBindings(NodeArena& nodes)
     }
 }
 
+// A read looks for a store of its name in each frame around it, up to its slot: with many stores, in an index made
+// once, so that a body of many `set`s and reads loads in linear time (docs/tasks/0592); a few are searched where they
+// are, which allocates nothing. Returns `index`, filled, or null
+const NameResolver::StoreIndex* NameResolver::IndexStores(StoreIndex& index) const
+{
+    constexpr std::size_t indexedStores = 64;
+    if (m_stores.size() <= indexedStores || m_uses.empty())
+    {
+        return nullptr;
+    }
+    index.reserve(m_stores.size());
+    for (const auto& store : m_stores)
+    {
+        index.emplace(store.frame, store.name);
+    }
+    return &index;
+}
+
 // Only with a macro or a loop that binds slots: without one every name is a lookup, and no
 // unit needs a frame
 void NameResolver::ResolveSlots(NodeArena& nodes)
@@ -481,11 +499,14 @@ void NameResolver::ResolveSlots(NodeArena& nodes)
         }
     }
 
+    StoreIndex storeIndex;
+    const StoreIndex* index = IndexStores(storeIndex);
+
     // The names each macro's body reads, itself and not from a frame inside it, from the
     // slots of its own arguments, which every call binds (MacroStatement::SetReadsSlotsOnly)
     for (const auto& [ref, frameId] : m_uses)
     {
-        const auto [slot, unit] = Find(nodes, ref, frameId);
+        const auto [slot, unit] = Find(nodes, ref, frameId, index);
         if (!slot.IsDynamic())
         {
             nodes[ref].SetSlot(slot, unit);
@@ -576,19 +597,53 @@ void NameResolver::SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner,
     }
 }
 
-bool NameResolver::IsStored(FrameId frame, std::string_view name) const
+bool NameResolver::IsStored(FrameId frame, std::string_view name, const StoreIndex* index) const
 {
     const auto& stores = m_frames[frame];
-    return stores.hasStores && std::any_of(m_stores.begin() + stores.firstStore, m_stores.end(), [frame, name](const Store& store) { return store.frame == frame && store.name == name; });
+    if (!stores.hasStores)
+    {
+        return false;
+    }
+    if (index)
+    {
+        ++m_storesScanned;
+        return index->count({ frame, name }) != 0;
+    }
+    m_storesScanned += m_stores.size() - stores.firstStore;
+    return std::any_of(m_stores.begin() + stores.firstStore, m_stores.end(), [frame, name](const Store& store) { return store.frame == frame && store.name == name; });
+}
+
+// A macro's arguments are its frame's first slots; a name it does not bind is read from another unit, and one its
+// body stores from the macro's scope
+std::pair<SlotIndex, UnitId> NameResolver::FindInMacro(const NodeArena& nodes, const HashedName& name, FrameId frameId, const StoreIndex* stores) const
+{
+    const auto& frame = m_frames[frameId];
+    const auto* const pos = std::find_if(frame.binders.begin(), frame.binders.end(), [&name, &nodes](const SlotName& binder) { return binder.hash == name.hash && nodes.Text(binder.name) == name.name; });
+    if (pos == frame.binders.end() || IsStored(frameId, name.name, stores))
+    {
+        return { SlotIndex{}, UnitId{} };
+    }
+    return { SlotIndex{ static_cast<std::uint16_t>(pos - frame.binders.begin()) }, frame.unitId };
+}
+
+// The slot of `loop`'s frame its target `name` takes, past the loop's own for its filter's; NoSlot when it binds none
+std::size_t NameResolver::LoopSlotOf(const NodeArena& nodes, const HashedName& name, const Frame& loop, bool isFilter)
+{
+    const auto* const first = isFilter ? loop.binders.begin() + 1 : loop.binders.begin();
+    const auto* const pos = std::find_if(first, loop.binders.end(), [&name, &nodes](const SlotName& binder) { return binder.hash == name.hash && nodes.Text(binder.name) == name.name; });
+    if (pos == loop.binders.end())
+    {
+        return NoSlot;
+    }
+    return loop.offset + (isFilter ? loop.binders.size() - 1 : 0) + static_cast<std::size_t>(pos - loop.binders.begin());
 }
 
 // From the frame the name is read in out to its unit: a store of the name on the way makes
 // it a lookup, since the scope the store writes hides the slot; so does a frame where no
 // slot can be bound. The first loop or macro that binds the name has its slot
-std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId) const
+std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frameId, const StoreIndex* stores) const
 {
     const auto name = nodes[ref].GetHashedName(nodes);
-    const auto isName = [&name, &nodes](const SlotName& binder) { return binder.hash == name.hash && nodes.Text(binder.name) == name.name; };
     const std::pair<SlotIndex, UnitId> dynamic{ SlotIndex{}, UnitId{} };
     for (auto id = frameId; id != NoFrame; id = m_frames[id].parent)
     {
@@ -596,16 +651,9 @@ std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<
         const bool isFilter = frame.kind == Kind::Filter;
         if (frame.kind == Kind::Unit && frame.isMacro)
         {
-            // A macro's arguments are its frame's first slots; a name it does not bind is
-            // read from another unit, and one its body stores from the macro's scope
-            const auto* const pos = std::find_if(frame.binders.begin(), frame.binders.end(), isName);
-            if (pos == frame.binders.end() || IsStored(id, name.name))
-            {
-                return dynamic;
-            }
-            return { SlotIndex{ static_cast<std::uint16_t>(pos - frame.binders.begin()) }, frame.unitId };
+            return FindInMacro(nodes, name, id, stores);
         }
-        if (frame.kind == Kind::Unit || frame.kind == Kind::Dynamic || frame.isDynamicRegion || IsStored(id, name.name) || (isFilter && frame.loop == NoFrame))
+        if (frame.kind == Kind::Unit || frame.kind == Kind::Dynamic || frame.isDynamicRegion || IsStored(id, name.name, stores) || (isFilter && frame.loop == NoFrame))
         {
             return dynamic;
         }
@@ -616,15 +664,12 @@ std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<
         {
             continue;
         }
-        const auto* const first = isFilter ? loop.binders.begin() + 1 : loop.binders.begin();
-        const auto* const pos = std::find_if(first, loop.binders.end(), isName);
-        if (pos != loop.binders.end())
+        if (const auto index = LoopSlotOf(nodes, name, loop, isFilter); index != NoSlot)
         {
             if (!loop.isSlotted)
             {
                 return dynamic;
             }
-            const auto index = loop.offset + (isFilter ? loop.binders.size() - 1 : 0) + static_cast<std::size_t>(pos - loop.binders.begin());
             return { SlotIndex{ static_cast<std::uint16_t>(index) }, m_frames[loop.unit].unitId };
         }
         if (isFilter)
