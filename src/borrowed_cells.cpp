@@ -143,7 +143,7 @@ void BorrowedCell::TraceExport(bool live) const noexcept
 }
 #endif
 
-bool BorrowedCell::IsUnheld() const noexcept
+BorrowedCell::Holders BorrowedCell::FindHolders(bool byItems) const noexcept
 {
     // The registry's reference alone, for data that lives only as long as its adapters, and the
     // reference of the source's own link. The only other adapters of the data are the anchors of
@@ -152,34 +152,44 @@ bool BorrowedCell::IsUnheld() const noexcept
     // The data of the host, or of a global, can be lent again at any time: its cell stays
     if (m_frozen || !m_links.empty() || m_owner.expired())
     {
-        return false;
+        return Holders::Some;
     }
-    // The owner's count first: a cell of data the module's names hold stops there, without the
-    // accessor's two virtual calls (DropUnheld runs at the end of every call, docs/tasks/0519)
-    const auto soleOwner = [](const ValueObject* owner) { return owner && owner->use_count() == 1; };
-    const CellLink* link = nullptr;
-    // The host's copy of a generic container can lend it to a later call, which must see this
-    // call's writes (0049 P2): its cell stays while the host holds one (docs/tasks/0336)
-    bool lentAgain = true;
+    const auto find = [this, byItems](const auto& source) {
+        const auto* accessor = source.GetAccessor();
+        const ValueObject* owner = source.GetOwner();
+        if (!accessor || !owner)
+        {
+            return Holders::Some;
+        }
+        // The owner's count first: a cell of data the module's names hold stops there, without the
+        // accessor's two virtual calls (DropUnheld runs at the end of every call, docs/tasks/0519)
+        const bool sole = owner->use_count() == 1;
+        if (!sole && (!byItems || (m_heldSourceUses == owner->use_count() && m_heldUses == use_count() && m_heldItems == StorageSize())))
+        {
+            return Holders::Some;
+        }
+        // The host's copy of a generic container can lend it to a later call, which must see this
+        // call's writes (0049 P2): its cell stays while the host holds one (docs/tasks/0336)
+        if (accessor->MayBeLentAgain())
+        {
+            return Holders::Some;
+        }
+        // Every other link owns the cell: only the source's own adapter reads it
+        const CellLink* link = accessor->GetCellLink();
+        const size_t links = link && link->m_cell == this ? 2U : 1U;
+        if (sole && use_count() == links)
+        {
+            return Holders::None;
+        }
+        return byItems && IsHeldByItsItems(*owner, links) ? Holders::ItsItems : Holders::Some;
+    };
     if (m_isList)
     {
-        if (auto list = AsList(m_source); list && list->GetAccessor() && soleOwner(list->GetOwner()))
-        {
-            link = list->GetAccessor()->GetCellLink();
-            lentAgain = list->GetAccessor()->MayBeLentAgain();
-        }
+        auto list = AsList(m_source);
+        return list ? find(*list) : Holders::Some;
     }
-    else if (auto map = AsMap(m_source); map && map->GetAccessor() && soleOwner(map->GetOwner()))
-    {
-        link = map->GetAccessor()->GetCellLink();
-        lentAgain = map->GetAccessor()->MayBeLentAgain();
-    }
-    if (lentAgain)
-    {
-        return false;
-    }
-    // Every other link owns the cell: only the source's own adapter reads it
-    return use_count() == (link && link->m_cell == this ? 2U : 1U);
+    auto map = AsMap(m_source);
+    return map ? find(*map) : Holders::Some;
 }
 
 bool BorrowedCell::OwnsItemsAlone() const noexcept
@@ -528,7 +538,7 @@ bool BorrowedCells::DropUnheldOnce(bool walk) noexcept
     size_t count = 0;
     for (const auto& [identity, cell] : *m_cells)
     {
-        count += cell->IsUnheld() ? 1U : 0U;
+        count += cell->FindHolders(walk) != BorrowedCell::Holders::Some ? 1U : 0U;
     }
     if (count == 0)
     {
@@ -550,10 +560,19 @@ bool BorrowedCells::DropUnheldOnce(bool walk) noexcept
     // (docs/tasks/0336): a cell that became unheld since the count waits for the next pass
     for (auto entry = m_cells->begin(); entry != m_cells->end();)
     {
-        if (dropped.size() != count && entry->second->IsUnheld())
+        const auto holders = dropped.size() != count ? entry->second->FindHolders(walk) : BorrowedCell::Holders::Some;
+        if (holders != BorrowedCell::Holders::Some)
         {
+            // Only the walk below reaches a cell its own items hold, through the links of its items'
+            // adapters, which pass the collector a frozen cell alone (CellLink::TraverseFrozen); nothing
+            // else reads it, nor writes it again
+            if (holders == BorrowedCell::Holders::ItsItems)
+            {
+                entry->second->m_frozen = true;
+            }
             JINJA2CPP_CELL_TRACE_EVENT("drop", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, entry->second.get()),
-                                       Trace::Links("links", entry->second->m_links.data(), entry->second->m_links.size()));
+                                       Trace::Links("links", entry->second->m_links.data(), entry->second->m_links.size()),
+                                       Trace::Num("items", holders == BorrowedCell::Holders::ItsItems ? 1 : 0));
             dropped.push_back(entry->second);
             entry = m_cells->erase(entry);
         }
@@ -984,6 +1003,95 @@ void ForEachItem(const InternalValue& container, const Fn& fn)
     }
 }
 } // namespace
+
+bool BorrowedCell::IsHeldByItsItems(const ValueObject& source, size_t links) const noexcept
+{
+    // A value the host keeps that shares the storage (CallExports::Pin) reads the items: they are not the
+    // cell's alone
+    const auto* retired = detail::InternalValueAccess::Object(m_retired);
+    if (!m_object || m_object->use_count() != 1 || (retired && retired->use_count() != 1))
+    {
+        return false;
+    }
+    // The adapters of the items attached to this cell: an adapter's own references, and the links
+    // (an adapter holds one; a block of item adapters holds one for each slot)
+    struct Attached
+    {
+        const ValueObject* owner;
+        size_t uses;
+    };
+    SmallVector<Attached, 4> owners;
+    SmallVector<const CellLink*, 4> attached;
+    size_t sourceUses = 1;
+    bool foreign = false;
+    const auto visit = [&](const InternalValue& item) {
+        const ValueObject* owner = nullptr;
+        const CellLink* link = nullptr;
+        if (auto list = AsList(item))
+        {
+            owner = list->GetOwner();
+            link = list->GetAccessor() ? list->GetAccessor()->GetCellLink() : nullptr;
+        }
+        else if (auto map = AsMap(item))
+        {
+            owner = map->GetOwner();
+            link = map->GetAccessor() ? map->GetAccessor()->GetCellLink() : nullptr;
+        }
+        if (owner == &source)
+        {
+            ++sourceUses;
+            return;
+        }
+        if (!owner || !link || link->m_cell != this)
+        {
+            return;
+        }
+        if (!link->Owns())
+        {
+            foreign = true;
+            return;
+        }
+        try
+        {
+            const auto known = std::find_if(owners.begin(), owners.end(), [owner](const Attached& entry) { return entry.owner == owner; });
+            if (known == owners.end())
+            {
+                owners.push_back(Attached{ owner, 1 });
+            }
+            else
+            {
+                ++known->uses;
+            }
+            if (std::find(attached.begin(), attached.end(), link) == attached.end())
+            {
+                attached.push_back(link);
+            }
+        }
+        catch (const std::bad_alloc&)
+        {
+            // Out of memory: the cell stays, as a cell something else holds does
+            foreign = true;
+        }
+    };
+    ForEachItem(m_storage, visit);
+    ForEachItem(m_retired, visit);
+    const bool alone = !foreign && source.use_count() == sourceUses && use_count() == links + attached.size() && std::all_of(owners.begin(), owners.end(), [](const Attached& entry) { return entry.owner->use_count() == entry.uses; });
+    if (!alone)
+    {
+        // Not again while the counts stay (FindHolders): a module that keeps many values walks none of them at each call's end
+        m_heldSourceUses = static_cast<uint32_t>(source.use_count());
+        m_heldUses = use_count();
+        m_heldItems = StorageSize();
+    }
+    return alone;
+}
+
+uint32_t BorrowedCell::StorageSize() const noexcept
+{
+    const TemplateDict* dict = m_isList ? nullptr : m_map->GetMutableItems();
+    const size_t size = m_isList ? m_items->size() : (dict ? dict->size() : 0U);
+    return static_cast<uint32_t>(size);
+}
 
 void CallExports::Record(const CellTable& table)
 {

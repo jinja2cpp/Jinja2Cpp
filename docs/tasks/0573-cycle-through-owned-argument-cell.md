@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: claude/project-thread-5hdynk (batch 14 A)
 priority: medium
 area: robustness
 depends: [0336, 0402]
@@ -29,3 +30,16 @@ stays live. Model the candidate step in CellProtocol.tla's `DropUnheld` (a cycle
 
 **Done when** the repro's token count stays bounded for host maps and owned JSON documents, with a
 test for each (the JSON one as a `selfref` row of `ModuleCallsOfAnOwnedDocument`'s expiry check).
+
+**Resolution (batch 14 A).** `BorrowedCell::FindHolders` (was `IsUnheld`) answers `ItsItems` when, in
+the end-of-call `DropUnheld(true)`, the only extra references to the source adapter and to the cell come
+from the items of the cell's own storage (and retired storage), which nothing else shares: each counted
+adapter's references are all items of the cell, and each attached link owns the cell. Such a cell
+leaves the table frozen, so the walk from its storage (`CollectFrom`) reaches it through the items'
+links and frees the cycle. A walk that finds other holders stores the counts it saw, and the cell is not
+walked again until one of them (source, cell, item count) changes, so kept cells cost no item walk per
+call. Only direct items count: a cycle through a nested container (`d.x = [d]`) still stays until the
+module goes. Model: `Unheld` in CellProtocol.tla allows links only the cell reaches and drops such a
+cell frozen (vacuous in the model, which has one adapter per call); the trace's `drop` event carries
+`items` and `CellRules!MayDrop` takes it. Tests: `BorrowedCellsSingle.ModuleCallFreesACycleThroughTheCellOfAFreshArgument`
+(host map and list), a `selfref` row in `ModuleCallsOfAnOwnedDocument`.

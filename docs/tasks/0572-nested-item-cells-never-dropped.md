@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: claude/project-thread-5hdynk (batch 14 A)
 priority: medium
 area: robustness
 depends: [0336, 0402]
@@ -35,3 +36,14 @@ holder keeps; then the rows run for every binding. Check the 0336 model (`FixGen
 
 **Done when** a fresh argument per call whose nested items a macro writes leaves no cell after the
 call, for generic containers and JSON without identities, with the conformance rows unskipped.
+
+**Resolution (batch 14 A).** `WithOwner` keeps the owner and the nested container in the deleter of a
+shared pointer that owns nothing (`LentItemHolder`, one allocation as before), so
+`AccessorHasOtherOwners` finds the holder from the item's aliasing accessor with `std::get_deleter` and
+asks the nested container itself: the item's copies share the alias, and the nested accessor's own
+owners tell whether anything else can hand it out. `HasUnheldIdentity` keeps the old test, so a nested
+JSON value keyed by a node identity stays call-scoped (the "related gap" above is not changed).
+Tests: `ModuleCallsOfAnOwnedDocument`'s expiry rows now run for every binding (they failed for the toy
+traits before), `BorrowedCellsSingle.ModuleCallFreesTheCellOfANestedItemOfAGenericArgument`.
+Left: a reflected `shared_ptr<T>` is lent over the host-side aliasing holder of `Reflector::CreateFromPtr`,
+which still counts as lent again (docs/tasks/0593).

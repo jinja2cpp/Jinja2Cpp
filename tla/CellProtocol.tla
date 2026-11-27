@@ -901,15 +901,17 @@ StoreNs(t, a) ==
     /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, hkeep, lag,
                    lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
 
-\* BorrowedCell::IsUnheld: only the registry holds the cell, only the cell holds its source,
-\* and only the source is attached
+\* BorrowedCell::FindHolders: only the registry holds the cell, only the cell holds its source,
+\* and only the source is attached, or an adapter only the cell reaches: an item of its own storage
+\* (`d.update(self=d)`, Holders::ItsItems, docs/tasks/0573). Such a cell drops frozen, so that the
+\* collector's walk from its storage reaches it through the item's link
 Unheld(c) ==
     LET R == Close(RootsExcept(c))
         s == cl[c].source
     IN /\ cl[c].owned /\ ~cl[c].frozen /\ s # 0
        /\ <<"c", c>> \notin R
        /\ (DropRule # "nosource") => <<"a", s>> \notin R
-       /\ (DropRule # "nolinks") => cl[c].links \subseteq {s}
+       /\ (DropRule # "nolinks") => \A a \in cl[c].links \ {s} : <<"a", a>> \notin R
        \* 0336: the host keeps no copy of the generic container, so it cannot lend it again
        /\ (DropRule # "nohostcopy") => ~hkeep[cl[c].idn]
 
@@ -923,7 +925,10 @@ DropUnheld ==
        ELSE \/ \E c \in cand :
                \* Out of the table first, then the source goes
                /\ rg' = [rg EXCEPT ![ModReg].tbl[cl[c].idn] = 0]
-               /\ cl' = [cl EXCEPT ![c].inTable = FALSE, ![c].source = 0]
+               \* Held by its own items: the cell freezes, its links own it (BorrowedCells::DropUnheldOnce)
+               /\ LET byItems == cl[c].links \ {cl[c].source} # {}
+                  IN cl' = [cl EXCEPT ![c].inTable = FALSE, ![c].source = 0, ![c].frozen = byItems,
+                                      ![c].links = IF byItems THEN {} ELSE @]
                /\ live' = live - 1
                /\ dirty' = TRUE
                \* A later call that is lent the same data would miss this cell's writes

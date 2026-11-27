@@ -1331,6 +1331,59 @@ TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfAGenericItemOfAnArgument)
     EXPECT_EQ(1, mapToken.use_count());
 }
 
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfANestedItemOfAGenericArgument)
+{
+    // 0572: a nested list of a fresh reflected struct, read through the struct and written. The struct
+    // lends it over a holder that keeps the struct alive (WithOwner): nothing else holds the list's
+    // accessor, so nothing can lend it again, and its cell goes once the host let go, not one per call.
+    // The struct's map field (`d.innerStruct`, a shared_ptr) is reflected over an aliasing accessor of
+    // the host's kind, which may be lent again: its cell stays, as for such an argument (docs/tasks/0593)
+    auto mapToken = std::make_shared<TestInnerStruct>();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(d) %}{% set l = d.innerStructList %}{% set _ = l.append(1) %}"
+                           "{% set _ = d.innerStructList.append(2) %}{{ l|length }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 4; ++i)
+    {
+        {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ FreshGenericMap(mapToken) };
+            EXPECT_EQ("1", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+        }
+        // This call's struct, and at most the one before, whose nested cells the parent's cell held: they go a
+        // call later, not one more for each call
+        EXPECT_GE(3, mapToken.use_count());
+    }
+    module = TemplateModule();
+    EXPECT_EQ(1, mapToken.use_count());
+}
+
+TEST(BorrowedCellsSingle, ModuleCallFreesACycleThroughTheCellOfAFreshArgument)
+{
+    // 0573: the macro writes the argument into itself, so the item `self` is an adapter of the same data
+    // attached to the cell: only the cell's own items hold it once the call ends, and it goes with them
+    // rather than stay in the module's registry until the module goes
+    auto token = std::make_shared<int>(0);
+    const UserCallable counted([token](const UserCallableParams&) { return Value(); }, {});
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro selfref(d, f) %}{% set _ = d.update(self=d, f=f) %}{{ d.self.a }}{% endmacro %}"
+                           "{% macro selflist(l, f) %}{% set _ = l.append(l) %}{% set _ = l.append(f) %}{{ l|length }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 50; ++i)
+    {
+        UserCallableParams callParams;
+        // Value(...): some compilers take a braced ValuesList holding one ValuesMap for a copy of it
+        callParams.extraPosArgs = ValuesList{ Value(ValuesMap{ { "a", ValuesList{ 0 } } }), Value(counted) };
+        EXPECT_EQ("[0]", module.exports["selfref"].As<UserCallable>().callable(callParams).AsString());
+        UserCallableParams listParams;
+        listParams.extraPosArgs = ValuesList{ Value(ValuesList{ 0 }), Value(counted) };
+        EXPECT_EQ("3", module.exports["selflist"].As<UserCallable>().callable(listParams).AsString());
+    }
+    EXPECT_GT(8, token.use_count());
+    module = TemplateModule();
+    EXPECT_EQ(2, token.use_count());
+}
+
 TEST(BorrowedCellsSingle, ModuleKeepsTheCellOfAGenericListTheHostLendsAgain)
 {
     // 0336: the host keeps its list and lends it to each call, so each call sees the earlier

@@ -362,9 +362,10 @@ Drop ==
        IN /\ Check([TableAgrees |-> c \notin TblCells(E.reg),
                     \* The code lists a global's links; the others own the cell
                     LinksAgree |-> AsSet(E.links) # C.held,
-                    DropRule |-> ~MayDrop(C.owned, C.frozen, C.links, C.src),
+                    DropRule |-> ~MayDrop(C.owned, C.frozen, C.links, C.src, E.items = 1),
                     NoCrossThreadWrite |-> ~WriterOk(E.reg, E.t)])
-          /\ Next1(/\ cl' = [cl EXCEPT ![c].inTable = FALSE]
+          \* A cell its own items hold drops frozen (0573): the collector's walk from its storage frees it
+          /\ Next1(/\ cl' = [cl EXCEPT ![c].inTable = FALSE, ![c].frozen = (E.items = 1)]
                    /\ rg' = [rg EXCEPT ![E.reg].tbl = [i \in DOMAIN @ |-> IF @[i] = c THEN 0 ELSE @[i]]]
                    /\ live' = live - 1)
     /\ UNCHANGED <<lk, exr, promoted>>
