@@ -1032,7 +1032,7 @@ public:
         {
             return;
         }
-        auto* const known = std::find_if(m_owners.begin(), m_owners.end(), [owner = owner](const Attached& entry) { return entry.owner == owner; });
+        auto* const known = std::find_if(m_owners.begin(), m_owners.end(), [wanted = owner](const Attached& entry) { return entry.owner == wanted; });
         if (known == m_owners.end())
         {
             // Many adapters of one cell's data in its own items: the cell stays, rather than a walk of each
