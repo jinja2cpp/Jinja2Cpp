@@ -22,9 +22,9 @@ namespace jinja2
 {
 inline namespace v2
 {
-class BindUndefinedStatement;
+class BindUndefinedStatement; // NOLINT(cppcoreguidelines-virtual-class-destructor): forward declaration of a final class
 class CallExpression;
-class ForStatement;
+class ForStatement; // NOLINT(cppcoreguidelines-virtual-class-destructor): forward declaration of a final class
 class IRendererBase;
 class MacroStatement;
 class ValueRefExpression;

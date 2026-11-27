@@ -316,9 +316,9 @@ NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, 
     }
     std::sort(stores.begin(), stores.end(), [](const EntryCandidate& lhs, const EntryCandidate& rhs) { return std::tie(lhs.hash, lhs.order) < std::tie(rhs.hash, rhs.order); });
     SmallVector<EntryCandidate, 4> candidates;
-    for (auto pos = stores.begin(); pos != stores.end(); ++pos)
+    for (auto* pos = stores.begin(); pos != stores.end(); ++pos)
     {
-        auto run = pos;
+        auto* run = pos;
         while (run != stores.begin() && std::prev(run)->hash == pos->hash)
         {
             --run;
@@ -786,7 +786,7 @@ std::vector<std::string_view> NameResolver::UndeclaredNames(const NodeArena& nod
     std::vector<std::string_view> names;
     const auto index = MakeDeclarationIndex(nodes);
     // The stores before a read are those made before it: m_stores is in parse order
-    auto storeEnd = m_stores.begin();
+    const auto* storeEnd = m_stores.begin();
     for (std::size_t idx = 0; idx < m_reads.size(); ++idx)
     {
         storeEnd = std::find_if(storeEnd, m_stores.end(), [idx](const Store& store) { return store.readsBefore > idx; });

@@ -4,7 +4,6 @@
 #include "engine_errors.h"
 #include "host_object.h"
 #include "internal_value.h"
-#include "markup.h"
 #include "render_context.h"
 #include "value_visitors.h"
 
@@ -12,13 +11,11 @@
 
 #include <charconv>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
-#include <variant>
 
 namespace jinja2
 {

@@ -13,7 +13,6 @@
 #include <climits>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <functional>
 #include <new>
 #include <optional>
@@ -476,7 +475,7 @@ struct CountedAllocator
         return static_cast<T*>(detail::AllocateCountedBlock(count * sizeof(T)));
     }
     // NOLINTNEXTLINE(readability-identifier-naming)
-    void deallocate(T* ptr, std::size_t /*count*/) noexcept { detail::FreeCountedBlock(ptr); }
+    void deallocate(T* ptr, std::size_t /*count*/) noexcept { detail::FreeCountedBlock(static_cast<void*>(ptr)); }
 
     template<typename U>
     bool operator==(const CountedAllocator<U>& /*other*/) const noexcept

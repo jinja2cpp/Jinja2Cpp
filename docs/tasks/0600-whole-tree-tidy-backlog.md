@@ -50,17 +50,21 @@ and `use_count` steps.
 
 **Next.** Without 0601 the count grows back: these hits got in through PRs that were green.
 
-**Progress.** The first PR (this branch) clears most of the 304 hits, in every file no open PR owned at
-the time, and leaves the rest in `big_int.cpp`, `borrowed_cells.cpp`, `cycle_collector.h`, `internal_value.*`,
-`name_resolver.*`, `recursion_guard.*`, `render_context.h`, `serialize_filters.cpp`, `statements.cpp`, `template_impl.h`,
-`template_parser.cpp`, `testers.cpp`, `undefined.cpp`, `value_methods.cpp` and `value_visitors.h`, which
-batch 14 PRs rewrote at the same time. A second PR takes them once those merge. Decisions:
-- `readability-function-cognitive-complexity` (21 here): NOLINT with the score, as 0061 left the rest;
-  a split of a flat case dispatch would only scatter it.
+**Progress.** The first PR (#1026) clears every hit outside the files that batch 14 PRs #1021 and #1025
+still owned: `borrowed_cells.cpp`, `internal_value.cpp`/`.h`, `render_context.h`, `serialize_filters.cpp`,
+`statements.cpp` and `value_visitors.h` (about 35 hits). A second PR takes them once those merge. Decisions:
+- `readability-function-cognitive-complexity`: NOLINT with the score, as 0061 left the rest; a split of a
+  flat case dispatch would only scatter it.
 - `performance-unnecessary-value-param` on `Reflector<shared_ptr<T>>::Create`: a false positive, the
   by-value parameter is moved into the view (0487).
 - `bugprone-exception-escape` on `Value::GetIf`: `As` calls `DemoteMarkup` unchecked and relies on the
-  `std::get` throw, so the throw cannot go; `GetIf` checks the alternative first. NOLINT with the reason.
+  `std::get` throw, so the throw cannot go; `GetIf` checks the alternative first. On the `noexcept` module
+  helpers in `template_impl.h` and `SmallVector`'s move assignment the only throw found is `length_error`
+  of a list that size, which cannot happen. Two `expected::value()` calls behind a check became `*`.
 - `bugprone-signed-char-misuse`: the lexer and parser read units through `char_class::CodeUnit`, which
   widens a narrow unit through `unsigned char`. In `BigInt(I)` a unary plus promotes first, keeping the
   sign extension the negation below needs.
+- `modernize-raw-string-literal` (77) in the generated `test/json_test_suite_cases.inc`: not hand-edited (the
+  SBOM hashes it); `test/.clang-tidy` leaves it out of the header filter.
+- Two fix-its cost instructions on Load/plain_text (+1.26%): a zero-filled `CharRange` and a `std::none_of`
+  in `UsableEnd`. Both stay as they were, with a NOLINT.
