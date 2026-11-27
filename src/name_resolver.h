@@ -327,6 +327,7 @@ private:
     using StoreIndex = std::unordered_set<FrameName, FrameNameHash>;
     // Whether `frame` stores `name`; `index` holds every store when not null
     [[nodiscard]] bool IsStored(FrameId frame, std::string_view name, const StoreIndex* index) const;
+    [[nodiscard]] const StoreIndex* IndexStores(StoreIndex& index) const;
     // Whether `name`, read or stored in `frame`, is declared there: the stores of the frame
     // before `storeEnd` (an index of m_stores) and every store of the frames around it count, as
     // Jinja2 analyses a frame's body in order and the frames inside it after it (idtracking)

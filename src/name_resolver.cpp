@@ -458,6 +458,24 @@ void NameResolver::ResolveEntryBindings(NodeArena& nodes)
     }
 }
 
+// A read looks for a store of its name in each frame around it, up to its slot: with many stores, in an index made
+// once, so that a body of many `set`s and reads loads in linear time (docs/tasks/0592); a few are searched where they
+// are, which allocates nothing. Returns `index`, filled, or null
+const NameResolver::StoreIndex* NameResolver::IndexStores(StoreIndex& index) const
+{
+    constexpr std::size_t indexedStores = 64;
+    if (m_stores.size() <= indexedStores || m_uses.empty())
+    {
+        return nullptr;
+    }
+    index.reserve(m_stores.size());
+    for (const auto& store : m_stores)
+    {
+        index.emplace(store.frame, store.name);
+    }
+    return &index;
+}
+
 // Only with a macro or a loop that binds slots: without one every name is a lookup, and no
 // unit needs a frame
 void NameResolver::ResolveSlots(NodeArena& nodes)
@@ -481,21 +499,8 @@ void NameResolver::ResolveSlots(NodeArena& nodes)
         }
     }
 
-    // A read looks for a store of its name in each frame around it, up to its slot: with many stores, in an index
-    // made once, so that a body of many `set`s and reads loads in linear time (docs/tasks/0592); a few are searched
-    // where they are, which allocates nothing
-    constexpr std::size_t indexedStores = 64;
     StoreIndex storeIndex;
-    const StoreIndex* index = nullptr;
-    if (m_stores.size() > indexedStores && !m_uses.empty())
-    {
-        storeIndex.reserve(m_stores.size());
-        for (const auto& store : m_stores)
-        {
-            storeIndex.emplace(store.frame, store.name);
-        }
-        index = &storeIndex;
-    }
+    const StoreIndex* index = IndexStores(storeIndex);
 
     // The names each macro's body reads, itself and not from a frame inside it, from the
     // slots of its own arguments, which every call binds (MacroStatement::SetReadsSlotsOnly)
