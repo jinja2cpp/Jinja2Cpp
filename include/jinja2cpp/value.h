@@ -19,7 +19,6 @@
 #include <limits>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -791,7 +790,7 @@ public:
     }
     //! Mutable \ref GetIf
     template<typename T>
-    T* GetIf() noexcept
+    T* GetIf() noexcept // NOLINT(bugprone-exception-escape): DemoteMarkup's std::get runs only after holds_alternative, so it cannot throw here (As calls it unchecked, to throw)
     {
         if constexpr (IsWrapped<T>::value)
         {
@@ -887,7 +886,7 @@ public:
     auto getPtr() { return GetRaw<T>(); }
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: GetIf")
-    auto getPtr() const { return GetRaw<T>(); }
+    [[nodiscard]] auto getPtr() const { return GetRaw<T>(); }
     JINJA2CPP_DEPRECATED("jinja2cpp-2: IsNone")
     [[nodiscard]] bool isEmpty() const { return IsNone(); }
 
@@ -944,7 +943,7 @@ private:
         return GetRawFrom<Value, T>(*this);
     }
     template<typename T>
-    auto GetRaw() const noexcept
+    [[nodiscard]] auto GetRaw() const noexcept
     {
         return GetRawFrom<const Value, T>(*this);
     }

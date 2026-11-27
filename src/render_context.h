@@ -62,7 +62,7 @@ template<typename CharT>
 class TemplateImpl;
 
 struct BlocksStack;
-class TemplateRenderer;
+class TemplateRenderer; // NOLINT(cppcoreguidelines-virtual-class-destructor): forward declaration, the class is defined elsewhere (task 0600)
 class ImportedModule;
 class RenderContext;
 namespace detail
@@ -501,7 +501,7 @@ private:
     // Raw storage: only the scopes below m_size are constructed
     struct Chunk
     {
-        Chunk() noexcept {}
+        Chunk() noexcept {} // NOLINT(cppcoreguidelines-pro-type-member-init): raw storage, filled by Push
         ~Chunk() {}
         Chunk(const Chunk&) = delete;
         Chunk(Chunk&&) = delete;
@@ -773,7 +773,7 @@ public:
 
     // Enters a scope made of `map`, names and all: the scope a loop kept from its last run
     // (docs/tasks/0133)
-    ScopeRef EnterScope(InternalValueMap&& map)
+    ScopeRef EnterScope(InternalValueMap&& map) // NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved): swapped into the scope, which is a move (task 0600)
     {
         auto& scope = m_scopes.Push();
         // A map without storage is empty: the pushed scope is already what it holds. A swap of
@@ -2147,7 +2147,7 @@ private:
 };
 
 template<typename Key>
-InternalValue& ScopeRef::operator[](Key&& name)
+InternalValue& ScopeRef::operator[](Key&& name) // NOLINT(cppcoreguidelines-missing-std-forward): only read as a string_view (task 0600)
 {
     // Hashed once, for the scope and for the lookup cache
     const std::string_view text(name);

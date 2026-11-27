@@ -22,12 +22,12 @@ struct ParseError
     ParseError() = default;
     ParseError(ErrorCode code, Token tok)
         : errorCode(code)
-        , errorToken(std::move(tok))
+        , errorToken(tok)
     {}
 
     ParseError(ErrorCode code, Token tok, std::initializer_list<Token> toks)
         : errorCode(code)
-        , errorToken(std::move(tok))
+        , errorToken(tok)
         , relatedTokens(toks)
     {}
 
@@ -55,7 +55,7 @@ struct ParseError
 
 inline auto MakeParseError(ErrorCode code, Token tok)
 {
-    return MakeUnexpected(ParseError{ code, std::move(tok) });
+    return MakeUnexpected(ParseError{ code, tok });
 }
 
 // Out of line (expression_parser.cpp): an error path, whose string and shared message stay out of
@@ -64,7 +64,7 @@ nonstd::unexpected_type<ParseError> MakeParseErrorMsg(ErrorCode code, Token tok,
 
 inline auto MakeParseError(ErrorCode code, Token tok, std::initializer_list<Token> toks)
 {
-    return MakeUnexpected(ParseError{ code, std::move(tok), toks });
+    return MakeUnexpected(ParseError{ code, tok, toks });
 }
 
 } // namespace v2

@@ -24,9 +24,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <iterator>
-#include <list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -778,7 +776,7 @@ private:
     SlotIndex PlaceOf(const TargetNode& item)
     {
         const auto text = m_nodes.Text(item.name);
-        const auto found = std::find_if(m_names.begin(), m_names.end(), [&item, text](const HashedName& name) { return name.hash == item.hash && name.name == text; });
+        auto* const found = std::find_if(m_names.begin(), m_names.end(), [&item, text](const HashedName& name) { return name.hash == item.hash && name.name == text; });
         const auto place = static_cast<std::size_t>(found - m_names.begin()) + 1;
         if (found == m_names.end())
         {
@@ -1161,7 +1159,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     statementInfo.frame = m_names.PushUnit(m_names.Current(), blockRenderer);
     // A block is a body of its own for `self`: the enclosing one does not see into it
     statementInfo.outerSelfUse = m_nodes.ExchangeSelfUse(NodeArena::SelfUse::None);
-    statementInfo.renderer = std::move(blockRenderer);
+    statementInfo.renderer = blockRenderer;
     Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
 }
@@ -1401,7 +1399,7 @@ nonstd::expected<MacroParamsInfo, ParseError> StatementsParser::ParseMacroParams
 
         MacroParamInfo p;
         p.paramName = std::move(paramName);
-        p.defaultValue = std::move(defVal);
+        p.defaultValue = defVal;
         items.push_back(std::move(p));
 
     } while (lexer.EatIfEqual(','));
@@ -2088,7 +2086,7 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
     auto renderer = m_nodes.Make<FilterStatement>(*filterExpr);
     auto statementInfo = StatementInfo::Create(
         StatementInfo::FilterStatement, stmtTok, m_tagOffset);
-    statementInfo.renderer = std::move(renderer);
+    statementInfo.renderer = renderer;
     statementInfo.frame = m_names.PushWith(m_names.Current());
     Push(statementsInfo, std::move(statementInfo));
 
@@ -2134,7 +2132,7 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
     m_root.hasVolatileAutoescape = m_root.hasVolatileAutoescape || isVolatile;
     auto renderer = m_nodes.Make<AutoescapeStatement>(*valueExpr, isVolatile);
     auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok, m_tagOffset);
-    statementInfo.renderer = std::move(renderer);
+    statementInfo.renderer = renderer;
     statementInfo.frame = m_names.PushWith(m_names.Current());
     Push(statementsInfo, std::move(statementInfo));
 
@@ -2224,7 +2222,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
             }
             value = ref;
         }
-        trans->variables.emplace_back(name, std::move(value));
+        trans->variables.emplace_back(name, value);
         trans->paramsCount = trans->variables.size();
         if (trans->pluralVar.empty())
         {
@@ -2405,7 +2403,7 @@ void TrimTransMessages(TransInfo& trans)
 }
 } // namespace
 
-StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
+StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& /*stmtTok*/) // NOLINT(readability-function-cognitive-complexity): score 29, kept whole (task 0600)
 {
     auto info = PopStatement(statementsInfo);
     auto& trans = *info.trans;
@@ -2445,7 +2443,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         if (trans.hasPlural && name == trans.pluralVar)
         {
             params.posParams.emplace_back(MakeConstant(m_nodes, InternalValue(trans.plural)));
-            params.posParams.push_back(slot);
+            params.posParams.emplace_back(slot);
             fnName = trans.context.IsUndefined() ? "ngettext" : "npgettext";
             if (name == "num")
             {
@@ -2520,7 +2518,7 @@ InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std:
         }
     }
     bool ok = true;
-    auto end = CompileEscapes(chars.begin(), chars.end(), &ok);
+    auto* end = CompileEscapes(chars.begin(), chars.end(), &ok);
     malformed = !ok;
     return InternalValue::FromText(std::basic_string_view<CharT>(chars.data(), static_cast<size_t>(end - chars.begin())));
 }

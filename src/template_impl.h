@@ -21,7 +21,6 @@
 #include "render_failure.h"
 #include "render_suspension.h"
 #include "render_workspace.h"
-#include "renderer.h"
 #include "small_vector.h"
 #include "statements.h"
 #include "template_env_impl.h"
@@ -406,7 +405,7 @@ public:
         return detail::TakeTemplateKeptWhileLoading(this);
     }
 
-    std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
+    std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName) // NOLINT(readability-function-cognitive-complexity): score 29, kept whole (task 0600)
     {
         if (SourceTooLong(tpl.size()))
         {
@@ -456,7 +455,7 @@ public:
         } scope(*this, inlineSource);
         if (inlineSource)
         {
-            m_source = std::move(tpl);
+            m_source = std::move(tpl); // NOLINT(bugprone-use-after-move): the earlier move runs when !inlineSource and this one when inlineSource, one const bool
         }
         NormalizeTemplateNewlines(source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;
@@ -778,7 +777,7 @@ public:
     }
 
     template<bool hasHooks, typename Target, typename ParamsMap>
-    std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const RenderHooks* hooks) const
+    std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const RenderHooks* hooks) const // NOLINT(readability-function-cognitive-complexity): score 36, kept whole (task 0600)
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         constexpr bool suspendable = hasHooks && std::is_same_v<Target, BasicOutputSink<CharT>>;
@@ -1309,7 +1308,7 @@ private:
     class RendererCallback : public IRendererCallback
     {
     public:
-        explicit RendererCallback(const ThisType* host)
+        explicit RendererCallback(const ThisType* host) // NOLINT(bugprone-random-generator-seed): lipsum's engine is default-seeded on purpose, each render draws the same text
             : m_host(host)
         {
             SetPromptEscaper(host->m_settings->promptEscaper);
@@ -1616,7 +1615,7 @@ private:
         // Ends the scopes above the top levels of the modules the call that took `mark` made that a failure left
         // (EndCall). When that cannot allocate, the scopes stay
         template<typename IsKept>
-        void EndScopesLeftByFailure(const CallMark& mark, const IsKept& isKept) noexcept
+        void EndScopesLeftByFailure(const CallMark& mark, const IsKept& isKept) noexcept // NOLINT(bugprone-exception-escape): the only throw found is SmallVector's length_error, which a list this size cannot reach; allocation failure is handled inside
         {
             auto& modules = m_loaded->modules;
             for (auto p = mark.modules; p != modules.size(); ++p)
@@ -1837,7 +1836,7 @@ private:
         // more, before it ends. Called when the outermost call of a module returned, before PruneReplaced and while
         // the call's collector notes the values that may hold themselves
         template<typename IsKept, typename Forget>
-        void EndReplacedSharedModules(ModuleImports& imports, const IsKept& isKept, const Forget& forget) noexcept
+        void EndReplacedSharedModules(ModuleImports& imports, const IsKept& isKept, const Forget& forget) noexcept // NOLINT(bugprone-exception-escape): the only throw found is SmallVector's length_error, which a list this size cannot reach; allocation failure is handled inside
         {
             if (!HasReplaced() || m_loaded->sharedModules.empty())
             {
@@ -1879,7 +1878,7 @@ private:
         // name, a shared module's template, a statement's `bySite` result or, while a handle may link to it, a
         // tree with a slot. What else views one (a macro, a recursive loop, an imported module) holds its owner
         // (docs/tasks/0482). Called when the outermost call of a module ends
-        void PruneReplaced(bool callerHoldsHandles) noexcept
+        void PruneReplaced(bool callerHoldsHandles) noexcept // NOLINT(bugprone-exception-escape): the only throw found is SmallVector's length_error, which a list this size cannot reach; allocation failure is handled inside
         {
             if (!HasReplaced())
             {
@@ -2086,7 +2085,7 @@ private:
                     }
                     else
                     {
-                        return loaded && templates.Holds(loaded.value()->Nodes());
+                        return loaded && templates.Holds((*loaded)->Nodes());
                     }
                 },
                 result);
@@ -2175,7 +2174,7 @@ private:
                     }
                     else
                     {
-                        return loaded ? static_cast<const void*>(loaded.value().get()) : nullptr;
+                        return loaded ? static_cast<const void*>(loaded->get()) : nullptr;
                     }
                 },
                 result);
@@ -2435,7 +2434,7 @@ private:
     // The size of the output to reserve. It has cache lines of its own, so that a store to it does
     // not evict the fields around it from the other cores rendering the template (docs/tasks/0138);
     // padded rather than aligned, which would need aligned allocation
-    struct OutputSizeHint
+    struct OutputSizeHint // NOLINT(cppcoreguidelines-pro-type-member-init): the padding is left uninitialized on purpose
     {
         static constexpr size_t CacheLineSize = 64;
         // Never read, so left uninitialized: a Load does not pay for zeroing them

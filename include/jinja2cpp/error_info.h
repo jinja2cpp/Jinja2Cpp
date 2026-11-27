@@ -162,7 +162,7 @@ public:
     }
 
     //! Copy-assignment operator
-    BasicErrorInfo& operator=(const BasicErrorInfo<CharT>& other) noexcept
+    BasicErrorInfo& operator=(const BasicErrorInfo<CharT>& other) noexcept // NOLINT(bugprone-unhandled-self-assignment): copy and swap, a self-assignment copies and swaps itself
     {
         BasicErrorInfo copy(other);
         copy.Swap(*this);

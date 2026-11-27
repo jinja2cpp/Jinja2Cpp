@@ -8,7 +8,6 @@
 #include "host_object.h"
 #include "internal_value.h"
 #include "loop_attr.h"
-#include "make_unexpected.h"
 #include "recursion_guard.h"
 #include "engine_errors.h"
 #include "span.h"
@@ -35,7 +34,6 @@
 #include <limits>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -716,7 +714,7 @@ void ValueRendererBase<CharT>::operator()(const Callable& val) const
     const auto& attributes = val.GetAttributes();
     if (val.GetKind() != Callable::Macro)
     {
-        AppendAscii(FunctionRepr(val).c_str());
+        AppendAscii(FunctionRepr(val));
         return;
     }
     if (!attributes)
@@ -843,7 +841,7 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
 }
 
 template<typename CharT>
-void ValueRendererBase<CharT>::operator()(const MapRef& map) const
+void ValueRendererBase<CharT>::operator()(const MapRef& map) const // NOLINT(readability-function-cognitive-complexity): score 34, kept whole (task 0600)
 {
     // An object of the host language prints as the host prints it: str(), repr() in a container
     if (const auto* host = map.GetHostObject())
@@ -864,7 +862,7 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
     InternalValue loopLength;
     if (map.GetLoopAttr(LoopAttr::Index, loopIndex) && map.GetLoopAttr(LoopAttr::Length, loopLength))
     {
-        AppendAscii(fmt::format("<LoopContext {}/{}>", *GetIf<int64_t>(&loopIndex), *GetIf<int64_t>(&loopLength)).c_str());
+        AppendAscii(fmt::format("<LoopContext {}/{}>", *GetIf<int64_t>(&loopIndex), *GetIf<int64_t>(&loopLength)));
         return;
     }
     // A template module's str() is its output (docs/tasks/0309)
@@ -887,7 +885,7 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
         AppendAscii("<jinja2.utils.");
         AppendAscii(hostClass);
         AppendAscii(" object at ");
-        AppendAscii(fmt::format("{}", map.GetIdentity()).c_str());
+        AppendAscii(fmt::format("{}", map.GetIdentity()));
         AppendAscii(">");
         return;
     }
@@ -906,7 +904,7 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
         AppendAscii("<jinja2.utils.");
         AppendAscii(objectClass);
         AppendAscii(" object at ");
-        AppendAscii(fmt::format("{}", map.GetIdentity()).c_str());
+        AppendAscii(fmt::format("{}", map.GetIdentity()));
         AppendAscii(">");
         return;
     }
@@ -2336,7 +2334,7 @@ struct BinaryMathOperation : BaseVisitor<>
     ResultType operator()(const KeyValuePair& left, bool right) const { return RepeatList(PairAsTuple(left).Ref(), static_cast<int64_t>(right), left, right); }
     ResultType operator()(bool left, const KeyValuePair& right) const { return RepeatList(PairAsTuple(right).Ref(), static_cast<int64_t>(left), left, right); }
 
-    ResultType operator()(const ListRef& left, const ListRef& right) const
+    ResultType operator()(const ListRef& left, const ListRef& right) const // NOLINT(readability-function-cognitive-complexity): score 34, kept whole (task 0600)
     {
         if (left.GetIteratorKind() != IteratorKind::None || right.GetIteratorKind() != IteratorKind::None)
         {

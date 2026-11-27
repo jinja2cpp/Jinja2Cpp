@@ -19,11 +19,9 @@
 #include <cstring>
 #include <iterator>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -710,7 +708,7 @@ private:
     }
 
     // The steps run in the order Python takes them, so that the first error is the same
-    void Directive(std::string_view format, const PercentDirective& directive, std::string& out)
+    void Directive(std::string_view format, const PercentDirective& directive, std::string& out) // NOLINT(readability-function-cognitive-complexity): score 31, kept whole (task 0600)
     {
         out.append(format.substr(directive.literalStart, directive.literalSize));
         if (!directive.hasConversion && directive.error == PercentDirective::Error::None)

@@ -10,7 +10,6 @@
 #include <cstdlib>
 #include <limits>
 #include <string>
-#include <utility>
 
 namespace jinja2
 {

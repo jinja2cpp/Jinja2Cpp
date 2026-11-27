@@ -28,7 +28,6 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>

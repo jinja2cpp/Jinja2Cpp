@@ -1,7 +1,6 @@
 #include "gtest/gtest.h"
 
 #include "../src/helpers.h"
-#include "../src/expression_evaluator.h"
 #include "../src/internal_value.h"
 #include "../src/lookup_result.h"
 #include "../src/render_context.h"
@@ -13,7 +12,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <new>
 #include <optional>
 #include <string>
 #include <string_view>

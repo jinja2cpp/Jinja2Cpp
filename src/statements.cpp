@@ -47,7 +47,6 @@
 #include <memory>
 #include <new>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -155,7 +154,7 @@ struct SlotSink
 // user-provided map, which Python could not unpack) is the exception: a tuple of names
 // takes its values by name (`set first, last = person`), as Jinja2C++ always has
 template<typename Sink>
-void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext& values)
+void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext& values) // NOLINT(readability-function-cognitive-complexity): score 32, kept whole (task 0600)
 {
     const auto& root = target[0];
     const auto& nodes = values.Nodes();
@@ -212,7 +211,7 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     }
 
     InternalValueList items;
-    if (auto* pair = GetIf<KeyValuePair>(&value))
+    if (const auto* pair = GetIf<KeyValuePair>(&value))
     {
         items.push_back(pair->key);
         items.push_back(pair->value);
@@ -1670,7 +1669,7 @@ void ForStatement::SetRecursiveBody(NodeArena& nodes, ArenaSpan<SlotName> stores
 }
 
 
-void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
+void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site) // NOLINT(readability-function-cognitive-complexity): score 41, kept whole (task 0600)
 {
     bool isConverted = false;
     auto loopItems = ConvertToLoopList(loopVal, isConverted);
@@ -1855,7 +1854,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     }
 }
 
-void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os, RenderContext& values)
+void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os, RenderContext& values) // NOLINT(readability-function-cognitive-complexity): score 40, kept whole (task 0600)
 {
     // Declared first, so that the loop's slots let go of `loop` before the frame is given back
     auto state = LoopFramePool::Take(m_loopId);
@@ -2735,10 +2734,10 @@ BlocksStack::~BlocksStack()
 
 ClosureSite::ClosureSite(RenderContext& context, size_t depth)
     : m_home(context.Anchor())
+    , m_depth(static_cast<uint32_t>(depth))
+    , m_serial(context.SerialBelow(depth))
     , m_endsWithCall(context.m_endsWithCall)
 {
-    m_depth = static_cast<uint32_t>(depth);
-    m_serial = context.SerialBelow(depth);
     // A template's top-level scope lives as long as the context it runs in
     if (const auto* frame = context.GetTemplateFrame())
     {
@@ -2971,7 +2970,7 @@ void RenderContext::AddClosureCapture(const std::shared_ptr<ClosureCapture>& cap
     sites.push_back(capture);
 }
 
-void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
+void RenderContext::CaptureClosuresImpl(const FrameEnd& end) // NOLINT(readability-function-cognitive-complexity): score 48, kept whole (task 0600)
 {
     // The frame's scopes: from `count - 1` up, all of this context's own when it ends
     const size_t count = end.count != 0 ? end.count : m_parentDepth + 1;
@@ -3180,7 +3179,7 @@ void AddCollected(InternalValueMap& collected,
 }
 } // namespace
 
-void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures, const ClosureCapture* keeps) const
+void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures, const ClosureCapture* keeps) const // NOLINT(readability-function-cognitive-complexity): score 29, kept whole (task 0600)
 {
     const size_t entryPassDepth = m_entryPassDepth;
     MacroStatement::SelfCopies copies;
@@ -3833,7 +3832,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
 }
 
 JINJA2CPP_NOINLINE
-void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(const IRendererCallback::LoadTemplateResult&)> doRender) const
+void IncludeStatement::RenderByNames(RenderContext& values, FunctionRef<bool(const IRendererCallback::LoadTemplateResult&)> doRender) const // NOLINT(readability-function-cognitive-complexity): score 31, kept whole (task 0600)
 {
     auto* callback = values.GetRendererCallback();
     auto templateNames = values.Nodes()[m_expr].Evaluate(values);
@@ -5369,7 +5368,7 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     }
     // The body is Markup under autoescape where the block is written; the filtered output is
     // written as is
-    InternalValue body(std::move(arg));
+    InternalValue body(arg);
     body.SetMarkup(values.IsOutputAutoescape());
     const auto result = values.Nodes()[m_expr].Evaluate(body, values);
     os.WriteValue(result);

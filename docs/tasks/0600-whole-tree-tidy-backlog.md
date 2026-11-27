@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: high
 area: style
 depends: []
@@ -49,3 +49,28 @@ functions carry a cognitive-complexity NOLINT (none do).
 and `use_count` steps.
 
 **Next.** Without 0601 the count grows back: these hits got in through PRs that were green.
+
+**Progress.** One PR (#1026) clears every hit. The files that batch 14 PRs #1021 and #1025 still owned
+(`borrowed_cells.cpp`, `internal_value.cpp`/`.h`, `render_context.h`, `serialize_filters.cpp`, `statements.cpp`,
+`value_visitors.h`, 37 hits) were done after the train that merged them (#1027). Decisions:
+Decisions:
+- `readability-function-cognitive-complexity`: NOLINT with the score, as 0061 left the rest; a split of a
+  flat case dispatch would only scatter it.
+- `performance-unnecessary-value-param` on `Reflector<shared_ptr<T>>::Create`: a false positive, the
+  by-value parameter is moved into the view (0487).
+- `bugprone-exception-escape` on `Value::GetIf`: `As` calls `DemoteMarkup` unchecked and relies on the
+  `std::get` throw, so the throw cannot go; `GetIf` checks the alternative first. On the `noexcept` module
+  helpers in `template_impl.h` and `SmallVector`'s move assignment the only throw found is `length_error`
+  of a list that size, which cannot happen. Two `expected::value()` calls behind a check became `*`.
+- `bugprone-signed-char-misuse`: the lexer and parser read units through `char_class::CodeUnit`, which
+  widens a narrow unit through `unsigned char`. In `BigInt(I)` a unary plus promotes first, keeping the
+  sign extension the negation below needs.
+- `modernize-raw-string-literal` (77) in the generated `test/json_test_suite_cases.inc`: not hand-edited (the
+  SBOM hashes it); `test/.clang-tidy` leaves it out of the header filter.
+- Two fix-its cost instructions on Load/plain_text (+1.26%): a zero-filled `CharRange` and a `std::none_of`
+  in `UsableEnd`. Both stay as they were, with a NOLINT.
+- The last 37 hits: eleven cognitive-complexity NOLINTs with the score; `exception-escape` on two `noexcept`
+  `BorrowedCells` functions that swallow an allocation failure by contract; three rvalue-reference and one
+  forwarding-reference parameter whose signature is the API (swap or read-only use), and the forward
+  declaration of `TemplateRenderer`, with a NOLINT each; the rest (`c_str`, `const auto*`, member
+  initializers, unused includes, a redundant declaration, two `std::move` of a value copied anyway) fixed.

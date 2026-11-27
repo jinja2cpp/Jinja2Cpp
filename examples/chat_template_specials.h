@@ -86,7 +86,7 @@ inline Specials ReadSpecials(const nlohmann::json& config)
         {
             const auto special = token.find("special");
             const auto* text = detail::TokenText(token);
-            if (text && special != token.end() && special->is_boolean() && special->get<bool>())
+            if ((text != nullptr) && special != token.end() && special->is_boolean() && special->get<bool>())
             {
                 detail::AddToken(result.tokens, *text);
             }

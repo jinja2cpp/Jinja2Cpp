@@ -296,7 +296,7 @@ void InternalValue::CloneObject()
     }
 }
 
-std::optional<TargetString> TakeString(InternalValue&& val)
+std::optional<TargetString> TakeString(InternalValue&& val) // NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved): the signature says the caller gives the value up (task 0600)
 {
     if (auto str = AsStringView<char>(val))
     {
@@ -499,7 +499,6 @@ bool InternalValue::IsEqual(const InternalValue& other) const
 }
 
 InternalValue Value2IntValue(const Value& val);
-InternalValue Value2IntValue(Value&& val);
 
 bool IsEngineCallSlot(const MapRef& map, std::string_view name)
 {
@@ -824,7 +823,7 @@ void ResolveMapCallOperator(InternalValue& result, MapRef map, RenderContext* va
     }
 
     auto callableVal = map.GetValueByName(callOperName);
-    auto* callable = GetIf<Callable>(&callableVal);
+    const auto* callable = GetIf<Callable>(&callableVal);
     if (!callable || callable->GetKind() == Callable::Macro || callable->GetType() == Callable::Type::Statement)
     {
         return;
@@ -3332,7 +3331,7 @@ std::shared_ptr<const Accessor> MakeHostCopy(const Adapter& adapter)
 }
 
 // A list of `values`
-ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind)
+ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind) // NOLINT(readability-function-cognitive-complexity): score 29, kept whole (task 0600)
 {
     // The items are shared by every copy of the list, as a Python list is shared by its
     // names: an append() through one is seen through all, and `a is sameas b` holds
@@ -4658,7 +4657,7 @@ protected:
 class NamespaceAdapter : public SharedDictAdapter
 {
 public:
-    using SharedDictAdapter::SharedDictAdapter;
+    using SharedDictAdapter::SharedDictAdapter; // NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved): inherited constructors (task 0600)
 
     // Its attributes are names: ns[1] is undefined, as in Python
     [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override
@@ -6615,7 +6614,7 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
             continue;
         }
 
-        auto p = args.args.find(argInfo.name);
+        const auto* const p = args.args.find(argInfo.name);
         if (p == args.args.end())
         {
             result.args[argInfo.name] = IntValue2Value(argInfo.defaultVal);

@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
-#include <string_view>
 #include <string>
 #include <type_traits>
 #include <utility>

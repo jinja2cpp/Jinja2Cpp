@@ -24,7 +24,6 @@
 #include <cstdint>
 #include <new>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -530,7 +529,7 @@ JINJA2CPP_COLD_INLINE std::optional<bool> IsValueInIteration(const InternalValue
 }
 
 // `value in seq`, Python's containment test
-bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
+bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq) // NOLINT(readability-function-cognitive-complexity): score 26, kept whole (task 0600)
 {
     bool result = false;
     CheckUndefinedUse(seq, UndefinedUse::Operator);
@@ -601,7 +600,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     return result;
 }
 
-bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
+bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 50, kept whole (task 0600)
 {
     // divisibleby, in and sameas take exactly one argument, the others none, as in Jinja2
     if (const auto& error = GetArgumentsError(); !error.empty())

@@ -13,7 +13,6 @@
 #include <cstring>
 #include <new>
 #include <string>
-#include <utility>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -176,9 +175,9 @@ void Refill(RenderLimits& limits)
     limits.stepsLeft = chunk;
 }
 
-[[noreturn]] void ThrowLimit(const char* field, std::string message)
+[[noreturn]] void ThrowLimit(const char* field, const std::string& message)
 {
-    throw ResourceLimitError(field, std::move(message));
+    throw ResourceLimitError(field, message);
 }
 } // namespace
 
@@ -215,7 +214,7 @@ void StepsSlow()
     PollDeadline();
     Refill(limits);
     // Last, with the count refilled: the poll may throw, and the render stops
-    if (const auto poll = t_hostPoll)
+    if (const auto* const poll = t_hostPoll)
     {
         (*poll)();
     }

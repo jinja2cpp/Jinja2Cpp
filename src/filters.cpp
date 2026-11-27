@@ -44,7 +44,6 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 using namespace std::string_literals;
@@ -397,7 +396,7 @@ Join::Join(const FilterParams& params)
     ParseParams(args, params);
 }
 
-InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 26, kept whole (task 0600)
 {
     bool attrGiven = false;
     InternalValue attrName = GetArgumentValue("attribute", context, attrGiven);
@@ -557,7 +556,7 @@ Attribute::Attribute(const FilterParams& params)
     }
 }
 
-InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 35, kept whole (task 0600)
 {
     const auto attrNameVal = GetArgumentValue("name", context);
     if (!IsStringValue(attrNameVal))
@@ -896,7 +895,7 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
 }
 
 
-InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 33, kept whole (task 0600)
 {
     // map('map', 'map', ...) nests a filter per argument, which unpacking makes cheap to write
     CheckStack();
@@ -1136,7 +1135,7 @@ InternalValue RandomItem(const ListAdapter& list, const InternalValue& baseVal)
     return result;
 }
 
-InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
+InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal) // NOLINT(readability-function-cognitive-complexity): score 28, kept whole (task 0600)
 {
     if (IsStringValue(baseVal))
     {
@@ -1418,7 +1417,7 @@ IteratorKind HostReverseKind(std::string_view type)
 }
 } // namespace
 
-InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 99, kept whole (task 0600)
 {
     // len(loop) is the length of the loop, as Jinja2's LoopContext.__len__, not the
     // number of its attributes
@@ -1760,7 +1759,7 @@ StringFormat::StringFormat(const FilterParams& params)
 }
 
 
-InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context)
+InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 35, kept whole (task 0600)
 {
     InternalValue testerName = GetArgumentValue("tester", context);
     InternalValue attrName = GetArgumentValue("attribute", context);

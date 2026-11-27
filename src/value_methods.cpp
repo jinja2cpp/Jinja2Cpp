@@ -42,13 +42,11 @@
 #include <memory>
 #include <numeric>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 using namespace std::string_literals;
@@ -2780,7 +2778,7 @@ InternalValue ListReverse(const InternalValue& self, const CallParams& params, R
 // list.sort(*, key=None, reverse=False), stable like Python's, comparing with `<` only. As in
 // CPython the list looks empty while the keys are computed and compared, and a list changed
 // meanwhile is an error; a key or comparison that fails leaves the list as it was.
-InternalValue ListSort(const InternalValue& self, const CallParams& params, RenderContext& context)
+InternalValue ListSort(const InternalValue& self, const CallParams& params, RenderContext& context) // NOLINT(readability-function-cognitive-complexity): score 29, kept whole (task 0600)
 {
     if (!params.posParams.empty())
     {
@@ -4022,7 +4020,7 @@ const MethodInfo* FindIn(const MethodInfo (&table)[N], std::string_view name)
     return nullptr;
 }
 
-const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view name)
+const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view name) // NOLINT(readability-function-cognitive-complexity): score 30, kept whole (task 0600)
 {
     switch (self.Kind())
     {
@@ -4478,7 +4476,7 @@ bool IsMutable(const InternalValue& value)
     return false;
 }
 
-InternalValue MakeMutable(const InternalValue& value)
+InternalValue MakeMutable(const InternalValue& value) // NOLINT(readability-function-cognitive-complexity): score 32, kept whole (task 0600)
 {
     if (IsMutable(value))
     {

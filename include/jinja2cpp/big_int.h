@@ -69,7 +69,8 @@ public:
         // Digits are taken in a type no narrower than 64 bits, so that no step narrows through int
         using Unsigned = std::conditional_t<(sizeof(I) > sizeof(uint64_t)), std::make_unsigned_t<I>, uint64_t>;
         bool negative = false;
-        auto magnitude = static_cast<Unsigned>(value);
+        // Unary plus promotes a narrow type first: a signed char must sign-extend here, not through an unsigned char
+        auto magnitude = static_cast<Unsigned>(+value);
         if constexpr (std::is_signed_v<I>)
         {
             negative = value < 0;

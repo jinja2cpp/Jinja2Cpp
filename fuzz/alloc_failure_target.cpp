@@ -30,6 +30,7 @@
 #include <new>
 #include <optional>
 #include <string>
+#include <utility>
 
 // NOLINTBEGIN(cppcoreguidelines-no-malloc): the replaced global allocation functions sit on malloc and free
 namespace

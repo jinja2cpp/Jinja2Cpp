@@ -987,7 +987,7 @@ size_t BitCount(const BigIntView& val)
     return val.IsHuge() ? WordsBitCount(val.Words()) : WordsBitCount(BinaryWords(InlineMagnitude(val)));
 }
 
-int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept
+int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept // NOLINT(readability-function-cognitive-complexity): score 32, kept whole (task 0600)
 {
     const int leftSign = left.Sign();
     const int rightSign = right.Sign();

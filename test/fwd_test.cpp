@@ -31,7 +31,6 @@ struct jinja2::Reflector<fwd_test::Local>
 
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <type_traits>
 
 static_assert(std::is_same_v<jinja2::Template, jinja2::BasicTemplate<char>>);

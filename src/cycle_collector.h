@@ -163,7 +163,7 @@ private:
     {
         std::weak_ptr<const void> owner;
         std::shared_ptr<const void> object;
-        const InternalValueMap* names;
+        const InternalValueMap* names = nullptr;
         // ReleaseUnreached: the call from which on the entry is due, and the log2 of the calls it waits after a check
         // that found its copy live; NeverChecked for an entry whose copy holds no container
         uint32_t checkAt = 0;

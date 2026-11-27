@@ -45,7 +45,6 @@
 #include <memory>
 #include <new>
 #include <optional>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -154,11 +153,11 @@ struct ParserTraitsBase
             return result;
         }();
 
-        if (name.empty() || static_cast<std::make_unsigned_t<CharT>>(name[0]) >= charsCount)
+        if (name.empty() || char_class::CodeUnit(name[0]) >= charsCount)
         {
             return Keyword::Unknown;
         }
-        const auto first = static_cast<std::size_t>(name[0]);
+        const auto first = static_cast<std::size_t>(char_class::CodeUnit(name[0]));
         const auto end = table.entries.begin() + table.runs[first + 1];
         // Keywords are short: a compare call per candidate would cost more than the compare
         auto entry = std::find_if(table.entries.begin() + table.runs[first], end, [name](const Entry& candidate) {
@@ -233,7 +232,7 @@ class StatementBodies // NOLINT(cppcoreguidelines-pro-type-member-init): m_inPla
 public:
     using Child = NodeRef<IRendererBase>;
 
-    StatementBodies() = default;
+    StatementBodies() = default; // NOLINT(cppcoreguidelines-pro-type-member-init): m_inPlace is raw storage
     StatementBodies(const StatementBodies&) = delete;
     StatementBodies& operator=(const StatementBodies&) = delete;
     ~StatementBodies() = default;
@@ -575,7 +574,7 @@ private:
     ParseResult ParseGeneration(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndGeneration(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseInTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    static ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
     // Opens `info`: its body starts with no children
@@ -821,7 +820,7 @@ private:
         MetaBlock
     };
 
-    struct TextBlockInfo
+    struct TextBlockInfo // NOLINT(cppcoreguidelines-pro-type-member-init): range is set where a block is made, a zero fill would cost every text block (0600)
     {
         CharRange range;
         // Where the tag starts, at its begin delimiter; where the text starts for text
@@ -1202,7 +1201,7 @@ private:
             }
             return result;
         }();
-        const auto code = static_cast<std::make_unsigned_t<CharT>>(ch);
+        const auto code = char_class::CodeUnit(ch);
         return ch != endFirst && (code >= special.size() || !special[code]);
     }
 
@@ -1570,7 +1569,7 @@ private:
         {
             return 0;
         }
-        const auto unit = static_cast<std::make_unsigned_t<CharT>>(tpl[pos]);
+        const auto unit = char_class::CodeUnit(tpl[pos]);
         if constexpr (sizeof(CharT) == 1)
         {
             if (unit >= 0x80)
@@ -1586,7 +1585,7 @@ private:
     [[nodiscard]] size_t SpaceLengthBefore(size_t pos, size_t begin) const
     {
         const auto& tpl = *m_template;
-        const auto unit = static_cast<std::make_unsigned_t<CharT>>(tpl[pos - 1]);
+        const auto unit = char_class::CodeUnit(tpl[pos - 1]);
         if constexpr (sizeof(CharT) == 1)
         {
             if (unit >= 0x80)

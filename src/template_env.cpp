@@ -5,7 +5,6 @@
 #include "error_boundary.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
-#include "sandbox_policy.h"
 #include "shared_owner.h"
 #include "dialect.h"
 #include "template_env_impl.h"
@@ -397,7 +396,7 @@ const LoadSettingsPtr& DefaultLoadSettings()
 }
 
 template<typename CharT>
-auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
+auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName) // NOLINT(readability-function-cognitive-complexity): score 36, kept whole (task 0600)
 {
     using Functions = TemplateFunctions<CharT>;
     using ResultType = typename Functions::ResultType;

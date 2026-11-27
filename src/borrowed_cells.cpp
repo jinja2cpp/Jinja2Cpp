@@ -534,7 +534,7 @@ void BorrowedCells::DropUnheld(bool walk) noexcept
     }
 }
 
-bool BorrowedCells::DropUnheldOnce(bool walk) noexcept
+bool BorrowedCells::DropUnheldOnce(bool walk) noexcept // NOLINT(bugprone-exception-escape,readability-function-cognitive-complexity): allocation failure is swallowed by the noexcept contract on purpose (task 0600); score 27, kept whole (task 0600)
 {
     size_t count = 0;
     for (const auto& [identity, cell] : *m_cells)
@@ -707,7 +707,7 @@ void BorrowedCells::HandOverReleasedCallFrozen(CycleCollector* collector) noexce
     }
 }
 
-void BorrowedCells::FreezeCallScopedSlow(CycleCollector* collector) noexcept
+void BorrowedCells::FreezeCallScopedSlow(CycleCollector* collector) noexcept // NOLINT(bugprone-exception-escape): allocation failure is swallowed by the noexcept contract on purpose (task 0600)
 {
     HandOverReleasedCallFrozen(collector);
     if (!m_cells || !m_hasUnheldIdentity)
