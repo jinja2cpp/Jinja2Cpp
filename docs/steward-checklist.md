@@ -113,6 +113,11 @@ when the PR is marked ready (`ready_for_review`) and on every push after that. C
   current master so the instruction counts compare against the real base.
 - Task numbers are shared with all threads: check master and open PRs before filing one. #807,
   #284, #199 and #197 are not the steward's; leave them.
+- Trace validation (`--mutants`) replays every `BorrowedCells*` test trace inside a 60-minute job
+  limit: a test making thousands of module calls (48k events, #1021) times it out. Keep such
+  tests to a few hundred calls.
+- Since 2026-11-27 the runner's packages.microsoft.com apt source answers 403; install-toolchain
+  drops it before `apt-get update` (#1027). If the 403 shows up elsewhere, apply the same fix there.
 
 ## After the merge
 

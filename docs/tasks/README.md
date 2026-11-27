@@ -630,8 +630,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | done |
 | [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | done |
 | [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | done |
-| [0572](0572-nested-item-cells-never-dropped.md) | A template module keeps the cell of every nested item it wrote, one per call | robustness | medium | open |
-| [0573](0573-cycle-through-owned-argument-cell.md) | A cycle through the cell of a module call's owned argument keeps it for the module's life | robustness | medium | open |
+| [0572](0572-nested-item-cells-never-dropped.md) | A template module keeps the cell of every nested item it wrote, one per call | robustness | medium | done |
+| [0573](0573-cycle-through-owned-argument-cell.md) | A cycle through the cell of a module call's owned argument keeps it for the module's life | robustness | medium | done |
 | [0574](0574-make-module-shared-without-engine-globals.md) | `make_module(shared=True)` keeps the engine's own globals | parity | low | done |
 | [0575](0575-module-object-parity-leftovers.md) | What a live module object still lacks of Jinja2's, short of shared mutable data | parity | low | done |
 | [0576](0576-fuzz-render-pr-timeout.md) | The pull-request `fuzz render` job runs close to its 45-minute timeout | ci | medium | open |
@@ -662,4 +662,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0601](0601-tidy-ratchet-leaks.md) | clang-tidy ratchet: hits on unchanged lines pass the pull-request job, and a red weekly run is silent | ci | high | open |
 | [0602](0602-tidy-python-fuzz-bench.md) | clang-tidy never sees `python/src/`, `fuzz/` or `bench/` | ci | medium | open |
 | [0603](0603-tidy-memory-safety-checks.md) | clang-tidy does not check the memory-safety style the project asks for | style | medium | open |
+| [0604](0604-reflected-shared-ptr-cell-never-dropped.md) | A module keeps the cell of a reflected `shared_ptr` it wrote, one per call | robustness | low | open |
 | [0605](0605-pprint-safe-key-host-errors.md) | pprint's `_safe_key` with host objects: catch only the TypeError, also inside a tuple key | parity | low | open |
