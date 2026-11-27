@@ -9,3 +9,4 @@ methods.set_lazy_map_sees_add          output      0587 deliberate: the engine's
 methods.set_lazy_map_loop_add_raises   accepts     0587 deliberate: an eager map read the set before the loop began, so an add() in the loop body changes no walk in progress (see methods.set_lazy_map_sees_add)
 methods.set_lazy_select_sees_add       output      0587 deliberate: an eager select read the set before the add() (see methods.set_lazy_map_sees_add)
 methods.list_lazy_map_sees_append      output      0587 deliberate: an eager map read the list before the append() (see methods.set_lazy_map_sees_add)
+methods.set_distinct_nans              output      0587 deliberate: a float has no identity in the engine, so two NaN objects Python keeps apart are one set item, as one NaN key of the engine's dict; the same NaN added twice, the common case, matches (methods.set_same_nan_once)

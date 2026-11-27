@@ -34,7 +34,7 @@ ones pass half or any read other than the set's own methods asks for the items (
 size check and `IsMutable` (`HasMutableItems`) count without closing up. `pop()` keeps Python's first item and finds
 it from a head cursor. `update`, `difference_update` and `symmetric_difference_update` go through the index;
 `intersection_update` still makes the new set (O(len)). A hit of an equal token that `ItemEquals` rejects (a NaN, a
-tuple holding one) is the item: the set holds one NaN, as the engine's dict holds one NaN key, and an unhashable or
+tuple holding one) is the item: the set holds one NaN, as the engine's dict holds one NaN key (two NaN objects Python keeps apart are one item: deliberate line `methods.set_distinct_nans`), and an unhashable or
 shadowed item counts beside the index instead of making every lookup rebuild it. Debug timings for 20000 steps:
 pop 7.0 s -> 0.2 s, discard 7.7 s -> 0.27 s, update over 300 s -> 0.15 s, repeated NaN add 95 s -> 0.1 s
 (`SetIndexLinearTest.ChangesInALoopAreLinear`). The lazy filter rows are listed as deliberate in

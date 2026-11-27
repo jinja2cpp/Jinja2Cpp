@@ -137,6 +137,12 @@ public:
             DropErased();
             m_stale = true;
         }
+        // The erased slots never outnumber the items for long, so that the slots stay within about twice the size.
+        // The close-up comes first, so that a failure to allocate for it leaves the set as it was
+        if ((m_erasedCount + 1) * 2 > slots.size())
+        {
+            Compact(slots, &position);
+        }
         if (m_erased.empty())
         {
             // The marks, made at the first erase; a failure leaves the set as it was
@@ -160,15 +166,10 @@ public:
                 m_stale = true;
             }
         }
-        // The erased slots never outnumber the items for long, so that the slots stay within twice the size
-        if (m_erasedCount * 2 > slots.size())
-        {
-            Compact(slots);
-        }
         return result;
     }
-    // Closes up the erased slots, keeping the order of the items, and moves the positions with them
-    void Compact(InternalValueList& slots)
+    // Closes up the erased slots, keeping the order of the items, and moves the positions with them, and `tracked`'s
+    void Compact(InternalValueList& slots, size_t* tracked = nullptr)
     {
         if (m_erasedCount == 0)
         {
@@ -201,6 +202,10 @@ public:
         for (auto& entry : m_positions)
         {
             entry.second = entry.second < moved.size() ? moved[entry.second] : NotFound;
+        }
+        if (tracked && *tracked < moved.size())
+        {
+            *tracked = moved[*tracked];
         }
         DropErased();
     }

@@ -559,5 +559,8 @@ CASES = [
     ("format_spec_comma_str", "{{ '{:,}'.format('ab') }}"),
     ("format_spec_comma_big_hex", "{{ '{:,x}'.format(18446744073709551615) }}"),
     ("format_spec_str_zero_equals", "{{ '{:0=10}'.format('ab') }}"),
+    ("format_spec_char_width", "{{ '{:010c}|{:5c}|{:<5c}|{:^5c}|{:05c}|{:3c}'.format(65, 66, 67, 68, true, 69) }}"),
+    ("format_spec_char_sign", "{{ '{:+c}'.format(65) }}"),
+    ("format_spec_char_alternate", "{{ '{:#c}'.format(65) }}"),
     ("format_spec_bound_method_names", "{% for x in [1] %}{{ loop.cycle.__name__ }}|{{ loop.cycle.__qualname__ }}|{{ loop.changed.__name__ }}|{{ loop.changed.__qualname__ }}{% endfor %}|{% set c = cycler(1, 2) %}{{ c.next.__name__ }}|{{ c.next.__qualname__ }}|{{ c.reset.__qualname__ }}"),
 ]

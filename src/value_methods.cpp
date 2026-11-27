@@ -1664,12 +1664,21 @@ struct StrOps
             Raise("Precision not allowed in integer format specifier");
         }
         Formatted result;
+        // A character aligns as a number does: right, and after the sign it has none of with '0' padding
+        result.numeric = true;
         if (spec.type == 'c')
         {
+            if (spec.sign != 0)
+            {
+                Raise("Sign not allowed with integer format specifier 'c'");
+            }
+            if (spec.alternate)
+            {
+                Raise("Alternate form (#) not allowed with integer format specifier 'c'");
+            }
             result.body = ToStr(InternalValue(TargetString(Str(1, static_cast<CharT>(value)))), false);
             return result;
         }
-        result.numeric = true;
         result.negative = value < 0;
         result.prefix = PrefixOf(spec);
         uint64_t magnitude = result.negative ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
