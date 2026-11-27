@@ -37,10 +37,12 @@ from the items of the cell's own storage (and retired storage), which nothing el
 adapter's references are all items of the cell, and each attached link owns the cell. Such a cell
 leaves the table frozen, so the walk from its storage (`CollectFrom`) reaches it through the items'
 links and frees the cycle. A walk that finds other holders stores the counts it saw, and the cell is not
-walked again until the source's or the cell's count changes or its storage doubles, so a kept cell
-costs no item walk per call and a growing one a logarithmic number (`ModuleCallsGrowingAKeptArgument`).
+walked again until the source's or the cell's count falls (a holder let go) or its storage doubles, so a
+kept cell costs no item walk per call and a growing one, also one that holds itself more each call, a
+logarithmic number (`ModuleCallsGrowingAKeptArgument`).
 At most 16 distinct attached adapters are counted per walk. A cell whose only change is that a holder
-outside its items let go of an attached item's adapter waits for the next walk, or the module's end. Only direct items count: a cycle through a nested container (`d.x = [d]`) still stays until the
+outside its items let go of an attached item's adapter, or let go in the same call as its items gained
+references, waits for the next walk, or the module's end. Only direct items count: a cycle through a nested container (`d.x = [d]`) still stays until the
 module goes. Model: `Unheld` in CellProtocol.tla allows links only the cell reaches and drops such a
 cell frozen (vacuous in the model, which has one adapter per call); the trace's `drop` event carries
 `items` and `CellRules!MayDrop` takes it. Tests: `BorrowedCellsSingle.ModuleCallFreesACycleThroughTheCellOfAFreshArgument`

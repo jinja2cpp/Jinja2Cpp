@@ -165,7 +165,7 @@ BorrowedCell::Holders BorrowedCell::FindHolders(bool byItems) const noexcept
         // The owner's count first: a cell of data the module's names hold stops there, without the
         // accessor's two virtual calls (DropUnheld runs at the end of every call, docs/tasks/0519)
         const bool sole = owner->use_count() == 1;
-        if (!sole && (!byItems || (m_heldSourceUses == owner->use_count() && m_heldUses == use_count() && StorageSize() < 2 * m_heldItems + 8U)))
+        if (!sole && (!byItems || (m_heldUses != 0 && owner->use_count() >= m_heldSourceUses && use_count() >= m_heldUses && StorageSize() < (2 * m_heldItems) + 8U)))
         {
             return Holders::Some;
         }
@@ -1117,9 +1117,11 @@ bool BorrowedCell::IsHeldByItsItems(const ValueObject& source, size_t links) con
     }
     if (!alone)
     {
-        // Not again while the counts stay and the storage has not doubled (FindHolders): a module that keeps many
-        // values walks none of them at each call's end, and one whose kept list grows walks it a logarithmic number
-        // of times (verifier of 0573). A holder outside the items that lets go of an attached item's adapter changes
+        // Not again until a count falls or the storage doubles (FindHolders): only a holder that lets go can leave
+        // the items alone, and a write that adds an item of the cell's own data raises a count. A module that keeps
+        // many values walks none of them at each call's end, and one whose kept list grows, by itself too
+        // (`l.append(l)`), walks it a logarithmic number of times (verifier of 0573). A holder outside the items
+        // that lets go of an attached item's adapter, or in the same call as the items gain a reference, lowers
         // neither count: such a cell waits for the next walk, or the module's end
         m_heldSourceUses = static_cast<uint32_t>(source.use_count());
         m_heldUses = use_count();
