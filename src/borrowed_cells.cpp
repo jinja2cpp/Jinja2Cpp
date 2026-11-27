@@ -165,7 +165,7 @@ BorrowedCell::Holders BorrowedCell::FindHolders(bool byItems) const noexcept
         // The owner's count first: a cell of data the module's names hold stops there, without the
         // accessor's two virtual calls (DropUnheld runs at the end of every call, docs/tasks/0519)
         const bool sole = owner->use_count() == 1;
-        if (!sole && (!byItems || (m_heldSourceUses == owner->use_count() && m_heldUses == use_count() && m_heldItems == StorageSize())))
+        if (!sole && (!byItems || (m_heldSourceUses == owner->use_count() && m_heldUses == use_count() && StorageSize() < 2 * m_heldItems + 8U)))
         {
             return Holders::Some;
         }
@@ -1035,6 +1035,12 @@ public:
         auto* const known = std::find_if(m_owners.begin(), m_owners.end(), [owner = owner](const Attached& entry) { return entry.owner == owner; });
         if (known == m_owners.end())
         {
+            // Many adapters of one cell's data in its own items: the cell stays, rather than a walk of each
+            // item over all of them
+            if (m_owners.size() == MaxAttached)
+            {
+                throw std::bad_alloc();
+            }
             m_owners.push_back(Attached{ owner, 1 });
         }
         else
@@ -1077,6 +1083,8 @@ private:
         return { nullptr, nullptr };
     }
 
+    static constexpr size_t MaxAttached = 16;
+
     const BorrowedCell* m_cell;
     const ValueObject* m_source;
     size_t m_sourceUses = 1;
@@ -1104,12 +1112,15 @@ bool BorrowedCell::IsHeldByItsItems(const ValueObject& source, size_t links) con
         // Every attached link owns the cell: no listed one (FindHolders asks for none)
         alone = source.use_count() == holders.SourceUses() && use_count() == links + holders.Links() && holders.OwnersHeldByItems();
     }
-    catch (...) // NOLINT(bugprone-empty-catch): out of memory, the cell stays as a cell something else holds does
+    catch (...) // NOLINT(bugprone-empty-catch): out of memory or too many adapters, the cell stays as a cell something else holds does
     {
     }
     if (!alone)
     {
-        // Not again while the counts stay (FindHolders): a module that keeps many values walks none of them at each call's end
+        // Not again while the counts stay and the storage has not doubled (FindHolders): a module that keeps many
+        // values walks none of them at each call's end, and one whose kept list grows walks it a logarithmic number
+        // of times (verifier of 0573). A holder outside the items that lets go of an attached item's adapter changes
+        // neither count: such a cell waits for the next walk, or the module's end
         m_heldSourceUses = static_cast<uint32_t>(source.use_count());
         m_heldUses = use_count();
         m_heldItems = StorageSize();

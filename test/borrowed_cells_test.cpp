@@ -1382,6 +1382,38 @@ TEST(BorrowedCellsSingle, ModuleCallFreesACycleThroughTheCellOfAFreshArgument)
     EXPECT_GT(8, token.use_count());
     module = TemplateModule();
     EXPECT_EQ(2, token.use_count());
+    // The same in a wide template
+    TemplateW wide;
+    ASSERT_TRUE(!!wide.Load(L"{% macro selfref(d, f) %}{% set _ = d.update(self=d, f=f) %}{{ d.self.a }}{% endmacro %}"));
+    auto wideModule = wide.MakeModule({}).value();
+    for (int i = 0; i != 50; ++i)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ Value(ValuesMap{ { "a", ValuesList{ 0 } } }), Value(counted) };
+        EXPECT_EQ(L"[0]", wideModule.exports["selfref"].As<UserCallable>().callable(callParams).AsWString());
+    }
+    EXPECT_GT(8, token.use_count());
+}
+
+TEST(BorrowedCellsSingle, ModuleCallsGrowingAKeptArgument)
+{
+    // 0573: a kept argument the module's later calls append to: the cell's own items are not walked again at each
+    // call's end while only its size grows (verifier of 0573: quadratic in the calls otherwise)
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% set store = [] %}{% macro init(d) %}{% set _ = store.append(d) %}{% endmacro %}"
+                           "{% macro add(x) %}{% set _ = store[0].append(x) %}{% endmacro %}{% macro size() %}{{ store[0]|length }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    auto call = [&module](const char* name, ValuesList args) {
+        UserCallableParams params;
+        params.extraPosArgs = std::move(args);
+        return module.exports[name].As<UserCallable>().callable(params).AsString();
+    };
+    call("init", ValuesList{ Value(ValuesList{}) });
+    for (int64_t i = 0; i != 3000; ++i)
+    {
+        call("add", ValuesList{ i });
+    }
+    EXPECT_EQ("3000", call("size", {}));
 }
 
 TEST(BorrowedCellsSingle, ModuleKeepsTheCellOfAGenericListTheHostLendsAgain)

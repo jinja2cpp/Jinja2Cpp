@@ -394,7 +394,7 @@ private:
     mutable bool m_frozen = false;
     // The counts of the last walk of the items that found other holders than the items
     // (IsHeldByItsItems): the source's references, the cell's and the storage's items. A cell the module
-    // keeps is not walked again at each call's end while they stay
+    // keeps is not walked again at each call's end while the counts stay and the storage has not doubled
     mutable uint32_t m_heldSourceUses = 0;
     mutable uint32_t m_heldUses = 0;
     mutable uint32_t m_heldItems = 0;

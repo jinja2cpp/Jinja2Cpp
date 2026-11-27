@@ -1484,10 +1484,6 @@ std::shared_ptr<const void> GenericOwner([[maybe_unused]] const Holder<T>& holde
     }
 }
 
-// An item of a generic list or map: a nested container of reflected data reads its parent
-// through raw pointers (Reflect of a field or an element), so once the item escapes the
-// container (a loop target stored in a namespace, a sorted copy) its accessor must keep the
-// owned root alive (docs/tasks/0125). Strings are copied by the convertor either way
 // The holder is the deleter of a shared pointer that owns nothing: one allocation holds the owner and the
 // nested container whose accessor it lends, as make_shared would, and std::get_deleter finds the holder from
 // the item's aliasing accessor, so that a module's cell of the item asks the nested container whether the
@@ -1507,6 +1503,10 @@ struct LentItemHolder
     }
 };
 
+// An item of a generic list or map: a nested container of reflected data reads its parent
+// through raw pointers (Reflect of a field or an element), so once the item escapes the
+// container (a loop target stored in a namespace, a sorted copy) its accessor must keep the
+// owned root alive (docs/tasks/0125). Strings are copied by the convertor either way
 template<typename Container, typename Accessor>
 Container WithOwnerImpl(std::shared_ptr<const void> owner, Container nested)
 {
@@ -2222,8 +2222,10 @@ const void* HostIdentity(const IJsonNode* node, const void* accessor, const Cell
 // or shares stays at its address while the cell's source lives (IJsonNode::KeepsDocument,
 // docs/tasks/0402), so the cell of the document itself, lent by the host, lives across the calls
 // and DropUnheld drops it once the host lets go. A nested value read through its parent (`d.a`) is
-// lent through an aliasing accessor (WithOwner), which DropUnheld cannot tell lent again or not:
-// its cell stays call-scoped, as before 0402, unless it is a global's, which the module keeps
+// lent through an aliasing accessor (WithOwner): its node identity outlives the lent item, as a
+// later read of the parent names the same value, so whether the host lends the parent again
+// decides, which the item's holder does not tell (docs/tasks/0572 asks the nested container only).
+// Its cell stays call-scoped, as before 0402, unless it is a global's, which the module keeps
 // anyway, so that a fresh document per call does not leave a cell per call (verifier of 0402)
 template<typename Container>
 bool HasUnheldIdentity(const IJsonNode* node, const Container& container, bool global) noexcept
