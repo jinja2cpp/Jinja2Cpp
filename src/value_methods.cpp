@@ -1259,6 +1259,10 @@ struct StrOps
         uint32_t grouping = 0;
         int64_t precision = -1;
         uint32_t type = 0;
+        // The fill came with the align, which a '0' before the width keeps
+        bool fillSet = false;
+        // A '0' before the width without an align: a number pads after its sign ('='), anything else left aligns
+        bool zeroPad = false;
     };
 
     static bool IsAlign(uint32_t cp) { return cp == '<' || cp == '>' || cp == '^' || cp == '='; }
@@ -1271,6 +1275,7 @@ struct StrOps
         if (chars.size() >= 2 && IsAlign(CodePointValue(chars[1])))
         {
             spec.fill = Str(chars[0].begin(), chars[0].end());
+            spec.fillSet = true;
             spec.align = chars[1][0];
             pos = 2;
         }
@@ -1289,13 +1294,14 @@ struct StrOps
             spec.alternate = true;
             ++pos;
         }
+        // Python's '0' fills with zeros unless a fill was given, whatever the align
         if (peek() == '0')
         {
-            if (spec.align == 0)
+            if (!spec.fillSet)
             {
                 spec.fill = Str(1, static_cast<CharT>('0'));
-                spec.align = '=';
             }
+            spec.zeroPad = spec.align == 0;
             ++pos;
         }
         auto readNumber = [&]() {
@@ -1331,15 +1337,62 @@ struct StrOps
         return spec;
     }
 
+    // A presentation type as Python's errors print it: 'x', or '\xe9' outside printable ASCII
+    static std::string TypeChar(uint32_t type) { return type > 32 && type < 128 ? std::string(1, static_cast<char>(type)) : fmt::format("\\x{:x}", type); }
+
+    // Python checks the separator against the type (`type`, the value's default for none) before anything else:
+    // ',' goes with the decimal and float types, '_' also with b, o, x and X
+    static void CheckGrouping(const FormatSpec& spec, uint32_t type)
+    {
+        if (spec.grouping == 0)
+        {
+            return;
+        }
+        switch (type)
+        {
+        case 0:
+        case 'd':
+        case 'e':
+        case 'E':
+        case 'f':
+        case 'F':
+        case 'g':
+        case 'G':
+        case '%':
+            return;
+        case 'b':
+        case 'o':
+        case 'x':
+        case 'X':
+            if (spec.grouping == '_')
+            {
+                return;
+            }
+            break;
+        default:
+            break;
+        }
+        Raise(fmt::format("Cannot specify '{}' with '{}'.", static_cast<char>(spec.grouping), TypeChar(type)));
+    }
+
     static Str FormatAsString(const InternalValue& val, const FormatSpec& spec)
     {
+        CheckGrouping(spec, spec.type == 0 ? 's' : spec.type);
         if (spec.type != 0 && spec.type != 's')
         {
-            Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(spec.type), TypeName(val)));
+            Raise(fmt::format("Unknown format code '{}' for object of type '{}'", TypeChar(spec.type), TypeName(val)));
         }
-        if (spec.sign != 0 || spec.alternate || spec.grouping != 0 || spec.align == '=')
+        if (spec.sign != 0)
         {
-            Raise("Invalid format specifier for a string");
+            Raise("Sign not allowed in string format specifier");
+        }
+        if (spec.alternate)
+        {
+            Raise("Alternate form (#) not allowed in string format specifier");
+        }
+        if (spec.align == '=')
+        {
+            Raise("'=' alignment not allowed in string format specifier");
         }
         Str body = ToStr(val, false);
         if (spec.precision >= 0)
@@ -1376,8 +1429,9 @@ struct StrOps
         return type == 'x' || type == 'X' ? 16 : 10;
     }
 
-    // Digits of magnitude in the base the type selects, grouped and with the 0b/0o/0x prefix
-    static std::string IntegerDigits(uint64_t magnitude, const FormatSpec& spec)
+    // Digits of magnitude in the base the type selects, grouped; the 0b/0o/0x prefix goes with the sign.
+    // minWidth: the width grouped zero padding fills (GroupedZeroWidth)
+    static std::string IntegerDigits(uint64_t magnitude, const FormatSpec& spec, int64_t minWidth)
     {
         const auto type = spec.type;
         const int base = IntegerBase(type);
@@ -1389,12 +1443,12 @@ struct StrOps
             magnitude /= static_cast<uint64_t>(base);
         } while (magnitude != 0);
         std::reverse(digits.begin(), digits.end());
-        return DecorateDigits(std::move(digits), base, spec);
+        return DecorateDigits(std::move(digits), base, spec, minWidth);
     }
 
     // The same for an integer outside int64 (docs/tasks/0270): decimal digits are subject to
     // CPython's digit limit, the power-of-two bases are not
-    static std::string IntegerDigits(const BigIntView& val, const FormatSpec& spec)
+    static std::string IntegerDigits(const BigIntView& val, const FormatSpec& spec, int64_t minWidth)
     {
         const int base = IntegerBase(spec.type);
         std::string digits;
@@ -1410,37 +1464,53 @@ struct StrOps
                 std::transform(digits.begin(), digits.end(), digits.begin(), [](char ch) { return ch >= 'a' && ch <= 'f' ? static_cast<char>(ch - 'a' + 'A') : ch; });
             }
         }
-        return DecorateDigits(std::move(digits), base, spec);
+        return DecorateDigits(std::move(digits), base, spec, minWidth);
     }
 
-    // Groups digits, given most significant first and never empty, and adds the prefix; digits
-    // with nothing to add come back as they are, uncopied (docs/tasks/0577)
-    static std::string DecorateDigits(std::string digits, int base, const FormatSpec& spec)
+    // Groups `digits`, most significant first, every `groupSize` from the least significant one, with leading zeros
+    // grouped as well up to `minWidth` characters, as CPython's _PyUnicode_InsertThousandsGrouping does: the result
+    // never starts with a separator, so that it can come out one character longer ('{:08,}' of 1234 is 0,001,234)
+    static std::string GroupDigits(std::string_view digits, size_t groupSize, char separator, int64_t minWidth)
     {
-        const bool prefix = spec.alternate && base != 10;
-        if (spec.grouping == 0 && !prefix)
+        std::string result;
+        const auto zeros = minWidth > static_cast<int64_t>(digits.size()) ? static_cast<size_t>(minWidth) - digits.size() : 0;
+        result.reserve(digits.size() + zeros + ((digits.size() + zeros) / groupSize) + 1);
+        size_t remaining = digits.size();
+        for (bool first = true;; first = false)
+        {
+            if (!first)
+            {
+                result.push_back(separator);
+                --minWidth;
+            }
+            const auto wanted = std::max<int64_t>({ static_cast<int64_t>(remaining), minWidth, 1 });
+            const auto length = std::min(static_cast<size_t>(wanted), groupSize);
+            const auto taken = std::min(remaining, length);
+            for (size_t n = 0; n != taken; ++n)
+            {
+                result.push_back(digits[remaining - 1 - n]);
+            }
+            result.append(length - taken, '0');
+            remaining -= taken;
+            minWidth -= static_cast<int64_t>(length);
+            if (remaining == 0 && minWidth <= 0)
+            {
+                break;
+            }
+        }
+        std::reverse(result.begin(), result.end());
+        return result;
+    }
+
+    // Groups digits, given most significant first and never empty; digits with nothing to add come back as they
+    // are, uncopied (docs/tasks/0577)
+    static std::string DecorateDigits(std::string digits, int base, const FormatSpec& spec, int64_t minWidth)
+    {
+        if (spec.grouping == 0)
         {
             return digits;
         }
-        const size_t groupSize = base == 10 ? 3 : 4;
-        const size_t separators = spec.grouping != 0 ? (digits.size() - 1) / groupSize : 0;
-        std::string result;
-        result.reserve(digits.size() + separators + (prefix ? 2 : 0));
-        if (prefix)
-        {
-            result.push_back('0');
-            result.push_back(static_cast<char>(spec.type));
-        }
-        // Groups count from the least significant digit
-        for (size_t n = 0; n < digits.size(); ++n)
-        {
-            if (spec.grouping != 0 && n != 0 && (digits.size() - n) % groupSize == 0)
-            {
-                result.push_back(static_cast<char>(spec.grouping));
-            }
-            result.push_back(digits[n]);
-        }
-        return result;
+        return GroupDigits(digits, base == 10 ? 3 : 4, static_cast<char>(spec.grouping), minWidth);
     }
 
     // Digits of a non-negative double for the float presentation types
@@ -1477,27 +1547,24 @@ struct StrOps
         return digits;
     }
 
-    // Inserts the separator every three digits of the integer part
-    static std::string GroupIntegerPart(const std::string& digits, uint32_t separator)
+    // Inserts the separator every three digits of the integer part; zero padding fills what the sign (signWidth)
+    // and the rest leave of the width with grouped zeros. nan and inf have no integer part and pad as they are
+    static std::string GroupIntegerPart(const std::string& digits, const FormatSpec& spec, int64_t signWidth)
     {
         auto intEnd = digits.find_first_not_of("0123456789");
         if (intEnd == std::string::npos)
         {
             intEnd = digits.size();
         }
-        std::string grouped;
-        for (size_t n = 0; n < intEnd; ++n)
+        if (intEnd == 0)
         {
-            if (n != 0 && (intEnd - n) % 3 == 0)
-            {
-                grouped.push_back(static_cast<char>(separator));
-            }
-            grouped.push_back(digits[n]);
+            return digits;
         }
-        return grouped + digits.substr(intEnd);
+        const auto minWidth = GroupedZeroWidth(spec, signWidth + static_cast<int64_t>(digits.size() - intEnd));
+        return GroupDigits(std::string_view(digits).substr(0, intEnd), 3, static_cast<char>(spec.grouping), minWidth) + digits.substr(intEnd);
     }
 
-    static std::string FormatFloat(double magnitude, const FormatSpec& spec)
+    static std::string FormatFloat(double magnitude, const FormatSpec& spec, int64_t signWidth)
     {
         auto digits = FloatDigits(magnitude, spec);
         if (spec.type == 'E' || spec.type == 'F' || spec.type == 'G')
@@ -1506,9 +1573,36 @@ struct StrOps
         }
         if (spec.grouping != 0)
         {
-            digits = GroupIntegerPart(digits, spec.grouping);
+            digits = GroupIntegerPart(digits, spec, signWidth);
         }
         return digits;
+    }
+
+    static CharT EffectiveAlign(const FormatSpec& spec, bool numeric)
+    {
+        if (spec.align != 0)
+        {
+            return spec.align;
+        }
+        if (!numeric)
+        {
+            return '<';
+        }
+        return spec.zeroPad ? '=' : '>';
+    }
+
+    // The characters of a number's sign: '-', or '+' and ' ' when the spec asks
+    static int64_t SignWidth(bool negative, const FormatSpec& spec) { return negative || spec.sign == '+' || spec.sign == ' ' ? 1 : 0; }
+
+    // The width grouped digits fill with grouped zeros, given the width of what goes beside them (sign, prefix,
+    // fraction): only zeros padding after the sign group, as CPython's calc_number_widths has it; 0 for no padding
+    static int64_t GroupedZeroWidth(const FormatSpec& spec, int64_t besideWidth)
+    {
+        if (spec.grouping == 0 || spec.width <= 0 || spec.fill.size() != 1 || spec.fill[0] != '0' || EffectiveAlign(spec, true) != '=')
+        {
+            return 0;
+        }
+        return spec.width - besideWidth;
     }
 
     // Pads sign and body to the spec's width; '=' puts the padding between them
@@ -1522,11 +1616,7 @@ struct StrOps
             return body;
         }
         auto pad = spec.width - len;
-        CharT align = spec.align;
-        if (align == 0)
-        {
-            align = numeric ? '>' : '<';
-        }
+        const CharT align = EffectiveAlign(spec, numeric);
         auto makePad = [&spec](int64_t n) {
             Str result;
             for (int64_t i = 0; i < n; ++i)
@@ -1554,7 +1644,18 @@ struct StrOps
         Str body;
         bool numeric = false;
         bool negative = false;
+        // The presentation type of a 0b/0o/0x prefix, which goes with the sign, before '=' padding
+        uint32_t prefix = 0;
     };
+
+    // The presentation type of an integer's 0b/0o/0x prefix ('#'), or 0
+    static uint32_t PrefixOf(const FormatSpec& spec) { return spec.alternate && IntegerBase(spec.type) != 10 ? spec.type : 0; }
+
+    // The width grouped zero padding fills beside an integer's sign and prefix
+    static int64_t IntegerZeroWidth(const Formatted& result, const FormatSpec& spec)
+    {
+        return GroupedZeroWidth(spec, SignWidth(result.negative, spec) + (result.prefix != 0 ? 2 : 0));
+    }
 
     static Formatted FormatInteger(int64_t value, const FormatSpec& spec)
     {
@@ -1570,8 +1671,9 @@ struct StrOps
         }
         result.numeric = true;
         result.negative = value < 0;
+        result.prefix = PrefixOf(spec);
         uint64_t magnitude = result.negative ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
-        result.body = Ascii(IntegerDigits(magnitude, spec));
+        result.body = Ascii(IntegerDigits(magnitude, spec, IntegerZeroWidth(result, spec)));
         return result;
     }
 
@@ -1588,7 +1690,8 @@ struct StrOps
         Formatted result;
         result.numeric = true;
         result.negative = value.Sign() < 0;
-        result.body = Ascii(IntegerDigits(value, spec));
+        result.prefix = PrefixOf(spec);
+        result.body = Ascii(IntegerDigits(value, spec, IntegerZeroWidth(result, spec)));
         return result;
     }
 
@@ -1596,12 +1699,12 @@ struct StrOps
     {
         if (!IsFloatType(spec.type))
         {
-            Raise(fmt::format("Unknown format code '{}' for object of type '{}'", static_cast<char>(spec.type), TypeName(val)));
+            Raise(fmt::format("Unknown format code '{}' for object of type '{}'", TypeChar(spec.type), TypeName(val)));
         }
         Formatted result;
         result.numeric = true;
         result.negative = std::signbit(value) && !std::isnan(value);
-        result.body = Ascii(FormatFloat(std::fabs(value), spec));
+        result.body = Ascii(FormatFloat(std::fabs(value), spec, SignWidth(result.negative, spec)));
         return result;
     }
 
@@ -1628,18 +1731,21 @@ struct StrOps
         {
             intValue = *boolVal ? 1 : 0;
         }
-        const bool isInt = intVal != nullptr || bigVal.has_value() || (boolVal != nullptr && type != 0 && type != 's');
+        // A bool formats as its int under any spec but the empty one (Python's int.__format__)
+        const bool isInt = intVal != nullptr || bigVal.has_value() || boolVal != nullptr;
         Formatted out;
-        if (IsStringValue(val) || (boolVal && type == 0))
+        if (IsStringValue(val))
         {
             out.body = FormatAsString(val, spec);
         }
         else if (isInt && IsIntegerType(type))
         {
+            CheckGrouping(spec, type);
             out = bigVal ? FormatBigInteger(*bigVal, spec) : FormatInteger(intValue, spec);
         }
         else if (isInt || dblVal)
         {
+            CheckGrouping(spec, type);
             auto real = static_cast<double>(intValue);
             if (dblVal)
             {
@@ -1664,6 +1770,11 @@ struct StrOps
         else if (out.numeric && (spec.sign == '+' || spec.sign == ' '))
         {
             signStr = Str(1, static_cast<CharT>(spec.sign));
+        }
+        if (out.prefix != 0)
+        {
+            signStr.push_back(static_cast<CharT>('0'));
+            signStr.push_back(static_cast<CharT>(out.prefix));
         }
         return PadFormatted(spec, signStr, std::move(out.body), out.numeric);
     }

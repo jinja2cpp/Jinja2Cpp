@@ -770,34 +770,41 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
             return InternalValue(callable);
         }
         const auto& attributes = callable.GetAttributes();
-        if (!attributes)
+        if (attributes)
+        {
+            auto p = attributes->find(field);
+            if (p != attributes->end())
+            {
+                return p->second;
+            }
+        }
+        // A built-in method's __name__ and __qualname__ (tuple.count), from the name it keeps,
+        // so that binding one allocates nothing more (docs/tasks/0571); a method bound through a
+        // receiver (loop.cycle, cycler.next) takes the receiver's class (docs/tasks/0585)
+        const char* method = callable.GetBoundMethod();
+        if (!method || (field != "__name__" && field != "__qualname__"))
         {
             return InternalValue();
         }
-
-        auto p = attributes->find(field);
-        if (p != attributes->end())
+        std::string className;
+        if (const auto& receiver = callable.GetBoundReceiver())
         {
-            return p->second;
+            className = receiver->GetClassName();
         }
-        // A built-in method's __name__ and __qualname__ (tuple.count), from the name it keeps,
-        // so that binding one allocates nothing more (docs/tasks/0571)
-        const auto self = attributes->find("__self__");
-        if (const char* method = callable.GetBoundMethod())
+        else if (attributes)
         {
-            if (!callable.GetBoundReceiver() && self != attributes->end())
+            const auto self = attributes->find("__self__");
+            if (self == attributes->end())
             {
-                if (field == "__name__")
-                {
-                    return InternalValue(std::string(method));
-                }
-                if (field == "__qualname__")
-                {
-                    return InternalValue(std::string(Apply<visitors::PythonTypeNameGetter>(self->second)) + "." + method);
-                }
+                return InternalValue();
             }
+            className = Apply<visitors::PythonTypeNameGetter>(self->second);
         }
-        return InternalValue();
+        else
+        {
+            return InternalValue();
+        }
+        return InternalValue(field == "__name__" ? std::string(method) : className + "." + method);
     }
 };
 
