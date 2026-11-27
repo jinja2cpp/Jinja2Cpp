@@ -264,7 +264,12 @@ void NameResolver::ResolveFrameBodySets(NodeArena& nodes, const BodyCall* first,
 void NameResolver::ResolveBodySets(NodeArena& nodes)
 {
     // The calls of a frame together, still in parse order: frames start and end around each other
-    std::stable_sort(m_bodyCalls.begin(), m_bodyCalls.end(), [](const BodyCall& left, const BodyCall& right) { return left.frame < right.frame; });
+    // (Already so without nested bodies; stable_sort allocates its buffer even then)
+    const auto byFrame = [](const BodyCall& left, const BodyCall& right) { return left.frame < right.frame; };
+    if (!std::is_sorted(m_bodyCalls.begin(), m_bodyCalls.end(), byFrame))
+    {
+        std::stable_sort(m_bodyCalls.begin(), m_bodyCalls.end(), byFrame);
+    }
     const auto* const end = m_bodyCalls.data() + m_bodyCalls.size();
     for (const auto* first = m_bodyCalls.data(); first != end;)
     {
