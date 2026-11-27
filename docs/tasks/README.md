@@ -616,8 +616,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0555](0555-strict-fold-errors-outside-tuple-slices.md) | Strict undefined fold errors outside tuple-of-slices templates | parity | low | done |
 | [0556](0556-strict-output-fold-error.md) | Strict output whose fold fails with an error that is no UndefinedError | parity | low | done |
 | [0557](0557-make-module-filter-policies.md) | Macros of a module keep the filter policies of the load | parity | low | done |
-| [0558](0558-python-derived-context-in-loop-bodies.md) | `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context | parity | low | open |
-| [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | open |
+| [0558](0558-python-derived-context-in-loop-bodies.md) | `pass_context` lookups: loop targets, `with` names and macro locals, and Jinja2's derived Context | parity | low | done |
+| [0559](0559-python-lent-class-globals-as-python-objects.md) | Python module: a lent `range` is not Python's `range` | parity | low | done |
 | [0560](0560-ended-block-in-stored-macro-sees-inner-frames.md) | A block in a macro stored by a nested render that failed renders nothing | parity | low | done |
 | [0561](0561-engine-set-hash-index-and-live-loop.md) | The engine's set has no hash index, and a loop over a set changed in its body goes on | robustness | low | done |
 | [0562](0562-pprint-self-containing-container.md) | pprint of a list or dict that contains itself fails with a recursion error | parity | low | done |
@@ -641,6 +641,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0580](0580-stored-block-of-an-extending-include-lost.md) | A block stored from inside an extending include renders nothing two calls later | parity | low | done |
 | [0581](0581-failed-include-kept-self-loses-frame-names.md) | A `self` an include stored before it failed reads the include's names as undefined | parity | low | done |
 | [0582](0582-host-operator-followups.md) | Host operators: the leftovers of task 0381 | parity | low | open |
+| [0583](0583-python-own-globals-outside-a-lent-call.md) | Python module: Python's `range` given to a template outside a lent call is not the template's `range` | parity | low | open |
+| [0584](0584-block-in-scoped-block-loses-loop-names.md) | An unscoped block nested in a scoped block does not see the loop around them | parity | low | open |
 | [0585](0585-int-format-zero-pad-prefix-grouping.md) | Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base | parity | low | open |
 | [0586](0586-closure-in-module-top-level-with-loses-outer-names.md) | A closure defined in a `with` at a module's top level reads the module's names as undefined on later calls | parity | low | open |
 | [0587](0587-set-erase-and-update-stay-linear.md) | The engine's set still spends O(n) per remove, pop and update | robustness | low | open |
@@ -648,3 +650,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0589](0589-ext-debug-extension.md) | `jinja2.ext.debug`: implement `{% debug %}` or record it as deliberate | parity | low | open |
 | [0590](0590-choiceloader-fallback-test.md) | Pin `ChoiceLoader` behaviour: several handlers on one prefix | parity | low | open |
 | [0591](0591-cell-protocol-inductive-invariant.md) | Find the cell protocol's inductive invariant | robustness | low | open |
+| [0592](0592-load-reads-after-many-sets-quadratic.md) | Load: name reads after many `set`s in one body cost reads x sets | robustness | low | open |
