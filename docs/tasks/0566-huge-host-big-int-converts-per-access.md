@@ -39,4 +39,4 @@ entries hit), and an object that with the others would take more than a quarter 
 Tests: `BigIntCases` rows (narrow and wide, `hl`/`hmap` params), `BigIntTemplate.HugeHostItemConvertsOncePerRender`
 (budget, timing ratio), `BigIntTemplate.HostBigIntValueSharesWithinTheCollector` (identity, uncharged,
 credit on eviction), module, limits, suspendable (two interleaved renders, same thread) and threads
-tests. Option C (a words form in the public BigInt) is filed as 0593. Measurements are in the PR.
+tests. Option C (a words form in the public BigInt) is filed as 0599. Measurements are in the PR.

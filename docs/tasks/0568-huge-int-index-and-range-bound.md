@@ -30,6 +30,6 @@ dict subscripts now render empty as in Python (`subscripts.huge_index_context`, 
 wide). `range(h)|first` stays a deliberate divergence (`globals.range_huge_context_bound`, rejects):
 clamping the stop would make `|length` and the repr wrong where Python raises OverflowError or
 prints the bound, and ranges are int64 by 0178.
-  A key that holds such an integer (`[1, 2, 3][(h, 1)]`, `{'a': 1}[(h,)]`, `(1, 2)[[h]]`) cannot be printed
-  either, so the undefined's message names it `<key that cannot be printed>` (Python formats its message only when it
-  is read): parity case `subscripts.huge_index_nested_context` (verifier round 1).
+A key that holds such an integer (`[1, 2, 3][(h, 1)]`, `{'a': 1}[(h,)]`, `(1, 2)[[h]]`) cannot be
+printed either, so the undefined's message names it `<key that cannot be printed>` (Python formats
+its message only when it is read): parity case `subscripts.huge_index_nested_context` (verifier round 1).
