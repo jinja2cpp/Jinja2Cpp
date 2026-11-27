@@ -229,6 +229,9 @@ public:
     [[nodiscard]] std::vector<std::string_view> UndeclaredNames(const NodeArena& nodes) const;
     // The name expressions made where a slot may be bound, in parse order (for the tests)
     [[nodiscard]] Span<const std::pair<NodeRef<ValueRefExpression>, FrameId>> Uses() const { return m_uses; }
+    // How many stores the resolution of slots looked at, for a check that it stays linear in the template
+    // (docs/tasks/0592)
+    [[nodiscard]] std::size_t StoresScanned() const { return m_storesScanned; }
 
 private:
     enum class Kind : std::uint8_t
@@ -395,6 +398,8 @@ private:
     FrameId m_current = NoFrame;
     bool m_inBranch = false;
     bool m_hasSlots = false;
+    // StoresScanned
+    mutable std::size_t m_storesScanned = 0;
 };
 } // namespace v2
 } // namespace jinja2

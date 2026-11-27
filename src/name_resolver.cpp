@@ -606,8 +606,10 @@ bool NameResolver::IsStored(FrameId frame, std::string_view name, const StoreInd
     }
     if (index)
     {
+        ++m_storesScanned;
         return index->count({ frame, name }) != 0;
     }
+    m_storesScanned += m_stores.size() - stores.firstStore;
     return std::any_of(m_stores.begin() + stores.firstStore, m_stores.end(), [frame, name](const Store& store) { return store.frame == frame && store.name == name; });
 }
 

@@ -4,12 +4,11 @@
 #include "../src/node_arena.h"
 #include "../src/template_parser.h"
 
-#include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
 #include "gtest/gtest.h"
 
-#include <chrono>
+#include <cstddef>
 #include <string>
 
 using namespace jinja2;
@@ -103,12 +102,11 @@ INSTANTIATE_TEST_SUITE_P(Slots, NameResolverTest, testing::Values(
 // clang-format on
 
 // Name reads after many `set`s in one body load in time linear in the template, which may be untrusted
-// (docs/tasks/0592): each read searched the body's stores, so 30000 sets and 30000 reads took 7 s in a Debug build
-namespace
+// (docs/tasks/0592): each read searched the body's stores, 30000 sets and 30000 reads 900 million of them
+TEST(NameResolverLoadTest, ReadsAfterManySetsLookAtFewStores)
 {
-std::chrono::steady_clock::duration LoadSetsThenReads(int count)
-{
-    std::string source = "{% for x in [1] %}";
+    const int count = 30000;
+    std::string source = "{% for x in xs %}";
     for (int i = 0; i != count; ++i)
     {
         source += "{% set s" + std::to_string(i) + " = 1 %}";
@@ -118,19 +116,25 @@ std::chrono::steady_clock::duration LoadSetsThenReads(int count)
         source += "{{ q }}";
     }
     source += "{% endfor %}";
+    NodeArena nodes;
     TemplateEnv env;
-    Template tpl(&env);
-    const auto start = std::chrono::steady_clock::now();
-    EXPECT_TRUE(tpl.Load(source).has_value());
-    return std::chrono::steady_clock::now() - start;
+    detail::LoadSettings settings{ env.GetSettings() };
+    const std::string templateName = "test";
+    TemplateParser<char> parser(&source, settings, &env, templateName, nodes);
+    ASSERT_TRUE(parser.Parse().has_value());
+    // A read looks once in each frame around it
+    EXPECT_LE(parser.GetNames().StoresScanned(), std::size_t{ 4 } * count);
 }
-} // namespace
 
-TEST(NameResolverLoadTest, ReadsAfterManySetsLoadInLinearTime)
+// With many stores, the index finds the same ones as the search (a body of more than 64 stores)
+TEST(NameResolverLoadTest, ManyStoresResolveAsFew)
 {
-    // Four times the template: four times the time when linear, sixteen when quadratic; slack for a noisy runner
-    const auto small = LoadSetsThenReads(10000);
-    const auto large = LoadSetsThenReads(40000);
-    EXPECT_LT(large, small * 9 + std::chrono::milliseconds(100));
+    std::string sets;
+    for (int i = 0; i != 70; ++i)
+    {
+        sets += "{% set s" + std::to_string(i) + " = 1 %}";
+    }
+    const std::string body = "{{ x }}{% for y in x %}{{ y }}{{ s3 }}{% set y = 2 %}{{ y }}{% endfor %}{% macro m(a) %}{{ a }}{% set a = 1 %}{% endmacro %}{% macro n(b) %}{{ b }}{{ s5 }}{% endmacro %}";
+    EXPECT_EQ(ResolveNames("{% for x in xs %}{% set s3 = 1 %}" + body + "{% endfor %}"), ResolveNames("{% for x in xs %}" + sets + body + "{% endfor %}"));
 }
 #endif
