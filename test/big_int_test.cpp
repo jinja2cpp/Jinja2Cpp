@@ -552,7 +552,13 @@ TEST(BigIntToyBackend, HugeOperandsAndResultsGoThroughWords)
         {
             return "error";
         }
-        return std::string(result.value().begin(), result.value().end());
+        // The output is ASCII: narrowed one character at a time (MSVC warns, C4244, on a range constructor)
+        std::string narrow;
+        for (const auto ch : result.value())
+        {
+            narrow.push_back(static_cast<char>(ch));
+        }
+        return narrow;
     };
     // From Python
     const std::string expected = "0|False|939304124|14401|010|True";
