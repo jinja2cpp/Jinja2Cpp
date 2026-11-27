@@ -172,7 +172,9 @@ cannot happen before a tag exists, or it has no end state a release could wait f
 Outside the corpus:
 - a call block escapes a callable's plain string result under autoescape, which Jinja2 writes
   raw (0362, Ruslan 2026-11-02);
-- borrowed JSON views start fresh in each module call (0402 option b, Ruslan 2026-11-06).
+- borrowed JSON views start fresh in each module call (0402 option b, Ruslan 2026-11-06);
+- `{% debug %}` (`jinja2.ext.debug`) is not implemented: it prints a `pprint` of Python's builtin filter and test tables, which
+  a C++ engine cannot match and no corpus case can pin (0589).
 
 Corpus on master `fb833ad`: 3941 cases, 3902 match; besides the deliberate and build-conditional lines, 8 are real (0555 ×3 and 0556, strict undefined folds that Jinja2's optimizer runs at compile time; 0563, dictsort/items pair tuple methods; 0564 ×3, int constants past 4300 digits). The upstream pallets/jinja suite through
 the Python module (0355) passes 645 of 856 (#895 closed five more for 0415; 0431-0434 are done).

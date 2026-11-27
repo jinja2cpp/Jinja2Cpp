@@ -360,6 +360,62 @@ TEST_F(FilesystemHandlerTest, IncludeInLoopLoadsOncePerRender)
 }
 
 // With autoReload the cached template is checked for changes once per render, not once per include
+// Jinja2's ChoiceLoader: several handlers on one prefix are tried in registration order and the first that opens
+// the name wins. The oracle (jinja2 3.1.6, ChoiceLoader([DictLoader(first), DictLoader(second)])) renders the same
+// four rows (0590)
+TEST_F(FilesystemHandlerTest, SeveralHandlersOnOnePrefixFirstThatOpensWins)
+{
+    auto first = std::make_shared<jinja2::MemoryFileSystem>();
+    auto second = std::make_shared<jinja2::MemoryFileSystem>();
+    first->AddFile("both.j2", "first");
+    first->AddFile("only_first.j2", "only first");
+    second->AddFile("both.j2", "second");
+    second->AddFile("only_second.j2", "only second");
+
+    jinja2::TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), first);
+    env.AddFilesystemHandler(std::string(), second);
+
+    EXPECT_EQ("only second", env.LoadTemplate("only_second.j2").value().RenderAsString({}).value());
+    EXPECT_EQ("first", env.LoadTemplate("both.j2").value().RenderAsString({}).value());
+    EXPECT_EQ("only first", env.LoadTemplate("only_first.j2").value().RenderAsString({}).value());
+
+    auto missing = env.LoadTemplate("neither.j2");
+    ASSERT_FALSE(missing);
+    EXPECT_EQ(jinja2::ErrorCode::FileNotFound, missing.error().GetCode());
+
+    // The same order serves includes
+    auto tpl = env.FromString("[{% include 'both.j2' %}|{% include 'only_second.j2' %}]").value();
+    EXPECT_EQ("[first|only second]", tpl.RenderAsString({}).value());
+}
+
+// A cached template stays with the handler that loaded it. A name added to the first handler later does not replace
+// it, as in Jinja2, whose cache entry is checked only against the loader that produced it (oracle: the second render
+// of a ChoiceLoader whose first DictLoader gained the name still gives the second loader's text). Without the cache the
+// first handler wins at once (0590)
+TEST_F(FilesystemHandlerTest, SeveralHandlersCachedTemplateKeepsItsHandler)
+{
+    auto first = std::make_shared<jinja2::MemoryFileSystem>();
+    auto second = std::make_shared<jinja2::MemoryFileSystem>();
+    second->AddFile("t.j2", "second");
+
+    jinja2::TemplateEnv cached;
+    cached.AddFilesystemHandler(std::string(), first);
+    cached.AddFilesystemHandler(std::string(), second);
+    jinja2::TemplateEnv uncached;
+    uncached.GetSettings().cacheSize = 0;
+    uncached.AddFilesystemHandler(std::string(), first);
+    uncached.AddFilesystemHandler(std::string(), second);
+
+    EXPECT_EQ("second", cached.LoadTemplate("t.j2").value().RenderAsString({}).value());
+    EXPECT_EQ("second", uncached.LoadTemplate("t.j2").value().RenderAsString({}).value());
+
+    first->AddFile("t.j2", "first");
+
+    EXPECT_EQ("second", cached.LoadTemplate("t.j2").value().RenderAsString({}).value());
+    EXPECT_EQ("first", uncached.LoadTemplate("t.j2").value().RenderAsString({}).value());
+}
+
 TEST_F(FilesystemHandlerTest, AutoReloadChecksOncePerRender)
 {
     CountingFileSystem fs;
