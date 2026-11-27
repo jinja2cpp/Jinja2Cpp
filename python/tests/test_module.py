@@ -58,13 +58,53 @@ def test_vars_locals_and_shared():
     for kwargs in ({"vars": {"a": 1, "b": 2}}, {"vars": {"a": 1}, "locals": {"b": 5}}, {"vars": {"a": 1, "b": 2}, "shared": False}):
         ours, theirs = [m.Environment().from_string(source).make_module(**kwargs) for m in (jinja2cpp, jinja2)]
         assert (str(ours), ours.total) == (str(theirs), theirs.total), kwargs
-    # a global is visible, unless the context is shared (the engine adds its own builtins only)
+    # a global is visible, unless the context is shared
     for module in (jinja2cpp, jinja2):
         env = module.Environment()
         env.globals["g"] = "G"
         out = env.from_string("{{ a }}-{{ g }}").make_module({"a": 1})
         assert str(out) == "1-G"
         assert str(env.from_string("{{ a }}-{{ g }}").make_module({"a": 1}, shared=True)) == "1-"
+        # any truth value, as Jinja2 takes it
+        assert str(env.from_string("{{ a }}-{{ g }}").make_module({"a": 1}, shared=1)) == "1-"
+        assert str(env.from_string("{{ a }}-{{ g }}").make_module({"a": 1}, shared=None)) == "1-G"
+
+
+SHARED_TEMPLATES = {
+    "inc": "{{ x }}:{{ range is defined }}",
+    "imp": "{% macro m() %}{{ range(2)|list }}{{ x is defined }}{% endmacro %}",
+}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ range(2)|list }}",
+        "{% set ns = namespace(a=1) %}{{ ns.a }}",
+        "{{ dict(a=1) }}",
+        "{{ cycler(1, 2).next() }}",
+        "{{ joiner()() }}",
+        "{{ lipsum(1) }}",
+        "{{ x }}{{ range is defined }}{{ namespace is defined }}{{ gettext is defined }}",
+        "{% macro m() %}{{ range is defined }}{% endmacro %}{{ m() }}",
+        '{% include "inc" %}',
+        '{% include "inc" without context %}',
+        '{% import "imp" as i %}{{ i.m() }}',
+        '{% import "imp" as i with context %}{{ i.m() }}',
+        '{% from "imp" import m %}{{ m() }}',
+    ],
+)
+def test_shared_module_leaves_out_the_builtin_globals(source):
+    # Jinja2's shared=True renders with the vars alone: range, dict, cycler, joiner, namespace and lipsum are undefined,
+    # also in an include and an import with context; an include or import without context sees the environment's (0574)
+    results = []
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(loader=module.DictLoader(SHARED_TEMPLATES))
+        try:
+            results.append(str(env.from_string(source).make_module({"x": 1}, shared=True)))
+        except module.UndefinedError as error:
+            results.append(("UndefinedError", str(error)))
+    assert results[0] == results[1], source
 
 
 def test_module_globals_and_filters_of_the_environment():
@@ -566,14 +606,70 @@ def test_module_object_cycle_is_collected():
 
 def test_module_object_holding_itself():
     source = "{% set ns = namespace(n=1) %}{% set ns.me = ns %}"
-    mod = jinja2cpp.Environment().from_string(source).make_module()
-    me = mod.ns.me
-    assert me.n == 1 and me.me.n == 1
-    # Jinja2's repr stops at the dict that repeats; each read here is a new object, so the repr is cut by the recursion limit
-    with pytest.raises(RecursionError):
-        repr(mod.ns)
-    del me, mod
+    ours, theirs = both(source)
+    for mod in (ours, theirs):
+        me = mod.ns.me
+        assert me.n == 1 and me.me.n == 1 and me is mod.ns and me.me is me
+    # Python's dict repr stops where the namespace repeats
+    assert repr(ours.ns) == repr(theirs.ns) == "<Namespace {'n': 1, 'me': <Namespace {...}>}>"
+    del me, ours
     gc.collect()
+
+
+OBJECTS_SOURCE = (
+    "{% set ns = namespace(count=0, inner=namespace(a=1)) %}{% set alias = ns %}{% set l = [ns.inner] %}"
+    "{% set cyc = cycler(1, 2) %}{% set j = joiner('-') %}"
+)
+
+
+def test_module_objects_are_jinja2s_classes():
+    # isinstance and callable() as of Jinja2's Namespace, Cycler and Joiner, without the module importing Jinja2 (0575)
+    import jinja2.utils
+
+    classes = (jinja2.utils.Namespace, jinja2.utils.Cycler, jinja2.utils.Joiner)
+    ours, theirs = both(OBJECTS_SOURCE)
+    for mod in (ours, theirs):
+        objects = (mod.ns, mod.cyc, mod.j)
+        assert [[isinstance(o, cls) for cls in classes] for o in objects] == [[True, False, False], [False, True, False], [False, False, True]]
+        assert [callable(o) for o in objects] == [False, False, True]
+        assert [type(o).__name__ for o in objects] == ["Namespace", "Cycler", "Joiner"]
+        assert [o.__class__ for o in objects] == list(classes)
+        with pytest.raises(AttributeError) as error:
+            mod.ns.nope
+        assert str(error.value) == "nope"
+        with pytest.raises(AttributeError, match="'Cycler' object has no attribute 'nope'"):
+            mod.cyc.nope
+
+
+def test_module_objects_read_twice_are_one_object():
+    # A nested namespace, and one exported under two names or in a list, is one Python object, as in Jinja2 (0575)
+    ours, theirs = both(OBJECTS_SOURCE)
+    for mod in (ours, theirs):
+        assert mod.ns.inner is mod.ns.inner
+        assert mod.alias is mod.ns
+        assert mod.l[0] is mod.ns.inner
+    # Python's object goes with the last reference to it, and the module makes another
+    mod = jinja2cpp.Environment().from_string("{% set ns = namespace(inner=namespace(a=1)) %}").make_module()
+    ref = weakref.ref(mod.ns.inner)
+    gc.collect()
+    assert ref() is None and mod.ns.inner.a == 1
+
+
+def test_module_object_method_reprs_as_a_bound_method():
+    ours, theirs = both(OBJECTS_SOURCE)
+    for mod in (ours, theirs):
+        for obj, method in ((mod.cyc, "next"), (mod.cyc, "reset")):
+            cls = type(obj).__name__
+            assert repr(getattr(obj, method)) == f"<bound method {cls}.{method} of {obj!r}>"
+            assert repr(obj).startswith(f"<jinja2.utils.{cls} object at 0x")
+
+
+def test_module_object_passed_to_a_render_prints_as_the_object():
+    ours, theirs = both(OBJECTS_SOURCE)
+    source = "{{ x }}|{{ [x] }}|{{ x.inner }}|{{ x.count }}|{{ c.next() }}{{ c.next() }}"
+    assert jinja2cpp.Template(source).render(x=ours.ns, c=ours.cyc) == jinja2.Template(source).render(x=theirs.ns, c=theirs.cyc)
+    for mod, module in ((ours, jinja2cpp), (theirs, jinja2)):
+        assert module.Template("{{ c }}").render(c=mod.cyc).startswith("<jinja2.utils.Cycler object at 0x")
 
 
 def test_module_macro_result_that_is_an_object():

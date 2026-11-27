@@ -363,7 +363,9 @@ public:
     [[nodiscard]] bool CatchKwargs() const { return m_catchKwargs; }
     [[nodiscard]] bool CatchVarargs() const { return m_catchVarargs; }
     [[nodiscard]] bool Caller() const { return m_caller; }
-    [[nodiscard]] std::string Repr() const { return "<macro '" + m_name + "'>"; }
+    [[nodiscard]] std::string Repr() const { return m_repr.empty() ? "<macro '" + m_name + "'>" : m_repr; }
+    // A method of a module's cycler or joiner prints as Jinja2's bound method (ModuleObject::GetAttr)
+    void SetRepr(std::string repr) { m_repr = std::move(repr); }
 
     int Traverse(visitproc visit, void* arg) const
     {
@@ -392,6 +394,7 @@ private:
     nb::object m_templateName;
     std::string m_name;
     std::vector<std::string> m_arguments;
+    std::string m_repr;
     bool m_catchKwargs = false;
     bool m_catchVarargs = false;
     bool m_caller = false;
@@ -435,28 +438,65 @@ public:
     // The engine's value, which the host API passes back to the module (ToEngine)
     [[nodiscard]] const jinja2::Value& Value() const { return m_value; }
 
-    nb::object GetAttr(const std::string& name) const
+    nb::object GetAttr(nb::handle self, const std::string& name) const
     {
-        return Read([&] {
+        auto result = Read([&] {
             const auto* map = m_value.GetIf<jinja2::GenericMap>();
             std::optional<jinja2::Value> found = map ? map->Find(name) : std::nullopt;
             if (!found)
             {
-                PyErr_Format(PyExc_AttributeError, "'%s' object has no attribute '%s'", ClassName(), name.c_str());
+                // Jinja2's Namespace raises AttributeError(name), the others Python's own message
+                if (std::string_view(ClassName()) == "Namespace")
+                {
+                    PyErr_SetObject(PyExc_AttributeError, MakeStr(name).ptr());
+                }
+                else
+                {
+                    PyErr_Format(PyExc_AttributeError, "'%s' object has no attribute '%s'", ClassName(), name.c_str());
+                }
                 throw nb::python_error();
             }
             return ExportToPython(*found, Context(), m_name + "." + name);
         });
+        // A cycler's next and reset, a joiner's __call__: Jinja2's bound methods
+        if (std::string_view(ClassName()) != "Namespace" && nb::isinstance<ModuleMacro>(result))
+        {
+            nb::cast<ModuleMacro&>(result).SetRepr("<bound method " + std::string(ClassName()) + "." + name + " of " + ObjectRepr(self) + ">");
+        }
+        return result;
     }
 
-    // Jinja2's Namespace.__repr__ is <Namespace {attributes}>, the others' the default object repr
+    // Jinja2's Namespace.__repr__ is <Namespace {attributes}>, the others' the default object repr; a namespace that holds
+    // itself prints `{...}` there, as Python's dict repr does
     nb::object Repr(nb::handle self) const
     {
         if (std::string_view(ClassName()) != "Namespace")
         {
-            const auto text = "<jinja2.utils." + std::string(ClassName()) + " object at 0x" + AddressOf(self) + ">";
+            const auto text = ObjectRepr(self);
             return nb::str(text.c_str(), text.size());
         }
+        const int entered = Py_ReprEnter(self.ptr());
+        if (entered != 0)
+        {
+            if (entered < 0)
+            {
+                throw nb::python_error();
+            }
+            return nb::str("<Namespace {...}>");
+        }
+        struct Leave
+        {
+            explicit Leave(PyObject* entered)
+                : object(entered)
+            {
+            }
+            PyObject* object;
+            ~Leave() { Py_ReprLeave(object); }
+            Leave(const Leave&) = delete;
+            Leave& operator=(const Leave&) = delete;
+            Leave(Leave&&) = delete;
+            Leave& operator=(Leave&&) = delete;
+        } leave(self.ptr());
         nb::dict attributes = Read([&] {
             nb::dict result;
             const auto* map = m_value.GetIf<jinja2::GenericMap>();
@@ -474,17 +514,26 @@ public:
         return nb::str(("<Namespace " + std::string(nb::cast<std::string>(text)) + ">").c_str());
     }
 
-    // next(cycler) as Jinja2's Cycler, which has __next__ and no __iter__
-    nb::object Next() const
+    // Jinja2's class of the object (`jinja2.utils.Namespace`, ...), which `__class__` gives so that isinstance holds; the
+    // module's own type when Jinja2 does not import
+    [[nodiscard]] nb::object PythonClass(nb::handle self) const
     {
-        RequireClass("Cycler", "is not an iterator");
-        return GetAttr("next")();
-    }
-    // A joiner is called as it is in the template: '' the first time, then its separator
-    nb::object Call(nb::args args, nb::kwargs kwargs) const
-    {
-        RequireClass("Joiner", "is not callable");
-        return GetAttr("__call__")(*args, **kwargs);
+        auto module = nb::steal(PyImport_ImportModule("jinja2.utils"));
+        if (module)
+        {
+            auto cls = nb::steal(PyObject_GetAttrString(module.ptr(), ClassName()));
+            if (cls)
+            {
+                return cls;
+            }
+        }
+        // Not installed, or without the class; anything else (KeyboardInterrupt) is raised
+        if (!PyErr_ExceptionMatches(PyExc_ImportError) && !PyErr_ExceptionMatches(PyExc_AttributeError))
+        {
+            throw nb::python_error();
+        }
+        PyErr_Clear();
+        return nb::borrow(reinterpret_cast<PyObject*>(Py_TYPE(self.ptr())));
     }
 
     int Traverse(visitproc visit, void* arg) const
@@ -512,14 +561,8 @@ private:
         const char* name = map ? map->GetObjectClass() : nullptr;
         return name ? name : "object";
     }
-    void RequireClass(const char* expected, const char* what) const
-    {
-        if (std::string_view(ClassName()) != expected)
-        {
-            PyErr_Format(PyExc_TypeError, "'%s' object %s", ClassName(), what);
-            throw nb::python_error();
-        }
-    }
+    // The default object repr Jinja2's Cycler and Joiner have, of this object
+    [[nodiscard]] std::string ObjectRepr(nb::handle self) const { return "<jinja2.utils." + std::string(ClassName()) + " object at 0x" + AddressOf(self) + ">"; }
     static std::string AddressOf(nb::handle self)
     {
         char text[2 * sizeof(void*) + 1];
@@ -568,6 +611,78 @@ private:
     nb::object m_templateName;
     std::string m_name;
 };
+
+// The module objects by class, as Jinja2's: a namespace and a cycler are not callable, a joiner is; a cycler has
+// __next__ (and no __iter__, as Jinja2's Cycler)
+class ModuleNamespace : public ModuleObject
+{
+public:
+    using ModuleObject::ModuleObject;
+};
+
+class ModuleCycler : public ModuleObject
+{
+public:
+    using ModuleObject::ModuleObject;
+    nb::object Next(nb::handle self) const { return GetAttr(self, "next")(); }
+};
+
+class ModuleJoiner : public ModuleObject
+{
+public:
+    using ModuleObject::ModuleObject;
+    // Called as it is in the template: '' the first time, then its separator
+    nb::object Call(nb::handle self, nb::args args, nb::kwargs kwargs) const { return GetAttr(self, "__call__")(*args, **kwargs); }
+};
+
+// The module objects Python holds, by the identity of the engine's object (IMapItemAccessor::GetIdentity), so that a
+// nested namespace read twice is one object (`module.ns.inner is module.ns.inner`), as is one exported under two names.
+// Weak (PyNames::liveModuleObjects): the entry goes with the Python object, which keeps the engine's object, and so its
+// identity, alive till then
+
+// The Python object of the module's live object `value` of class `objectClass`
+nb::object MakeModuleObject(const jinja2::Value& value, const ExportContext& context, const std::string& name, std::string_view objectClass)
+{
+    const auto* map = value.GetIf<jinja2::GenericMap>();
+    const void* identity = map && map->GetAccessor() ? map->GetAccessor()->GetIdentity() : nullptr;
+    auto key = nb::int_(reinterpret_cast<std::uintptr_t>(identity));
+    const auto& objects = Names().liveModuleObjects;
+    if (identity)
+    {
+        auto found = nb::steal(PyObject_CallMethod(objects.ptr(), "get", "O", key.ptr()));
+        if (!found)
+        {
+            throw nb::python_error();
+        }
+        // The same object still: one the garbage collector cleared has let go of it, and its identity may be another's
+        if (const auto* held = found.is_none() ? nullptr : ModuleObjectValue(found))
+        {
+            const auto* heldMap = held->GetIf<jinja2::GenericMap>();
+            if (heldMap && heldMap->GetAccessor() && heldMap->GetAccessor()->GetIdentity() == identity)
+            {
+                return found;
+            }
+        }
+    }
+    nb::object result;
+    if (objectClass == "Namespace")
+    {
+        result = nb::cast(new ModuleNamespace(value, context, name), nb::rv_policy::take_ownership);
+    }
+    else if (objectClass == "Cycler")
+    {
+        result = nb::cast(new ModuleCycler(value, context, name), nb::rv_policy::take_ownership);
+    }
+    else
+    {
+        result = nb::cast(new ModuleJoiner(value, context, name), nb::rv_policy::take_ownership);
+    }
+    if (identity && PyObject_SetItem(objects.ptr(), key.ptr(), result.ptr()) != 0)
+    {
+        throw nb::python_error();
+    }
+    return result;
+}
 
 // One level of a nested export, counted against Python's recursion limit
 class ExportDepth
@@ -643,7 +758,7 @@ nb::object ExportToPython(const jinja2::Value& value, const ExportContext& conte
         // A namespace, a cycler or a joiner is the module's own (ModuleExports::Objects)
         if (IsModuleObjectClass(map->GetObjectClass()))
         {
-            return nb::cast(new ModuleObject(value, context, name), nb::rv_policy::take_ownership);
+            return MakeModuleObject(value, context, name, map->GetObjectClass());
         }
         // The entries under their own keys: `{1: 'a', '1': 'b'}` stays two entries
         nb::dict result;
@@ -698,7 +813,28 @@ int ObjectClear(PyObject* self)
     return 0;
 }
 
-PyType_Slot g_objectSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&ObjectTraverse) }, { Py_tp_clear, reinterpret_cast<void*>(&ObjectClear) }, { 0, nullptr } };
+// Attribute lookup of a module object: `__class__` is Jinja2's class, so that isinstance holds (nanobind cannot install a
+// `__class__` property: setting it on the type sets the type's own class); then what the type has, then the object's
+// attributes (__getattr__ as a slot, which a `__getattr__` method would replace with Python's own hook)
+PyObject* ObjectGetAttro(PyObject* self, PyObject* name)
+{
+    if (PyUnicode_Check(name) && PyUnicode_CompareWithASCIIString(name, "__class__") == 0)
+    {
+        return PyObject_CallMethod(self, "__jinja2cpp_class__", nullptr);
+    }
+    PyObject* found = PyObject_GenericGetAttr(self, name);
+    if (found || !PyErr_ExceptionMatches(PyExc_AttributeError))
+    {
+        return found;
+    }
+    PyErr_Clear();
+    return PyObject_CallMethod(self, "__jinja2cpp_getattr__", "O", name);
+}
+
+PyType_Slot g_objectSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&ObjectTraverse) },
+                                { Py_tp_clear, reinterpret_cast<void*>(&ObjectClear) },
+                                { Py_tp_getattro, reinterpret_cast<void*>(&ObjectGetAttro) },
+                                { 0, nullptr } };
 
 PyType_Slot g_macroSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&MacroTraverse) }, { Py_tp_clear, reinterpret_cast<void*>(&MacroClear) }, { 0, nullptr } };
 } // namespace
@@ -719,7 +855,7 @@ PyEnvironment& PyTemplate::LiveEnvironment() const
     return env;
 }
 
-nb::tuple PyTemplate::MakeModule(nb::handle params) const
+nb::tuple PyTemplate::MakeModule(nb::handle params, bool shared) const
 {
     auto& env = LiveEnvironment();
     const auto entry = env.Enter();
@@ -736,8 +872,11 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
             values[std::string(Utf8View(name))] = convert.Convert(value);
         }
     }
-    // The globals are among the params here (Template.make_module)
-    env.AddUninstalledGettext(values);
+    // The globals are among the params here (Template.make_module); shared, Jinja2's module sees the params alone
+    if (!shared)
+    {
+        env.AddUninstalledGettext(values);
+    }
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
     state.environment = m_environment.ptr();
@@ -757,6 +896,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         jinja2::ModuleOptions moduleOptions;
         moduleOptions.exports = jinja2::ModuleExports::Objects;
         moduleOptions.waitForTurn = &WaitWithoutGil;
+        moduleOptions.builtinGlobals = !shared;
         auto made = m_template.MakeModule(values, options, moduleOptions);
         // In the scope, which an undefined value needs for its class
         if (made)
@@ -835,9 +975,14 @@ void BindTemplateModule(nb::module_& module)
         .def_prop_ro("catch_varargs", &ModuleMacro::CatchVarargs)
         .def_prop_ro("caller", &ModuleMacro::Caller);
     nb::class_<ModuleObject>(module, "ModuleObject", nb::type_slots(g_objectSlots), nb::is_weak_referenceable())
-        .def("__getattr__", &ModuleObject::GetAttr)
-        .def("__repr__", [](nb::handle self) { return nb::cast<const ModuleObject&>(self).Repr(self); })
-        .def("__next__", &ModuleObject::Next)
-        .def("__call__", &ModuleObject::Call);
+        .def("__jinja2cpp_getattr__", [](nb::handle self, const std::string& name) { return nb::cast<const ModuleObject&>(self).GetAttr(self, name); })
+        .def("__jinja2cpp_class__", [](nb::handle self) { return nb::cast<const ModuleObject&>(self).PythonClass(self); })
+        .def("__repr__", [](nb::handle self) { return nb::cast<const ModuleObject&>(self).Repr(self); });
+    // Named as Jinja2's classes, whose objects they are (`type(module.ns).__name__`)
+    nb::class_<ModuleNamespace, ModuleObject>(module, "Namespace", nb::type_slots(g_objectSlots), nb::is_weak_referenceable());
+    nb::class_<ModuleCycler, ModuleObject>(module, "Cycler", nb::type_slots(g_objectSlots), nb::is_weak_referenceable())
+        .def("__next__", [](nb::handle self) { return nb::cast<const ModuleCycler&>(self).Next(self); });
+    nb::class_<ModuleJoiner, ModuleObject>(module, "Joiner", nb::type_slots(g_objectSlots), nb::is_weak_referenceable())
+        .def("__call__", [](nb::handle self, nb::args args, nb::kwargs kwargs) { return nb::cast<const ModuleJoiner&>(self).Call(self, std::move(args), std::move(kwargs)); });
 }
 } // namespace jinja2cpp_py

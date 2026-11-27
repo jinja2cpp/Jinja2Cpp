@@ -415,6 +415,13 @@ struct ModuleOptions
      * it throws fails the call or the read
      */
     std::function<void(const std::function<void()>& wait)> waitForTurn;
+    /*!
+     * Whether the module's top level and macros see the engine's own globals (`range`, `dict`, `cycler`, `joiner`,
+     * `namespace`, `lipsum` and, with the i18n extension, its functions), the default. False is Python Jinja2's
+     * `make_module(vars, shared=True)`: the template sees its params only, and so does a template it includes or imports
+     * with context; one it imports without context sees the engine's globals as a render's import does
+     */
+    bool builtinGlobals = true;
 };
 
 /*!
@@ -478,6 +485,21 @@ struct LentCallableInfo
  *         it was lent to has returned
  */
 JINJA2CPP_EXPORT std::optional<LentCallableInfo> DescribeLentCallable(const UserCallable& callable);
+
+/*!
+ * \brief The engine's global that Python Jinja2 has as `pythonModule.pythonQualname`, as a host value that stays it
+ *
+ * A host that gives a template callable Python's own object for a global (\ref LentCallableInfo::pythonModule) gets the
+ * global back with this wherever that object reaches the template again: as a render's argument or global, or as the
+ * result of a later call. The callable this returns is the template's own global once converted for a render, so that
+ * `{{ r is sameas range }}` holds and `r(3)` is the template's `range(3)`. Called by the host itself it throws an
+ * \ref ErrorInfo of \ref ErrorCode::TemplateRuntimeError, as the global runs in a template only.
+ *
+ * @param pythonModule   `builtins` or `jinja2.utils`
+ * @param pythonQualname `range`, `dict` (builtins), `Cycler`, `Joiner`, `Namespace` or `generate_lorem_ipsum` (jinja2.utils)
+ * @return The global; std::nullopt for any other name
+ */
+JINJA2CPP_EXPORT std::optional<UserCallable> PythonGlobal(std::string_view pythonModule, std::string_view pythonQualname);
 
 /*!
  * \brief Which names of a host call's context a view of it shows (\ref ContextView), as Python Jinja2's `Context`

@@ -1491,6 +1491,25 @@ std::shared_ptr<const void> GenericOwner([[maybe_unused]] const Holder<T>& holde
     }
 }
 
+// The holder is the deleter of a shared pointer that owns nothing: one allocation holds the owner and the
+// nested container whose accessor it lends, as make_shared would, and std::get_deleter finds the holder from
+// the item's aliasing accessor, so that a module's cell of the item asks the nested container whether the
+// host can lend it again (AccessorHasOtherOwners, docs/tasks/0572). The deleter lives as long as a weak
+// pointer to the item's accessor: it lets go of what it holds when the last owner goes, as an object
+// make_shared made would
+template<typename Container>
+struct LentItemHolder
+{
+    std::shared_ptr<const void> owner;
+    Container nested;
+
+    void operator()(const void* /*nothing*/) noexcept
+    {
+        nested = Container();
+        owner.reset();
+    }
+};
+
 // An item of a generic list or map: a nested container of reflected data reads its parent
 // through raw pointers (Reflect of a field or an element), so once the item escapes the
 // container (a loop target stored in a namespace, a sorted copy) its accessor must keep the
@@ -1498,9 +1517,9 @@ std::shared_ptr<const void> GenericOwner([[maybe_unused]] const Holder<T>& holde
 template<typename Container, typename Accessor>
 Container WithOwnerImpl(std::shared_ptr<const void> owner, Container nested)
 {
-    // One allocation holds the owner and the nested container whose accessor it lends
-    auto holder = std::make_shared<std::pair<std::shared_ptr<const void>, Container>>(std::move(owner), std::move(nested));
-    return Container(std::shared_ptr<const Accessor>(holder, holder->second.GetAccessor()));
+    const std::shared_ptr<const void> block(static_cast<const void*>(nullptr), LentItemHolder<Container>{ std::move(owner), std::move(nested) });
+    const auto* holder = std::get_deleter<LentItemHolder<Container>>(block);
+    return Container(std::shared_ptr<const Accessor>(block, holder->nested.GetAccessor()));
 }
 
 GenericList WithOwner(std::shared_ptr<const void> owner, GenericList&& nested)
@@ -2033,7 +2052,7 @@ std::shared_ptr<const void> ExportOwner(const BySharedVal<T>& holder)
 }
 
 // The owner of data that lives only as long as its adapters (a user callable's result, a module
-// call's argument), which a module's cell of it checks (BorrowedCell::IsUnheld); none for the
+// call's argument), which a module's cell of it checks (BorrowedCell::FindHolders); none for the
 // data the host or a global keeps
 template<typename Holder>
 std::weak_ptr<const void> AdaptersOwner(const Holder& /*holder*/)
@@ -2046,7 +2065,7 @@ std::weak_ptr<const void> AdaptersOwner(const BySharedVal<T>& holder)
     return holder.GetOwner();
 }
 
-// What a module's cell of a generic container keeps as its source (BorrowedCell::IsUnheld): the
+// What a module's cell of a generic container keeps as its source (BorrowedCell::FindHolders): the
 // adapter that wrote it. An adapter that owns its copy of the container (BySharedVal) keeps the
 // accessor alive itself, which holds what it reads (LendGenericItem's WithOwner), so the cell
 // keeps none of the container it was read from: that container's copy shares the accessor, and
@@ -2084,10 +2103,18 @@ bool AccessorIsLent(const Container& container) noexcept
     return self.owner_before(accessor) || accessor.owner_before(self);
 }
 
+// An item of a generic container lent over a holder (WithOwner) is the holder's nested container: the copies
+// of the item share the aliasing accessor, and the nested container's own accessor tells whether anything
+// else can hand it out (docs/tasks/0572)
 template<typename Container>
 bool AccessorHasOtherOwners(const Container& container) noexcept
 {
-    return AccessorIsLent(container) || !IsSoleOwner(detail::GenericAccessorAccess::Get(container));
+    const auto& accessor = detail::GenericAccessorAccess::Get(container);
+    if (const auto* holder = std::get_deleter<LentItemHolder<Container>>(accessor))
+    {
+        return !IsSoleOwner(accessor) || AccessorHasOtherOwners(holder->nested);
+    }
+    return AccessorIsLent(container) || !IsSoleOwner(accessor);
 }
 } // namespace
 
@@ -2202,8 +2229,10 @@ const void* HostIdentity(const IJsonNode* node, const void* accessor, const Cell
 // or shares stays at its address while the cell's source lives (IJsonNode::KeepsDocument,
 // docs/tasks/0402), so the cell of the document itself, lent by the host, lives across the calls
 // and DropUnheld drops it once the host lets go. A nested value read through its parent (`d.a`) is
-// lent through an aliasing accessor (WithOwner), which DropUnheld cannot tell lent again or not:
-// its cell stays call-scoped, as before 0402, unless it is a global's, which the module keeps
+// lent through an aliasing accessor (WithOwner): its node identity outlives the lent item, as a
+// later read of the parent names the same value, so whether the host lends the parent again
+// decides, which the item's holder does not tell (docs/tasks/0572 asks the nested container only).
+// Its cell stays call-scoped, as before 0402, unless it is a global's, which the module keeps
 // anyway, so that a fresh document per call does not leave a cell per call (verifier of 0402)
 template<typename Container>
 bool HasUnheldIdentity(const IJsonNode* node, const Container& container, bool global) noexcept
@@ -4851,6 +4880,7 @@ public:
     // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
     // reflected struct, are its attributes
     [[nodiscard]] bool HasAttributes() const override { return m_node == nullptr; }
+    [[nodiscard]] const char* GetHostObjectClass() const override { return m_node ? nullptr : m_values.Get().GetObjectClass(); }
     [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor(), m_link); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
@@ -6628,6 +6658,25 @@ namespace visitors
 
 namespace
 {
+// The host's form of an engine global (PythonGlobal): converted back for a render it is the global, which the host's
+// call cannot run outside one
+struct PythonGlobalCall
+{
+    InternalValue global;
+    std::string name;
+
+    Value operator()(const UserCallableParams& /*params*/) const
+    {
+        ErrorInfo::Data errorData;
+        errorData.code = ErrorCode::TemplateRuntimeError;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.col = 1;
+        errorData.extraParams.emplace_back("the engine's global " + name + " runs in a template only");
+        errorData.extraParams.emplace_back(std::string("TypeError"));
+        throw ErrorInfo(std::move(errorData));
+    }
+};
+
 // The function of a callable converted from a jinja2::UserCallable, which Callable::IsSame
 // reads the identity of
 struct UserCallableBody
@@ -6727,6 +6776,11 @@ struct UserCallableBody
 
 InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
 {
+    // The engine's own global a host named (PythonGlobal): the global itself
+    if (const auto* global = val.callable.target<PythonGlobalCall>())
+    {
+        return global->global;
+    }
     std::vector<ArgumentInfo> args;
     args.reserve(val.argsInfo.size());
     for (const auto& pi : val.argsInfo)
@@ -6763,6 +6817,16 @@ Value HostCallableOf(const Callable& callable)
         return LendToHost(InternalValue(callable), *frame->lease->context, *frame->scope);
     }
     return Value();
+}
+
+std::optional<UserCallable> PythonGlobal(std::string_view pythonModule, std::string_view pythonQualname)
+{
+    auto global = PythonGlobalOf(pythonModule, pythonQualname);
+    if (!global)
+    {
+        return std::nullopt;
+    }
+    return UserCallable(visitors::PythonGlobalCall{ std::move(*global), std::string(pythonQualname) }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) });
 }
 
 void TraverseBoxed(const KeyValuePair& pair, const TraverseFn& fn)

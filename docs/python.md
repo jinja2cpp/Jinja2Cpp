@@ -475,6 +475,30 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   `bytearray`, `array` or `deque` it returns is then checked.
 - The cost of a number's own arithmetic (`Fraction ** 10**8`) is not capped by `MaxBigIntBits`; Python Jinja2 behaves
   the same (task 0412).
+- `abs`, `round` (method `common`), `%` formatting of a number and the order of a `dict`'s keys in `pprint` ask the
+  object: `__abs__`, `__round__`, `int()` and `float()`, `__lt__` (task 0582). The documented differences of these
+  operators, all from task 0582:
+  - An `int`, `float` or `str` subclass is converted to the engine's own scalar, so an overridden `__add__` or `__lt__`
+    is not run. Keeping it a host object would make the scalar filters (`int`, `round`, `upper`) and every conversion
+    pay for the lookups.
+  - A `list` or `tuple` subclass that overrides `__add__` or `__lt__` is read as a list: the engine's list path runs
+    before the host is asked, and routing every Python list through Python's operators would cost every list operation.
+  - A template macro as an operand reaches the object as `None`. Nothing of the template is kept, but an `__add__` that
+    accepts `None` answers where Python hands it the macro.
+  - The order of `unique`'s native-order scope (hash and `==` only, never a host's `<`) is a `thread_local` flag: a
+    host `__eq__` that renders a template which sorts host objects inside that call gets a `TypeError` from its `<`.
+  - The `Markup` flag of an operand is dropped when the object is asked (`x + m`, `m + x`, `x < m`, `max`): `__add__`
+    sees a `str` where Python passes a `Markup`. The result is escaped more, never less.
+  - `len()` and `__index__` of the count are called by the size guard before Python calls them, so `bytes * n` with a
+    user `__index__` runs it twice.
+  - `'%x'`, `'%o'` and `'%X'` of an object accept what `int()` accepts, where Python wants `__index__`: a `Decimal` or a
+    `Fraction` renders in the engine and is a `TypeError` in Python. `'%d'` of an object that has only `__float__`
+    renders the truncated float, where Python raises. `'%c'` and a `Markup` format do not ask the object.
+  - `round` with the method `ceil` or `floor` of an object (`Fraction`, `Decimal`) is not asked and raises, where Python
+    runs `math.ceil` on it.
+  - `pprint` orders keys of types that cannot be compared by the type's `__name__`, where Python compares
+    `str(type(key))`: a `Fraction` key sorts before a `None` key, as `Fraction` < `NoneType`, where Python's
+    `<class 'fractions.Fraction'>` sorts after `<class 'NoneType'>`.
 
 ## Differences from Jinja2
 
@@ -521,14 +545,20 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   stay themselves (`module.o is o`), an `Undefined` is the environment's `Undefined` class, a tuple and a `dictsort`
   entry are tuples, and a dict keeps its own keys (0411). A `namespace`, a `cycler` and a `joiner` are the module's own
   objects: `module.ns.count` is what a macro set last, `module.cyc.next()` advances the cycler the macros read, `next(module.cyc)`
-  and `module.j()` work, and `repr(module.ns)` is `<Namespace {'count': 1}>`. They outlive the template, as a macro does. Still
-  different: a `range` is a list; the object is a `ModuleObject`, not a `jinja2.utils.Namespace` (`isinstance` is false, `callable()`
-  is true of every one); Python cannot set an attribute of `module.ns` and an exported list or dict is a copy, not shared with the macros (deliberate: no shared mutable host data, 0575); each read of a nested namespace
-  (`module.ns.inner`) is a new object, though one the module shares; a namespace the module holds itself (`ns.me = ns`)
-  reprs to a `RecursionError` where Jinja2 prints `{...}`; and one passed back to a macro as an argument is the module's object,
-  but inside a list or dict argument it is a copy (a cycler or joiner there cannot be called). The params of a module are
-  copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
-  globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`).
+  and `module.j()` work, and `repr(module.ns)` is `<Namespace {'count': 1}>`, `{...}` where a namespace holds itself. They outlive the template, as a
+  macro does. They are of Jinja2's classes as `isinstance` and `__class__` see them (`jinja2.utils.Namespace`, `Cycler`, `Joiner`,
+  without the module importing Jinja2 before it is asked), only a joiner is `callable()`, and `type()` is the module's class of
+  that name; a nested namespace read twice is one object (`module.ns.inner is module.ns.inner`), as is one exported under two
+  names; `module.cyc.next` prints as Jinja2's bound method; and a module object passed to a render prints as Jinja2's (0575).
+  Still different: a `range` is a list; `module.j.__call__` is the module's own method; a module object passed to another
+  render is read there as a dict (`|length`, `|pprint` and iteration as on a dict, and a joiner there cannot be called, 0594); and one passed
+  back to a macro as an argument is the module's object, but inside a list or dict argument it is a copy, so a cycler or joiner
+  there cannot be called: the host's list would hold the module's own object where the module's cycle collector cannot walk
+  it. Deliberate, by the design principle that host data stays copied and renders independent (0575): Python cannot set an
+  attribute of `module.ns` (`AttributeError`), and an exported list or dict is a copy, not shared with the macros (a macro's
+  `{% do l.append(1) %}` does not show in `module.l`, nor Python's `module.l.append(2)` in the macros); a module's own
+  namespaces are live because the module is one context whose macros already share them. The params of a module are
+  copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`).
   Calls and reads of one module from several threads take turns, waiting with the GIL released; a Python callable in
   a macro that joins a thread using the same module, or two modules whose macros call each other from two threads, deadlock (0411).
 - A dict view (`keys()`, `values()`, `items()`) or a set (`d.keys() - []`) of the engine reaches a Python callable as a real
@@ -583,9 +613,8 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
 - A Python callable gets Python's own `range` and `dict` for the template's globals, and Jinja2's
   `jinja2.utils.Cycler`, `Joiner`, `Namespace` and `generate_lorem_ipsum` for `cycler`, `joiner`, `namespace` and
   `lipsum`, as Jinja2 passes them (when Jinja2 is not installed, those four are lent as the other template callables
-  are). Given back while that call runs, such an object is the template's global again (`f(range) is sameas range`);
-  given to the template elsewhere (`render(r=range)`, or kept and given back later), it stays Python's, so that
-  `r is sameas range` is False, where Jinja2's is True (0583). Calling `cycler` or `namespace` in Python makes
+  are). Wherever such an object reaches the template, it is the template's global, as in Jinja2: given back by the call
+  (`f(range) is sameas range`), kept and given back later, or passed to a render (`render(r=range)`). Calling `cycler` or `namespace` in Python makes
   Jinja2's object, a Python object to the template. A macro or `loop.cycle` prints as Jinja2's object does (0439), but
   its `type()` is the module's `TemplateValue`, as the module has no `jinja2.runtime.Macro`.
 - Sandbox (0412, 0413, 0414): `intercepted_binops` and `intercepted_unops` raise

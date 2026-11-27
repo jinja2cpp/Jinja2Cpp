@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1025
 priority: low
 area: parity
 depends: [0381]
@@ -50,3 +51,36 @@ small and independent:
 **Done when.** Each item is fixed, or recorded on the divergence allow-list or in the module's
 docs with the reason, by a regression row in `test/public_host_object_test.cpp` or the module's
 `test_values.py` that renders as Python does under the pinned Jinja2.
+
+## Outcome
+
+Fixed, each with a regression row (`test/public_host_object_test.cpp`: `ListConcatenationOfADecliningObjectNamesTheLeftType`,
+`PercentFormatReadsAHostNumberAsPythonDoes`, `AbsAndRoundAskTheObject`, `PprintOrdersHostKeysByTheirOwnLessThan`;
+`python/tests/test_values.py`: the `CASES` rows marked task 0582 and the `TYPE_ERRORS` rows for `[1] + d`, `(1, 2) + d`,
+`'%d' % k` and `'%f' % k`, all compared with Python Jinja2 3.1.6):
+
+- `[1] + x` and `(1, 2) + x` say `can only concatenate list (not "T") to list` (tuple likewise).
+- `'%d'`, `'%i'`, `'%u'`, `'%x'`, `'%o'`, `'%f'`, `'%e'`, `'%g'` of a host number, alone or as a tuple item, render the
+  number (`IHostObject::ToInt`, `ToFloat`); the error of a host that is no number names its type, not `dict`.
+- `|abs` and `|round` (method `common`) ask the host through `HostOperator::Absolute` and `HostOperator::Round`
+  (appended); the Python module runs `abs()` and `round(x, n)`. `ceil` and `floor` are recorded, not fixed: Python runs
+  `math.ceil(x * 10**n) / 10**n` on the object, which needs the host's `*`, `**` and `/` composed in the filter.
+- pprint orders dict keys that are host objects by the host's `<`, falling back to the type-name order as Python does.
+- pprint of a dict mixing a host key with another type (`{'a': 1, Fraction(7, 2): 2}`) orders by type where the host's
+  `<` fails, as `_safe_key` catches its TypeError. Recorded: that fallback compares the type's `__name__`, where
+  Python compares `str(type(obj))`, so a host type of another module (`<class 'fractions.Fraction'>`) can sort
+  differently against a built-in one (`{None: 1, Fraction(7, 2): 2}` puts the Fraction first).
+  Filed as task 0605: the fallback catches every error of a host's `<`, not only its TypeError, and a tuple key holding
+  an incomparable host raises.
+- Not changed: the module-qualified type name (`'decimal.Decimal'`) of the Markup message. Python uses `tp_name` in its
+  operators' TypeErrors but `__name__` elsewhere (`tojson`), and `tp_name` is not in the limited API; the messages that
+  name the type keep `__name__`.
+
+Not fixed: `Markup * x` with an `__index__` object. The repeat check is `CheckMarkupRepeatCount` in
+`src/expression_evaluator.cpp`, which this task's file list does not include; the fix is to ask the host (`host::Operate`
+with `HostOperator::Multiply`, the host on the right) before that check and mark a string result as Markup.
+
+Recorded in `docs/python.md` ("Operators on Python objects"): `int`, `float` and `str` subclasses, `list` and `tuple`
+subclasses that override operators, a macro as an operand, the `thread_local` native-order scope, the dropped Markup flag,
+the doubled `__len__`/`__index__` call, and the host-number cost (task 0412), plus the differences of the new `%` and
+`round` paths.

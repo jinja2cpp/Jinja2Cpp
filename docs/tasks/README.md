@@ -630,18 +630,18 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0569](0569-load-fold-cpu-budget.md) | Bound the CPU the Load's fold check spends on dead constant code | robustness | low | done |
 | [0570](0570-volatile-statement-folds.md) | Statement expressions in volatile code, and what TryFoldTruth catches | parser | low | done |
 | [0571](0571-tuple-index-bounds-method-name.md) | Tuple and list index bounds, and a bound method's __name__ | parity | low | done |
-| [0572](0572-nested-item-cells-never-dropped.md) | A template module keeps the cell of every nested item it wrote, one per call | robustness | medium | open |
-| [0573](0573-cycle-through-owned-argument-cell.md) | A cycle through the cell of a module call's owned argument keeps it for the module's life | robustness | medium | open |
-| [0574](0574-make-module-shared-without-engine-globals.md) | `make_module(shared=True)` keeps the engine's own globals | parity | low | open |
-| [0575](0575-module-object-parity-leftovers.md) | What a live module object still lacks of Jinja2's, short of shared mutable data | parity | low | open |
+| [0572](0572-nested-item-cells-never-dropped.md) | A template module keeps the cell of every nested item it wrote, one per call | robustness | medium | done |
+| [0573](0573-cycle-through-owned-argument-cell.md) | A cycle through the cell of a module call's owned argument keeps it for the module's life | robustness | medium | done |
+| [0574](0574-make-module-shared-without-engine-globals.md) | `make_module(shared=True)` keeps the engine's own globals | parity | low | done |
+| [0575](0575-module-object-parity-leftovers.md) | What a live module object still lacks of Jinja2's, short of shared mutable data | parity | low | done |
 | [0576](0576-fuzz-render-pr-timeout.md) | The pull-request `fuzz render` job runs close to its 45-minute timeout | ci | medium | open |
 | [0577](0577-big-int-radix-ops-slower-than-python.md) | Huge-integer bit_count and power-of-two formatting are slower than Python | perf | medium | done |
 | [0578](0578-loop-dict-view-fixed-cost.md) | Win back the for-loop start cost that the live dict views added | perf | medium | open |
 | [0579](0579-render-fixed-cost-creep-2026-11.md) | Render rows crept +1-2% in the week to 2026-11-23, in steps under the bar | perf | low | open |
 | [0580](0580-stored-block-of-an-extending-include-lost.md) | A block stored from inside an extending include renders nothing two calls later | parity | low | done |
 | [0581](0581-failed-include-kept-self-loses-frame-names.md) | A `self` an include stored before it failed reads the include's names as undefined | parity | low | done |
-| [0582](0582-host-operator-followups.md) | Host operators: the leftovers of task 0381 | parity | low | open |
-| [0583](0583-python-own-globals-outside-a-lent-call.md) | Python module: Python's `range` given to a template outside a lent call is not the template's `range` | parity | low | open |
+| [0582](0582-host-operator-followups.md) | Host operators: the leftovers of task 0381 | parity | low | done |
+| [0583](0583-python-own-globals-outside-a-lent-call.md) | Python module: Python's `range` given to a template outside a lent call is not the template's `range` | parity | low | done |
 | [0584](0584-block-in-scoped-block-loses-loop-names.md) | An unscoped block nested in a scoped block does not see the loop around them | parity | low | done |
 | [0585](0585-int-format-zero-pad-prefix-grouping.md) | Integer format specs: `#` with zero padding, grouped zero padding, `,` with a binary base | parity | low | done |
 | [0586](0586-closure-in-module-top-level-with-loses-outer-names.md) | A closure defined in a `with` at a module's top level reads the module's names as undefined on later calls | parity | low | done |
@@ -652,6 +652,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0591](0591-cell-protocol-inductive-invariant.md) | Find the cell protocol's inductive invariant | robustness | low | open |
 | [0592](0592-load-reads-after-many-sets-quadratic.md) | Load: name reads after many `set`s in one body cost reads x sets | robustness | low | done |
 | [0593](0593-set-index-per-set-and-cloned-walk-size.md) | Set leftovers after 0587: an index object per set, a cloned walk's size, intersection_update | robustness | low | open |
+| [0594](0594-module-object-read-as-dict-in-another-render.md) | A module's namespace, cycler or joiner passed to another render is read there as a dict | parity | low | open |
+| [0595](0595-missing-method-call-is-undefined-error.md) | Calling a missing method of a str, number or list raises TemplateRuntimeError, not UndefinedError | parity | low | open |
 | [0596](0596-stored-self-block-of-scoped-block-loses-derived-context.md) | A `self` block or `super` stored in a scoped block and called after the loop loses the derived context | parity | low | open |
 | [0597](0597-import-with-context-in-loop-loses-loop.md) | A module imported with context in a loop does not see the loop's `loop` | parity | low | open |
 | [0598](0598-failure-in-module-top-level-with-drops-stored-closure.md) | A failure inside a module's top-level `with` drops the names its stored closure reads | parity | low | open |
@@ -660,3 +662,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0601](0601-tidy-ratchet-leaks.md) | clang-tidy ratchet: hits on unchanged lines pass the pull-request job, and a red weekly run is silent | ci | high | open |
 | [0602](0602-tidy-python-fuzz-bench.md) | clang-tidy never sees `python/src/`, `fuzz/` or `bench/` | ci | medium | open |
 | [0603](0603-tidy-memory-safety-checks.md) | clang-tidy does not check the memory-safety style the project asks for | style | medium | open |
+| [0604](0604-reflected-shared-ptr-cell-never-dropped.md) | A module keeps the cell of a reflected `shared_ptr` it wrote, one per call | robustness | low | open |
+| [0605](0605-pprint-safe-key-host-errors.md) | pprint's `_safe_key` with host objects: catch only the TypeError, also inside a tuple key | parity | low | open |

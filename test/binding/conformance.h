@@ -31,6 +31,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -1163,7 +1164,8 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfAnOwnedDocument)
                                "{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{% endmacro %}"
                                "{% macro h(d) %}{{ d.a }}{% set _ = d.a.append(1) %}{% endmacro %}"
                                "{% macro keep(d) %}{% set _ = d.update(k=2) %}{% set _ = store.append(d) %}{% endmacro %}"
-                               "{% macro same(d) %}{{ store[0] is sameas d }}{{ store[0] }}{{ d }}{% endmacro %}"));
+                               "{% macro same(d) %}{{ store[0] is sameas d }}{{ store[0] }}{{ d }}{% endmacro %}"
+                               "{% macro selfref(d, f) %}{% set _ = d.update(self=d, f=f) %}{% endmacro %}"));
         auto module = tpl.MakeModule({});
         ASSERT_TRUE(!!module) << module.error().ToString();
         const auto call = [&module](const char* name, jinja2::ValuesList args) {
@@ -1217,15 +1219,25 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfAnOwnedDocument)
             }
         }
         EXPECT_EQ("[0]", call("g", { jinja2::Reflect(TypeParam::Parse("[0]")) }));
-        // Traits without an Identity hook key a cell by the view's accessor: a nested item's cell is never dropped yet
-        // (docs/tasks/0572)
-        if constexpr (jinja2::detail::json::HasIdentity<Json>::value)
+        // Also for traits without an Identity hook, which key a cell by the view's accessor: a nested item lent over
+        // its parent's holder is the parent's alone, so its cell goes too (docs/tasks/0572)
+        for (const auto& doc : gone)
         {
-            for (const auto& doc : gone)
-            {
-                EXPECT_TRUE(doc.expired());
-            }
+            EXPECT_TRUE(doc.expired());
         }
+        // A fresh document per call written into itself: only the cell's own items hold the cell, which goes with
+        // them, not one more for each call (docs/tasks/0573)
+        auto token = std::make_shared<int>(0);
+        const jinja2::UserCallable counted([token](const jinja2::UserCallableParams&) { return jinja2::Value(); }, {});
+        std::vector<std::weak_ptr<Json>> cyclic;
+        for (int n = 0; n != 40; ++n)
+        {
+            auto doc = std::make_shared<Json>(TypeParam::Parse(R"({"a":[0]})"));
+            cyclic.push_back(doc);
+            EXPECT_EQ("", call("selfref", { jinja2::Reflect(std::move(doc)), counted }));
+        }
+        EXPECT_GT(8, token.use_count());
+        EXPECT_GT(4, std::count_if(cyclic.begin(), cyclic.end(), [](const std::weak_ptr<Json>& doc) { return !doc.expired(); }));
     }
 }
 

@@ -251,7 +251,7 @@ public:
     PyEnvironment& LiveEnvironment() const;
     // Template.make_module of the Python layer (template_module.cpp): (body, exports) for the
     // params, a dict of str names, over the environment's globals
-    nb::tuple MakeModule(nb::handle params) const;
+    nb::tuple MakeModule(nb::handle params, bool shared) const;
     // jinja2.meta.find_undeclared_variables, as a sorted list; find_referenced_templates, as a
     // list of the names (None for one that is not a constant)
     nb::object FindUndeclared() const;
