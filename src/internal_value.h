@@ -773,6 +773,11 @@ struct IListAccessor : ValueObject
     // The hash index beside the items of the engine's set (IteratorKind::Set, set_index.h, docs/tasks/0561); null for
     // every other list
     [[nodiscard]] virtual SetIndex* GetSetIndex() const { return nullptr; }
+    // A set's items as its methods change them, with the slots they erased, which the index counts and every other
+    // read closes up first (GetMutableItems, docs/tasks/0587); null for every other list
+    [[nodiscard]] virtual InternalValueList* GetSetSlots() const { return nullptr; }
+    // Whether GetMutableItems gives items, without what giving them costs (a set's close-up of its erased slots)
+    [[nodiscard]] virtual bool HasMutableItems() const { return GetMutableItems() != nullptr; }
     // Whether len() can change while the render runs: a list the template owns (GetMutableItems),
     // or a host's list that the template changes through the host's own methods (a Python
     // list's append). Then loop.length is len() at its first read, as Jinja2's (docs/tasks/0390)
@@ -936,6 +941,8 @@ public:
     [[nodiscard]] InternalValueList* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
     [[nodiscard]] bool ItemsCharged() const { return m_accessor != nullptr && m_accessor->ItemsCharged(); }
     [[nodiscard]] SetIndex* GetSetIndex() const { return m_accessor ? m_accessor->GetSetIndex() : nullptr; }
+    [[nodiscard]] InternalValueList* GetSetSlots() const { return m_accessor ? m_accessor->GetSetSlots() : nullptr; }
+    [[nodiscard]] bool HasMutableItems() const { return m_accessor != nullptr && m_accessor->HasMutableItems(); }
     [[nodiscard]] bool HasLiveSize() const { return m_accessor != nullptr && m_accessor->HasLiveSize(); }
     [[nodiscard]] GenericList CreateGenericList() const { return m_accessor ? m_accessor->CreateGenericList() : GenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
@@ -1061,6 +1068,8 @@ public:
     [[nodiscard]] InternalValueList* GetMutableItems() const { return Ref().GetMutableItems(); }
     [[nodiscard]] bool ItemsCharged() const { return Ref().ItemsCharged(); }
     [[nodiscard]] SetIndex* GetSetIndex() const { return Ref().GetSetIndex(); }
+    [[nodiscard]] InternalValueList* GetSetSlots() const { return Ref().GetSetSlots(); }
+    [[nodiscard]] bool HasMutableItems() const { return Ref().HasMutableItems(); }
     [[nodiscard]] GenericList CreateGenericList() const { return Ref().CreateGenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const { return Ref().GetEnumerator(); }
     void RebindEnumerator(std::optional<ListAccessorEnumeratorPtr>& enumerator) const { Ref().RebindEnumerator(enumerator); }

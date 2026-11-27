@@ -3572,16 +3572,6 @@ InternalValue SetReplace(const InternalValue& self, const InternalDict& entries,
     return InternalValue(NoneValue());
 }
 
-template<SetOp op>
-InternalValue SetCombinedUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
-{
-    constexpr const char* names[] = { "update", "intersection_update", "difference_update", "symmetric_difference_update" };
-    constexpr bool single = op == SetOp::SymmetricDifference;
-    CheckArgs(params, names[static_cast<size_t>(op)], single ? 1 : 0, single ? 1 : std::numeric_limits<size_t>::max());
-    SetScratch scratch;
-    return SetReplace(self, SetCombine(op, self, params, scratch), scratch);
-}
-
 InternalValue SetIsSubset(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "issubset", 1, 1);
@@ -3618,49 +3608,66 @@ std::string SetToken(const InternalValue& item)
     return std::move(*token);
 }
 
-// The position of the item equal to `item` (Python's ==, as the set's hash tokens find equal ones) in the receiver's
-// items, or SetIndex::NotFound, through the index beside them (docs/tasks/0561). `index` is that of the receiver
-size_t SetFind(SetIndex& index, const InternalValueList& items, const std::string& token, const InternalValue& item)
+// The receiver's slots, a set's items with those its methods erased (SetIndex, docs/tasks/0587)
+InternalValueList& SetSlotsOf(const InternalValue& self)
 {
-    return index.Find(items, token, [&item](const InternalValue& other) { return ItemEquals(other, item); });
+    auto* slots = ListOf(self).GetSetSlots();
+    if (!slots)
+    {
+        Raise("not a set");
+    }
+    return *slots;
+}
+
+// The position of the item equal to `item` (Python's ==, as the set's hash tokens find equal ones) in the receiver's
+// slots, or SetIndex::NotFound, through the index beside them (docs/tasks/0561). `index` is that of the receiver
+size_t SetFind(SetIndex& index, const InternalValueList& slots, const std::string& token, const InternalValue& item)
+{
+    return index.Find(slots, token, [&item](const InternalValue& other) { return ItemEquals(other, item); });
+}
+
+// Adds `item`, whose token is `token`, to the receiver unless it holds an equal one
+void SetInsert(const InternalValue& self, InternalValueList& slots, SetIndex& index, std::string token, const InternalValue& item)
+{
+    if (SetFind(index, slots, token, item) != SetIndex::NotFound)
+    {
+        return;
+    }
+    CheckSequenceSize(uint64_t{ index.LiveCount(slots) } + 1, "a set");
+    ReserveCounted(slots, slots.size() + 1);
+    index.Reserve(slots, token);
+    NoteContainerStore(self, item);
+    slots.push_back(item);
+    index.Appended(slots, std::move(token), slots.size() - 1);
+}
+
+// Takes the item equal to `item` out of the receiver; false when it holds none
+bool SetErase(InternalValueList& slots, SetIndex& index, const std::string& token, const InternalValue& item)
+{
+    const auto found = SetFind(index, slots, token, item);
+    if (found == SetIndex::NotFound)
+    {
+        return false;
+    }
+    const auto dropped = index.Erase(slots, token, found);
+    CycleCollector::NoteDropped(dropped);
+    return true;
 }
 
 InternalValue SetAdd(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "add", 1, 1);
     auto token = SetToken(params.posParams[0]);
-    auto& items = MutableItems(self);
-    auto& index = SetIndexOf(self);
-    if (SetFind(index, items, token, params.posParams[0]) == SetIndex::NotFound)
-    {
-        CheckSequenceSize(uint64_t{ items.size() } + 1, "a set");
-        ReserveCounted(items, items.size() + 1);
-        index.Reserve(token);
-        NoteContainerStore(self, params.posParams[0]);
-        items.push_back(params.posParams[0]);
-        index.Appended(items, std::move(token), items.size() - 1);
-    }
+    SetInsert(self, SetSlotsOf(self), SetIndexOf(self), std::move(token), params.posParams[0]);
     return InternalValue(NoneValue());
 }
 
 InternalValue SetRemoveItem(const InternalValue& self, const CallParams& params, bool mustExist)
 {
     const auto token = SetToken(params.posParams[0]);
-    auto& items = MutableItems(self);
-    auto& index = SetIndexOf(self);
-    const auto found = SetFind(index, items, token, params.posParams[0]);
-    if (found == SetIndex::NotFound)
+    if (!SetErase(SetSlotsOf(self), SetIndexOf(self), token, params.posParams[0]) && mustExist)
     {
-        if (mustExist)
-        {
-            ThrowKeyError(params.posParams[0]);
-        }
-    }
-    else
-    {
-        CycleCollector::NoteDropped(items[found]);
-        items.erase(items.begin() + static_cast<std::ptrdiff_t>(found));
-        index.Erased(items, token, found);
+        ThrowKeyError(params.posParams[0]);
     }
     return InternalValue(NoneValue());
 }
@@ -3677,21 +3684,92 @@ InternalValue SetDiscard(const InternalValue& self, const CallParams& params, Re
     return SetRemoveItem(self, params, false);
 }
 
+// Takes the first item, which for small ints is the one Python's pop takes
 InternalValue SetPop(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "pop", 0, 0);
-    auto& items = MutableItems(self);
-    if (items.empty())
+    auto& slots = SetSlotsOf(self);
+    auto& index = SetIndexOf(self);
+    const auto first = index.First(slots);
+    if (first == SetIndex::NotFound)
     {
         ThrowKeyError(InternalValue(std::string("pop from an empty set")));
     }
-    auto& index = SetIndexOf(self);
-    const auto token = SetToken(items.front());
-    CycleCollector::NoteDropped(items.front());
-    auto result = std::move(items.front());
-    items.erase(items.begin());
-    index.Erased(items, token, 0);
+    const auto token = SetToken(slots[first]);
+    auto result = index.Erase(slots, token, first);
+    CycleCollector::NoteDropped(result);
     return result;
+}
+
+// The items of the iterables a set method takes, with their tokens, every one read before the set changes
+std::vector<std::pair<std::string, InternalValue>> SetArgumentItems(const std::vector<InternalValue>& args, SetScratch& scratch)
+{
+    std::vector<std::pair<std::string, InternalValue>> result;
+    for (const auto& arg : args)
+    {
+        bool isConverted = false;
+        const auto other = ConvertToList(arg, isConverted, false);
+        if (!isConverted)
+        {
+            Raise("'" + TypeName(arg) + "' object is not iterable");
+        }
+        for (const auto& item : other)
+        {
+            auto token = SetToken(item);
+            scratch.Entry();
+            CheckSequenceSize(uint64_t{ result.size() } + 1, "a set");
+            result.emplace_back(std::move(token), item);
+        }
+    }
+    return result;
+}
+
+// update() and difference_update() through the index, so that each costs what its arguments hold (docs/tasks/0587)
+template<bool add>
+InternalValue SetUpdateItems(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, add ? "update" : "difference_update", 0, std::numeric_limits<size_t>::max());
+    SetScratch scratch;
+    auto items = SetArgumentItems(params.posParams, scratch);
+    auto& slots = SetSlotsOf(self);
+    auto& index = SetIndexOf(self);
+    for (auto& [token, item] : items)
+    {
+        if constexpr (add)
+        {
+            SetInsert(self, slots, index, std::move(token), item);
+        }
+        else
+        {
+            SetErase(slots, index, token, item);
+        }
+    }
+    return InternalValue(NoneValue());
+}
+
+// symmetric_difference_update() through the index: each item of the argument, once, leaves the set or joins it
+InternalValue SetSymmetricDifferenceUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "symmetric_difference_update", 1, 1);
+    SetScratch scratch;
+    const auto other = SetArgumentEntries(params.posParams[0], scratch);
+    auto& slots = SetSlotsOf(self);
+    auto& index = SetIndexOf(self);
+    for (const auto& [token, item] : other)
+    {
+        if (!SetErase(slots, index, token, item))
+        {
+            SetInsert(self, slots, index, token, item);
+        }
+    }
+    return InternalValue(NoneValue());
+}
+
+InternalValue SetIntersectionUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
+{
+    CheckArgs(params, "intersection_update", 0, std::numeric_limits<size_t>::max());
+    SetScratch scratch;
+    return SetReplace(self, SetCombine(SetOp::Intersection, self, params, scratch), scratch);
 }
 
 InternalValue SetClear(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -3720,10 +3798,10 @@ const MethodInfo SetMethods[] = {
     { "discard", SetDiscard, true },
     { "pop", SetPop, true },
     { "clear", SetClear, true },
-    { "update", SetCombinedUpdate<SetOp::Union>, true },
-    { "intersection_update", SetCombinedUpdate<SetOp::Intersection>, true },
-    { "difference_update", SetCombinedUpdate<SetOp::Difference>, true },
-    { "symmetric_difference_update", SetCombinedUpdate<SetOp::SymmetricDifference>, true },
+    { "update", SetUpdateItems<true>, true },
+    { "intersection_update", SetIntersectionUpdate, true },
+    { "difference_update", SetUpdateItems<false>, true },
+    { "symmetric_difference_update", SetSymmetricDifferenceUpdate, true },
 };
 
 const MethodInfo DictMethods[] = {
@@ -4380,7 +4458,7 @@ bool IsMutable(const InternalValue& value)
 {
     if (auto list = AsList(value))
     {
-        return list->GetMutableItems() != nullptr;
+        return list->HasMutableItems();
     }
     if (auto map = AsMap(value))
     {

@@ -95,6 +95,20 @@ const std::vector<SetCase>& Rows()
         { "SingleItemAddDuringLoopRaises", R"({% set s = {1: 0}.keys() - [] %}{% for x in s %}{% set _ = s.add(2) %}{{ x }}{% endfor %})", "", R"(Set changed size during iteration)" },
         { "ListGrowsUnderLoop", R"({% set l = [1, 2] %}{% for x in l %}{% if l|length < 4 %}{% set _ = l.append(x + 2) %}{% endif %}{{ x }}{% endfor %})", R"(1234)", "" },
         { "CopyHasItsOwnIndex", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set c = s.copy() %}{% set _ = c.remove(1) %}{% set _ = s.add(9) %}{{ 1 in c }}|{{ 1 in s }}|{{ 9 in c }}|{{ 9 in s }}|{{ c|length }}|{{ s|length }})", R"(False|True|False|True|4|6)", "" },
+        // Erased slots stay until a read closes them up (docs/tasks/0587)
+        { "DiscardMiddleThenAdd", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.discard(2) %}{% set _ = s.discard(4) %}{% set _ = s.add(6) %}{{ s|sort }}|{{ s|length }}|{{ 2 in s }}|{{ 6 in s }})", R"([1, 3, 5, 6]|4|False|True)", "" },
+        { "PopTwiceThenIterate", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.pop() %}{% set _ = s.pop() %}{% for x in s %}{{ x }}{% endfor %}|{{ s|length }}|{{ s.pop() }})", R"(345|3|3)", "" },
+        { "PopUntilCompactThenAdd", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% for i in range(3) %}{% set _ = s.pop() %}{% endfor %}{{ s|length }}|{% set _ = s.add(1) %}{{ s|sort }}|{{ 1 in s }}|{{ 4 in s }})", R"(2|[1, 4, 5]|True|True)", "" },
+        { "DiscardThenLength", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.discard(1) %}{{ s|length }}|{{ s }}|{{ s|sum }})", R"(4|{2, 3, 4, 5}|14)", "" },
+        { "DiscardAllThenPopEmpty", R"({% set s = {1:0}.keys() - [] %}{% set _ = s.discard(1) %}{{ s|length }}{{ s.pop() }})", "", R"(pop from an empty set)" },
+        { "AliasSeesErase", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set t = s %}{% set _ = s.pop() %}{% set _ = s.discard(3) %}{{ t|list }}|{{ t|length }}|{{ 2 in t }})", R"([2, 4, 5]|3|True)", "" },
+        { "CopyAfterErase", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.discard(2) %}{% set c = s.copy() %}{% set _ = s.discard(3) %}{{ c|list }}|{{ s|list }}|{{ s == c }})", R"([1, 3, 4, 5]|[1, 4, 5]|False)", "" },
+        { "UpdateManyArgs", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.update([6, 1], (7, 6), 'ab') %}{{ s|length }}|{{ 'a' in s }}|{{ 7 in s }})", R"(9|True|True)", "" },
+        { "UpdateNotIterable", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.update([6], 5) %})", "", R"('int' object is not iterable)" },
+        { "UpdateUnhashable", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.update([6, [1]]) %})", "", R"(unhashable type: 'list')" },
+        { "DifferenceUpdateMany", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.difference_update([1], (2, 9)) %}{{ s|list }}|{{ 1 in s }}|{{ s|length }})", R"([3, 4, 5]|False|3)", "" },
+        { "SymmetricDifferenceUpdateDup", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.symmetric_difference_update([1, 1, 6, 6]) %}{{ s|sort }}|{{ 1 in s }}|{{ 6 in s }})", R"([2, 3, 4, 5, 6]|False|True)", "" },
+        { "SameNanOnce", R"({% set w = 'nan' %}{% set s = {}.keys() - [] %}{% set n = w|float %}{% set _ = s.add(n) %}{% set _ = s.add(n) %}{% set _ = s.add((n, 1)) %}{% set _ = s.add((n, 1)) %}{{ s|length }}|{{ n in s }})", R"(2|True)", "" },
         { "AliasSharesIndex", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set t = s %}{% set _ = t.remove(2) %}{% set _ = s.add(6) %}{{ 2 in s }}|{{ 2 in t }}|{{ 6 in t }}|{{ s|list }})", R"(False|False|True|[1, 3, 4, 5, 6])", "" },
     };
     return rows;
@@ -134,4 +148,39 @@ TEST(SetIndexLinearTest, AddInALoopIsLinear)
     const auto rendered = tpl.RenderAsString(ValuesMap{});
     ASSERT_TRUE(!!rendered) << ErrorToString(rendered.error());
     EXPECT_EQ("20000|True|True|False", rendered.value());
+}
+
+
+// The set's other methods in a loop cost what their arguments hold (docs/tasks/0587): an erase leaves its slot until the
+// erased ones pass half, `update` goes through the index, and one NaN is found again as itself. Each was quadratic
+// before, seconds to minutes in a debug build
+TEST(SetIndexLinearTest, ChangesInALoopAreLinear)
+{
+    const char* const prefix = "{% set w = 'nan' %}{% set s = {}.keys() - [] %}{% for i in range(20000) %}{% set _ = s.add(i) %}{% endfor %}";
+    const struct
+    {
+        const char* body;
+        const char* expected;
+    } rows[] = {
+        { "{% for i in range(20000) %}{% set _ = s.pop() %}{% endfor %}{{ s|length }}", "0" },
+        { "{% for i in range(20000) %}{% set _ = s.discard(i) %}{{ s|length if i == 9999 }}{% endfor %}|{{ s|length }}", "10000|0" },
+        { "{% for i in range(19999, -1, -1) %}{% set _ = s.remove(i) %}{% endfor %}{{ s|length }}", "0" },
+        { "{% for i in range(20000) %}{% if i in s %}{% set _ = s.discard(i) %}{% endif %}{% endfor %}{{ s|length }}", "0" },
+        { "{% for i in range(20000, 40000) %}{% set _ = s.update([i]) %}{% set _ = s.difference_update([i - 20000]) %}{% endfor %}{{ s|length }}|{{ 39999 in s }}|{{ 0 in s }}",
+          "20000|True|False" },
+        { "{% for i in range(20000) %}{% set _ = s.symmetric_difference_update([i, i + 20000]) %}{% endfor %}{{ s|length }}|{{ 20000 in s }}", "20000|True" },
+        { "{% set n = w|float %}{% for i in range(20000) %}{% set _ = s.add(n) %}{% endfor %}{{ s|length }}", "20001" },
+    };
+    for (const auto& row : rows)
+    {
+        Settings settings;
+        settings.limits.maxRenderTime = std::chrono::seconds(30);
+        TemplateEnv env;
+        env.SetSettings(settings);
+        Template tpl(&env);
+        ASSERT_TRUE(!!tpl.Load(std::string(prefix) + row.body)) << row.body;
+        const auto rendered = tpl.RenderAsString(ValuesMap{});
+        ASSERT_TRUE(!!rendered) << row.body << ": " << ErrorToString(rendered.error());
+        EXPECT_EQ(row.expected, rendered.value()) << row.body;
+    }
 }

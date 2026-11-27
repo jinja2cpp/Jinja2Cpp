@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: robustness
 depends: [0561]
-touches: [src/set_index.h, src/value_methods.cpp#SetMethods]
+touches: [src/set_index.h, src/value_methods.cpp#SetMethods, src/internal_value.cpp#CreateValuesAdapter, src/internal_value.h, src/testers.cpp]
 shares: [test/set_index_test.cpp]
 ---
 # The engine's set still spends O(n) per remove, pop and update
@@ -26,3 +26,17 @@ the index object made on first use.
 
 **Done when** pop/discard/update in a loop of 20000 and repeated NaN adds stay linear in a limits test, the lazy filter
 rows match Python (or are listed as deliberate in test/parity/divergences/methods.txt), and the 0561 rows still pass.
+
+**Resolution (batch 14 D).** An erase (`remove`, `discard`, `pop`, `difference_update`) empties its slot and marks it
+erased in the index (`SetIndex::Erase`), with no renumbering; the slots close up, positions with them, once the erased
+ones pass half or any read other than the set's own methods asks for the items (the adapter's `Values()`,
+`GetMutableItems`). Set methods and `in` use the slots directly (`IListAccessor::GetSetSlots`); `len()`, the walk's
+size check and `IsMutable` (`HasMutableItems`) count without closing up. `pop()` keeps Python's first item and finds
+it from a head cursor. `update`, `difference_update` and `symmetric_difference_update` go through the index;
+`intersection_update` still makes the new set (O(len)). A hit of an equal token that `ItemEquals` rejects (a NaN, a
+tuple holding one) is the item: the set holds one NaN, as the engine's dict holds one NaN key, and an unhashable or
+shadowed item counts beside the index instead of making every lookup rebuild it. Debug timings for 20000 steps:
+pop 7.0 s -> 0.2 s, discard 7.7 s -> 0.27 s, update over 300 s -> 0.15 s, repeated NaN add 95 s -> 0.1 s
+(`SetIndexLinearTest.ChangesInALoopAreLinear`). The lazy filter rows are listed as deliberate in
+`divergences/methods.txt`: map, select, reject, unique and batch are eager for lists as well (0101, 0206). The
+index object per set and the cloned walk's size moved to 0593.

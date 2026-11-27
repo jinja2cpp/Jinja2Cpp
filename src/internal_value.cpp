@@ -3321,12 +3321,26 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
             }
         }
 
-        [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
+        // A set's slots that its methods erased stay until a read here, which closes them up (docs/tasks/0587)
+        [[nodiscard]] InternalValueList& Values() const
+        {
+            auto& values = m_values.Get();
+            if (m_index)
+            {
+                m_index->Compact(values);
+            }
+            return values;
+        }
+        [[nodiscard]] size_t GetItemsCountImpl() const
+        {
+            const auto& values = m_values.Get();
+            return m_index ? m_index->LiveCount(values) : values.size();
+        }
         // A set's walk fails at its next step once the set's size changed, as Python's does (docs/tasks/0561);
         // `startSize` is the set's size when the walk began
         void CheckStep(size_t startSize) const
         {
-            if (m_index && m_values.Get().size() != startSize)
+            if (m_index && m_index->LiveCount(m_values.Get()) != startSize)
             {
                 throw TemplateRuntimeError("Set changed size during iteration");
             }
@@ -3334,7 +3348,7 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
         {
             // A list can shrink while it is iterated (pop() in a loop body)
-            const auto& values = m_values.Get();
+            const auto& values = Values();
             if (idx < 0 || static_cast<size_t>(idx) >= values.size())
             {
                 return std::optional<InternalValue>();
@@ -3343,7 +3357,7 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         }
         [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
         {
-            const auto& values = m_values.Get();
+            const auto& values = Values();
             if (idx < 0 || static_cast<size_t>(idx) >= values.size())
             {
                 return InternalValue();
@@ -3352,10 +3366,14 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         }
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
         [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
-        [[nodiscard]] InternalValueList* GetMutableItems() const override { return &m_values.Get(); }
+        [[nodiscard]] InternalValueList* GetMutableItems() const override { return &Values(); }
         [[nodiscard]] bool ItemsCharged() const override { return m_values.IsCharged(); }
         [[nodiscard]] SetIndex* GetSetIndex() const override { return m_index.get(); }
+        [[nodiscard]] InternalValueList* GetSetSlots() const override { return m_index ? &m_values.Get() : nullptr; }
         [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
+        // Without closing up a set's erased slots, as GetMutableItems would
+        [[nodiscard]] bool HasLiveSize() const override { return true; }
+        [[nodiscard]] bool HasMutableItems() const override { return true; }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
             // In a template module's call, its items that are the module's data read what the
@@ -3371,6 +3389,7 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         {
             if (OwnsMutableItemsAlone())
             {
+                // A set's erased slots hold nothing
                 for (const auto& item : m_values.Get())
                 {
                     TraverseValue(item, fn);
@@ -3382,6 +3401,10 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
             if (OwnsMutableItemsAlone())
             {
                 m_values.Get().clear();
+                if (m_index)
+                {
+                    m_index->Reset();
+                }
             }
         }
 

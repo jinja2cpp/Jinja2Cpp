@@ -7295,6 +7295,174 @@
     "type": "RuntimeError",
     "message": "Set changed size during iteration"
    }
+  },
+  {
+   "id": "methods.set_erase_then_read",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}.keys() - [] %}{% do s.discard(2) %}{% do s.pop() %}{{ s|sort }}|{{ s|length }}|{% do s.add(9) %}{{ s|sort }}|{{ 3 in s }}|{{ 2 in s }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 4, 5]|3|[3, 4, 5, 9]|True|False"
+  },
+  {
+   "id": "methods.set_update_through_index",
+   "template": "{% set s = {1: 0, 2: 0}.keys() - [] %}{% for i in range(5) %}{% do s.update([i], (i + 10,)) %}{% do s.difference_update([i + 10]) %}{% endfor %}{{ s|sort }}|{% do s.symmetric_difference_update([0, 0, 7]) %}{{ s|sort }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[0, 1, 2, 3, 4]|[1, 2, 3, 4, 7]"
+  },
+  {
+   "id": "methods.set_same_nan_once",
+   "template": "{% set n = w|float %}{% set s = {}.keys() - [] %}{% do s.add(n) %}{% do s.add(n) %}{% do s.update([n, n]) %}{{ s|length }}|{{ n in s }}",
+   "context": {
+    "w": "nan"
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "1|True"
+  },
+  {
+   "id": "methods.set_lazy_map_sees_add",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% set it = s|map('string') %}{% do s.add(9) %}{{ it|list }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "['1', '2', '3', '9']"
+  },
+  {
+   "id": "methods.set_lazy_map_loop_add_raises",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% for x in s|map('string') %}{% do s.add(x|int + 10) %}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "RuntimeError",
+    "message": "Set changed size during iteration"
+   }
+  },
+  {
+   "id": "methods.set_lazy_select_sees_add",
+   "template": "{% set s = {1: 0, 2: 0, 3: 0}.keys() - [] %}{% set it = s|select %}{% do s.add(9) %}{{ it|list }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 2, 3, 9]"
+  },
+  {
+   "id": "methods.list_lazy_map_sees_append",
+   "template": "{% set l = [1, 2] %}{% set it = l|map('string') %}{% do l.append(9) %}{{ it|list }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "['1', '2', '9']"
   }
  ]
 }
