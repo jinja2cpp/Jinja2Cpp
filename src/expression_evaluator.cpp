@@ -1,4 +1,5 @@
 #include "expression_evaluator.h"
+#include "host_call_context.h"
 
 #include "call_stop.h"
 #include "engine_errors.h"
@@ -2100,7 +2101,7 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
         HomeCall::Snapshot snapshot(values);
         try
         {
-            result = callable.GetExpressionCallable()(callParams, values);
+            result = m_bodySetCount == 0 ? callable.GetExpressionCallable()(callParams, values) : InvokeAtSite(values, callable, callParams);
         }
         catch (...)
         {
@@ -2212,6 +2213,18 @@ InternalValue InvokeCallable(RenderContext& values, const Callable& callable, co
 }
 } // namespace
 
+InternalValue CallExpression::InvokeAtSite(RenderContext& values, const Callable& callable, const CallParams& callParams) const
+{
+    if (callable.GetType() != Callable::Type::Expression)
+    {
+        return InvokeCallable(values, callable, callParams);
+    }
+    // An expression callable returns a value and writes no output, so no render suspends while the site is published
+    host_call::CallSite site{ &callParams, BodySets(), nullptr };
+    const host_call::CallSiteScope scope(site);
+    return callable.GetExpressionCallable()(callParams, values);
+}
+
 InternalValue CallExpression::CallArbitraryFn(RenderContext& values, InternalValue fnVal)
 {
     const auto* callable = ResolveCallee(fnVal);
@@ -2228,7 +2241,7 @@ InternalValue CallExpression::CallCallable(RenderContext& values, const Callable
     HomeCall::Snapshot snapshot(values);
     try
     {
-        return InvokeCallable(values, callable, callParams);
+        return m_bodySetCount == 0 ? InvokeCallable(values, callable, callParams) : InvokeAtSite(values, callable, callParams);
     }
     catch (...)
     {

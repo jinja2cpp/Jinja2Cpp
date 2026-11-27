@@ -75,6 +75,46 @@ def test_a_lent_engine_callable_prints_as_jinja2s(source, show):
     both(make_env, source, f=show)
 
 
+@pytest.mark.parametrize("name", ["range", "dict", "cycler", "joiner", "namespace", "lipsum"])
+def test_a_lent_global_is_pythons_own_object(name):
+    # Jinja2 passes Python's own range, dict and jinja2.utils objects, and the object a Python callable gives back is the
+    # template's global again (task 0559)
+    import builtins
+
+    import jinja2.utils
+
+    objects = (builtins.range, builtins.dict, jinja2.utils.Cycler, jinja2.utils.Joiner, jinja2.utils.Namespace)
+    objects += (jinja2.utils.generate_lorem_ipsum,)
+    both(make_env, f"{{{{ f({name}) }}}}", f=lambda x: f"{type(x).__name__} {any(x is o for o in objects)}")
+    both(make_env, f"{{{{ f({name}) is sameas {name} }}}}", f=lambda x: x)
+    both(make_env, f"{{{{ (f({name}), {name})|map('pprint')|unique|list|length }}}}", f=lambda x: x)
+
+
+def test_a_lent_global_read_through_the_context_is_pythons_own_object():
+    @jinja2cpp.pass_context
+    def get(ctx):
+        return ctx.get("range") is range and ctx["dict"] is dict
+
+    env = jinja2cpp.Environment()
+    env.globals["get"] = get
+    assert env.from_string("{{ get() }}").render() == "True"
+
+
+def test_python_range_given_back_after_the_call_stays_pythons():
+    # Past the call it was lent to, Python's range is a Python object to the template, which calls it as Jinja2 does;
+    # `back() is sameas range` is True in Jinja2 only (task 0583)
+    kept = []
+
+    def keep(x):
+        kept.append(x)
+        return ""
+
+    source = "{{ keep(range) }}{{ back()(2)|list }} {{ back() is sameas range }}"
+    assert jinja2cpp.Template(source).render(keep=keep, back=lambda: kept[0]) == "[0, 1] False"
+    kept.clear()
+    assert jinja2.Template(source).render(keep=keep, back=lambda: kept[0]) == "[0, 1] True"
+
+
 def test_lipsum_lent_to_python_prints_as_a_function():
     out = jinja2cpp.Template("{{ f(lipsum) }}").render(f=repr)
     assert out.startswith("<function generate_lorem_ipsum at 0x"), out
@@ -118,8 +158,64 @@ def make_split_env(module):
 )
 def test_context_splits_top_level_names_from_arguments(source):
     # Context.vars holds the template's top-level names, Context.parent its arguments and globals, and a loop variable,
-    # a with name or a macro's local is in neither (task 0416). A lookup of one of those finds it, unlike Jinja2's (0558)
+    # a with name or a macro's local is in neither (task 0416)
     both(make_split_env, source, w=2)
+
+
+def make_body_env(module):
+    @module.pass_context
+    def p(ctx):
+        names = ("a", "b", "c", "i", "w", "loop", "_b")
+        return (
+            f"vars={sorted(k for k in ctx.vars if k != 'p')} i={ctx.get('i')!r} b={ctx.get('b')!r} loop={'loop' in ctx} "
+            f"parent={sorted(k for k in ctx.parent if k in names)} keys={sorted(k for k in ctx.keys() if k in names)}"
+        )
+
+    @module.pass_context
+    def pf(ctx, value):
+        return f"{value}:{sorted(k for k in ctx.vars if k not in ('p', 'pf'))}:{ctx.get('b')!r}"
+
+    env = module.Environment(loader=module.DictLoader({"base": "{% for i in [1] %}{% block x scoped %}{% endblock %}{% endfor %}"}))
+    env.globals["p"] = p
+    env.filters["pf"] = pf
+    return env
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        # The task's probe rows
+        "{% set a = 1 %}{% for i in [1] %}{{ p() }}{% endfor %}",
+        "{% set a = 1 %}{% for i in [1] %}{% set b = 2 %}{{ p() }}{% endfor %}",
+        "{% set a = 1 %}{% block x %}{% set b = 1 %}{{ p() }}{% endblock %}",
+        "{% with w = 3 %}{% set b = 2 %}{{ p() }}{% endwith %}",
+        # A body's names count from its `set` on, in each pass
+        "{% set b = 9 %}{% for i in [1, 2] %}{{ p() }}{% set b = i %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% if true %}{% set b = 2 %}{% endif %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% set b = 2 %}{% if true %}{{ p() }}{% endif %}{{ p() if true }}{% endfor %}",
+        "{% for i in [1] %}{% set b = 2 %}{% with %}{{ p() }}{% endwith %}{% filter upper %}{{ p() }}{% endfilter %}{% endfor %}",
+        "{% for i in [1] %}{% set i = 5 %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% set _b = 2 %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% set b, c = 1, 2 %}{{ p() }}{% endfor %}",
+        "{% for i in [1] %}{% set b %}x{% endset %}{{ p() }}{% endfor %}",
+        "{% block x %}{% set b = 1 %}{% for i in [1] %}{{ p() }}{% endfor %}{% endblock %}",
+        "{% macro m() %}{% for i in [1] %}{% set b = 1 %}{{ p() }}{% endfor %}{% endmacro %}{{ m() }}",
+        "{% macro m(i) %}{% set b = 1 %}{{ p() }}{% endmacro %}{{ m(3) }}",
+        "{% for i in [1] %}{% set b = 2 %}{% for j in [1] %}{{ p() }}{% endfor %}{% endfor %}",
+        "{% for i in [1] %}{% set b = 2 %}{{ 'v'|pf }}{% endfor %}",
+        "{% set loop = 6 %}{{ p() }}",
+        # A scoped block's context is derived from the names its call site sees
+        "{% set a = 1 %}{% block x scoped %}{{ p() }}{% endblock %}",
+        "{% for i in [1] %}{% block x scoped %}{{ p() }}{% endblock %}{% endfor %}",
+        "{% for i in [1] %}{% set b = 2 %}{% block x scoped %}{{ p() }}{% endblock %}{% endfor %}",
+        "{% for i in [1] %}{% block x scoped %}{% set b = 3 %}{{ p() }}{% endblock %}{% endfor %}",
+        "{% extends 'base' %}{% block x %}{{ p() }}{% endblock %}",
+    ],
+)
+def test_context_of_calls_in_loop_and_block_bodies(source):
+    # Jinja2's Context.call hands a call written in a loop or block body, after a `set` there, context.derived(the names
+    # those stored), and a scoped block gets context.derived(locals()) (task 0558)
+    both(make_body_env, source, w=2)
 
 
 def test_context_in_included_and_imported_templates():

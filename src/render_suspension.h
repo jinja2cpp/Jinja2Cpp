@@ -27,13 +27,14 @@ struct SuspensionMarks
     std::size_t pendingDestroy = 0;
     const void* bridgingAccessor = nullptr;
     const void* lendFrame = nullptr;
+    const void* callSite = nullptr;
     bool keepUndefinedExport = false;
     bool renderFailure = false;
 
     [[nodiscard]] bool operator==(const SuspensionMarks& other) const noexcept
     {
         return destroyDepth == other.destroyDepth && pendingDestroy == other.pendingDestroy && bridgingAccessor == other.bridgingAccessor
-               && lendFrame == other.lendFrame && keepUndefinedExport == other.keepUndefinedExport && renderFailure == other.renderFailure;
+               && lendFrame == other.lendFrame && callSite == other.callSite && keepUndefinedExport == other.keepUndefinedExport && renderFailure == other.renderFailure;
     }
 };
 // internal_value.cpp and render_failure.cpp
@@ -51,7 +52,7 @@ bool HasPendingRenderFailure() noexcept;
 // - in here: the workspace's contents and its count of running renders, the render limits, the
 //   stack bounds, the host's poll, the render depth, the cycle collector, the parse limits;
 // - idle at every Write (SuspensionMarks): deferred destructions, a pending render failure, a
-//   bridging accessor, a lent frame, the export mode of undefined values;
+//   bridging accessor, a lent frame, a call site, the export mode of undefined values;
 // - shared: the lookup cache (its epochs never repeat), the HTML escape buffer (a sink's stream
 //   keeps no fragment in it), the JSON node type cache, the slot hash seed, the cell trace.
 struct RenderThreadState

@@ -6534,7 +6534,7 @@ InternalValue HostCallScope::Restore(Value&& value, const RenderContext& context
 
 // The host's parameters of a call made from `context` with the arguments `args` parsed, which
 // `scope` records point into
-void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo, UserCallableParams& result, HostCallScope& scope)
+void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo, UserCallableParams& result, HostCallScope& scope, const host_call::CallSite* site)
 {
     if (args.multipleValues)
     {
@@ -6579,9 +6579,9 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
         extraPosArgs.push_back(ArgumentToHost(p, context, scope));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
-    auto contextMap = host_call::MakeContextMap(context, &scope, [](const InternalValue& value, RenderContext& ctx, void* callScope) {
-        return ArgumentToHost(value, ctx, *static_cast<HostCallScope*>(callScope));
-    });
+    auto contextMap = host_call::MakeContextMap(
+        context, &scope,
+        [](const InternalValue& value, RenderContext& ctx, void* callScope) { return ArgumentToHost(value, ctx, *static_cast<HostCallScope*>(callScope)); }, site);
     scope.contextMap = contextMap.handle;
     result.context = std::move(contextMap.map);
     if (asksForContext)
@@ -6616,7 +6616,7 @@ struct UserCallableBody
         const KeepUndefinedScope keepUndefined(val.keepUndefined);
         // Kept for the call: the scope's records point into it
         const ParsedArguments args = helpers::ParseCallParams(argsInfo, params, ucParams.paramsParsed);
-        PrepareUserCallableParams(args, context, argsInfo, ucParams, scope);
+        PrepareUserCallableParams(args, context, argsInfo, ucParams, scope, host_call::SiteOf(params));
         scope.args = &args;
         scope.params = &ucParams;
         // Converted while the call's scope is live: what it was handed comes back as itself
@@ -6828,6 +6828,7 @@ SuspensionMarks ValueSuspensionMarks() noexcept
     marks.bridgingAccessor = g_bridgingAccessor;
     marks.lendFrame = t_lendFrame;
     marks.keepUndefinedExport = t_keepUndefinedExport;
+    marks.callSite = host_call::CurrentSite();
     return marks;
 }
 } // namespace detail

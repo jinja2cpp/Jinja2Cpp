@@ -5,11 +5,14 @@
 #include "render_context.h"
 #include "render_failure.h"
 #include "shared_owner.h"
+#include "slot_frame.h"
+#include "span.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <new>
@@ -30,19 +33,21 @@ namespace
 class ContextMapper : public IMapItemAccessor
 {
 public:
-    ContextMapper(RenderContext* context, void* scope, LendFn lend)
+    ContextMapper(RenderContext* context, void* scope, LendFn lend, const CallSite* site)
         : m_context(context)
         , m_scope(scope)
         , m_lend(lend)
     {
+        SetSite(site);
     }
 
     // Given to a new call on this thread, once nothing but the caller holds it (MakeContextMap)
-    void Renew(RenderContext* context, void* scope, LendFn lend) const noexcept
+    void Renew(RenderContext* context, void* scope, LendFn lend, const CallSite* site) const
     {
         m_context = context;
         m_scope = scope;
         m_lend = lend;
+        SetSite(site);
     }
 
     // The number of names GetKeys lists
@@ -74,7 +79,8 @@ public:
     {
         const auto& context = Live();
         const std::string key(name);
-        const auto* value = part == ContextNames::TopLevel ? context.FindTopLevelName(key) : context.FindParentName(key);
+        const auto* value = part == ContextNames::BodyVars ? FindBodyVar(context, key) : part == ContextNames::TopLevel ? context.FindTopLevelName(key)
+                                                                                                                        : context.FindParentName(key);
         if (!value)
         {
             return std::nullopt;
@@ -84,6 +90,10 @@ public:
     [[nodiscard]] std::vector<std::string> KeysOfPart(ContextNames part) const
     {
         const auto& context = Live();
+        if (part == ContextNames::BodyVars)
+        {
+            return BodyVarNames(context);
+        }
         return part == ContextNames::TopLevel ? context.CollectTopLevelNames() : context.CollectParentNames();
     }
 
@@ -93,6 +103,8 @@ public:
     {
         m_context = nullptr;
         m_scope = nullptr;
+        m_bodyScope = nullptr;
+        m_bodySets = {};
     }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -129,9 +141,54 @@ private:
     }
     [[nodiscard]] Value ToHost(const InternalValue& value) const { return m_lend && m_scope ? m_lend(value, *m_context, m_scope) : IntValue2Value(value); }
 
+    // The scope the call is made in and the names `set` stored before it there, when the call has any (CallSite). Taken
+    // at the call: a macro the host calls back into pushes scopes on the context while the call runs
+    void SetSite(const CallSite* site) const
+    {
+        m_bodyScope = nullptr;
+        m_bodySets = {};
+        if (site && m_context)
+        {
+            m_bodyScope = &std::as_const(*m_context).GetCurrentScope();
+            m_bodySets = m_context->Nodes()[site->bodySets];
+        }
+    }
+    // The value of a name `set` stored in the body, as a name with no value there is not in the view
+    [[nodiscard]] const InternalValue* FindBodyVar(const RenderContext& context, const std::string& name) const
+    {
+        if (!m_bodyScope)
+        {
+            return nullptr;
+        }
+        const auto hash = HashedName::Hash(name);
+        const auto* const named = std::find_if(m_bodySets.begin(), m_bodySets.end(), [&](const SlotName& set) { return set.hash == hash && context.Nodes().Text(set.name) == name; });
+        return named == m_bodySets.end() ? nullptr : RenderContext::FindStoredName(*m_bodyScope, name);
+    }
+    [[nodiscard]] std::vector<std::string> BodyVarNames(const RenderContext& context) const
+    {
+        std::vector<std::string> names;
+        if (!m_bodyScope)
+        {
+            return names;
+        }
+        // The list holds each name once (NameResolver): no scan of it per name
+        for (const auto& set : m_bodySets)
+        {
+            std::string name(context.Nodes().Text(set.name));
+            if (RenderContext::FindStoredName(*m_bodyScope, name))
+            {
+                names.push_back(std::move(name));
+            }
+        }
+        std::sort(names.begin(), names.end());
+        return names;
+    }
+
     mutable RenderContext* m_context;
     mutable void* m_scope;
     mutable LendFn m_lend;
+    mutable const InternalValueMap* m_bodyScope = nullptr;
+    mutable Span<const SlotName> m_bodySets;
 };
 
 // A view of a call's context that shows some of its names (ContextView): it expires with the context it views, which it
@@ -173,7 +230,35 @@ private:
 thread_local std::shared_ptr<const IMapItemAccessor> t_spareContext;
 } // namespace
 
-ContextMap MakeContextMap(RenderContext& context, void* scope, LendFn lend)
+namespace
+{
+// The call sites of the host calls running on this thread, innermost first (CallSiteScope)
+thread_local const CallSite* t_callSite = nullptr;
+} // namespace
+
+CallSiteScope::CallSiteScope(CallSite& site) noexcept
+    : m_site(site)
+{
+    site.outer = t_callSite;
+    t_callSite = &site;
+}
+
+CallSiteScope::~CallSiteScope()
+{
+    t_callSite = m_site.outer;
+}
+
+const CallSite* SiteOf(const CallParams& params) noexcept
+{
+    return t_callSite && t_callSite->params == &params ? t_callSite : nullptr;
+}
+
+const void* CurrentSite() noexcept
+{
+    return t_callSite;
+}
+
+ContextMap MakeContextMap(RenderContext& context, void* scope, LendFn lend, const CallSite* site)
 {
     // Taken from the slot, so that a call made during this one makes a map of its own
     auto spare = std::move(t_spareContext);
@@ -183,10 +268,10 @@ ContextMap MakeContextMap(RenderContext& context, void* scope, LendFn lend)
     {
         const auto* handle = spare.get();
         // Only MakeContextMap makes the maps the slot holds
-        static_cast<const ContextMapper*>(handle)->Renew(&context, scope, lend);
+        static_cast<const ContextMapper*>(handle)->Renew(&context, scope, lend, site);
         return ContextMap{ GenericMap(std::move(spare)), handle };
     }
-    auto mapper = std::make_shared<const ContextMapper>(&context, scope, lend);
+    auto mapper = std::make_shared<const ContextMapper>(&context, scope, lend, site);
     const IMapItemAccessor* handle = mapper.get();
     return ContextMap{ GenericMap(std::move(mapper)), handle };
 }
@@ -266,6 +351,17 @@ std::optional<LentCallableInfo> DescribeLentCallable(const UserCallable& callabl
     // The repr a template's {{ x|pprint }} prints (ValueRendererBase), and Python's type of it
     visitors::RenderValue(*lent, info.repr, true);
     info.typeName = visitors::PythonTypeName(*fn);
+    // A global that is Python's own object holds its names (SetupGlobals); a macro or a bound method has neither
+    if (const auto& attributes = fn->GetAttributes(); attributes && fn->GetKind() != Callable::Macro && !fn->GetBoundReceiver())
+    {
+        const auto module = attributes->find("__module__");
+        const auto qualname = attributes->find("__qualname__");
+        if (module != attributes->end() && qualname != attributes->end() && IsStringValue(module->second) && IsStringValue(qualname->second))
+        {
+            info.pythonModule = AsString(module->second);
+            info.pythonQualname = AsString(qualname->second);
+        }
+    }
     return info;
 }
 } // namespace v2

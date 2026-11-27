@@ -571,15 +571,23 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   for an error a callable raised, and the line of a syntax error.
 - The `Context` a `pass_context` callable gets holds, as Jinja2's, the template's top-level names in
   `vars` and its arguments and globals in `parent` (and in `keys()`, `items()`, `get_all()`), with no
-  loop variable, `{% with %}` name or macro local (0416). A lookup (`get`, `resolve`, `ctx[name]`)
-  still finds the names of the loops, `with` blocks and macros around the call, where Jinja2's finds
-  only those a `{% set %}` in a loop or block body stored, and Jinja2 hands a call in such a body,
-  and in a `scoped` block, a derived context (`vars` empty, the outer names in `parent`) (0558).
-  `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and `exported_vars` (empty) are not
-  there.
-- A template callable a Python callable gets (`range`, a macro, `loop.cycle`) prints as Jinja2's object
-  does (0439), but its `type()` is the module's `TemplateValue` and `f(range) is range` is False: Jinja2
-  passes Python's own `range`, `dict` and `jinja2.utils` classes (0559).
+  loop variable, `{% with %}` name or macro local (0416). A call written in a loop or block body after
+  a `{% set %}` there, and any call in a `scoped` block, gets Jinja2's derived context (`vars` empty, the
+  names the body stored and the block's call site sees on top in `parent`). When a body both sets a
+  name and defines a macro or imports a name under it, the context shows the name's current value,
+  where Jinja2's shows the value the `set` stored; a call in a loop body after an inner loop ran sees
+  the outer body's names, where Jinja2's sees those of the inner loop's last pass (its `_loop_vars` is
+  one variable each inner pass starts again); and a body with more than 65535 distinct `set` names
+  shows the first 65535 only. `eval_ctx.volatile` is always False.
+  `Context.derived`, `blocks` and `exported_vars` (empty) are not there.
+- A Python callable gets Python's own `range` and `dict` for the template's globals, and Jinja2's
+  `jinja2.utils.Cycler`, `Joiner`, `Namespace` and `generate_lorem_ipsum` for `cycler`, `joiner`, `namespace` and
+  `lipsum`, as Jinja2 passes them (when Jinja2 is not installed, those four are lent as the other template callables
+  are). Given back while that call runs, such an object is the template's global again (`f(range) is sameas range`);
+  given to the template elsewhere (`render(r=range)`, or kept and given back later), it stays Python's, so that
+  `r is sameas range` is False, where Jinja2's is True (0583). Calling `cycler` or `namespace` in Python makes
+  Jinja2's object, a Python object to the template. A macro or `loop.cycle` prints as Jinja2's object does (0439), but
+  its `type()` is the module's `TemplateValue`, as the module has no `jinja2.runtime.Macro`.
 - Sandbox (0412, 0413, 0414): `intercepted_binops` and `intercepted_unops` raise
   `UnsupportedError` (Jinja2's `test_binary_operator_intercepting` and
   `test_unary_operator_intercepting` are `xfail`). A public name of the engine's own values

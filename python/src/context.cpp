@@ -91,9 +91,9 @@ nb::object MakeEvalContext(const CallLease& lease)
 
 ContextHandle::Part PartOf(int part)
 {
-    if (part < 0 || part > 2)
+    if (part < 0 || part > 4)
     {
-        RaiseTypeError("a context part is 0, 1 or 2");
+        RaiseTypeError("a context part is 0 to 4");
     }
     return static_cast<ContextHandle::Part>(part);
 }
@@ -162,15 +162,46 @@ const jinja2::GenericMap& ContextHandle::Live() const
 jinja2::Value ContextHandle::View(Part part) const
 {
     const auto& context = Live();
-    if (part == Part::All)
+    jinja2::ContextNames names{};
+    switch (part)
     {
+    case Part::Vars:
+        names = jinja2::ContextNames::TopLevel;
+        break;
+    case Part::Parent:
+        names = jinja2::ContextNames::Parent;
+        break;
+    case Part::Body:
+        names = jinja2::ContextNames::BodyVars;
+        break;
+    case Part::All:
+    case Part::Resolve:
         return jinja2::Value(context);
     }
-    return jinja2::ContextView(jinja2::Value(context), part == Part::Vars ? jinja2::ContextNames::TopLevel : jinja2::ContextNames::Parent);
+    auto& view = m_views.at(static_cast<std::size_t>(part) - static_cast<std::size_t>(Part::Vars));
+    if (!view)
+    {
+        view = jinja2::ContextView(jinja2::Value(context), names);
+    }
+    return *view;
 }
 
 nb::object ContextHandle::Lookup(const std::string& name, Part part, bool& found) const
 {
+    if (part == Part::Resolve)
+    {
+        // Jinja2's Context.call derives the context of a call in such a body, which puts the body's names over
+        // the others; vars hide parent either way
+        for (const auto each : { Part::Body, Part::Vars, Part::Parent })
+        {
+            auto value = Lookup(name, each, found);
+            if (found)
+            {
+                return value;
+            }
+        }
+        return nb::none();
+    }
     const auto view = View(part);
     const auto* map = view.GetIf<jinja2::GenericMap>();
     const auto value = map ? map->Find(name) : std::nullopt;
@@ -184,6 +215,10 @@ nb::object ContextHandle::Lookup(const std::string& name, Part part, bool& found
 
 nb::list ContextHandle::Names(Part part) const
 {
+    if (part == Part::Resolve)
+    {
+        RaiseTypeError("a lookup part has no names");
+    }
     nb::list result;
     const auto view = View(part);
     if (const auto* map = view.GetIf<jinja2::GenericMap>())
@@ -199,7 +234,8 @@ nb::list ContextHandle::Names(Part part) const
 void BindContext(nb::module_& module)
 {
     nb::class_<ContextHandle>(module, "_ContextHandle")
-        // part: 0 every name the template sees, 1 Context.vars, 2 Context.parent (ContextHandle::Part)
+        // part: 0 every name the template sees, 1 Context.vars, 2 Context.parent, 3 the body's names, 4 a lookup as
+        // Context.resolve makes it (ContextHandle::Part)
         .def(
             "lookup",
             [](const ContextHandle& self, const std::string& name, int part) {
