@@ -3,7 +3,7 @@ status: in-progress
 priority: low
 area: robustness
 depends: [0569]
-touches: [src/big_int.cpp#Power, src/expression_parser.h#FoldBudget]
+touches: [src/big_int.cpp#Power, src/expression_parser.h#FoldBudget, src/recursion_guard.h, src/recursion_guard.cpp, src/template_impl.h#FailedFold]
 ---
 # Charge the Load's fold budget for the size of big-integer work
 
