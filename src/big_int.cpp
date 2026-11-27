@@ -1,6 +1,7 @@
 #include "big_int.h"
 
 #include "contracts.h"
+#include "cycle_collector.h"
 #include "decimal_number.h"
 #include "engine_errors.h"
 #include "internal_value.h"
@@ -29,6 +30,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -748,6 +750,45 @@ InternalValue MakeBigIntValue(std::string_view decimal)
     return MakeBigInt(decimal, false);
 }
 
+InternalValue HostBigIntValue(std::string_view decimal)
+{
+    const auto magnitude = decimal.substr(decimal.empty() || decimal.front() != '-' ? 0 : 1);
+    auto* const collector = CycleCollector::Current();
+    if (magnitude.size() <= MaxIntStrDigits || !collector)
+    {
+        return MakeBigInt(decimal, false);
+    }
+    // The budget that pays for an object made now: a hit is an object that budget paid for. Under an
+    // UncountedMemoryScope or without a budget it is null, and then only uncharged objects are shared
+    const bool counted = RenderMemoryCounted();
+    const void* const key = counted ? detail::t_renderLimits.collector : nullptr;
+    if (counted && !key)
+    {
+        return MakeBigInt(decimal, false);
+    }
+    auto& cache = collector->HugeHostIntsForWrite();
+    if (auto* object = cache.Find(decimal, key))
+    {
+        return BigIntValue(BigIntView(*object));
+    }
+    auto value = MakeBigInt(decimal, false);
+    const auto* handle = std::get_if<detail::BigIntHandle>(&detail::InternalValueAccess::Data(value));
+    if (!handle || !handle->object)
+    {
+        return value;
+    }
+    const auto* object = handle->object;
+    JINJA2CPP_EXPECTS(!object->Decimal().empty());
+    // A fourth of the budget at most, so that the cache cannot starve the template of it
+    if (key && cache.ChargedBytes() + object->ChargedBytes() > detail::t_renderLimits.memoryBudget / 4)
+    {
+        return value;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): MakeBigInt made the object, which is not const
+    cache.Insert(IntrusivePtr<detail::BigIntObject>(const_cast<detail::BigIntObject*>(object)), key);
+    return value;
+}
+
 BigIntView BigIntView::FromText(std::string_view decimal)
 {
     // At most MaxIntStrDigits digits is fewer than 14285 bits: never huge (docs/tasks/0543 B2)
@@ -1233,15 +1274,67 @@ void BackendObject::Made(BigIntStatus status)
     m_madeBy = m_backend;
 }
 
+// An optional entry of the table (BigIntBackend::fromWords and after): null when the backend's `structSize` does not
+// cover it, as for a table compiled against an older header
+template<typename Entry>
+Entry OptionalEntry(const BigIntBackend& backend, Entry BigIntBackend::*entry, size_t offset) noexcept
+{
+    return backend.structSize >= offset + sizeof(Entry) ? backend.*entry : nullptr;
+}
+
+auto FromWordsEntry(const BigIntBackend& backend) noexcept
+{
+    return OptionalEntry(backend, &BigIntBackend::fromWords, offsetof(BigIntBackend, fromWords));
+}
+
+auto ToWordsEntry(const BigIntBackend& backend) noexcept
+{
+    return OptionalEntry(backend, &BigIntBackend::toWords, offsetof(BigIntBackend, toWords));
+}
+
+// In the Load's fold check, the steps of big-integer work on operands of `leftBits` and `rightBits` bits: a product
+// of their 64-bit words each RenderLimits::bigIntWorkPerStep, which bounds a product, a division or (both operands
+// the same) a backend's quadratic decimal conversion. ResourceLimitError past the budget, before the backend's
+// work (a words-only operand's own decimal form, without fromWords, is built first). Nothing elsewhere (docs/tasks/0588)
+void ChargeBigIntWork(size_t leftBits, size_t rightBits)
+{
+    const auto perStep = detail::t_renderLimits.bigIntWorkPerStep;
+    if (perStep == 0)
+    {
+        return;
+    }
+    const auto products = ((std::uint64_t{ leftBits } + 63) / 64) * ((std::uint64_t{ rightBits } + 63) / 64);
+    if (products >= perStep)
+    {
+        detail::ChargeSteps(products / perStep);
+    }
+}
+
+// The bits of a magnitude of `digits` decimal digits, at most one more than it has
+size_t DecimalBits(size_t digits) noexcept
+{
+    return static_cast<size_t>(static_cast<double>(digits) * BitsPerDigit) + 1;
+}
+
 void Load(const BigIntBackend& backend, BackendObject& obj, const IntOperand& val)
 {
     if (!val.big)
     {
         obj.Made(backend.fromInt64(&backend, obj.Out(), val.small));
     }
+    else if (const auto fromWords = FromWordsEntry(backend); fromWords && val.big->IsHuge())
+    {
+        // A huge integer keeps its words: no decimal conversion either way (docs/tasks/0543 P4)
+        const auto words = val.big->Words();
+        obj.Made(fromWords(&backend, obj.Out(), words.data(), words.size(), val.big->Sign()));
+    }
     else
     {
-        obj.Made(WithDecimal(*val.big, [&backend, &obj](std::string_view decimal) { return backend.fromDecimal(&backend, obj.Out(), decimal.data(), decimal.size()); }));
+        obj.Made(WithDecimal(*val.big, [&backend, &obj](std::string_view decimal) {
+            const auto bits = DecimalBits(decimal.size());
+            ChargeBigIntWork(bits, bits);
+            return backend.fromDecimal(&backend, obj.Out(), decimal.data(), decimal.size());
+        }));
     }
 }
 
@@ -1253,10 +1346,28 @@ InternalValue ToValue(const BigIntBackend& backend, const BackendObject& obj)
     {
         return small;
     }
-    if (backend.bitLength(&backend, obj.Get()) > MaxBigIntBits)
+    const size_t bits = backend.bitLength(&backend, obj.Get());
+    if (bits > MaxBigIntBits)
     {
         ThrowTooManyBits();
     }
+    if (const auto toWords = ToWordsEntry(backend); toWords && bits > HugeBigIntBits)
+    {
+        // A huge result keeps only its words, as one made from a power-of-two literal (docs/tasks/0543 P4)
+        Limbs words((bits + 31) / 32);
+        const auto status = toWords(&backend, obj.Get(), words.data(), words.size());
+        if (status != BigIntStatus::Ok)
+        {
+            ThrowBackendFailure(backend, status);
+        }
+        // The words must be the magnitude bitLength measured: BigIntObject::Make expects a non-zero top word
+        if (WordsBits(words) != bits)
+        {
+            ThrowBackendFailure(backend, BigIntStatus::BadInput);
+        }
+        return ObjectValue(backend.sign(&backend, obj.Get()) < 0, words, {});
+    }
+    ChargeBigIntWork(bits, bits);
     // The sink runs inside the backend's noexcept call, so a failed append is recorded rather than thrown through it
     struct Sink
     {
@@ -1313,6 +1424,7 @@ bool IsOdd(const IntOperand& val) noexcept
 // modulo round the quotient down, and the remainder takes the sign of the divisor
 InternalValue FloorDivide(const BigIntBackend& backend, const BackendObject& left, const BackendObject& right, bool wantRemainder)
 {
+    ChargeBigIntWork(backend.bitLength(&backend, left.Get()), backend.bitLength(&backend, right.Get()));
     BackendObject quot(backend);
     BackendObject rem(backend);
     const auto status = backend.divideTruncated(&backend, quot.Out(), rem.Out(), left.Get(), right.Get());
@@ -1345,13 +1457,15 @@ size_t IntBitsCap()
     return detail::t_renderLimits.maxIntBits;
 }
 
-// The bits of a product of factors of `leftBits` and `rightBits` bits: at least their sum less one
+// The bits of a product of factors of `leftBits` and `rightBits` bits: at least their sum less one; ResourceLimitError
+// past the cap. Then takes the steps of computing it in the Load's fold check (ChargeBigIntWork)
 void CheckProductBits(size_t leftBits, size_t rightBits)
 {
     if (leftBits != 0 && rightBits != 0 && leftBits + rightBits - 1 > IntBitsCap())
     {
         ThrowTooManyBits();
     }
+    ChargeBigIntWork(leftBits, rightBits);
 }
 
 InternalValue Power(const BigIntBackend* backend, const IntOperand& base, const IntOperand& exp)

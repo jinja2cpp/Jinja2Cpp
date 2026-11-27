@@ -222,6 +222,23 @@ void StepsSlow()
 }
 } // namespace
 
+void ChargeSteps(std::uint64_t steps)
+{
+    auto& limits = t_renderLimits;
+    if (!limits.active)
+    {
+        return;
+    }
+    while (steps >= limits.stepsLeft)
+    {
+        // The rest of the countdown, then the slow path as the step that ends it would take
+        steps -= limits.stepsLeft;
+        limits.stepsLeft = 0;
+        StepsSlow();
+    }
+    limits.stepsLeft -= steps;
+}
+
 void CheckStackSlow(std::uintptr_t frame)
 {
     if (t_renderLimits.active)

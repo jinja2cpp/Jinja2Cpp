@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/1020
 priority: low
 area: robustness
 depends: [0543]
-touches: [src/value_visitors.h, src/big_int.cpp, include/jinja2cpp/big_int.h]
+touches: [src/value_visitors.h, src/big_int.cpp, src/big_int.h, src/cycle_collector.h, src/cycle_collector.cpp, src/internal_value.h, test/big_int_test.cpp, test/limits_test.cpp, test/template_module_test.cpp, test/suspendable_render_test.cpp, test/embedding_lifecycle_threads_test.cpp]
 ---
 # Stop converting a huge host BigInt on every access
 
@@ -27,3 +28,16 @@ multiplier. P2 does not remove it; neither does P4 (backend words), as the host 
 
 **Done when.** Twenty accesses to a 262144-bit host `BigInt` in a list take about the time of one
 conversion or less (bench case or test), and the behaviour of host big integers is unchanged.
+
+**Progress.** Decision: option A, no public API change (architect plan `/mnt/project-files/0566/plan.md`).
+A render's collector (`CycleCollector::Notes::hugeInts`, class `HugeHostInts` in `src/cycle_collector.h`)
+holds the last four huge host BigInts it converted, keyed by content and by the budget that paid for
+them; `HostBigIntValue` (`src/big_int.cpp`, called from `value_visitors.h`) shares the object on a hit.
+An entry that held the last reference to a charged object credits the budget that paid and clears the
+object's charge (`BigIntObject::ForgetCharge`), so a nested render's cache ending after its limits
+credits no outer budget. Not cached: no collector, under `UncountedMemoryScope` (only uncharged
+entries hit), and an object that with the others would take more than a quarter of the budget.
+Tests: `BigIntCases` rows (narrow and wide, `hl`/`hmap` params), `BigIntTemplate.HugeHostItemConvertsOncePerRender`
+(budget, timing ratio), `BigIntTemplate.HostBigIntValueSharesWithinTheCollector` (identity, uncharged,
+credit on eviction), module, limits, suspendable (two interleaved renders, same thread) and threads
+tests. Option C (a words form in the public BigInt) is filed as 0599. Measurements are in the PR.

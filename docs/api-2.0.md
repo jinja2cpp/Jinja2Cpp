@@ -299,6 +299,13 @@ Every environment starts with the built-in one: none by default, `cpp_int` with
 `jinja2cpp/big_int/boost_cpp_int.h` (`BoostCppIntBackend()`) works with any build and is the
 sample for writing a backend over another library.
 Only int64 overflow calls the backend, so int64 arithmetic costs the same with or without one.
+Two optional entries follow the thirteen (task 0543 P4, recommended by its plan Q5 and approved
+by Ruslan 2026-11-21): `fromWords` and `toWords` take and give the magnitude as 32-bit words,
+least significant first, so that an integer past 14285 bits, which the library keeps as words,
+reaches the backend and comes back without a decimal conversion (about 0.1 s each at 2^20 bits).
+The table stays version 1: the library uses an entry only when `structSize` covers it and it is
+not null, so tables compiled against the older header still work, and a new one works with an
+older library, which reads only as far as version 1 goes. `BoostCppIntBackend()` has both.
 
 **Chat-template preset (task 0360, decided by Ruslan 2026-11-01).** `jinja2cpp/chat_template.h`:
 `ConfigureForChatTemplates(TemplateEnv&, ChatTemplateOptions = {})` configures an environment as

@@ -98,6 +98,8 @@ CASES = [
     ('namespace_non_string_subscript', '{% set ns = namespace(a=1) %}[{{ ns[1] }}][{{ ns.a }}]'),
     # task 0270: Python's range is lazy; Jinja2C++ ranges are int64
     ('range_big_bounds', "{{ range(18446744073709551615) }}"),
+    # task 0568: a lazy Python range takes a bound past 4300 digits; Jinja2C++ ranges are int64
+    ('range_huge_context_bound', "{% set h = hs|int(base=16) %}{{ range(h)|first }}", {"ctx": {"hs": "f" * 3600}}),
     # task 0401: an engine object's method prints as a bound method of it
     ('cycler_method_prints', "{{ (cycler(1).next|string).split(' at ')[0] }}"),
     ('cycler_reset_prints', "{{ (cycler(1).reset|string).split(' at ')[0] }}"),

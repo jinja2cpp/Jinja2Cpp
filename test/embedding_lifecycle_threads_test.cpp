@@ -1,5 +1,6 @@
 #include "embedding_lifecycle_test.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template_env.h>
@@ -386,6 +387,45 @@ TEST(EmbeddingLifecycleTest, C7_WideStoredMemoryFileOpenedNarrowOnTwoThreads)
             }
         });
     }
+    for (auto& worker : workers)
+    {
+        worker.join();
+    }
+    EXPECT_EQ("", failures.Summary());
+}
+
+// A host list that holds a huge BigInt is read by renders on several threads at once (docs/tasks/0566): each render converts
+// it into its own cache, and the shared list and its BigInt are only read
+TEST(EmbeddingLifecycleTest, C8_HugeHostBigIntSharedByThreads)
+{
+    TemplateEnv env;
+    Settings settings;
+    settings.limits.maxRenderMemory = std::uint64_t{ 256 } << 10;
+    env.SetSettings(settings);
+    auto tpl = env.FromString("{% set acc = [] %}{% for i in range(20) %}{{ acc.append(l[0]) }}{% endfor %}{{ acc|length }}|{{ acc[19] == l[0] }}|{{ l[0].bit_length() }}|{{ (-l[0]) < 0 }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    // 2^65535 + 12345: 19729 digits, 28 KB converted
+    const ValuesMap params{ { "l", ValuesList{ BigInt::FromDigits("8" + std::string(16379, '0') + "3039", 16, false) } } };
+    constexpr int threads = 4;
+    Latch start;
+    Failures failures;
+    std::vector<std::thread> workers;
+    workers.reserve(threads);
+    for (int w = 0; w < threads; ++w)
+    {
+        workers.emplace_back([&] {
+            EXPECT_TRUE(start.Wait());
+            for (int i = 0; i < 5; ++i)
+            {
+                const std::string actual = Out(tpl->RenderAsString(params));
+                if (actual != "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone20|True|65536|True")
+                {
+                    failures.Add("got " + actual);
+                }
+            }
+        });
+    }
+    start.CountDown();
     for (auto& worker : workers)
     {
         worker.join();

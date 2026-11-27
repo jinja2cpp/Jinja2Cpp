@@ -1,6 +1,8 @@
 #include "../src/big_int.h"
 #include "../src/contracts.h"
+#include "../src/cycle_collector.h"
 #include "../src/internal_value.h"
+#include "../src/recursion_guard.h"
 #include "big_int_toy_backend.h"
 #include "gtest/gtest.h"
 
@@ -15,9 +17,11 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cmath>
 #include <cstdint>
+#include <ratio>
 #include <limits>
 #include <new>
 #include <stdexcept>
@@ -266,6 +270,9 @@ const BigIntCase BigIntCases[] = {
     { "{{ (hs|int(base=16))|float }}", nullptr, Expect::Python },
     { "{{ hbig / 2 }}", nullptr, Expect::Python },
     { "{{ hbig|filesizeformat }}", nullptr, Expect::Python },
+    // Task 0566: an item of a host container is read again and again; hl holds hbig and its negative, hmap hbig
+    { "{% set acc = [] %}{% for i in range(20) %}{{ acc.append(hl[0]) }}{% endfor %}|{{ acc|length }}|{{ acc[19] == hl[0] }}|{{ hl[0] > 0 }}|{{ hl[1] < 0 }}|{{ hl[1] == -hl[0] }}|{{ hl[0] == hmap.k }}|{{ hl[0] == hbig }}|{{ hl[0] is sameas hl[0] }}|{{ hl[0].bit_length() }}|{{ hl[1].bit_count() }}", "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone|20|True|True|True|True|True|True|True|14400|14400", Expect::Python },
+    { "{{ hl[0] }}", nullptr, Expect::Python },
     { "{% set h = hs|int(base=16) %}{{ (h + 1).bit_length() }}|{{ (h * h).bit_count() }}|{{ h - hbig }}|{{ h // hbig }}|{{ (h + 1) is even }}|{{ (h * -1) == -h }}|{{ {h + 0: 2}[hbig] }}|{{ {(p14285m1|int(base=2)): 3}[(p14285|int(base=2)) - 1] }}", "14401|14400|0|1|True|True|2|3", Expect::OverflowWithoutBackend },
 };
 
@@ -285,7 +292,9 @@ ValuesMap BigIntParams()
     BigInt nbig;
     BigInt::TryParse("-18446744073709551615", nbig);
     const std::string hs(3600, 'f');
-    return { { "big", std::numeric_limits<uint64_t>::max() }, { "nbig", nbig }, { "nan", std::nan("") }, { "inf", HUGE_VAL }, { "small", BigInt(5) }, { "hs", hs }, { "hbig", BigInt::FromDigits(hs, 16, false) }, { "o8", BigInt::FromDigits(hs, 16, false).ToDigits(8) }, { "o32", BigInt::FromDigits(hs, 16, false).ToDigits(32) }, { "o4", BigInt::FromDigits(hs, 16, false).ToDigits(4) }, { "p14284", "1" + std::string(14284, '0') }, { "p14285m1", std::string(14285, '1') }, { "p14285", "1" + std::string(14285, '0') }, { "hm", HugeMixedHex() } };
+    const auto hbig = BigInt::FromDigits(hs, 16, false);
+    const auto hneg = BigInt::FromDigits(hs, 16, true);
+    return { { "hl", ValuesList{ hbig, hneg } }, { "hmap", ValuesMap{ { "k", hbig } } }, { "big", std::numeric_limits<uint64_t>::max() }, { "nbig", nbig }, { "nan", std::nan("") }, { "inf", HUGE_VAL }, { "small", BigInt(5) }, { "hs", hs }, { "hbig", BigInt::FromDigits(hs, 16, false) }, { "o8", BigInt::FromDigits(hs, 16, false).ToDigits(8) }, { "o32", BigInt::FromDigits(hs, 16, false).ToDigits(32) }, { "o4", BigInt::FromDigits(hs, 16, false).ToDigits(4) }, { "p14284", "1" + std::string(14284, '0') }, { "p14285m1", std::string(14285, '1') }, { "p14285", "1" + std::string(14285, '0') }, { "hm", HugeMixedHex() } };
 }
 
 template<typename CharT>
@@ -404,7 +413,7 @@ TEST(BigIntToyBackend, EnvironmentChecksTheTable)
         EXPECT_EQ(toy, env.GetBigIntBackend());
         return !accepted;
     };
-    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.structSize = sizeof(BigIntBackend) - sizeof(b.divideTruncated); }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.structSize = static_cast<uint32_t>(offsetof(BigIntBackend, divideTruncated)); }));
     EXPECT_TRUE(rejected([](BigIntBackend& b) { b.version = 2; }));
     EXPECT_TRUE(rejected([](BigIntBackend& b) { b.objectSize = MaxBigIntObjectSize + 1; }));
     EXPECT_TRUE(rejected([](BigIntBackend& b) { b.objectAlign = 32; }));
@@ -520,6 +529,92 @@ TEST(BigIntToyBackend, FailuresOfTheBackend)
     EXPECT_THROW((void)tpl.RenderAsString(BigIntParams()), std::bad_alloc);
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ big * 3 }}", FailingBackend<BigIntStatus::TooLarge>()));
     EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ big + 1 }}", FailingBackend<BigIntStatus::Unsupported>()));
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+// Task 0543 P4: a backend with fromWords and toWords takes and gives a huge integer (past 14285 bits) as words, and a
+// huge result keeps no decimal form; a table without them, or one whose structSize ends before them, converts
+// through decimal text as before, with the same results
+TEST(BigIntToyBackend, HugeOperandsAndResultsGoThroughWords)
+{
+    // h has 14401 bits; (h + 1) * 3 and the like stay huge, (h * 2) // 2 - h is small again
+    const std::string hex = "1" + std::string(3599, '0') + "f";
+    const std::string source = "{% set h = s|int(base=16) %}{{ (h * 2) // 2 - h }}|{{ (h + 1) is odd }}|{{ ((h * 3) % 1000000007) }}|{{ (-h - 1).bit_length() }}|{{ '{:x}'.format(h + 1)[-3:] }}|{{ (h * 3) > h }}";
+    const auto render = [&source, &hex](const BigIntBackend* backend, auto charType) -> std::string {
+        using CharT = decltype(charType);
+        TemplateEnv env;
+        EXPECT_TRUE(env.SetBigIntBackend(backend));
+        std::conditional_t<std::is_same_v<CharT, char>, Template, TemplateW> tpl(&env);
+        const auto loaded = tpl.Load(std::basic_string<CharT>(source.begin(), source.end()));
+        EXPECT_TRUE(loaded.has_value());
+        const auto result = tpl.RenderAsString({ { "s", hex } });
+        if (!result.has_value())
+        {
+            return "error";
+        }
+        // The output is ASCII: narrowed one character at a time (MSVC warns, C4244, on a range constructor)
+        std::string narrow;
+        for (const auto ch : result.value())
+        {
+            narrow.push_back(static_cast<char>(ch));
+        }
+        return narrow;
+    };
+    // From Python
+    const std::string expected = "0|False|939304124|14401|010|True";
+    big_int_toy::WordCalls() = 0;
+    const auto withWords = render(big_int_toy::Backend(), char{});
+    EXPECT_GT(big_int_toy::WordCalls(), 0);
+    EXPECT_EQ(withWords, render(big_int_toy::Backend(), wchar_t{}));
+    big_int_toy::WordCalls() = 0;
+    EXPECT_EQ(withWords, render(big_int_toy::DecimalOnlyBackend(), char{}));
+    EXPECT_EQ(withWords, render(big_int_toy::DecimalOnlyBackend(), wchar_t{}));
+    EXPECT_EQ(0, big_int_toy::WordCalls());
+    EXPECT_EQ(expected, withWords);
+
+#ifndef JINJA2CPP_LINK_AS_SHARED
+    // A huge result made through toWords keeps only its words (the render limits are the library's own thread-local)
+    {
+        const auto h = jinja2::IntegerFromDigits(hex, 16, false);
+        // A render's limits, none set, with the backend
+        const jinja2::Settings::Limits limits;
+        jinja2::RenderLimitsScope scope(&limits, big_int_toy::Backend());
+        const auto sum = jinja2::BigIntBinary(jinja2::BigIntOp::Add, jinja2::AsBigInt(h).value(), int64_t{ 1 });
+        const auto view = jinja2::AsBigInt(sum).value();
+        ASSERT_TRUE(view.IsHuge());
+        EXPECT_TRUE(view.InlineDecimal().empty());
+        EXPECT_EQ(14401U, jinja2::BitLength(view));
+    }
+#endif
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+namespace
+{
+// A backend whose toWords reports words that are not the value's magnitude: a zero top word
+const BigIntBackend* ZeroTopWordBackend()
+{
+    static const BigIntBackend backend = [] {
+        BigIntBackend b = *big_int_toy::Backend();
+        b.toWords = [](const BigIntBackend*, const void*, uint32_t* out, size_t count) noexcept {
+            std::fill(out, out + count, 0U);
+            return BigIntStatus::Ok;
+        };
+        return b;
+    }();
+    return &backend;
+}
+} // namespace
+
+TEST(BigIntToyBackend, WordsThatDoNotMatchTheBitLengthFailTheRender)
+{
+    TemplateEnv env;
+    ASSERT_TRUE(env.SetBigIntBackend(ZeroTopWordBackend()));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ ((s|int(base=16)) + 1) is odd }}"));
+    const auto result = tpl.RenderAsString({ { "s", "1" + std::string(3600, '0') } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_NE(std::string::npos, result.error().ToString().find("big-integer backend 'toy-decimal' failed")) << result.error().ToString();
     EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 
@@ -952,6 +1047,50 @@ TEST(BigIntTemplate, StrDigitsConstantsFailTheLoad)
 // Task 0569: Jinja2 folds constants when it compiles, in code that never renders too, so the Load's fold check
 // computes them; without limits of the template's own it does under a budget (FoldBudget), past which a candidate
 // does not fold and its value is left to the render
+// Task 0588: in the fold check a big-integer product, power or division takes steps for its operands' words, so
+// that roots of big arithmetic spend the Load's steps as other work does. Thirty roots of ten products of 15850-bit
+// powers spend them, and the tuple-slice subscript after them, which needs more than a root's own steps to fold,
+// then fails the Load; the same roots on small powers do not. The 0588 template (a hundred roots of ten products of 31700-bit powers) took 7.5 s to load (Release)
+TEST(BigIntTemplate, FoldBudgetChargesBigIntWork)
+{
+    const auto loadError = [](const std::string& source) {
+        TemplateEnv env;
+        env.SetBigIntBackend(BoostCppIntBackend());
+        Template tpl(&env);
+        const auto loaded = tpl.Load(source);
+        if (!loaded)
+        {
+            return loaded.error().ToString().substr(0, 200);
+        }
+        const auto rendered = tpl.RenderAsString({});
+        return rendered ? rendered.value() : "render: " + rendered.error().ToString().substr(0, 200);
+    };
+    const auto roots = [](int count, const std::string& power) {
+        std::string term = "((" + power + " * " + power + ") % 7)";
+        std::string sum = term;
+        for (int idx = 1; idx != 10; ++idx)
+        {
+            sum += " + " + term;
+        }
+        std::string result;
+        for (int root = 0; root != count; ++root)
+        {
+            result += "{% if false %}{{ " + sum + " }}{% endif %}";
+        }
+        return result;
+    };
+    // A fold that needs more than a root's own steps, as in FoldBudgetBoundsDeadConstants
+    std::string chain = "(2 * 3)";
+    for (int filter = 0; filter != 300; ++filter)
+    {
+        chain += "|abs";
+    }
+    const std::string folding = "{{ ()[:, :] ~ (" + chain + ") }}";
+    EXPECT_EQ("6", loadError(roots(30, "3 ** 100") + folding));
+    EXPECT_NE(std::string::npos, loadError(roots(30, "3 ** 10000") + folding).find("']' expected"));
+    EXPECT_EQ("ok", loadError(roots(100, "3 ** 20000") + "ok"));
+}
+
 TEST(BigIntTemplate, FoldBudgetBoundsDeadConstants)
 {
     const auto loadError = [](const std::string& source, const Settings* settings = nullptr) {
@@ -1157,3 +1296,135 @@ TEST(BigIntTemplate, HugeFromBinaryBuildsDecimalWithinTheBudget)
         EXPECT_EQ(ErrorCode::ResourceLimitExceeded, failed.error().GetCode()) << source << ": " << failed.error().ToString();
     }
 }
+
+// Task 0566: the item of a host container converts from decimal on every access; a render now holds the last
+// four huge ones it converted
+namespace
+{
+// 2^262143 + 12345: 78914 digits, 262144 bits
+BigInt HostHuge262144()
+{
+    return BigInt::FromDigits("8" + std::string(65531, '0') + "3039", 16, false);
+}
+
+#ifndef JINJA2CPP_LINK_AS_SHARED
+// A huge integer of 4400 digits whose first digit is `lead` and whose digits are otherwise 1 (for the test of the
+// cache itself, which a shared build cannot run)
+std::string HugeText(char lead)
+{
+    return std::string(1, lead) + std::string(4399, '1');
+}
+#endif
+} // namespace
+
+TEST(BigIntTemplate, HugeHostItemConvertsOncePerRender)
+{
+    TemplateEnv env;
+    Settings settings;
+    settings.limits.maxRenderMemory = std::uint64_t{ 640 } * 1024;
+    env.SetSettings(settings);
+    const ValuesMap params{ { "l", ValuesList{ HostHuge262144() } } };
+    const auto render = [&env, &params](const std::string& source) {
+        Template tpl(&env);
+        const auto loaded = tpl.Load(source);
+        EXPECT_TRUE(loaded.has_value()) << source;
+        return tpl.RenderAsString(params);
+    };
+    // (a) Twenty values of 111 KB each, held by the list, would pass the budget; one shared object does not
+    const auto held = render("{% set acc = [] %}{% for i in range(20) %}{{ acc.append(l[0]) }}{% endfor %}{{ acc|length }}|{{ acc[19] == l[0] }}|{{ acc[0].bit_length() }}");
+    ASSERT_TRUE(held.has_value()) << held.error().ToString();
+    std::string expected;
+    for (int n = 0; n != 20; ++n)
+    {
+        expected += "None";
+    }
+    EXPECT_EQ(expected + "20|True|262144", held.value());
+    // The same twenty values from another item each each convert: they do not fit
+    const ValuesMap distinct{ { "l", ValuesList{ HostHuge262144() } }, { "m", ValuesList{ BigInt::FromDigits("8" + std::string(65531, '0') + "303a", 16, false), BigInt::FromDigits("8" + std::string(65531, '0') + "303b", 16, false), BigInt::FromDigits("8" + std::string(65531, '0') + "303c", 16, false), BigInt::FromDigits("8" + std::string(65531, '0') + "303d", 16, false), BigInt::FromDigits("8" + std::string(65531, '0') + "303e", 16, false), BigInt::FromDigits("8" + std::string(65531, '0') + "303f", 16, false) } } };
+    Template tooMany(&env);
+    ASSERT_TRUE(tooMany.Load("{% set acc = [] %}{% for x in m %}{{ acc.append(x) }}{% endfor %}"));
+    const auto failed = tooMany.RenderAsString(distinct);
+    ASSERT_FALSE(failed.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, failed.error().GetCode());
+
+    // (b) Twenty accesses take about the time of one: before, twenty times as long (the done-when of 0566)
+    TemplateEnv plain;
+    const auto timed = [&plain, &params](int count) {
+        Template tpl(&plain);
+        EXPECT_TRUE(tpl.Load("{% for i in range(" + std::to_string(count) + ") %}{{ l[0] > 0 }}{% endfor %}").has_value());
+        auto best = std::chrono::steady_clock::duration::max();
+        for (int n = 0; n != 3; ++n)
+        {
+            const auto start = std::chrono::steady_clock::now();
+            const auto result = tpl.RenderAsString(params);
+            best = std::min(best, std::chrono::steady_clock::now() - start);
+            EXPECT_TRUE(result.has_value());
+        }
+        return std::chrono::duration<double, std::milli>(best).count();
+    };
+    const double one = timed(1);
+    const double twenty = timed(20);
+    RecordProperty("one_access_ms", std::to_string(one));
+    RecordProperty("twenty_accesses_ms", std::to_string(twenty));
+    // Recorded, not asserted: a test does not depend on timing (REVIEW.md). (a) pins the sharing
+}
+
+#ifndef JINJA2CPP_LINK_AS_SHARED
+// (c) The cache is the running render's collector's: its objects are shared there, charged to the budget that paid,
+// not shared into a render without that budget, and given back to it when they leave the cache
+TEST(BigIntTemplate, HostBigIntValueSharesWithinTheCollector)
+{
+    const std::string text = HugeText('7');
+    const auto objectOf = [](const InternalValue& value) { return AsBigInt(value).value().Object(); };
+    {
+        const auto first = HostBigIntValue(text);
+        const auto second = HostBigIntValue(text);
+        ASSERT_NE(nullptr, objectOf(first));
+        EXPECT_NE(objectOf(first), objectOf(second)) << "no collector: no cache";
+    }
+    CycleCollector collector;
+    {
+        const auto first = HostBigIntValue(text);
+        const auto second = HostBigIntValue("-" + text);
+        const auto third = HostBigIntValue(text);
+        EXPECT_EQ(objectOf(first), objectOf(third));
+        EXPECT_NE(objectOf(first), objectOf(second));
+        EXPECT_FALSE(objectOf(first)->IsCharged());
+        EXPECT_TRUE(objectOf(second)->IsNegative());
+        // Only the huge are held: a value that is not (4300 digits) is made again
+        const auto small = std::string(4300, '9');
+        EXPECT_NE(objectOf(HostBigIntValue(small)), objectOf(HostBigIntValue(small)));
+    }
+    Settings::Limits limits;
+    limits.maxRenderMemory = std::uint64_t{ 1 } << 20;
+    const RenderLimitsScope scope(&limits, nullptr);
+    const auto budget = detail::t_renderLimits.memoryBudget;
+    ASSERT_EQ(budget, detail::t_renderLimits.memoryLeft);
+    {
+        const auto counted = HostBigIntValue(text);
+        EXPECT_TRUE(objectOf(counted)->IsCharged());
+        const auto bytes = objectOf(counted)->ChargedBytes();
+        EXPECT_EQ(budget - bytes, detail::t_renderLimits.memoryLeft);
+        EXPECT_EQ(objectOf(counted), objectOf(HostBigIntValue(text)));
+        EXPECT_EQ(budget - bytes, detail::t_renderLimits.memoryLeft) << "a shared object is charged once";
+        {
+            // Uncounted: the object the budget paid for is not for a snapshot of the globals
+            const UncountedMemoryScope uncounted;
+            const auto outside = HostBigIntValue(text);
+            EXPECT_NE(objectOf(counted), objectOf(outside));
+            EXPECT_FALSE(objectOf(outside)->IsCharged());
+            EXPECT_EQ(objectOf(outside), objectOf(HostBigIntValue(text)));
+        }
+        EXPECT_EQ(objectOf(counted), objectOf(HostBigIntValue(text)));
+    }
+    // The cache alone holds it now: still charged, and credited when it lets go. Four more take the four slots: the
+    // two uncharged ones and the charged one go, and the budget holds the four new ones alone
+    EXPECT_LT(detail::t_renderLimits.memoryLeft, budget);
+    std::uint64_t four = 0;
+    for (const char lead : { '1', '2', '3', '4' })
+    {
+        four += objectOf(HostBigIntValue(HugeText(lead)))->ChargedBytes();
+    }
+    EXPECT_EQ(budget - four, detail::t_renderLimits.memoryLeft);
+}
+#endif
