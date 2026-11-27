@@ -1684,6 +1684,10 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                          Case{ "{% include 'header.j2' %}{% from 'macros.j2' import item %}{% for i in items[:2] %}{{ item(i) }}{% endfor %}",
                                                "<h1>REPORT</h1>[1], [2], " },
                                          Case{ "{% extends 'base.j2' %}{% block body %}{{ super() }}+{{ title }}{% endblock %}", "<base+Report>" },
+                                         // A set's erased slots and its index rebuilt after them (docs/tasks/0587)
+                                         Case{ "{% set s = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}.keys() - [] %}{% set _ = s.pop() %}{{ 3 in s }}"
+                                               "{% set _ = s.discard(4) %}{% set _ = s.update([6, 7]) %}{{ s|length }}{{ s|sort }}",
+                                               "True5[2, 3, 5, 6, 7]" },
                                          // Reference cycles, freed when the render ends: none leaks when an
                                          // allocation fails (docs/tasks/0283, LeakSanitizer in the sanitizer job)
                                          Case{ "{% set ns = namespace(l=[]) %}{% set ns.self = ns %}{% set l = [1] %}{{ l.append(l) or '' }}"

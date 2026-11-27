@@ -169,6 +169,7 @@ TEST(SetIndexLinearTest, ChangesInALoopAreLinear)
         { "{% for i in range(20000, 40000) %}{% set _ = s.update([i]) %}{% set _ = s.difference_update([i - 20000]) %}{% endfor %}{{ s|length }}|{{ 39999 in s }}|{{ 0 in s }}",
           "20000|True|False" },
         { "{% for i in range(20000) %}{% set _ = s.symmetric_difference_update([i, i + 20000]) %}{% endfor %}{{ s|length }}|{{ 20000 in s }}", "20000|True" },
+        { "{% set _ = s.discard(0) %}{% for i in range(20000, 40000) %}{% set _ = s.add(i) %}{% endfor %}{{ s|length }}|{{ 39999 in s }}", "39999|True" },
         { "{% set n = w|float %}{% for i in range(20000) %}{% set _ = s.add(n) %}{% endfor %}{{ s|length }}", "20001" },
     };
     for (const auto& row : rows)

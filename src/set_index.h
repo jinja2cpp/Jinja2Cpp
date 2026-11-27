@@ -91,9 +91,10 @@ public:
     // `slots`, so that a failure leaves the set as it was
     void Reserve(const InternalValueList& slots, const std::string& token)
     {
-        if (!m_erased.empty() && InStep(slots))
+        // Geometric growth, as push_back's: a reserve of one more each time would copy the marks at every add
+        if (!m_erased.empty() && InStep(slots) && m_erased.capacity() < slots.size() + 1)
         {
-            m_erased.reserve(slots.size() + 1);
+            m_erased.reserve(std::max(slots.size() + 1, m_erased.capacity() * 2));
         }
         Charge(EntryBytes(token));
     }
@@ -272,12 +273,17 @@ private:
             Rebuild(slots);
         }
     }
-    void Rebuild(const InternalValueList& slots)
+    // Drops the lookup table and what it counted; the erase marks stay, as the slots they mark do
+    void ClearTable() noexcept
     {
         m_positions = Positions();
         ReleaseRenderMemory(std::exchange(m_charged, 0));
-        m_stale = false;
         m_shadowed = 0;
+    }
+    void Rebuild(const InternalValueList& slots)
+    {
+        ClearTable();
+        m_stale = false;
         try
         {
             m_positions.reserve(LiveCount(slots));
@@ -305,7 +311,9 @@ private:
         }
         catch (...)
         {
-            Reset();
+            // The erased slots are still there: only the table goes, and the next lookup builds it again
+            ClearTable();
+            m_stale = true;
             throw;
         }
     }
