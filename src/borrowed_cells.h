@@ -218,7 +218,7 @@ private:
     // Takes a listed link out of its live cell's list
     void Unlist(const BorrowedCell& cell, uint64_t index) const noexcept;
 #ifdef JINJA2CPP_CELL_TRACE
-    // The link IsUnheld compares the cell's links with, for the trace of an adopt
+    // The link FindHolders compares the cell's links with, for the trace of an adopt
     static const CellLink* TraceSourceLink(const BorrowedCell& cell, bool isList);
 #endif
     // Takes the frozen cell `other` reads, if it reads one
@@ -329,9 +329,28 @@ private:
     void TraceExport(bool live) const noexcept;
 #endif
 
-    // Whether nothing can read the cell any more but the registry: no value holds it, its
-    // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld)
-    [[nodiscard]] bool IsUnheld() const noexcept;
+    // What can read the cell besides the registry (BorrowedCells::DropUnheld)
+    enum class Holders : uint8_t
+    {
+        // A value, the host or a later call
+        Some,
+        // Nothing: no value holds it, its source alone holds its data and no other adapter is
+        // attached to it
+        None,
+        // Its own items alone: what holds the source or the cell is an item of the cell's storage
+        // (`d.update(self=d)`), a cycle that the walk from the dropped cell's storage frees once the
+        // cell is frozen (docs/tasks/0573)
+        ItsItems,
+    };
+    // `byItems`: whether the caller walks from what a dropped cell held, which a cell its own items
+    // hold needs
+    [[nodiscard]] Holders FindHolders(bool byItems) const noexcept;
+    // Whether the items of the cell's storage (and of the retired one) alone hold `source`, the
+    // adapter of the source, beyond the cell's own reference, and every other link attached to the cell:
+    // `links`, the references the cell has besides those links
+    [[nodiscard]] bool IsHeldByItsItems(const ValueObject& source, size_t links) const noexcept;
+    // The number of items in the cell's storage
+    [[nodiscard]] uint32_t StorageSize() const noexcept;
     // Whether the cell's storage alone holds the items: no value of an ended call shares them
     [[nodiscard]] bool OwnsItemsAlone() const noexcept;
     void Bind() const noexcept;
@@ -373,6 +392,12 @@ private:
     bool m_unheldIdentity;
     // Set when the render ends (BorrowedCells::Finish)
     mutable bool m_frozen = false;
+    // The counts of the last walk of the items that found other holders than the items
+    // (IsHeldByItsItems): the source's references, the cell's and the storage's items. A cell the module
+    // keeps is not walked again at each call's end until a count falls or the storage doubles; 0: no walk yet
+    mutable uint32_t m_heldSourceUses = 0;
+    mutable uint32_t m_heldUses = 0;
+    mutable uint32_t m_heldItems = 0;
     // The links of the adapters the thread's snapshot of the globals reaches attached to the live
     // cell, which the registry detaches when the render ends; the other links own the cell and
     // are not listed

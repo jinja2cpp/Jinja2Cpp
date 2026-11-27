@@ -801,7 +801,7 @@ struct IListAccessor : ValueObject
     [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
     // Whether something besides the adapter's own copy of the data can lend it to a later call of
     // a template module, which must then see what this call wrote: the host's copy of a generic
-    // container (docs/tasks/0336). Asked of the data an adapter owns (BorrowedCell::IsUnheld)
+    // container (docs/tasks/0336). Asked of the data an adapter owns (BorrowedCell::FindHolders)
     [[nodiscard]] virtual bool MayBeLentAgain() const noexcept { return false; }
     // The host's data an adapter of it lends, as the host sees it, without a look at the link
     // (a value a template module's call handed out, CallExports); CreateGenericList for the
