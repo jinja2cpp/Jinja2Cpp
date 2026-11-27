@@ -3,6 +3,7 @@
 // `sorted(k for k in vars(m) if not k.startswith('__'))`, `str(m)` and `m.name(...)`.
 #include "test_tools.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/host_object.h>

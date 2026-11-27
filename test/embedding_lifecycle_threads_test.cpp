@@ -1,5 +1,6 @@
 #include "embedding_lifecycle_test.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template_env.h>

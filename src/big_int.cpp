@@ -30,6 +30,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -1293,8 +1294,8 @@ auto ToWordsEntry(const BigIntBackend& backend) noexcept
 
 // In the Load's fold check, the steps of big-integer work on operands of `leftBits` and `rightBits` bits: a product
 // of their 64-bit words each RenderLimits::bigIntWorkPerStep, which bounds a product, a division or (both operands
-// the same) a backend's quadratic decimal conversion. ResourceLimitError past the budget, before the work
-// (docs/tasks/0588). Nothing elsewhere
+// the same) a backend's quadratic decimal conversion. ResourceLimitError past the budget, before the backend's
+// work (a words-only operand's own decimal form, without fromWords, is built first). Nothing elsewhere (docs/tasks/0588)
 void ChargeBigIntWork(size_t leftBits, size_t rightBits)
 {
     const auto perStep = detail::t_renderLimits.bigIntWorkPerStep;

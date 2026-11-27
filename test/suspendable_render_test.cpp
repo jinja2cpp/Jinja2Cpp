@@ -5,6 +5,7 @@
 
 #include <fiber.h>
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>

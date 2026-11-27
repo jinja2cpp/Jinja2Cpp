@@ -49,6 +49,7 @@ CASES = [
     # task 0568: an integer past 4300 digits indexes nothing (IndexError, KeyError: undefined), and
     # the undefined's message does not print it
     ('huge_index_context', "{% set h = hs|int(base=16) %}[{{ [1, 2, 3][h] }}][{{ [1, 2, 3][-h] }}][{{ (1, 2, 3)[h] }}][{{ 'abc'[h] }}][{{ 'abc'[-h] }}][{{ {'a': 1}[h] }}][{{ {'a': 1}[-h] }}][{{ [1, 2, 3][h] is defined }}]", {"ctx": {"hs": "f" * 3600}}),
+    ('huge_index_nested_context', "{% set h = hs|int(base=16) %}[{{ [1, 2, 3][(h, 1)] }}][{{ {'a': 1}[(h,)] }}][{{ (1, 2)[[h]] is defined }}]", {"ctx": {"hs": "f" * 3600}}),
     # task 0362: a slice goes to __getitem__ without getitem's fallback, so what has no items
     # raises; a slice of literals folds through getitem, which makes it undefined
     ("slice_int_variable", "{{ x[1:2] }}", {"ctx": {"x": 5}}),

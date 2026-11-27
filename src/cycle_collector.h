@@ -3,6 +3,7 @@
 
 #include "borrowed_cells.h"
 #include "internal_value.h"
+#include "intrusive_ptr.h"
 #include "recursion_guard.h"
 
 #include <array>
@@ -486,7 +487,8 @@ public:
         }
         return collector->m_notes->noted.count(object) != 0;
     }
-    // Whether the render noted anything: a store, a container letting go of a value, a frozen cell (docs/tasks/0312)
+    // Whether the render noted anything: a store, a container letting go of a value, a frozen cell (docs/tasks/0312),
+    // or kept a converted huge host integer (HugeHostInts, docs/tasks/0566), which a caller may take for a store
     [[nodiscard]] bool HasNotes() const noexcept { return m_notes != nullptr; }
     // Counts a tree (a template, what a render of it loaded) against this render's memory budget for as long as
     // something owns it: a render started inside this one that shares its snapshot of the globals can store a value

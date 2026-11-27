@@ -164,7 +164,16 @@ std::string KeyName(const InternalValue& key)
     {
         return "<integer of " + std::to_string(BitLength(*big)) + " bits>";
     }
-    return Repr(key);
+    // A key that holds such an integer (a tuple, a list) cannot print either; Python formats its message only when
+    // it is read, so a render that never reads it does not fail
+    try
+    {
+        return Repr(key);
+    }
+    catch (const TemplateRuntimeError&)
+    {
+        return "<key that cannot be printed>";
+    }
 }
 
 std::string HintOf(const UndefinedInfo& info)

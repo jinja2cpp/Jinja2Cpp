@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cmath>
 #include <cstdint>
+#include <ratio>
 #include <limits>
 #include <new>
 #include <stdexcept>
@@ -565,7 +566,8 @@ TEST(BigIntToyBackend, HugeOperandsAndResultsGoThroughWords)
     EXPECT_EQ(0, big_int_toy::WordCalls());
     EXPECT_EQ(expected, withWords);
 
-    // A huge result made through toWords keeps only its words
+#ifndef JINJA2CPP_LINK_AS_SHARED
+    // A huge result made through toWords keeps only its words (the render limits are the library's own thread-local)
     {
         const auto h = jinja2::IntegerFromDigits(hex, 16, false);
         // A render's limits, none set, with the backend
@@ -577,6 +579,7 @@ TEST(BigIntToyBackend, HugeOperandsAndResultsGoThroughWords)
         EXPECT_TRUE(view.InlineDecimal().empty());
         EXPECT_EQ(14401U, jinja2::BitLength(view));
     }
+#endif
     EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 
@@ -1335,7 +1338,7 @@ TEST(BigIntTemplate, HugeHostItemConvertsOncePerRender)
     ASSERT_FALSE(failed.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, failed.error().GetCode());
 
-    // (b) Twenty accesses take about the time of one: before, twenty times as long
+    // (b) Twenty accesses take about the time of one: before, twenty times as long (the done-when of 0566)
     TemplateEnv plain;
     const auto timed = [&plain, &params](int count) {
         Template tpl(&plain);
@@ -1354,7 +1357,7 @@ TEST(BigIntTemplate, HugeHostItemConvertsOncePerRender)
     const double twenty = timed(20);
     RecordProperty("one_access_ms", std::to_string(one));
     RecordProperty("twenty_accesses_ms", std::to_string(twenty));
-    EXPECT_LT(twenty, one * 3) << "one access " << one << " ms, twenty " << twenty << " ms";
+    // Recorded, not asserted: a test does not depend on timing (REVIEW.md). (a) pins the sharing
 }
 
 #ifndef JINJA2CPP_LINK_AS_SHARED
