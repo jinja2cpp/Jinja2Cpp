@@ -22657,6 +22657,128 @@
    "output": "False"
   },
   {
+   "id": "statements.stored_self_block_of_scoped_block_after_loop",
+   "template": "{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% block x scoped %}{% set ns.f = self.y %}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1][2]|[2]"
+  },
+  {
+   "id": "statements.stored_self_block_of_scoped_block_reads_loop",
+   "template": "{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% block x scoped %}{% set ns.f = self.y %}{% block y %}[{{ i }}{{ loop.index }}]{% endblock %}{% endblock %}{% endfor %}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[11][22]|[22]"
+  },
+  {
+   "id": "statements.import_with_context_in_loop_sees_loop",
+   "template": "{% for i in [1] %}{{ loop.index }}{% import \"a\" as m with context %}{{ m.f() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro f() %}A{{ i }}{{ loop is defined }}{% endmacro %}"
+   },
+   "output": "1A1True"
+  },
+  {
    "id": "statements.macro_closure_in_scoped_block_of_loop",
    "template": "{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}",
    "context": {

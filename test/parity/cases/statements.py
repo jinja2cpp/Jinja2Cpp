@@ -613,6 +613,11 @@ CASES = [
     ('include_in_scoped_block_sees_loop', '{% for i in [1, 2] %}{% block x scoped %}{% include "t" %}{% endblock %}{% endfor %}', {"templates": {"t": "<{{ i }}|{{ loop is defined }}|{{ loop.index if loop is defined }}>"}}),
     ('include_in_inner_loop_of_scoped_block_sees_outer_loop', '{% for i in [1, 2] %}{% block x scoped %}{% for j in "ab" %}{% include "t" %}{% endfor %}{% endblock %}{% endfor %}', {"templates": {"t": "<{{ j }}{{ loop.index if loop is defined }}>"}}),
     ('include_in_scoped_block_outside_loops', '{% block x scoped %}{% include "t" %}{% endblock %}', {"templates": {"t": "{{ loop is defined }}"}}),
+    # a `self` block or `super` stored in a scoped block and called after the loop renders in the derived context (0596)
+    ('stored_self_block_of_scoped_block_after_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% block x scoped %}{% set ns.f = self.y %}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}|{{ ns.f() }}'),
+    ('stored_self_block_of_scoped_block_reads_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% block x scoped %}{% set ns.f = self.y %}{% block y %}[{{ i }}{{ loop.index }}]{% endblock %}{% endblock %}{% endfor %}|{{ ns.f() }}'),
+    # a module imported with context in a loop sees the loop's `loop` (0597)
+    ('import_with_context_in_loop_sees_loop', '{% for i in [1] %}{{ loop.index }}{% import "a" as m with context %}{{ m.f() }}{% endfor %}', {"templates": {"a": "{% macro f() %}A{{ i }}{{ loop is defined }}{% endmacro %}"}}),
     ('macro_closure_in_scoped_block_of_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}'),
     # A kept closure keeps only the names it and the closures it sees read (0375): a namespace it
     # sets an attribute of, a sibling it calls, a parameter's default, varargs, a name set later
