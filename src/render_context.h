@@ -615,6 +615,7 @@ public:
         , m_parentDepth(other.m_parentDepth)
         , m_selfDepth(other.m_selfDepth)
         , m_selfFromContext(other.m_selfFromContext)
+        , m_inEndingModule(other.m_inEndingModule)
         , m_scopes(other.m_scopes)
         , m_frame(other.m_frame)
         , m_views(other.m_views)
@@ -670,6 +671,7 @@ public:
         , m_parentDepth(std::min(depth, other.GetScopesCount()))
         , m_selfDepth(std::min(other.m_selfDepth, m_parentDepth))
         , m_selfFromContext(other.m_selfFromContext)
+        , m_inEndingModule(other.m_inEndingModule)
         , m_frame(other.m_frame)
         , m_inheritsViews(other.m_inheritsViews || !other.m_views.empty())
         , m_hasEntryBindings(other.m_hasEntryBindings)
@@ -907,7 +909,11 @@ public:
     // The context is an imported module's that ends with the host's call that imports it
     // (IRendererCallback::ModulesEndWithCall): a closure defined here and called after that
     // call fails with TemplateExpired (ClosureSite::Resolve)
-    void SetEndsWithCall() { m_endsWithCall = true; }
+    void SetEndsWithCall()
+    {
+        m_endsWithCall = true;
+        m_inEndingModule = true;
+    }
     // The top level of such a module has run: a closure made in it from now on (in a call of its macro) may be stored
     // where no value of the module shows it (ImportedModule::MayBeReached, docs/tasks/0312)
     void SetTopLevelRun() { m_topLevelRun = true; }
@@ -918,10 +924,25 @@ public:
     // the macro it calls may store (docs/tasks/0567)
     void NoteOtherClosure()
     {
-        if (m_endsWithCall)
+        if (auto* module = EndingModule())
         {
-            m_madeOtherClosures = true;
+            module->m_madeOtherClosures = true;
         }
+    }
+    // The context of such a module this context is, or is made on (a `with` body at its top level): a closure made
+    // here runs in the module once its own frame has ended (docs/tasks/0586); null elsewhere
+    [[nodiscard]] RenderContext* EndingModule()
+    {
+        if (!m_inEndingModule)
+        {
+            return nullptr;
+        }
+        auto* context = this;
+        while (!context->m_endsWithCall && context->m_parent)
+        {
+            context = context->m_parent;
+        }
+        return context->m_endsWithCall ? context : nullptr;
     }
     // The context of an included template, which ends with the include: the closures defined
     // at its top level keep the names they see (ClosureCapture), which CaptureClosures copies
@@ -2045,6 +2066,8 @@ private:
     // An imported module's context that ends with the host's call that made it, before the
     // render (SetEndsWithCall); not copied
     bool m_endsWithCall = false;
+    // This context is such a module's or one made on it (EndingModule); copied
+    bool m_inEndingModule = false;
     // SetTopLevelRun and MadeOtherClosures; not copied
     bool m_topLevelRun = false;
     bool m_madeOtherClosures = false;
@@ -2510,8 +2533,9 @@ public:
     [[nodiscard]] std::shared_ptr<ClosureCapture> CaptureOnEnd(RenderContext& context, Span<const std::size_t> reads, bool readsAll);
     // Whether the closure runs in `context`, a module's that ends with the host's call that made it
     // (RenderContext::SetEndsWithCall): a value that outlives that call and reaches the closure keeps the module
-    // (docs/tasks/0312)
-    [[nodiscard]] bool RunsInEndingModule(const RenderContext& context) const { return m_endsWithCall && IsDefinedIn(context); }
+    // (docs/tasks/0312), and so does one defined on a context made on the module's (docs/tasks/0586). Defined in
+    // statements.cpp
+    [[nodiscard]] bool RunsInEndingModule(const RenderContext& context) const;
 
 private:
     friend class HomeCall;

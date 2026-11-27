@@ -851,6 +851,54 @@ TEST_F(TemplateModuleTest, ClosureStoredAcrossCallsKeepsTheModuleItsCaptureNames
     }
 }
 
+namespace
+{
+// A closure a module defines in a `with` at its top level and stores, then called by later calls: 5, AM, CAM in Jinja2
+// 3.1.6 (docs/tasks/0586)
+// Each in a file of its own, `lib0` on: the environment caches the templates it loaded
+const std::pair<const char*, const char*> WithClosureLibs[] = {
+    { "{% set v = 5 %}{% with q = 1 %}{% macro f() %}{{ v }}{% endmacro %}{% set ns.f = f %}{% endwith %}", "5" },
+    { "{% import 'a' as x with context %}{% with q = 1 %}{% macro f() %}{{ x.am() }}{% endmacro %}{% set ns.f = f %}{% endwith %}", "AM" },
+    { "{% import 'a' as x with context %}{% macro st() %}{% set ns.f = caller %}{% endmacro %}{% with q = 1 %}{% call st() %}C{{ x.am() }}{% endcall %}{% endwith %}",
+      "CAM" },
+};
+std::string WithClosureMain(std::size_t index)
+{
+    return "{% set ns = namespace() %}{% macro keep() %}{% import 'lib" + std::to_string(index) + "' as l with context %}{% endmacro %}{% macro use() %}{{ ns.f() }}{% endmacro %}";
+}
+} // namespace
+
+TEST_F(TemplateModuleTest, ClosureInATopLevelWithKeepsTheModuleNames)
+{
+    for (std::size_t index = 0; index != std::size(WithClosureLibs); ++index)
+    {
+        const auto& [lib, wanted] = WithClosureLibs[index];
+        AddFile("lib" + std::to_string(index), lib);
+        auto module = Make(WithClosureMain(index));
+        EXPECT_EQ("", Call(module.exports["keep"]).AsString()) << lib;
+        EXPECT_EQ(wanted, Call(module.exports["use"]).AsString()) << lib;
+        EXPECT_EQ(wanted, Call(module.exports["use"]).AsString()) << lib;
+    }
+}
+
+TEST_F(TemplateModuleTest, WideClosureInATopLevelWithKeepsTheModuleNames)
+{
+    for (std::size_t index = 0; index != std::size(WithClosureLibs); ++index)
+    {
+        const auto& [lib, wanted] = WithClosureLibs[index];
+        AddFile("lib" + std::to_string(index), lib);
+        const auto main = WithClosureMain(index);
+        jinja2::TemplateW tpl(&m_env);
+        ASSERT_TRUE(!!tpl.Load(std::wstring(main.begin(), main.end())));
+        auto module = tpl.MakeModule().value();
+        EXPECT_EQ(L"", Call(module.exports["keep"]).AsWString()) << lib;
+        const std::string narrow(wanted);
+        const std::wstring wide(narrow.begin(), narrow.end());
+        EXPECT_EQ(wide, Call(module.exports["use"]).AsWString()) << lib;
+        EXPECT_EQ(wide, Call(module.exports["use"]).AsWString()) << lib;
+    }
+}
+
 // A module whose top level failed partway, inside a loop and a `with`, after storing its macro, stays for that macro with
 // the scopes the failure left: G1 on each later call, as in Jinja2 3.1.6 (docs/tasks/0312, security review)
 TEST_F(TemplateModuleTest, MacroStoredByAFailedImportKeepsItsModule)

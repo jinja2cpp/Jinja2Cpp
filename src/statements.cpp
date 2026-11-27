@@ -2754,6 +2754,30 @@ ClosureSite::ClosureSite(RenderContext& context, size_t depth)
     {
         context.m_madeOtherClosures = true;
     }
+    // Made on such a module's context (a `with` body at its top level): it outlives this context and runs in the
+    // module's (RunsInEndingModule, docs/tasks/0586)
+    else if (auto* module = !m_endsWithCall ? context.EndingModule() : nullptr)
+    {
+        module->m_madeOtherClosures = true;
+    }
+}
+
+bool ClosureSite::RunsInEndingModule(const RenderContext& context) const
+{
+    if (m_endsWithCall || !context.m_anchor)
+    {
+        return m_endsWithCall && IsDefinedIn(context);
+    }
+    // Defined on a context made on the module's, which has ended: a call runs on the frames it kept, the module's top
+    // level among them (ResolveKept)
+    for (auto capture = m_capture.lock(); capture; capture = capture->outer)
+    {
+        if (!capture->home.owner_before(context.m_anchor) && !context.m_anchor.owner_before(capture->home))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::shared_ptr<RenderContext> ClosureSite::LiveHome(const ClosureCapture& capture)
