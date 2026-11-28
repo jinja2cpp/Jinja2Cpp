@@ -654,9 +654,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0593](0593-set-index-per-set-and-cloned-walk-size.md) | Set leftovers after 0587: an index object per set, a cloned walk's size, intersection_update | robustness | low | open |
 | [0594](0594-module-object-read-as-dict-in-another-render.md) | A module's namespace, cycler or joiner passed to another render is read there as a dict | parity | low | open |
 | [0595](0595-missing-method-call-is-undefined-error.md) | Calling a missing method of a str, number or list raises TemplateRuntimeError, not UndefinedError | parity | low | open |
-| [0596](0596-stored-self-block-of-scoped-block-loses-derived-context.md) | A `self` block or `super` stored in a scoped block and called after the loop loses the derived context | parity | low | open |
-| [0597](0597-import-with-context-in-loop-loses-loop.md) | A module imported with context in a loop does not see the loop's `loop` | parity | low | open |
-| [0598](0598-failure-in-module-top-level-with-drops-stored-closure.md) | A failure inside a module's top-level `with` drops the names its stored closure reads | parity | low | open |
+| [0596](0596-stored-self-block-of-scoped-block-loses-derived-context.md) | A `self` block or `super` stored in a scoped block and called after the loop loses the derived context | parity | low | done |
+| [0597](0597-import-with-context-in-loop-loses-loop.md) | A module imported with context in a loop does not see the loop's `loop` | parity | low | done |
+| [0598](0598-failure-in-module-top-level-with-drops-stored-closure.md) | A failure inside a module's top-level `with` drops the names its stored closure reads | parity | low | done |
 | [0599](0599-public-big-int-words-form.md) | A words form in the public BigInt | robustness | low | open |
 | [0600](0600-whole-tree-tidy-backlog.md) | clang-tidy: 304 hits on master; the weekly whole-tree job has never been green | style | high | done |
 | [0601](0601-tidy-ratchet-leaks.md) | clang-tidy ratchet: hits on unchanged lines pass the pull-request job, and a red weekly run is silent | ci | high | done |
@@ -665,3 +665,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0604](0604-reflected-shared-ptr-cell-never-dropped.md) | A module keeps the cell of a reflected `shared_ptr` it wrote, one per call | robustness | low | open |
 | [0605](0605-pprint-safe-key-host-errors.md) | pprint's `_safe_key` with host objects: catch only the TypeError, also inside a tuple key | parity | low | open |
 | [0606](0606-bindings-tidy-whole-file-mode.md) | clang-tidy ratchet for the bindings job: it still reports changed lines only | ci | medium | open |
+| [0607](0607-stored-self-derived-context-residuals.md) | A stored `self` or super() misses the scoped block's derived context in the shapes 0596 left | parity | low | open |
+| [0608](0608-failure-in-macro-body-frame-keeps-closure-names.md) | A failure out of a loop or `with` in a macro body drops the names its stored closure reads | parity | low | open |
+| [0609](0609-import-loop-retention-and-small-gaps.md) | An import in a loop keeps ~5 KB per pass, and two small `super`/include gaps | robustness | low | open |
