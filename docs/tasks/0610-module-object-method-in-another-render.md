@@ -25,4 +25,4 @@ Jinja2's.
 `loop.__call__`), and the cycler's `items` a tuple, in Objects mode.
 
 **Done when.** A `python/tests/test_module.py` row renders the three templates above as Jinja2 does (addresses
-normalised), and the docs/python.md sentence naming 0607 is gone.
+normalised), and the docs/python.md sentence naming 0610 is gone.
