@@ -253,6 +253,39 @@ def test_type_errors_of_lists_and_tuples(source, context, raised):
     assert str(got.value) == str(expected.value)
 
 
+class LessRaises:
+    # A key whose `<` raises `error`, which pprint's _safe_key does not catch unless it is a TypeError
+    def __init__(self, error):
+        self.error = error
+
+    def __lt__(self, other):
+        raise self.error
+
+    def __gt__(self, other):
+        raise self.error
+
+    def __repr__(self):
+        return "L"
+
+
+@pytest.mark.parametrize("error", [ValueError("boom"), KeyboardInterrupt()])
+def test_pprint_raises_a_host_error_that_is_no_type_error(error):
+    # _safe_key catches only the TypeError of `<` (0605)
+    for module in (jinja2, jinja2cpp):
+        with pytest.raises(type(error)):
+            module.Template("{{ {a: 1, b: 2}|pprint }}").render(a=LessRaises(error), b=LessRaises(error))
+
+
+def test_pprint_orders_a_tuple_key_with_an_incomparable_item_by_type():
+    # (1, f) < (1, 'a') raises TypeError inside the tuple: _safe_key orders the two by type, then by id (0605)
+    context = {"f": FRAC(7, 2)}
+    source = "{{ {(1, f): 1, (1, 'a'): 2}|pprint }}"
+    orders = {"{(1, Fraction(7, 2)): 1, (1, 'a'): 2}", "{(1, 'a'): 2, (1, Fraction(7, 2)): 1}"}
+    assert jinja2.Template(source).render(**context) in orders
+    assert jinja2cpp.Template(source).render(**context) in orders
+    assert_same("{{ {(1, f): 1, 'a': 2, 3: 4}|pprint }}", context)
+
+
 @pytest.mark.parametrize("autoescape", [False, True])
 def test_markup(autoescape):
     assert jinja2cpp.Markup is markupsafe.Markup

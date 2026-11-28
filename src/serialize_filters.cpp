@@ -20,6 +20,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -33,7 +34,6 @@
 #include <iterator>
 #include <memory>
 #include <optional>
-#include <new>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -87,26 +87,17 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         const bool host = GetHostObject(left) != nullptr || GetHostObject(right) != nullptr;
         if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)) || host)
         {
+            // Only Python's TypeError falls back, at any depth of a tuple key: the engine's own (items it cannot order)
+            // and a host's marked one (a Fraction and a str); any other error of a host's `<` fails the render (0605)
             try
             {
                 return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
             }
             catch (const TemplateRuntimeError&) // NOLINT(bugprone-empty-catch): the fallback below is the handling
             {
-                // Tuples with items Python cannot order: ordered by type like the rest
             }
-            catch (const std::bad_alloc&)
+            catch (const HostTypeError&) // NOLINT(bugprone-empty-catch): the fallback below is the handling
             {
-                throw;
-            }
-            catch (...)
-            {
-                // A host's `<` that fails (Python's TypeError of a Fraction and a str, which _safe_key catches) is ordered
-                // by type too; the engine cannot tell a host's TypeError from its other errors
-                if (!host)
-                {
-                    throw;
-                }
             }
         }
         return std::strcmp(Apply<visitors::PythonTypeNameGetter>(left), Apply<visitors::PythonTypeNameGetter>(right)) < 0;

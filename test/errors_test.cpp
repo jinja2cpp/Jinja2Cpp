@@ -1081,6 +1081,11 @@ TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
         { "{{ 'x%(a)sy' % nope }}", ErrorCode::UndefinedError },
         { "{{ 'x%xy' % nope }}", ErrorCode::TemplateRuntimeError },
         { "{{ 1 in none }}", ErrorCode::TemplateRuntimeError },
+        // Calling a method a str, number or list has not got calls Jinja2's Undefined (docs/tasks/0595)
+        { "{{ 'a'.nope() }}", ErrorCode::UndefinedError },
+        { "{{ (1).nope() }}", ErrorCode::UndefinedError },
+        { "{{ [].nope() }}", ErrorCode::UndefinedError },
+        { "{{ {}.nope() }}", ErrorCode::UndefinedError },
     };
     for (const auto& [source, code] : rows)
     {

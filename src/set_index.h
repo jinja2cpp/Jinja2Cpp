@@ -9,6 +9,8 @@
 #include "recursion_guard.h"
 #include "template_dict.h"
 
+#include <jinja2cpp/config.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -21,6 +23,9 @@ namespace jinja2
 {
 inline namespace v2
 {
+// The number of set indexes made so far, which a test reads to see that a set nothing looked up has none (docs/tasks/0593)
+JINJA2CPP_EXPORT std::uint64_t SetIndexesMade() noexcept;
+
 // A cache beside the items of a set (IListAccessor::GetSetIndex): it holds no values, and a lookup checks what it
 // finds, so that a path that changed the items without the set's methods costs a rebuild, never a wrong answer.
 // A live size that differs from the index's makes the next lookup rebuild it.

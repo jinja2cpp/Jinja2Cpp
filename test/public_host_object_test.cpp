@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/generic_list_iterator.h> // IWYU pragma: keep (GenericList::iterator is only declared in generic_list.h)
@@ -15,6 +16,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <limits>
 #include <map>
@@ -2297,6 +2299,65 @@ TEST(PublicHostObjectTest, PprintOrdersHostKeysByTheirOwnLessThan)
     // Python's pprint sorts a dict by _safe_key, which tries `a < b` (task 0582): {x: 'a', y: 'b'} prints y first
     const ValuesMap params{ { "x", MakeToy(Numbered(3)) }, { "y", MakeToy(Numbered(1)) }, { "z", MakeToy(Numbered(2)) }, { "p", MakeToy() }, { "q", MakeToy() } };
     ExpectBoth("{T(1): 'b', T(2): 'c', T(3): 'a'}", "{{ {x: 'a', y: 'b', z: 'c'}|pprint }}", params);
+}
+
+// A host exception that says it is Python's TypeError, and one that does not (docs/tasks/0605)
+struct ToyTypeError
+    : std::runtime_error
+    , jinja2::HostTypeError
+{
+    using std::runtime_error::runtime_error;
+};
+
+// An object whose `<` throws: Python's TypeError when `typeError`, else another error (ValueError, KeyboardInterrupt)
+class FailingLess final : public IHostObject
+{
+public:
+    explicit FailingLess(bool typeError)
+        : m_typeError(typeError)
+    {
+    }
+    [[nodiscard]] const char* TypeName() const override { return "Failing"; }
+    [[nodiscard]] std::string Str() const override { return "F"; }
+    [[nodiscard]] std::string Repr() const override { return "F()"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view /*name*/) const override { return std::nullopt; }
+    [[nodiscard]] std::optional<Value> Operate(HostOperator op, const Value& other, HostOperandSide side) const override
+    {
+        if (op != HostOperator::Less && op != HostOperator::Greater)
+        {
+            return IHostObject::Operate(op, other, side);
+        }
+        if (m_typeError)
+        {
+            throw ToyTypeError("'<' not supported");
+        }
+        throw std::runtime_error("boom");
+    }
+
+private:
+    bool m_typeError;
+};
+
+TEST(PublicHostObjectTest, PprintFallsBackOnlyOnAHostTypeError)
+{
+    // pprint's _safe_key orders keys by type where `<` raises a TypeError, at any depth of a tuple key; any other error
+    // of the host's `<` fails the render (docs/tasks/0605)
+    const ValuesMap params{ { "t", MakeHostValue<FailingLess>(true) }, { "v", MakeHostValue<FailingLess>(false) } };
+    ExpectBoth("{F(): 1, 'a': 2}", "{{ {'a': 2, t: 1}|pprint }}", params);
+    ExpectBoth("{(1, F()): 1, (1, 'a'): 2}", "{{ {(1, t): 1, (1, 'a'): 2}|pprint }}", params);
+    for (const char* source : { "{{ {'a': 2, v: 1}|pprint }}", "{{ {(1, v): 1, (1, 'a'): 2}|pprint }}" })
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        const auto result = tpl.RenderAsString(params);
+        ASSERT_FALSE(result.has_value()) << source;
+        // As the host's other operator errors: the exception kept
+        ASSERT_TRUE(result.error().GetException()) << source;
+        EXPECT_THROW(std::rethrow_exception(result.error().GetException()), std::runtime_error) << source;
+        Template direct;
+        ASSERT_TRUE(direct.Load("{{ v < 1 }}").has_value());
+        EXPECT_EQ(direct.RenderAsString(params).error().GetCode(), result.error().GetCode()) << source;
+    }
 }
 
 TEST(PublicHostObjectTest, OrderingHandsTheObjectTheKeyIgnoreCaseMakes)

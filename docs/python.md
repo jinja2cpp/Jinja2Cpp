@@ -549,9 +549,11 @@ orders values: `sort`, `min`, `max`, `groupby`, `dictsort` and `sum`, and the te
   macro does. They are of Jinja2's classes as `isinstance` and `__class__` see them (`jinja2.utils.Namespace`, `Cycler`, `Joiner`,
   without the module importing Jinja2 before it is asked), only a joiner is `callable()`, and `type()` is the module's class of
   that name; a nested namespace read twice is one object (`module.ns.inner is module.ns.inner`), as is one exported under two
-  names; `module.cyc.next` prints as Jinja2's bound method; and a module object passed to a render prints as Jinja2's (0575).
-  Still different: a `range` is a list; `module.j.__call__` is the module's own method; a module object passed to another
-  render is read there as a dict (`|length`, `|pprint` and iteration as on a dict, and a joiner there cannot be called, 0594); and one passed
+  names; `module.cyc.next` prints as Jinja2's bound method; and a module object passed to another render is that object there:
+  it prints as Jinja2's, is neither a mapping nor iterable, has no dict methods, and a joiner there can be called (0575, 0594).
+  Still different: a `range` is a list; `module.j.__call__` is the module's own method; in another render a module object's
+  method prints empty rather than as a bound method and a cycler's `items` is a list (0610), and the render cannot set an
+  attribute of a namespace passed to it (`cannot assign attribute on non-namespace object`); and one passed
   back to a macro as an argument is the module's object, but inside a list or dict argument it is a copy, so a cycler or joiner
   there cannot be called: the host's list would hold the module's own object where the module's cycle collector cannot walk
   it. Deliberate, by the design principle that host data stays copied and renders independent (0575): Python cannot set an

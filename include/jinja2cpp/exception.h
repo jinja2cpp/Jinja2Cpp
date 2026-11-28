@@ -90,6 +90,29 @@ protected:
     StopIteration& operator=(const StopIteration&) = default;
     StopIteration& operator=(StopIteration&&) noexcept = default;
 };
+
+/*!
+ * \brief A mix-in for a host exception that is Python's `TypeError`
+ *
+ * `|pprint` orders the keys of a dict or set as Python's `pprint._safe_key` does: by `<`, and by the names of the
+ * types where `<` raises a `TypeError`. A host object's `<` (\ref IHostObject) that throws such an exception falls
+ * back to that order; any other exception it throws fails the render. Elsewhere it fails the render as any host
+ * exception does (`ErrorCode::UserCallableException`, the exception kept). Not a `std::exception`: a host type
+ * derives from it next to its own base.
+ */
+class JINJA2CPP_EXPORT HostTypeError
+{
+public:
+    // Out of line: the key function, so that the type has one typeinfo across shared libraries
+    virtual ~HostTypeError();
+
+protected:
+    HostTypeError() = default;
+    HostTypeError(const HostTypeError&) = default;
+    HostTypeError(HostTypeError&&) noexcept = default;
+    HostTypeError& operator=(const HostTypeError&) = default;
+    HostTypeError& operator=(HostTypeError&&) noexcept = default;
+};
 } // namespace v2
 } // namespace jinja2
 

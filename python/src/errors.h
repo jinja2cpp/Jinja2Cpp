@@ -25,6 +25,19 @@ public:
     }
 };
 
+// A TypeError a Python operation raised, marked for the engine: pprint's _safe_key orders keys whose `<` raises it by
+// their types (docs/tasks/0605). Elsewhere it is the python_error it was
+class PyTypeError final
+    : public nb::python_error
+    , public jinja2::HostTypeError
+{
+public:
+    explicit PyTypeError(nb::python_error&& error) noexcept
+        : nb::python_error(std::move(error))
+    {
+    }
+};
+
 // Where a failed template came from, for TemplateSyntaxError's attributes: None when unknown
 struct ErrorSource
 {

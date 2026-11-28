@@ -34,6 +34,24 @@ namespace detail
 struct JINJA2CPP_EXPORT OwnedAccessor : std::enable_shared_from_this<OwnedAccessor>
 {
 };
+/*!
+ * \brief Internal: the deleter of the pointer that owns a reflected `std::shared_ptr`'s accessor
+ *
+ * The accessor of a reflected `std::shared_ptr` lives in a holder beside the pointer, so it is not one `std::make_shared`
+ * made, and the library could not tell that only the pointer's owners reach it. The holder is the deleter of a
+ * `std::shared_ptr` that owns nothing, which the accessor's pointer aliases: the library finds it with `std::get_deleter`
+ * and lets the accessor's own owners decide whether the host can lend it again (docs/tasks/0604). Exported, so that the
+ * type has one identity across a shared library and the code that made the pointer, which `std::get_deleter` compares.
+ */
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
+struct JINJA2CPP_EXPORT LentOwnerDeleter
+{
+    std::shared_ptr<const void> held;
+
+    void operator()(const void* /*nothing*/) noexcept { held.reset(); }
+};
+JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
+
 //! Internal: the library's view of the accessor a \ref GenericList or \ref GenericMap holds
 struct GenericAccessorAccess;
 struct UserCallableAccess;

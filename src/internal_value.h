@@ -886,9 +886,6 @@ struct IMapAccessor : ValueObject
     // The Python class of an object stored as a map (namespace(), cycler(), joiner()); null
     // for a mapping. Such an object is neither a mapping nor iterable, and prints as itself
     [[nodiscard]] virtual const char* GetObjectClass() const { return nullptr; }
-    // The Python class of a host's map that is an engine object the host holds (a module's live namespace, cycler or
-    // joiner, ModuleExports::Objects): it prints as that object, but is read as a map. Null for the others
-    [[nodiscard]] virtual const char* GetHostObjectClass() const { return nullptr; }
     // The value an object prints with as <Class value> (`self`, <TemplateReference 'name'>);
     // null for one that prints as <module.Class object at 0x...>
     [[nodiscard]] virtual const InternalValue* GetReprArgument() const { return nullptr; }
@@ -1128,7 +1125,6 @@ public:
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return m_accessor ? m_accessor->GetAttrPolicy() : MapAttrPolicy::KeysOnly; }
     [[nodiscard]] bool IsNamespace() const { return m_accessor != nullptr && m_accessor->IsNamespace(); }
     [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
-    [[nodiscard]] const char* GetHostObjectClass() const { return m_accessor ? m_accessor->GetHostObjectClass() : nullptr; }
     [[nodiscard]] const InternalValue* GetReprArgument() const { return m_accessor ? m_accessor->GetReprArgument() : nullptr; }
     [[nodiscard]] const void* GetObjectItems() const { return m_accessor ? m_accessor->GetObjectItems() : nullptr; }
     [[nodiscard]] const InternalValue* GetStrValue() const { return m_accessor ? m_accessor->GetStrValue() : nullptr; }
@@ -1191,7 +1187,6 @@ public:
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return Ref().GetAttrPolicy(); }
     [[nodiscard]] bool IsNamespace() const { return Ref().IsNamespace(); }
     [[nodiscard]] const char* GetObjectClass() const { return Ref().GetObjectClass(); }
-    [[nodiscard]] const char* GetHostObjectClass() const { return Ref().GetHostObjectClass(); }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
     bool SetValue(std::string name, const InternalValue& val) const { return Ref().SetValue(std::move(name), val); }
     [[nodiscard]] bool ShouldExtendLifetime() const { return Ref().ShouldExtendLifetime(); }

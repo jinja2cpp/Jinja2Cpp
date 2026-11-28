@@ -672,6 +672,50 @@ def test_module_object_passed_to_a_render_prints_as_the_object():
         assert module.Template("{{ c }}").render(c=mod.cyc).startswith("<jinja2.utils.Cycler object at 0x")
 
 
+def outcome(render):
+    # What a render gives: its output, or the error's class name and first line, which Jinja2C++ words alike
+    try:
+        return render()
+    except Exception as error:  # noqa: BLE001 - the class is compared below
+        return type(error).__name__, str(error).splitlines()[0]
+
+
+@pytest.mark.parametrize(
+    "template,expected",
+    [
+        ("{{ x|pprint }}", "<Namespace {'count': 0}>"),
+        ("{{ x is mapping }}", "False"),
+        ("{{ x|length }}", "TypeError"),
+        ("{% for a in x %}{{ a }}{% endfor %}", "TypeError"),
+        ("{{ x.items()|list }}", "UndefinedError"),
+        ("{{ x.get('count') }}", "UndefinedError"),
+        ("{{ k() }}{{ k() }}", "-"),
+        ("{{ k is callable }}{{ x is callable }}", "TrueFalse"),
+        ("{{ x.count }}{{ x['count'] }}{{ x.__class__.__name__ }}", "00Namespace"),
+    ],
+)
+def test_module_object_passed_to_another_render_is_the_object(template, expected):
+    # A namespace or joiner of one module passed to another render is the object there too, not a dict (0594)
+    source = "{% set ns = namespace(count=0) %}{% set j = joiner('-') %}"
+    results = []
+    for module, mod in zip((jinja2cpp, jinja2), both(source)):
+        result = outcome(lambda: module.Template(template).render(x=mod.ns, k=mod.j))
+        results.append(result if isinstance(result, str) else result[0])
+    # Jinja2C++ raises TemplateRuntimeError where Jinja2 raises TypeError, as it does for the template's own objects
+    ours, theirs = results
+    assert theirs == expected
+    assert ours == theirs or (theirs == "TypeError" and ours == "TemplateRuntimeError")
+
+
+def test_module_namespace_holding_itself_passed_to_a_render():
+    # Every read of the object is one object, so the repeat prints as {...}; it failed with bad_expected_access (0594)
+    source = "{% set ns = namespace(n=1) %}{% set ns.me = ns %}"
+    ours, theirs = both(source)
+    for template in ("{{ x }}", "{{ [x] }}", "{{ x|string }}", "{{ x|pprint }}", "{{ x|e }}", "{{ x.me == x }}", "{{ x.me is sameas x }}"):
+        assert jinja2cpp.Template(template).render(x=ours.ns) == jinja2.Template(template).render(x=theirs.ns), template
+    assert jinja2cpp.Template("{{ x }}").render(x=ours.ns) == "<Namespace {'n': 1, 'me': <Namespace {...}>}>"
+
+
 def test_module_macro_result_that_is_an_object():
     source = "{% set cyc = cycler(namespace(n=1), namespace(n=2)) %}"
     for module in (jinja2cpp, jinja2):

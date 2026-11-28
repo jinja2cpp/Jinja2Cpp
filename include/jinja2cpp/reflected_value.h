@@ -91,6 +91,14 @@ namespace detail
  */
 template<typename T, typename Tag>
 struct Reflector;
+
+//! Internal: `accessor`, aliased over a pointer that owns `holder` through a LentOwnerDeleter
+template<typename Accessor>
+std::shared_ptr<const Accessor> AliasOverHolder(std::shared_ptr<const void> holder, const Accessor* accessor)
+{
+    const std::shared_ptr<const void> block(static_cast<const void*>(nullptr), LentOwnerDeleter{ std::move(holder) });
+    return std::shared_ptr<const Accessor>(block, accessor);
+}
 } // namespace detail
 
 /*!
@@ -512,7 +520,7 @@ struct ContainerReflector
         const T* raw = cont.get();
         auto holder = std::make_shared<const Holder>(std::move(cont), raw);
         const IListItemAccessor* accessor = &holder->accessor;
-        return GenericList(std::shared_ptr<const IListItemAccessor>(std::move(holder), accessor));
+        return GenericList(detail::AliasOverHolder<IListItemAccessor>(std::move(holder), accessor));
     }
 };
 
@@ -574,7 +582,7 @@ struct Reflector<T, IsReflectedType<T>>
         };
         auto holder = std::make_shared<const Holder>(val);
         const IMapItemAccessor* accessor = &holder->accessor;
-        return GenericMap(std::shared_ptr<const IMapItemAccessor>(std::move(holder), accessor));
+        return GenericMap(detail::AliasOverHolder<IMapItemAccessor>(std::move(holder), accessor));
     }
 };
 

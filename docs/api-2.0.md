@@ -199,6 +199,11 @@ and the memory budget as it is written. Held output is capped at `MaxSequenceSiz
 `maxSequenceSize`), as a value is: past that it reaches the sink while the call runs, and a call that then stops fails as it
 did before 0499. The Python module marks Python's `StopIteration` with it.
 
+**`jinja2::HostTypeError` (task 0605, additive).** A mix-in of `exception.h`, shaped as `StopIteration`, for a host
+exception that is Python's `TypeError`. `|pprint` orders dict and set keys as `pprint._safe_key` does: where a host
+object's `<` throws such an exception, at any depth of a tuple key, the keys are ordered by type; any other exception of
+that `<` fails the render as a host exception does. The Python module marks Python's `TypeError` with it.
+
 **Against Python.** Same: syntax, undefined and not-found errors keep their codes, with
 location; `MemoryError` propagates as `bad_alloc` does. Different: errors arrive as `Result`,
 not raised; host exceptions are wrapped, not propagated (`std::rethrow_exception(e.GetException())`

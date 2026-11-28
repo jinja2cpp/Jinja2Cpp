@@ -6,6 +6,7 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
 #include <exception>
@@ -72,6 +73,18 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
     {
         located = !error.GetLocationDescr().empty();
         return CopyErrorData<CharT>(error);
+    }
+    // A failed read of a module's object the host passed on (ModuleExports::Objects) or a failed module call in a host
+    // accessor: the module's error, located in its template, as for a failed macro call (docs/tasks/0594)
+    catch (const BadResultAccess<char>& failure)
+    {
+        located = !failure.error().GetLocationDescr().empty();
+        return CopyErrorData<CharT>(failure.error());
+    }
+    catch (const BadResultAccess<wchar_t>& failure)
+    {
+        located = !failure.error().GetLocationDescr().empty();
+        return CopyErrorData<CharT>(failure.error());
     }
     catch (const HostCallableFailure& failure)
     {

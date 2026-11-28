@@ -152,6 +152,7 @@ inline namespace v2
 {
 Exception::~Exception() = default;
 StopIteration::~StopIteration() = default;
+HostTypeError::~HostTypeError() = default;
 
 namespace
 {

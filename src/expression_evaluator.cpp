@@ -1967,8 +1967,8 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
                 return false;
             }
         }
-        // Python raises AttributeError; calling the missing attribute of a map, None or a
-        // chainable undefined is an UndefinedError
+        // Calling the missing attribute of any value is an UndefinedError, as calling Jinja2's Undefined is
+        // (docs/tasks/0595); a map, None or a chainable undefined gives the undefined value below
         if (callee.IsUndefined() && !IsEmpty(receiver) && !AsMap(receiver))
         {
             methods::ThrowNoAttribute(receiver, *name);

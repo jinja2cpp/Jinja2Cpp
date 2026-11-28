@@ -82,7 +82,7 @@ bool IsContainer(const InternalValue& value);
 // and the key itself for the Python module when it is a plain value (docs/tasks/0511)
 [[noreturn]] void ThrowKeyError(const InternalValue& key);
 
-// Python's AttributeError text, "'str object' has no attribute 'x'" as Jinja2 words it
+// Calling an attribute a value has not got: Jinja2's UndefinedError, "'str object' has no attribute 'x'"
 [[noreturn]] void ThrowNoAttribute(const InternalValue& obj, const std::string& name);
 
 } // namespace methods

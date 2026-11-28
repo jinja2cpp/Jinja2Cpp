@@ -305,6 +305,44 @@ TEST_F(TemplateModuleTest, ObjectsPrintAsObjectsInAnotherRender)
     EXPECT_EQ(0u, Render("{{ c }}", params).rfind("<jinja2.utils.Cycler object at ", 0));
 }
 
+// ... and is read as the object, not as a dict: neither a mapping nor iterable, no dict methods, and a joiner is
+// callable; every read of a namespace that holds itself is one object, so it prints {...} where it repeats. The same for a
+// namespace a render lends to a host callable that passes it to another render (docs/tasks/0594)
+TEST_F(TemplateModuleTest, ObjectsAreObjectsInAnotherRender)
+{
+    auto module = Load("{% set ns = namespace(count=0) %}{% set j = joiner('-') %}{% set me = namespace(n=1) %}{% set me.me = me %}")
+                      .MakeModule({}, {}, ObjectsOptions());
+    ASSERT_TRUE(!!module) << module.error().ToString();
+    const jinja2::ValuesMap params{ { "x", module->exports.at("ns") }, { "k", module->exports.at("j") }, { "y", module->exports.at("me") } };
+    const std::pair<const char*, const char*> rows[] = {
+        { "{{ x|pprint }}|{{ x is mapping }}|{{ x is iterable }}|{{ x.count }}", "<Namespace {'count': 0}>|False|False|0" },
+        { "{{ k() }}{{ k() }}|{{ k is callable }}|{{ x is callable }}", "-|True|False" },
+        { "{{ y }}|{{ [y]|pprint }}|{{ y.me == y }}", "<Namespace {'n': 1, 'me': <Namespace {...}>}>|[<Namespace {'n': 1, 'me': <Namespace {...}>}>]|True" },
+        { "{{ x|length }}", "object of type 'Namespace' has no len()" },
+        { "{% for a in x %}{{ a }}{% endfor %}", "'Namespace' object is not iterable" },
+        { "{{ x.items()|list }}", "'jinja2.utils.Namespace object' has no attribute 'items'" },
+        { "{% set x.count = 1 %}", "cannot assign attribute on non-namespace object" },
+    };
+    for (const auto& [source, expected] : rows)
+    {
+        jinja2::Template tpl(&m_env);
+        ASSERT_TRUE(!!tpl.Load(source)) << source;
+        const auto result = tpl.RenderAsString(params);
+        EXPECT_NE(std::string::npos, (result ? *result : result.error().ToString()).find(expected)) << source << ": " << (result ? *result : result.error().ToString());
+    }
+
+    // A namespace lent to the host, which renders another template with it
+    std::string inner;
+    jinja2::ValuesMap lent{ { "show", jinja2::MakeCallable(
+                                          [this, &inner](const jinja2::Value& ns) {
+                                              inner = Render("{{ x is mapping }}|{{ x }}|{{ x|pprint }}", { { "x", ns } });
+                                              return jinja2::Value(std::string());
+                                          },
+                                          jinja2::ArgInfo{ "ns" }) } };
+    EXPECT_EQ("", Render("{% set ns = namespace(a=1) %}{% set ns.me = ns %}{{ show(ns) }}", lent));
+    EXPECT_EQ("False|<Namespace {'a': 1, 'me': <Namespace {...}>}>|<Namespace {'a': 1, 'me': <Namespace {...}>}>", inner);
+}
+
 // What leaves in Objects mode owns its strings: a key from the template's source and a name the undefined carries stay valid
 // after the template is loaded with another source and the module's params are gone (ASan checks the views)
 TEST_F(TemplateModuleTest, ObjectsExportsOwnTheirStrings)
