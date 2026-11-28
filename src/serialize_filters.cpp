@@ -34,7 +34,6 @@
 #include <iterator>
 #include <memory>
 #include <optional>
-#include <new>
 #include <string>
 #include <string_view>
 #include <utility>
