@@ -2105,6 +2105,11 @@ template<typename Container>
 bool AccessorIsLent(const Container& container) noexcept
 {
     const auto& accessor = detail::GenericAccessorAccess::Get(container);
+    // A reflected shared_ptr's accessor, kept by a holder only its owners reach (docs/tasks/0604)
+    if (std::get_deleter<detail::LentOwnerDeleter>(accessor))
+    {
+        return false;
+    }
     const auto* owned = dynamic_cast<const detail::OwnedAccessor*>(accessor.get());
     if (!owned)
     {

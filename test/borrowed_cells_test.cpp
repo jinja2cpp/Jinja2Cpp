@@ -1336,8 +1336,8 @@ TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfANestedItemOfAGenericArgument)
     // 0572: a nested list of a fresh reflected struct, read through the struct and written. The struct
     // lends it over a holder that keeps the struct alive (WithOwner): nothing else holds the list's
     // accessor, so nothing can lend it again, and its cell goes once the host let go, not one per call.
-    // The struct's map field (`d.innerStruct`, a shared_ptr) is reflected over an aliasing accessor of
-    // the host's kind, which may be lent again: its cell stays, as for such an argument (docs/tasks/0604)
+    // The struct's map field (`d.innerStruct`, a shared_ptr) is reflected over a holder the library
+    // recognises (docs/tasks/0604, ModuleCallFreesTheCellOfAReflectedSharedPtr)
     auto mapToken = std::make_shared<TestInnerStruct>();
     Template tpl;
     ASSERT_TRUE(!!tpl.Load("{% macro consume(d) %}{% set l = d.innerStructList %}{% set _ = l.append(1) %}"
@@ -1356,6 +1356,51 @@ TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfANestedItemOfAGenericArgument)
     }
     module = TemplateModule();
     EXPECT_EQ(1, mapToken.use_count());
+}
+
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfAReflectedSharedPtr)
+{
+    // 0604: a shared_ptr the host reflects lends its struct over a holder that keeps the pointer; the library
+    // recognises the holder, so the accessor's own owners decide whether it can be lent again, as for one
+    // make_shared made. The macro writes the argument, and its cell goes with the call, not one per call
+    auto token = std::make_shared<TestInnerStruct>();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(d) %}{% set _ = d.update(k=1) %}{{ d.k }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 40; ++i)
+    {
+        {
+            auto data = std::make_shared<TestStruct>();
+            data->innerStruct = token;
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ Reflect(std::move(data)) };
+            EXPECT_EQ("1", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+        }
+        // This call's struct, and at most the one before; not one more for each call
+        EXPECT_GE(3, token.use_count());
+    }
+    module = TemplateModule();
+    EXPECT_EQ(1, token.use_count());
+}
+
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfASharedPtrFieldOfAFreshStruct)
+{
+    // 0604: the macro writes the map a fresh struct's shared_ptr field reflects (`d.innerStruct`)
+    auto token = std::make_shared<TestInnerStruct>();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(d) %}{% set _ = d.innerStruct.update(k=1) %}{{ d.innerStruct.k }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 40; ++i)
+    {
+        {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ FreshGenericMap(token) };
+            EXPECT_EQ("1", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+        }
+        EXPECT_GE(3, token.use_count());
+    }
+    module = TemplateModule();
+    EXPECT_EQ(1, token.use_count());
 }
 
 TEST(BorrowedCellsSingle, ModuleCallFreesACycleThroughTheCellOfAFreshArgument)
