@@ -3774,7 +3774,11 @@ InternalValue SetIntersectionUpdate(const InternalValue& self, const CallParams&
                 {
                     slots[found] = item;
                 }
-                kept.try_emplace(token, InternalValue());
+                // Charged as SetCombine's tables are: a full overlap keeps a table as large as the receiver (Codex P2 on #1031)
+                if (kept.try_emplace(token, InternalValue()).second)
+                {
+                    scratch.Entry();
+                }
             }
         }
         if (kept.size() == index.LiveCount(slots))
