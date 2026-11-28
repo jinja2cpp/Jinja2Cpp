@@ -707,7 +707,11 @@ public:
     // Whether it owns the capture of scope `depth - 1`: one of the derived context's above the template's top level
     [[nodiscard]] bool OwnsDerivedCapture(size_t depth) const
     {
-        return m_ownsDerivedCaptures && depth <= m_parentDepth && m_templateFrame && depth > m_templateFrame->baseDepth;
+        if (!m_ownsDerivedCaptures || depth > m_parentDepth || !m_templateFrame)
+        {
+            return false;
+        }
+        return depth > m_templateFrame->baseDepth;
     }
     // Whether the code runs in a `scoped` block of its own template: an include or an import with context has a top
     // level of its own, deeper than the block's scopes
@@ -916,6 +920,9 @@ public:
     // wins, else the template itself, made on first use (Jinja2's TemplateReference). Defined
     // with TemplateFrame in statements.cpp
     LookupResult FindSelf(const std::string& name);
+    // The context a `self` made here at `depth` runs in (FindSelf): the one whose scopes the template's top level set,
+    // or a scoped block saw, which may run below this one. Defined in statements.cpp
+    RenderContext* SelfHome(size_t depth);
     // Whether the block running in the scopes from the self depth up has no `self` of its own
     // (BlockStatement::SetSelfFromContext); returns the previous setting
     bool SetSelfFromContext(bool fromContext) { return std::exchange(m_selfFromContext, fromContext); }

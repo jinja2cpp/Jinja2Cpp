@@ -2652,6 +2652,16 @@ void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* captu
     context.SetTemplateFrame(&frame);
 }
 
+RenderContext* RenderContext::SelfHome(size_t depth)
+{
+    auto* home = this;
+    while (home->m_parentDepth >= depth && home->m_parent)
+    {
+        home = home->m_parent;
+    }
+    return home;
+}
+
 LookupResult RenderContext::FindSelf(const std::string& name)
 {
     auto* frame = m_templateFrame;
@@ -2679,15 +2689,7 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     // The context whose scopes the template's top level set, or a scoped block saw, which may
     // run below this one (a `with` or a block): `self` outlives those
     const auto makeSelf = [this, frame](size_t depth, RenderContext* derivedHome) {
-        auto* home = this;
-        while (!derivedHome && home->m_parentDepth >= depth && home->m_parent)
-        {
-            home = home->m_parent;
-        }
-        if (derivedHome)
-        {
-            home = derivedHome;
-        }
+        auto* home = derivedHome ? derivedHome : SelfHome(depth);
         ClosureSite site(*home, depth);
         // An included template's `self` stored past the include sees what the include saw (0323)
         std::shared_ptr<const void> keepAlive;
