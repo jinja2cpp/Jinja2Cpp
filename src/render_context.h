@@ -944,6 +944,21 @@ public:
         }
         return context->m_endsWithCall ? context : nullptr;
     }
+    // Whether EndingModule finds one: a failure out of a frame here leaves the module's closures to later calls of its
+    // macros, which see the frame as the failure left it (docs/tasks/0598)
+    [[nodiscard]] bool InEndingModule() const
+    {
+        if (!m_inEndingModule)
+        {
+            return false;
+        }
+        const auto* context = this;
+        while (!context->m_endsWithCall && context->m_parent)
+        {
+            context = context->m_parent;
+        }
+        return context->m_endsWithCall;
+    }
     // The context of an included template, which ends with the include: the closures defined
     // at its top level keep the names they see (ClosureCapture), which CaptureClosures copies
     // when the include ends

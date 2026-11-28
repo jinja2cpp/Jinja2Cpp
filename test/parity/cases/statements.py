@@ -618,6 +618,13 @@ CASES = [
     ('stored_self_block_of_scoped_block_reads_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% block x scoped %}{% set ns.f = self.y %}{% block y %}[{{ i }}{{ loop.index }}]{% endblock %}{% endblock %}{% endfor %}|{{ ns.f() }}'),
     # a module imported with context in a loop sees the loop's `loop` (0597)
     ('import_with_context_in_loop_sees_loop', '{% for i in [1] %}{{ loop.index }}{% import "a" as m with context %}{{ m.f() }}{% endfor %}', {"templates": {"a": "{% macro f() %}A{{ i }}{{ loop is defined }}{% endmacro %}"}}),
+    ('import_with_context_in_loop_not_naming_loop', '{% for i in [1] %}{% import "a" as m with context %}{{ m.f() }}{% endfor %}', {"templates": {"a": "{% macro f() %}A{{ i }}{{ loop is defined }}{% endmacro %}"}}),
+    ('from_import_with_context_in_loop_sees_loop', '{% for i in [1] %}{{ loop.index }}{% from "a" import f with context %}{{ f() }}{% endfor %}', {"templates": {"a": "{% macro f() %}A{{ i }}{{ loop is defined }}{% endmacro %}"}}),
+    ('import_with_context_in_inner_loop_sees_outer_loop', '{% for i in [1] %}{{ loop.index }}{% for j in [5, 6] %}{% import "a" as m with context %}{{ m.g() }}{% endfor %}{% endfor %}', {"templates": {"a": "{% macro g() %}<{{ loop.index if loop is defined else 'u' }}>{% endmacro %}"}}),
+    ('import_with_context_in_scoped_block_of_loop', '{% for i in [1, 2] %}{% block x scoped %}{% import "a" as m with context %}{{ m.f() }}{% endblock %}{% endfor %}', {"templates": {"a": "{% macro f() %}A{{ i }}{{ loop is defined }}{% endmacro %}"}}),
+    ('import_with_context_stored_macro_reads_loop_after_it', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{{ loop.index }}{% import "a" as m with context %}{% set ns.f = m.g %}{% endfor %}|{{ ns.f() }}', {"templates": {"a": "{% macro g() %}<{{ loop.index if loop is defined else 'u' }}>{% endmacro %}"}}),
+    ('import_with_context_sees_top_level_loop_name', '{% set loop = 7 %}{% import "a" as m with context %}{{ m.g() }}', {"templates": {"a": "{% macro g() %}<{{ loop.index if loop is defined else 'u' }}>{% endmacro %}"}}),
+    ('import_with_context_module_top_level_reads_loop', '{% for i in [1, 2] %}{{ loop.index }}{% import "b" as m with context %}{{ m.v }}{% endfor %}', {"templates": {"b": "{% set v = loop.index * 10 %}"}}),
     ('macro_closure_in_scoped_block_of_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}'),
     # A kept closure keeps only the names it and the closures it sees read (0375): a namespace it
     # sets an attribute of, a sibling it calls, a parameter's default, varargs, a name set later

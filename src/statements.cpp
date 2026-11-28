@@ -1409,10 +1409,11 @@ namespace
 // Whether a frame a failure leaves closes over its names first, as a stop does (docs/tasks/0479): a stop, or any
 // failure in a context that ends before the render. There a render nested under a keeper may fail, its host swallow
 // the failure and the outer render call a closure the frame stored in a shared global, which reads the names the
-// frame held, as Jinja2's does (docs/tasks/0531). Asked only on the failure path
+// frame held, as Jinja2's does (docs/tasks/0531); or in a module that ends with the host's call, whose closures later
+// calls of its macros run (docs/tasks/0598). Asked only on the failure path
 bool ClosesOverOnFailure(const std::exception_ptr& failure, const RenderContext& context)
 {
-    return detail::IsStop(failure) || context.EndsBeforeRender();
+    return detail::IsStop(failure) || context.EndsBeforeRender() || context.InEndingModule();
 }
 
 // The end of a block body or an included template that failed: the closures defined there close over its names first
@@ -1811,7 +1812,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             values.CaptureClosures(FrameEnd::Stopped(endScopes));
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
         }
-        else if (values.EndsBeforeRender())
+        else if (ClosesOverOnFailure(failure, values))
         {
             values.CaptureClosures(FrameEnd::Stopped(endScopes));
         }
@@ -2005,7 +2006,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         // Taken: the collecting below may run calls that are guarded in turn
         auto failure = detail::TakeKept();
         const bool isStop = detail::IsStop(failure);
-        if (isStop || values.EndsBeforeRender())
+        if (ClosesOverOnFailure(failure, values))
         {
             if (isStop)
             {
@@ -3681,6 +3682,19 @@ private:
     InternalValue* m_binding = nullptr;
 };
 
+namespace
+{
+// The `loop` a template rendered with the context of `values` sees in Jinja2, which hands it the frame's stores: an
+// enclosing loop whose body names it, or a value of that name set outside the loops
+std::optional<InternalValue> LoopSeenWithContextOf(const RenderContext& values)
+{
+    return values.FindValueWhere("loop"s, [](const InternalValue& value) {
+        const auto* accessor = AsLoopAccessor(value);
+        return !accessor || accessor->State()->bodyReadsLoop;
+    });
+}
+} // namespace
+
 // `loop` as the included template of `values` sees it. With a `loop` of the same name outside the
 // loop (a render parameter, a global, a top-level set) that one is shadowed in the include's own
 // scope; otherwise the loop's binding is hidden for the length of the include
@@ -3698,12 +3712,7 @@ void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopH
     {
         return;
     }
-    // The `loop` that is visible to Jinja2 there: an enclosing loop whose body names it, or a
-    // value of that name set outside the loops
-    if (auto outer = values.FindValueWhere("loop"s, [](const InternalValue& value) {
-            const auto* accessor = AsLoopAccessor(value);
-            return !accessor || accessor->State()->bodyReadsLoop;
-        }))
+    if (auto outer = LoopSeenWithContextOf(values))
     {
         innerContext.GetCurrentScope()["loop"s] = *outer;
         return;
@@ -3932,6 +3941,11 @@ InternalValueMap ImporterNames(const RenderContext& importer, bool withContext)
     InternalValueMap names;
     if (withContext)
     {
+        // Jinja2's module context takes the frame's locals, `loop` among them as an include sees it (docs/tasks/0597)
+        if (auto loop = LoopSeenWithContextOf(importer))
+        {
+            names.emplace("loop"s, std::move(*loop));
+        }
         importer.CollectVisibleNames(names);
     }
     return names;
@@ -5234,7 +5248,8 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 namespace
 {
 // A `with`, `filter` or generation body rendered by `body` in `inner`, its context: a stop out of it closes over the
-// body's names first (FrameEnd::Stopped). The rethrow is outside the handler, as in RenderMacroBody
+// body's names first (FrameEnd::Stopped), and so does a failure a later call can see past (ClosesOverOnFailure). The
+// rethrow is outside the handler, as in RenderMacroBody
 [[noreturn]] JINJA2CPP_NOINLINE void EndStoppedSoftBody(RenderContext& inner)
 {
     auto failure = detail::TakeKept();
