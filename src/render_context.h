@@ -695,7 +695,20 @@ public:
     // The code this context runs is a `scoped` block's, which Jinja2 calls with `context.derived(locals)`: it sees the
     // scopes below as the derived context's parent, and none as its top level (docs/tasks/0558). Set once, by the
     // block statement, on the context it makes for the call
-    void MarkDerived() { m_derivedDepth = static_cast<std::uint32_t>(m_parentDepth); }
+    void MarkDerived()
+    {
+        m_derivedDepth = static_cast<std::uint32_t>(m_parentDepth);
+        m_ownsDerivedCaptures = true;
+    }
+    // Whether this context is such a call's own (MarkDerived), not one made from it: it owns the captures of the scopes
+    // its derived context holds, which a `self` or super() made in the block keeps (CaptureOfScope), and copies them
+    // when the call ends, as Jinja2's derived context is a snapshot of them (EndDerivedCaptures, docs/tasks/0596)
+    [[nodiscard]] bool OwnsDerivedCaptures() const { return m_ownsDerivedCaptures; }
+    // Whether it owns the capture of scope `depth - 1`: one of the derived context's above the template's top level
+    [[nodiscard]] bool OwnsDerivedCapture(size_t depth) const
+    {
+        return m_ownsDerivedCaptures && depth <= m_parentDepth && m_templateFrame && depth > m_templateFrame->baseDepth;
+    }
     // Whether the code runs in a `scoped` block of its own template: an include or an import with context has a top
     // level of its own, deeper than the block's scopes
     [[nodiscard]] bool InDerivedBlock() const { return m_derivedDepth > TopLevelDepth(); }
@@ -2131,6 +2144,8 @@ private:
     bool m_hasEntryBindings = false;
     // The scopes below this depth are the parent of the derived context of a `scoped` block call (MarkDerived); 0 outside
     std::uint32_t m_derivedDepth = 0;
+    // Set by MarkDerived on the block call's own context, and copied to none made from it
+    bool m_ownsDerivedCaptures = false;
     // Lookups pass over the names bound at entry in the scopes below this depth
     // (PassOverEntryBindings)
     size_t m_entryPassDepth = 0;

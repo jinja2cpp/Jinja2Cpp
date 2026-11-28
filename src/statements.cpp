@@ -2678,11 +2678,15 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     }
     // The context whose scopes the template's top level set, or a scoped block saw, which may
     // run below this one (a `with` or a block): `self` outlives those
-    const auto makeSelf = [this, frame](size_t depth) {
+    const auto makeSelf = [this, frame](size_t depth, RenderContext* derivedHome) {
         auto* home = this;
-        while (home->m_parentDepth >= depth && home->m_parent)
+        while (!derivedHome && home->m_parentDepth >= depth && home->m_parent)
         {
             home = home->m_parent;
+        }
+        if (derivedHome)
+        {
+            home = derivedHome;
         }
         ClosureSite site(*home, depth);
         // An included template's `self` stored past the include sees what the include saw (0323)
@@ -2702,19 +2706,21 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     {
         const size_t depth = m_selfDepth - 1;
         auto* block = this;
-        while (block->m_parentDepth > depth && block->m_parent)
+        while (block->m_parentDepth > depth && block->m_parent && !block->OwnsDerivedCapture(depth))
         {
             block = block->m_parent;
         }
+        // A scoped block call's own context: the derived context's frames end before the render, and its `self` keeps
+        // what they held then (docs/tasks/0596)
         if (!block->m_blockSelf)
         {
-            block->m_blockSelf = std::make_unique<InternalValue>(makeSelf(depth));
+            block->m_blockSelf = std::make_unique<InternalValue>(makeSelf(depth, block->OwnsDerivedCapture(depth) ? block : nullptr));
         }
         return LookupResult(*block->m_blockSelf);
     }
     if (!frame->self)
     {
-        frame->self = makeSelf(frame->baseDepth);
+        frame->self = makeSelf(frame->baseDepth, nullptr);
     }
     return LookupResult(*frame->self);
 }
@@ -2904,13 +2910,13 @@ std::shared_ptr<ClosureCapture> RenderContext::CaptureOfScope(size_t depth)
     {
         return nullptr;
     }
-    // The context whose own scope it is
+    // The context whose own scope it is, or the scoped block call's that holds it in its derived context
     auto* owner = this;
-    while (depth <= owner->m_parentDepth && owner->m_parent)
+    while (depth <= owner->m_parentDepth && owner->m_parent && !owner->OwnsDerivedCapture(depth))
     {
         owner = owner->m_parent;
     }
-    if (depth <= owner->m_parentDepth)
+    if (depth <= owner->m_parentDepth && !owner->OwnsDerivedCapture(depth))
     {
         return nullptr;
     }
@@ -3294,6 +3300,16 @@ void RenderContext::EnterCapturedScope(const ClosureKept& kept, size_t link, con
     }
 }
 
+namespace
+{
+// The scope a closure made in a `scoped` block call copies from once the call ends: the template's top level, as
+// Jinja2's derived context holds what context.get_all() gave at the call (docs/tasks/0596)
+size_t DerivedCopyFrom(const TemplateFrame& frame)
+{
+    return frame.baseDepth == 0 ? 0 : frame.baseDepth - 1;
+}
+} // namespace
+
 void BlockStatement::Render(OutStream& os, RenderContext& values)
 {
     auto* frame = values.GetTemplateFrame();
@@ -3344,6 +3360,16 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
     {
         // Jinja2 calls the block with context.derived(locals), which a host's callable then sees (docs/tasks/0558)
         blockContext.MarkDerived();
+        // That context is a snapshot of the frames around the block: a `self` or super() made in the call and kept
+        // past it (`set ns.f = self.b`, called after the loop) renders with what they held, also once they ended
+        // (docs/tasks/0596). Its captures end with the call, its body's scopes gone (OwnsDerivedCapture)
+        const auto derivedEnd = [frame] {
+            const size_t topLevel = DerivedCopyFrom(*frame);
+            return FrameEnd{ frame->baseDepth + 1, true, topLevel, topLevel };
+        };
+        RenderFailingFrame(blockContext, blockContext, [&] { RenderBlockAt(*frame->blocks, name, 0, os, blockContext); }, derivedEnd);
+        blockContext.CaptureClosures(derivedEnd());
+        return;
     }
     RenderBlockAt(*frame->blocks, name, 0, os, blockContext);
 }
@@ -3369,7 +3395,9 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             // Stored past an include, it sees what the block saw there, as a macro defined in the block does
             // (0373); elsewhere the frames it sees end with the render, and nothing is kept
             std::shared_ptr<const void> capture;
-            if (values.EndsBeforeRender() && site.OutlivesItsFrames(values))
+            // So too in the derived context of a scoped block in a loop, whose frames end before the render (0596)
+            const bool inDerivedFrames = values.InDerivedBlock() && values.DerivedDepth() > frame->baseDepth;
+            if ((values.EndsBeforeRender() || inDerivedFrames) && site.OutlivesItsFrames(values))
             {
                 capture = site.CaptureOnEnd(values, {}, true);
             }
@@ -3407,7 +3435,12 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     const auto blockEnd = [&values, frame] {
         const size_t count = values.GetScopesCount();
         const size_t first = std::min(values.FirstOwnScope(), count);
-        const size_t root = frame ? std::min(frame->baseDepth, first - 1) : first - 1;
+        size_t root = frame ? std::min(frame->baseDepth, first - 1) : first - 1;
+        // A scoped block's derived context is a snapshot of the template's top level too (docs/tasks/0596)
+        if (frame && values.OwnsDerivedCaptures())
+        {
+            root = std::min(root, DerivedCopyFrom(*frame));
+        }
         return FrameEnd{ first, true, root, root };
     };
     RenderFailingFrame(values, values, [&] { values.Nodes()[m_mainBody].Render(os, values); }, blockEnd);
