@@ -1079,6 +1079,9 @@ public:
     };
     [[nodiscard]] ContextMarks Marks() const { return { m_nameRefs, m_contextNodes, m_loopReads }; }
     void NoteLoopRead() { ++m_loopReads; }
+    // The references to the name `super`: a block whose body has none needs no super() that outlives its call
+    void NoteNameRead(std::string_view name) { m_superReads += name == "super" ? 1U : 0U; }
+    [[nodiscard]] std::uint32_t SuperReads() const { return m_superReads; }
     // `count` of the reads of `loop` lie in the body of an outermost for loop, where the loop's own `loop` is read
     void NoteLoopReadsInFor(std::uint32_t count) { m_loopReadsInFor += count; }
     // The reads of `loop` outside every for loop's body: those of the `loop` somebody else binds
@@ -1467,6 +1470,7 @@ private:
     std::uint32_t m_contextNodes = 0;
     std::uint32_t m_loopReads = 0;
     std::uint32_t m_loopReadsInFor = 0;
+    std::uint32_t m_superReads = 0;
     SelfUse m_selfUse = SelfUse::None;
     bool m_sealed = false;
     detail::TemplateOriginPtr m_origin = nullptr;

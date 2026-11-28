@@ -354,6 +354,8 @@ struct StatementInfo
     NodeArena::ContextMarks marks;
     // A macro's or call block's: the resolver's mark of name expressions before its parameters
     std::uint32_t useMark = 0;
+    // A block's: the tree's count of `super` names before its body (NodeArena::SuperReads)
+    std::uint32_t superReads = 0;
 
     // Whether the body of a statement of `type` is a frame of the resolver of its own
     static bool OwnsFrame(Type type)

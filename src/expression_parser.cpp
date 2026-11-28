@@ -981,6 +981,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
             value = SelfRefExpression::Make(m_nodes);
             break;
         }
+        m_nodes.NoteNameRead(name);
         auto ref = ValueRefExpression::Make(m_nodes, name);
         m_readsName = true;
         ++m_nameReads;

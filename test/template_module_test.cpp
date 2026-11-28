@@ -959,6 +959,58 @@ TEST_F(TemplateModuleTest, WideClosureInATopLevelWithKeepsTheModuleNames)
     }
 }
 
+namespace
+{
+// A failure inside a module's top-level `with`, `filter`, loop, `else` or block leaves the body unended: the closure
+// it stored keeps the names it saw on each later call, as in Jinja2 3.1.6 (docs/tasks/0598)
+constexpr WithClosureLib FailingBodyLibs[] = {
+    { "{% set v = 5 %}{% with a = 1 %}{% macro f() %}{{ v }}{{ a }}{% endmacro %}{% set ns.f = f %}{{ 1 // 0 }}{% endwith %}", "51" },
+    { "{% set v = 5 %}{% filter upper %}{% set a = 1 %}{% macro f() %}{{ v }}{{ a }}{% endmacro %}{% set ns.f = f %}{{ 1 // 0 }}{% endfilter %}", "51" },
+    { "{% set v = 5 %}{% for a in [1] %}{% macro f() %}{{ v }}{{ a }}{% endmacro %}{% set ns.f = f %}{{ 1 // 0 }}{% endfor %}", "51" },
+    { "{% set v = 5 %}{% for a in [1, 2] if a %}{% macro f() %}{{ v }}{{ a }}{% endmacro %}{% set ns.f = f %}{{ 1 // (2 - a) }}{% endfor %}", "52" },
+    { "{% set v = 5 %}{% for a in [] %}{% else %}{% set a = 1 %}{% macro f() %}{{ v }}{{ a }}{% endmacro %}{% set ns.f = f %}{{ 1 // 0 }}{% endfor %}", "51" },
+    { "{% set v = 5 %}{% for b in [1] %}{% with a = b %}{% macro f() %}{{ v }}{{ a }}{% endmacro %}{% set ns.f = f %}{{ 1 // 0 }}{% endwith %}{% endfor %}", "51" },
+    { "{% set v = 5 %}{% block b %}{% set a = 1 %}{% macro f() %}{{ v }}{{ a }}{% endmacro %}{% set ns.f = f %}{{ 1 // 0 }}{% endblock %}", "51" },
+    { "{% set v = 5 %}{% for q in [0] %}{% block b scoped %}{% set a = 1 %}{% macro f() %}{{ v }}{{ a }}{% endmacro %}{% set ns.f = f %}{{ 1 // 0 }}{% endblock %}{% endfor %}",
+      "51" },
+};
+std::string FailingBodyMain(std::size_t index)
+{
+    return "{% set ns = namespace() %}{% macro keep() %}{% import 'failbody" + std::to_string(index) + "' as l with context %}{% endmacro %}{% macro use() %}{{ ns.f() }}{% endmacro %}";
+}
+} // namespace
+
+TEST_F(TemplateModuleTest, FailureInATopLevelBodyKeepsTheClosureNames)
+{
+    for (std::size_t index = 0; index != std::size(FailingBodyLibs); ++index)
+    {
+        const auto& [lib, wanted] = FailingBodyLibs[index];
+        AddFile("failbody" + std::to_string(index), lib);
+        auto module = Make(FailingBodyMain(index));
+        EXPECT_THROW(Call(module.exports["keep"]), jinja2::BadResultAccess<>) << lib;
+        EXPECT_EQ(wanted, Call(module.exports["use"]).AsString()) << lib;
+        EXPECT_EQ(wanted, Call(module.exports["use"]).AsString()) << lib;
+    }
+}
+
+TEST_F(TemplateModuleTest, WideFailureInATopLevelBodyKeepsTheClosureNames)
+{
+    for (std::size_t index = 0; index != std::size(FailingBodyLibs); ++index)
+    {
+        const auto& [lib, wanted] = FailingBodyLibs[index];
+        AddFile("failbody" + std::to_string(index), lib);
+        const auto main = FailingBodyMain(index);
+        jinja2::TemplateW tpl(&m_env);
+        ASSERT_TRUE(!!tpl.Load(std::wstring(main.begin(), main.end())));
+        auto module = tpl.MakeModule().value();
+        EXPECT_THROW(Call(module.exports["keep"]), jinja2::BadResultAccess<wchar_t>) << lib;
+        const std::string narrow(wanted);
+        const std::wstring wide(narrow.begin(), narrow.end());
+        EXPECT_EQ(wide, Call(module.exports["use"]).AsWString()) << lib;
+        EXPECT_EQ(wide, Call(module.exports["use"]).AsWString()) << lib;
+    }
+}
+
 // A module whose top level failed partway, inside a loop and a `with`, after storing its macro, stays for that macro with
 // the scopes the failure left: G1 on each later call, as in Jinja2 3.1.6 (docs/tasks/0312, security review)
 TEST_F(TemplateModuleTest, MacroStoredByAFailedImportKeepsItsModule)

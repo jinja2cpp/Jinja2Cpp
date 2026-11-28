@@ -1159,6 +1159,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     statementInfo.frame = m_names.PushUnit(m_names.Current(), blockRenderer);
     // A block is a body of its own for `self`: the enclosing one does not see into it
     statementInfo.outerSelfUse = m_nodes.ExchangeSelfUse(NodeArena::SelfUse::None);
+    statementInfo.superReads = m_nodes.SuperReads();
     statementInfo.renderer = blockRenderer;
     Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
@@ -1193,6 +1194,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
 
     blockStmt.SetMainBody(TakeBody(info));
     blockStmt.SetSelfFromContext(m_nodes.ExchangeSelfUse(info.outerSelfUse) == NodeArena::SelfUse::Store);
+    blockStmt.SetReadsSuper(m_nodes.SuperReads() != info.superReads);
     m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();

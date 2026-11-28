@@ -1409,10 +1409,11 @@ namespace
 // Whether a frame a failure leaves closes over its names first, as a stop does (docs/tasks/0479): a stop, or any
 // failure in a context that ends before the render. There a render nested under a keeper may fail, its host swallow
 // the failure and the outer render call a closure the frame stored in a shared global, which reads the names the
-// frame held, as Jinja2's does (docs/tasks/0531). Asked only on the failure path
+// frame held, as Jinja2's does (docs/tasks/0531); or in a module that ends with the host's call, whose closures later
+// calls of its macros run (docs/tasks/0598). Asked only on the failure path
 bool ClosesOverOnFailure(const std::exception_ptr& failure, const RenderContext& context)
 {
-    return detail::IsStop(failure) || context.EndsBeforeRender();
+    return detail::IsStop(failure) || context.EndsBeforeRender() || context.InEndingModule();
 }
 
 // The end of a block body or an included template that failed: the closures defined there close over its names first
@@ -1811,7 +1812,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             values.CaptureClosures(FrameEnd::Stopped(endScopes));
             KeepStoppedLoop(state, static_cast<bool>(m_ifExpr), loopVal, loopItems);
         }
-        else if (values.EndsBeforeRender())
+        else if (ClosesOverOnFailure(failure, values))
         {
             values.CaptureClosures(FrameEnd::Stopped(endScopes));
         }
@@ -2005,7 +2006,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         // Taken: the collecting below may run calls that are guarded in turn
         auto failure = detail::TakeKept();
         const bool isStop = detail::IsStop(failure);
-        if (isStop || values.EndsBeforeRender())
+        if (ClosesOverOnFailure(failure, values))
         {
             if (isStop)
             {
@@ -2651,6 +2652,16 @@ void EnterEndedTemplateFrame(RenderContext& context, const ClosureCapture* captu
     context.SetTemplateFrame(&frame);
 }
 
+RenderContext* RenderContext::SelfHome(size_t depth)
+{
+    auto* home = this;
+    while (home->m_parentDepth >= depth && home->m_parent)
+    {
+        home = home->m_parent;
+    }
+    return home;
+}
+
 LookupResult RenderContext::FindSelf(const std::string& name)
 {
     auto* frame = m_templateFrame;
@@ -2677,12 +2688,8 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     }
     // The context whose scopes the template's top level set, or a scoped block saw, which may
     // run below this one (a `with` or a block): `self` outlives those
-    const auto makeSelf = [this, frame](size_t depth) {
-        auto* home = this;
-        while (home->m_parentDepth >= depth && home->m_parent)
-        {
-            home = home->m_parent;
-        }
+    const auto makeSelf = [this, frame](size_t depth, RenderContext* derivedHome) {
+        auto* home = derivedHome ? derivedHome : SelfHome(depth);
         ClosureSite site(*home, depth);
         // An included template's `self` stored past the include sees what the include saw (0323)
         std::shared_ptr<const void> keepAlive;
@@ -2701,19 +2708,21 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     {
         const size_t depth = m_selfDepth - 1;
         auto* block = this;
-        while (block->m_parentDepth > depth && block->m_parent)
+        while (block->m_parentDepth > depth && block->m_parent && !block->OwnsDerivedCapture(depth))
         {
             block = block->m_parent;
         }
+        // A scoped block call's own context: the derived context's frames end before the render, and its `self` keeps
+        // what they held then (docs/tasks/0596)
         if (!block->m_blockSelf)
         {
-            block->m_blockSelf = std::make_unique<InternalValue>(makeSelf(depth));
+            block->m_blockSelf = std::make_unique<InternalValue>(makeSelf(depth, block->OwnsDerivedCapture(depth) ? block : nullptr));
         }
         return LookupResult(*block->m_blockSelf);
     }
     if (!frame->self)
     {
-        frame->self = makeSelf(frame->baseDepth);
+        frame->self = makeSelf(frame->baseDepth, nullptr);
     }
     return LookupResult(*frame->self);
 }
@@ -2903,13 +2912,13 @@ std::shared_ptr<ClosureCapture> RenderContext::CaptureOfScope(size_t depth)
     {
         return nullptr;
     }
-    // The context whose own scope it is
+    // The context whose own scope it is, or the scoped block call's that holds it in its derived context
     auto* owner = this;
-    while (depth <= owner->m_parentDepth && owner->m_parent)
+    while (depth <= owner->m_parentDepth && owner->m_parent && !owner->OwnsDerivedCapture(depth))
     {
         owner = owner->m_parent;
     }
-    if (depth <= owner->m_parentDepth)
+    if (depth <= owner->m_parentDepth && !owner->OwnsDerivedCapture(depth))
     {
         return nullptr;
     }
@@ -3293,6 +3302,16 @@ void RenderContext::EnterCapturedScope(const ClosureKept& kept, size_t link, con
     }
 }
 
+namespace
+{
+// The scope a closure made in a `scoped` block call copies from once the call ends: the template's top level, as
+// Jinja2's derived context holds what context.get_all() gave at the call (docs/tasks/0596)
+size_t DerivedCopyFrom(const TemplateFrame& frame)
+{
+    return frame.baseDepth == 0 ? 0 : frame.baseDepth - 1;
+}
+} // namespace
+
 void BlockStatement::Render(OutStream& os, RenderContext& values)
 {
     auto* frame = values.GetTemplateFrame();
@@ -3343,6 +3362,16 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
     {
         // Jinja2 calls the block with context.derived(locals), which a host's callable then sees (docs/tasks/0558)
         blockContext.MarkDerived();
+        // That context is a snapshot of the frames around the block: a `self` or super() made in the call and kept
+        // past it (`set ns.f = self.b`, called after the loop) renders with what they held, also once they ended
+        // (docs/tasks/0596). Its captures end with the call, its body's scopes gone (OwnsDerivedCapture)
+        const auto derivedEnd = [frame] {
+            const size_t topLevel = DerivedCopyFrom(*frame);
+            return FrameEnd{ frame->baseDepth + 1, true, topLevel, topLevel };
+        };
+        RenderFailingFrame(blockContext, blockContext, [&] { RenderBlockAt(*frame->blocks, name, 0, os, blockContext); }, derivedEnd);
+        blockContext.CaptureClosures(derivedEnd());
+        return;
     }
     RenderBlockAt(*frame->blocks, name, 0, os, blockContext);
 }
@@ -3368,7 +3397,10 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             // Stored past an include, it sees what the block saw there, as a macro defined in the block does
             // (0373); elsewhere the frames it sees end with the render, and nothing is kept
             std::shared_ptr<const void> capture;
-            if (values.EndsBeforeRender() && site.OutlivesItsFrames(values))
+            // So too in the derived context of a scoped block in a loop, whose frames end before the render, when the
+            // body names `super` (0596)
+            const bool inDerivedFrames = m_readsSuper && values.InDerivedBlock() && values.DerivedDepth() > frame->baseDepth;
+            if ((values.EndsBeforeRender() || inDerivedFrames) && site.OutlivesItsFrames(values))
             {
                 capture = site.CaptureOnEnd(values, {}, true);
             }
@@ -3406,7 +3438,12 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     const auto blockEnd = [&values, frame] {
         const size_t count = values.GetScopesCount();
         const size_t first = std::min(values.FirstOwnScope(), count);
-        const size_t root = frame ? std::min(frame->baseDepth, first - 1) : first - 1;
+        size_t root = frame ? std::min(frame->baseDepth, first - 1) : first - 1;
+        // A scoped block's derived context is a snapshot of the template's top level too (docs/tasks/0596)
+        if (frame && values.OwnsDerivedCaptures())
+        {
+            root = std::min(root, DerivedCopyFrom(*frame));
+        }
         return FrameEnd{ first, true, root, root };
     };
     RenderFailingFrame(values, values, [&] { values.Nodes()[m_mainBody].Render(os, values); }, blockEnd);
@@ -3681,6 +3718,19 @@ private:
     InternalValue* m_binding = nullptr;
 };
 
+namespace
+{
+// The `loop` a template rendered with the context of `values` sees in Jinja2, which hands it the frame's stores: an
+// enclosing loop whose body names it, or a value of that name set outside the loops
+std::optional<InternalValue> LoopSeenWithContextOf(const RenderContext& values)
+{
+    return values.FindValueWhere("loop"s, [](const InternalValue& value) {
+        const auto* accessor = AsLoopAccessor(value);
+        return !accessor || accessor->State()->bodyReadsLoop;
+    });
+}
+} // namespace
+
 // `loop` as the included template of `values` sees it. With a `loop` of the same name outside the
 // loop (a render parameter, a global, a top-level set) that one is shadowed in the include's own
 // scope; otherwise the loop's binding is hidden for the length of the include
@@ -3698,12 +3748,7 @@ void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopH
     {
         return;
     }
-    // The `loop` that is visible to Jinja2 there: an enclosing loop whose body names it, or a
-    // value of that name set outside the loops
-    if (auto outer = values.FindValueWhere("loop"s, [](const InternalValue& value) {
-            const auto* accessor = AsLoopAccessor(value);
-            return !accessor || accessor->State()->bodyReadsLoop;
-        }))
+    if (auto outer = LoopSeenWithContextOf(values))
     {
         innerContext.GetCurrentScope()["loop"s] = *outer;
         return;
@@ -3932,6 +3977,11 @@ InternalValueMap ImporterNames(const RenderContext& importer, bool withContext)
     InternalValueMap names;
     if (withContext)
     {
+        // Jinja2's module context takes the frame's locals, `loop` among them as an include sees it (docs/tasks/0597)
+        if (auto loop = LoopSeenWithContextOf(importer))
+        {
+            names.emplace("loop"s, std::move(*loop));
+        }
         importer.CollectVisibleNames(names);
     }
     return names;
@@ -5234,7 +5284,8 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 namespace
 {
 // A `with`, `filter` or generation body rendered by `body` in `inner`, its context: a stop out of it closes over the
-// body's names first (FrameEnd::Stopped). The rethrow is outside the handler, as in RenderMacroBody
+// body's names first (FrameEnd::Stopped), and so does a failure a later call can see past (ClosesOverOnFailure). The
+// rethrow is outside the handler, as in RenderMacroBody
 [[noreturn]] JINJA2CPP_NOINLINE void EndStoppedSoftBody(RenderContext& inner)
 {
     auto failure = detail::TakeKept();

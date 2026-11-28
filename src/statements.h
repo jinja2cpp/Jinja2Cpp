@@ -471,6 +471,8 @@ public:
     void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
     // The body stores `self` before it reads it: it has no `self` of its own (NodeArena::SelfUse)
     void SetSelfFromContext(bool fromContext) { m_selfFromContext = fromContext; }
+    // The body names `super`, so a super() it makes may be stored past the call (docs/tasks/0596)
+    void SetReadsSuper(bool readsSuper) { m_readsSuper = readsSuper; }
     // The block sits in a statement that opens a frame of its own in Jinja2's compiler (`with`,
     // `autoescape`, `for`, `filter`, a call block, a macro, a set block or another block):
     // there it is called in place even after an `extends` (`frame.toplevel`, docs/tasks/0389)
@@ -483,6 +485,7 @@ private:
     bool m_autoescape{};
     bool m_selfFromContext{};
     bool m_inPlace{};
+    bool m_readsSuper{};
     NodeRef<IRendererBase> m_mainBody;
     UnitLayout m_unitLayout;
 };
