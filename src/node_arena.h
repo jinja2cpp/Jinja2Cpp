@@ -1080,7 +1080,7 @@ public:
     [[nodiscard]] ContextMarks Marks() const { return { m_nameRefs, m_contextNodes, m_loopReads }; }
     void NoteLoopRead() { ++m_loopReads; }
     // The references to the name `super`: a block whose body has none needs no super() that outlives its call
-    void NoteSuperRead() { ++m_superReads; }
+    void NoteNameRead(std::string_view name) { m_superReads += name == "super" ? 1U : 0U; }
     [[nodiscard]] std::uint32_t SuperReads() const { return m_superReads; }
     // `count` of the reads of `loop` lie in the body of an outermost for loop, where the loop's own `loop` is read
     void NoteLoopReadsInFor(std::uint32_t count) { m_loopReadsInFor += count; }
