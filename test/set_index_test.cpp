@@ -2,6 +2,9 @@
 // what Python Jinja2 renders (3.1.6); a row with an error names the message Python raises
 #include "test_tools.h"
 
+#include "../src/internal_value.h"
+#include "../src/set_index.h"
+
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -109,6 +112,16 @@ const std::vector<SetCase>& Rows()
         { "DifferenceUpdateMany", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.difference_update([1], (2, 9)) %}{{ s|list }}|{{ 1 in s }}|{{ s|length }})", R"([3, 4, 5]|False|3)", "" },
         { "SymmetricDifferenceUpdateDup", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.symmetric_difference_update([1, 1, 6, 6]) %}{{ s|sort }}|{{ 1 in s }}|{{ 6 in s }})", R"([2, 3, 4, 5, 6]|False|True)", "" },
         { "SameNanOnce", R"({% set w = 'nan' %}{% set s = {}.keys() - [] %}{% set n = w|float %}{% set _ = s.add(n) %}{% set _ = s.add(n) %}{% set _ = s.add((n, 1)) %}{% set _ = s.add((n, 1)) %}{{ s|length }}|{{ n in s }})", R"(2|True)", "" },
+        // intersection_update walks the argument and drops the rest through the index (docs/tasks/0593)
+        { "IntersectionUpdateTakesArgumentItems", R"({% set s = {1:0,2:0,3:0}.keys() - [] %}{% set _ = s.intersection_update([2.0, 3]) %}{{ s|list }}|{{ s|length }}|{{ 2 in s }}|{{ 1 in s }})", R"([2.0, 3]|2|True|False)", "" },
+        { "IntersectionUpdateManyArgs", R"({% set s = {1:0,2:0,3:0,4:0}.keys() - [] %}{% set _ = s.intersection_update([1, 2, 3], [3, 4, 1]) %}{{ s|list }}|{{ 2 in s }})", R"([1, 3]|False)", "" },
+        { "IntersectionUpdateNoArgs", R"({% set s = {1:0,2:0,3:0,4:0}.keys() - [] %}{% set _ = s.intersection_update() %}{{ s|list }}|{{ 4 in s }})", R"([1, 2, 3, 4]|True)", "" },
+        { "IntersectionUpdateLargerSetKeepsReceiverItems", R"({% set s = {1:0,2:0}.keys() - [] %}{% set b = {1.0:0,2.0:0,3:0}.keys() - [] %}{% set _ = s.intersection_update(b) %}{{ s|list }})", R"([1, 2])", "" },
+        { "IntersectionUpdateSmallerSetGivesItems", R"({% set s = {1:0,2:0,3:0}.keys() - [] %}{% set b = {1.0:0,2.0:0}.keys() - [] %}{% set _ = s.intersection_update(b) %}{{ s|list }})", R"([1.0, 2.0])", "" },
+        { "IntersectionUpdateDuplicatesThenAdd", R"({% set s = {1:0,2:0,3:0}.keys() - [] %}{% set _ = s.intersection_update([3, 3]) %}{{ s|list }}|{{ 3 in s }}|{{ 1 in s }}{% set _ = s.add(1) %}{{ s|sort }})", R"([3]|True|False[1, 3])", "" },
+        { "IntersectionUpdateWithItself", R"({% set s = {1:0,2:0,3:0}.keys() - [] %}{% set _ = s.intersection_update(s, [1]) %}{{ s|list }}|{{ 2 in s }})", R"([1]|False)", "" },
+        { "IntersectionUpdateAfterDiscard", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set _ = s.discard(2) %}{% set _ = s.intersection_update([5, 1, 2]) %}{{ s|list }}|{{ 2 in s }}|{{ 5 in s }}|{{ s|length }})", R"([1, 5]|False|True|2)", "" },
+        { "IntersectionUpdateNotIterableKeepsSet", R"({% set s = {1:0,2:0,3:0}.keys() - [] %}{% set _ = s.intersection_update([1], 5) %})", "", R"('int' object is not iterable)" },
         { "AliasSharesIndex", R"({% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set t = s %}{% set _ = t.remove(2) %}{% set _ = s.add(6) %}{{ 2 in s }}|{{ 2 in t }}|{{ 6 in t }}|{{ s|list }})", R"(False|False|True|[1, 3, 4, 5, 6])", "" },
     };
     return rows;
@@ -171,6 +184,88 @@ TEST(SetIndexLinearTest, ChangesInALoopAreLinear)
         { "{% for i in range(20000) %}{% set _ = s.symmetric_difference_update([i, i + 20000]) %}{% endfor %}{{ s|length }}|{{ 20000 in s }}", "20000|True" },
         { "{% set _ = s.discard(0) %}{% for i in range(20000, 40000) %}{% set _ = s.add(i) %}{% endfor %}{{ s|length }}|{{ 39999 in s }}", "39999|True" },
         { "{% set n = w|float %}{% for i in range(20000) %}{% set _ = s.add(n) %}{% endfor %}{{ s|length }}", "20001" },
+    };
+    for (const auto& row : rows)
+    {
+        Settings settings;
+        settings.limits.maxRenderTime = std::chrono::seconds(30);
+        TemplateEnv env;
+        env.SetSettings(settings);
+        Template tpl(&env);
+        ASSERT_TRUE(!!tpl.Load(std::string(prefix) + row.body)) << row.body;
+        const auto rendered = tpl.RenderAsString(ValuesMap{});
+        ASSERT_TRUE(!!rendered) << row.body << ": " << ErrorToString(rendered.error());
+        EXPECT_EQ(row.expected, rendered.value()) << row.body;
+    }
+}
+
+
+// A set nothing looks up has no index (docs/tasks/0593): the temporaries a - b and s|list make, a loop over a set and its
+// size cost none; the first lookup makes one that the copies sharing the items share
+TEST(SetIndexLazyTest, TemporariesMakeNoIndex)
+{
+    TemplateEnv env;
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% set s = {1:0,2:0,3:0,4:0,5:0}.keys() - [] %}{% set b = {1:0}.keys() - [] %}{% for i in range(20) %}{% set t = s - b %}{% set l = s|list %}{{ t|length }}{{ l|length }}{% for x in t %}{% endfor %}{% endfor %}{{ s|length }}"));
+    const auto before = SetIndexesMade();
+    const auto rendered = tpl.RenderAsString(ValuesMap{});
+    ASSERT_TRUE(!!rendered) << ErrorToString(rendered.error());
+    EXPECT_EQ(before, SetIndexesMade());
+
+    // A lookup makes the index of that set only
+    Template lookup(&env);
+    ASSERT_TRUE(!!lookup.Load("{% set s = {1:0,2:0,3:0}.keys() - [] %}{% set t = s %}{% for i in range(20) %}{{ 1 in s }}{{ 2 in t }}{% endfor %}"));
+    const auto beforeLookup = SetIndexesMade();
+    const auto looked = lookup.RenderAsString(ValuesMap{});
+    ASSERT_TRUE(!!looked) << ErrorToString(looked.error());
+    EXPECT_EQ(beforeLookup + 1, SetIndexesMade());
+}
+
+TEST(SetIndexLazyTest, AdapterCopiesShareTheIndexMadeLater)
+{
+    const auto set = ListAdapter::CreateIterator(InternalValueList{ InternalValue(int64_t{ 1 }), InternalValue(int64_t{ 2 }) }, IteratorKind::Set);
+    const auto copy = set;
+    const auto before = SetIndexesMade();
+    auto* index = copy.GetSetIndex();
+    ASSERT_NE(nullptr, index);
+    EXPECT_EQ(before + 1, SetIndexesMade());
+    // The copy that was taken before the index existed sees the one the other made
+    EXPECT_EQ(index, set.GetSetIndex());
+    EXPECT_EQ(before + 1, SetIndexesMade());
+    // A list has none
+    const auto list = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(int64_t{ 1 }) });
+    EXPECT_EQ(nullptr, list.GetSetIndex());
+}
+
+// A cloned walk fails at the size the walk began with, not the size at the clone (docs/tasks/0593)
+TEST(SetIndexLazyTest, ClonedWalkKeepsItsStartSize)
+{
+    const auto set = ListAdapter::CreateIterator(InternalValueList{ InternalValue(int64_t{ 1 }), InternalValue(int64_t{ 2 }), InternalValue(int64_t{ 3 }) }, IteratorKind::Set);
+    auto walk = set.GetEnumerator();
+    ASSERT_TRUE(walk.has_value());
+    ASSERT_TRUE((*walk)->MoveNext());
+    // The set grows under the walk, then the walk is cloned
+    set.GetMutableItems()->push_back(InternalValue(int64_t{ 4 }));
+    auto clone = (*walk)->Clone();
+    ASSERT_TRUE(clone.has_value());
+    EXPECT_THROW((*walk)->MoveNext(), TemplateRuntimeError);
+    EXPECT_THROW((*clone)->MoveNext(), TemplateRuntimeError);
+}
+
+// A one-item argument in a loop (docs/tasks/0593): the work of a call is what its argument holds, and the receiver is
+// walked only for what leaves it
+TEST(SetIndexLinearTest, IntersectionUpdateWithOneItemInALoopIsLinear)
+{
+    const char* const prefix = "{% set s = {}.keys() - [] %}{% for i in range(20000) %}{% set _ = s.add(i) %}{% endfor %}";
+    const struct
+    {
+        const char* body;
+        const char* expected;
+    } rows[] = {
+        { "{% set _ = s.intersection_update([5]) %}{{ s|list }}", "[5]" },
+        { "{% for i in range(20000) %}{% set _ = s.add(i + 20000) %}{% set _ = s.intersection_update([i + 20000]) %}{% endfor %}{{ s|list }}", "[39999]" },
+        { "{% for i in range(20000) %}{% set _ = s.intersection_update([i]) %}{% set _ = s.add(i + 1) %}{% endfor %}{{ s|list }}", "[19999, 20000]" },
+        { "{% for i in range(20000) %}{% set _ = s.intersection_update(s) %}{% set _ = s.intersection_update([i]) %}{% set _ = s.update([i, i + 1]) %}{% endfor %}{{ s|length }}", "2" },
     };
     for (const auto& row : rows)
     {

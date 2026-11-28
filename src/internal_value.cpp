@@ -1419,6 +1419,18 @@ public:
     [[nodiscard]] bool IsUnique() const { return m_val->use_count() == 1; }
     // Whether a budget counted the storage when it was made
     [[nodiscard]] bool IsCharged() const { return m_val->IsCharged(); }
+    // The set index beside a list's items, shared by every copy of the holder as the items are; null until a lookup
+    // made it (docs/tasks/0593)
+    [[nodiscard]] SetIndex* PeekSetIndex() const noexcept { return m_val->setIndex.get(); }
+    template<typename Make>
+    SetIndex& EnsureSetIndex(const Make& make) const
+    {
+        if (!m_val->setIndex)
+        {
+            m_val->setIndex = make();
+        }
+        return *m_val->setIndex;
+    }
 
     bool operator==(const BySharedMutable<T>& other) const { return Get() == other.Get(); }
     bool operator!=(const BySharedMutable<T>& other) const { return !(*this == other); }
@@ -1470,6 +1482,8 @@ private:
         }
 
         mutable T items;
+        // Used by a set's list only
+        mutable IntrusivePtr<SetIndex> setIndex;
     };
 
     IntrusivePtr<const Storage> m_val;
@@ -3273,6 +3287,16 @@ void CollectDroppedExports(std::vector<InternalValue> containers) noexcept
     CycleCollector::CollectExport(std::move(roots));
 }
 
+namespace detail
+{
+std::atomic<std::uint64_t> g_setIndexesMade{ 0 };
+} // namespace detail
+
+std::uint64_t SetIndexesMade() noexcept
+{
+    return detail::g_setIndexesMade.load(std::memory_order_relaxed);
+}
+
 namespace
 {
 
@@ -3342,6 +3366,13 @@ std::shared_ptr<const Accessor> MakeHostCopy(const Adapter& adapter)
     return std::shared_ptr<const Accessor>(holder, &holder->Get());
 }
 
+IntrusivePtr<SetIndex> MakeSetIndex()
+{
+    auto index = MakeRef<SetIndex>();
+    detail::g_setIndexesMade.fetch_add(1, std::memory_order_relaxed);
+    return index;
+}
+
 // A list of `values`
 ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind) // NOLINT(readability-function-cognitive-complexity): score 29, kept whole (task 0600)
 {
@@ -3355,32 +3386,30 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         {
             SetTraversable();
             SetIteratorKind(iteratorKind);
-            if (iteratorKind == IteratorKind::Set)
-            {
-                m_index = MakeRef<SetIndex>();
-            }
+            m_isSet = iteratorKind == IteratorKind::Set;
         }
 
         // A set's slots that its methods erased stay until a read here, which closes them up (docs/tasks/0587)
         [[nodiscard]] InternalValueList& Values() const
         {
             auto& values = m_values.Get();
-            if (m_index)
+            if (auto* index = m_values.PeekSetIndex())
             {
-                m_index->Compact(values);
+                index->Compact(values);
             }
             return values;
         }
         [[nodiscard]] size_t GetItemsCountImpl() const
         {
             const auto& values = m_values.Get();
-            return m_index ? m_index->LiveCount(values) : values.size();
+            auto* index = m_values.PeekSetIndex();
+            return index ? index->LiveCount(values) : values.size();
         }
         // A set's walk fails at its next step once the set's size changed, as Python's does (docs/tasks/0561);
         // `startSize` is the set's size when the walk began
         void CheckStep(size_t startSize) const
         {
-            if (m_index && m_index->LiveCount(m_values.Get()) != startSize)
+            if (m_isSet && GetItemsCountImpl() != startSize)
             {
                 throw TemplateRuntimeError("Set changed size during iteration");
             }
@@ -3408,8 +3437,12 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
         [[nodiscard]] InternalValueList* GetMutableItems() const override { return &Values(); }
         [[nodiscard]] bool ItemsCharged() const override { return m_values.IsCharged(); }
-        [[nodiscard]] SetIndex* GetSetIndex() const override { return m_index.get(); }
-        [[nodiscard]] InternalValueList* GetSetSlots() const override { return m_index ? &m_values.Get() : nullptr; }
+        // Made by the first lookup, so that a set nothing looks up (a temporary) has none (docs/tasks/0593)
+        [[nodiscard]] SetIndex* GetSetIndex() const override
+        {
+            return m_isSet ? &m_values.EnsureSetIndex([] { return MakeSetIndex(); }) : nullptr;
+        }
+        [[nodiscard]] InternalValueList* GetSetSlots() const override { return m_isSet ? &m_values.Get() : nullptr; }
         [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
         // Without closing up a set's erased slots, as GetMutableItems would
         [[nodiscard]] bool HasLiveSize() const override { return true; }
@@ -3441,17 +3474,18 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
             if (OwnsMutableItemsAlone())
             {
                 m_values.Get().clear();
-                if (m_index)
+                if (auto* index = m_values.PeekSetIndex())
                 {
-                    m_index->Reset();
+                    index->Reset();
                 }
             }
         }
 
     private:
         BySharedMutable<InternalValueList> m_values;
-        // A set's index, shared by the copies of the adapter as their items are; null for a list
-        IntrusivePtr<SetIndex> m_index;
+        // Whether the list is a set, whose index (made by the first lookup) is kept with the items, shared by the copies
+        // of the adapter as the items are
+        bool m_isSet = false;
     };
 
     return ListAdapter(MakeRef<Adapter>(std::move(values), iteratorKind));

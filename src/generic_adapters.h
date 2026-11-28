@@ -274,9 +274,11 @@ public:
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
             auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, this->m_list);
-            auto base = *result;
-            auto& typedBase = static_cast<Enumerator&>(*base);
+            // The result itself, not a copy of it (polymorphic copies deeply)
+            auto& typedBase = static_cast<Enumerator&>(**result);
             typedBase.m_curItem = this->m_curItem;
+            // The size the walk began with, which CheckStep compares (docs/tasks/0593)
+            typedBase.m_maxItems = this->m_maxItems;
             return result;
         }
 

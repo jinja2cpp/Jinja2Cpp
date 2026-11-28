@@ -3549,36 +3549,6 @@ SetIndex& SetIndexOf(const InternalValue& self)
     return *index;
 }
 
-// The receiver's items become `entries`, which SetCombine made from them
-InternalValue SetReplace(const InternalValue& self, const InternalDict& entries, SetScratch& scratch)
-{
-    const auto before = SetEntries(ListOf(self), scratch);
-    auto& items = MutableItems(self);
-    ReserveCounted(items, entries.size());
-    for (const auto& entry : before)
-    {
-        if (entries.find(entry.first) == entries.end())
-        {
-            CycleCollector::NoteDropped(entry.second);
-        }
-    }
-    for (const auto& entry : entries)
-    {
-        if (before.find(entry.first) == before.end())
-        {
-            NoteContainerStore(self, entry.second);
-        }
-    }
-    items.clear();
-    for (const auto& entry : entries)
-    {
-        items.push_back(entry.second);
-    }
-    // The index is built again by the next lookup
-    SetIndexOf(self).Reset();
-    return InternalValue(NoneValue());
-}
-
 InternalValue SetIsSubset(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "issubset", 1, 1);
@@ -3772,11 +3742,63 @@ InternalValue SetSymmetricDifferenceUpdate(const InternalValue& self, const Call
     return InternalValue(NoneValue());
 }
 
+// Keeps of the receiver's items those the iterables of the call all have, as Python's intersection_update does: it walks
+// the argument, the smaller side as a rule, and the receiver only to drop what the argument lacks (docs/tasks/0593).
+// Every argument is read before anything changes. The kept items come from the argument, as Python's do (2.0 for 2),
+// unless it is a set larger than the receiver; the order is the receiver's
 InternalValue SetIntersectionUpdate(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "intersection_update", 0, std::numeric_limits<size_t>::max());
     SetScratch scratch;
-    return SetReplace(self, SetCombine(SetOp::Intersection, self, params, scratch), scratch);
+    std::vector<InternalDict> others;
+    others.reserve(params.posParams.size());
+    for (const auto& arg : params.posParams)
+    {
+        others.push_back(SetArgumentEntries(arg, scratch));
+    }
+    auto& slots = SetSlotsOf(self);
+    auto& index = SetIndexOf(self);
+    for (size_t argPos = 0; argPos != others.size(); ++argPos)
+    {
+        const auto& other = others[argPos];
+        const auto list = AsList(params.posParams[argPos]);
+        const bool fromReceiver = list && list->GetIteratorKind() == IteratorKind::Set && other.size() > index.LiveCount(slots);
+        // The argument's items the receiver holds; the receiver's slot takes the argument's item
+        InternalDict kept;
+        for (const auto& [token, item] : other)
+        {
+            const auto found = SetFind(index, slots, token, item);
+            if (found != SetIndex::NotFound)
+            {
+                if (!fromReceiver)
+                {
+                    slots[found] = item;
+                }
+                kept.try_emplace(token, InternalValue());
+            }
+        }
+        if (kept.size() == index.LiveCount(slots))
+        {
+            continue;
+        }
+        // The rest leaves through the index; the slots close up first, so that each one is an item
+        index.Compact(slots);
+        std::vector<std::pair<std::string, InternalValue>> dropped;
+        for (const auto& item : slots)
+        {
+            auto token = SetToken(item);
+            scratch.Entry();
+            if (kept.find(token) == kept.end())
+            {
+                dropped.emplace_back(std::move(token), item);
+            }
+        }
+        for (const auto& [token, item] : dropped)
+        {
+            SetErase(slots, index, token, item);
+        }
+    }
+    return InternalValue(NoneValue());
 }
 
 InternalValue SetClear(const InternalValue& self, const CallParams& params, RenderContext&)
