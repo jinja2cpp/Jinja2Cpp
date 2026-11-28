@@ -4539,7 +4539,9 @@ InternalValue MakeMutable(const InternalValue& value) // NOLINT(readability-func
 
 void ThrowNoAttribute(const InternalValue& obj, const std::string& name)
 {
-    Raise("'" + TypeName(obj) + " object' has no attribute '" + name + "'");
+    // Jinja2's getattr gives an Undefined for the missing attribute, which raises UndefinedError when called, under
+    // every undefined policy (docs/tasks/0595)
+    throw UndefinedError("'" + TypeName(obj) + " object' has no attribute '" + name + "'");
 }
 
 } // namespace methods

@@ -55,6 +55,14 @@ def test_undefined_error_message():
         assert str(ours) == str(theirs)
 
 
+def test_calling_a_missing_method_is_an_undefined_error():
+    # Calling the Undefined that `'a'.nope` is raises UndefinedError, as for a dict (0595)
+    for source in ("{{ 'a'.nope() }}", "{{ (1).nope() }}", "{{ [].nope() }}", "{{ {}.nope() }}"):
+        ours, theirs = raised(jinja2cpp, source), raised(jinja2, source)
+        assert type(ours) is jinja2cpp.UndefinedError and type(theirs) is jinja2.UndefinedError, source
+        assert str(ours) == str(theirs), source
+
+
 def test_template_not_found():
     for module in (jinja2cpp, jinja2):
         env = module.Environment(loader=module.DictLoader({"a": "{% include 'missing' %}"}))

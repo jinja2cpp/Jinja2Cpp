@@ -69,6 +69,11 @@ bool ClearTypeError()
     {
         throw PyStopIteration(nb::python_error());
     }
+    // A TypeError, which pprint's _safe_key falls back on (docs/tasks/0605)
+    if (PyErr_ExceptionMatches(PyExc_TypeError))
+    {
+        throw PyTypeError(nb::python_error());
+    }
     throw nb::python_error();
 }
 

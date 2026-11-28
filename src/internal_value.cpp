@@ -2205,6 +2205,18 @@ const IJsonNode* JsonNodeOf(const Accessor* accessor) noexcept
     return node;
 }
 
+// `objectClass` when it is the class of a template's object a host may hold and pass on (a namespace, a cycler or a
+// joiner: IMapItemAccessor::GetObjectClass, docs/tasks/0594), else null
+const char* LiveObjectClass(const char* objectClass) noexcept
+{
+    if (!objectClass)
+    {
+        return nullptr;
+    }
+    const std::string_view name(objectClass);
+    return name == "Namespace" || name == "Cycler" || name == "Joiner" ? objectClass : nullptr;
+}
+
 // The identity of a host container's views: for a JSON node, the document value it shows when the
 // traits tell it, so that two reads of one value are one object (docs/tasks/0212); else the
 // accessor, and each view is an object of its own
@@ -4800,6 +4812,7 @@ public:
     explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
         , m_node(JsonNodeOf(m_values.Get().GetAccessor()))
+        , m_objectClass(m_node ? nullptr : LiveObjectClass(m_values.Get().GetObjectClass()))
     {
         // As OwnedAdapter
         this->SetTraversable();
@@ -4829,6 +4842,10 @@ public:
         if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
         {
             return CellOrHostItem(name);
+        }
+        if (JINJA2CPP_CELL_UNLIKELY(m_objectClass != nullptr))
+        {
+            return ObjectItem(name);
         }
         return HostItem(name);
     }
@@ -4879,8 +4896,20 @@ public:
     // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
     // reflected struct, are its attributes
     [[nodiscard]] bool HasAttributes() const override { return m_node == nullptr; }
-    [[nodiscard]] const char* GetHostObjectClass() const override { return m_node ? nullptr : m_values.Get().GetObjectClass(); }
-    [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor(), m_link); }
+    // A namespace, a cycler or a joiner of a template that the host passes on (a module's live object,
+    // ModuleExports::Objects, or one a callable was lent): that object to this render too, not a dict, though not a
+    // namespace the render may set on (IsNamespace stays false). Its identity is the object's, which every read of it
+    // shares, so that a namespace that holds itself prints {...} where it repeats (docs/tasks/0594)
+    [[nodiscard]] const char* GetObjectClass() const override { return m_objectClass; }
+    [[nodiscard]] const void* GetIdentity() const override
+    {
+        const auto* accessor = m_values.Get().GetAccessor();
+        if (m_objectClass)
+        {
+            return accessor->GetIdentity();
+        }
+        return HostIdentity(m_node, accessor, m_link);
+    }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
@@ -4893,7 +4922,15 @@ public:
                             HasUnheldIdentity(m_node, m_values.Get(), this->IsGlobalData()));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_node ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
+    // A namespace, a cycler or a joiner the host passes on has its attributes only, as the template's own (KeysOnly)
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override
+    {
+        if (m_node)
+        {
+            return MapAttrPolicy::MethodsFirst;
+        }
+        return m_objectClass ? MapAttrPolicy::KeysOnly : MapAttrPolicy::KeysFirst;
+    }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
@@ -4933,6 +4970,16 @@ private:
 
         return LendGenericItem(GenericOwner(m_values), std::move(*val));
     }
+    // The call operator of a joiner the host passes on is its `__call__`, the same method, which the host's view gives
+    // where it hides the engine's call slot: `j()` calls it in its module (docs/tasks/0594)
+    JINJA2CPP_CELL_NOINLINE InternalValue ObjectItem(const std::string& name) const
+    {
+        if (name == "operator()" && std::string_view(m_objectClass) == "Joiner")
+        {
+            return HostItem("__call__");
+        }
+        return HostItem(name);
+    }
     JINJA2CPP_CELL_NOINLINE InternalValue CellOrHostItem(const std::string& name) const
     {
         if (const auto* cell = m_link.Get(*this))
@@ -4947,6 +4994,8 @@ private:
     // identity of the document value it shows (docs/tasks/0212); null for any other host map. The
     // accessor m_values holds owns it
     const IJsonNode* m_node;
+    // The class of the template's object the accessor views, or null (GetObjectClass)
+    const char* m_objectClass;
     // The render's copy of the map once the render wrote to it (docs/tasks/0049)
     AutoCellLink m_link;
 };
