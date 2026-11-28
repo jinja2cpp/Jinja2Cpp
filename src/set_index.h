@@ -9,6 +9,8 @@
 #include "recursion_guard.h"
 #include "template_dict.h"
 
+#include <jinja2cpp/config.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>

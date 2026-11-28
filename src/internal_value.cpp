@@ -1423,7 +1423,7 @@ public:
     // made it (docs/tasks/0593)
     [[nodiscard]] SetIndex* PeekSetIndex() const noexcept { return m_val->setIndex.get(); }
     template<typename Make>
-    SetIndex& EnsureSetIndex(const Make& make) const
+    [[nodiscard]] SetIndex& EnsureSetIndex(const Make& make) const
     {
         if (!m_val->setIndex)
         {
@@ -3388,10 +3388,10 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
     public:
         Adapter(InternalValueList&& values, IteratorKind iteratorKind)
             : m_values(std::move(values))
+            , m_isSet(iteratorKind == IteratorKind::Set)
         {
             SetTraversable();
             SetIteratorKind(iteratorKind);
-            m_isSet = iteratorKind == IteratorKind::Set;
         }
 
         // A set's slots that its methods erased stay until a read here, which closes them up (docs/tasks/0587)
@@ -3490,7 +3490,7 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         BySharedMutable<InternalValueList> m_values;
         // Whether the list is a set, whose index (made by the first lookup) is kept with the items, shared by the copies
         // of the adapter as the items are
-        bool m_isSet = false;
+        bool m_isSet;
     };
 
     return ListAdapter(MakeRef<Adapter>(std::move(values), iteratorKind));

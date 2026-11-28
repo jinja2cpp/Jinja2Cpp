@@ -2,6 +2,7 @@
 // what Python Jinja2 renders (3.1.6); a row with an error names the message Python raises
 #include "test_tools.h"
 
+#include "../src/engine_errors.h"
 #include "../src/internal_value.h"
 #include "../src/set_index.h"
 
@@ -13,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -221,10 +223,12 @@ TEST(SetIndexLazyTest, TemporariesMakeNoIndex)
     EXPECT_EQ(beforeLookup + 1, SetIndexesMade());
 }
 
+// Internal functions are not exported from a shared library
+#ifndef JINJA2CPP_LINK_AS_SHARED
 TEST(SetIndexLazyTest, AdapterCopiesShareTheIndexMadeLater)
 {
-    const auto set = ListAdapter::CreateIterator(InternalValueList{ InternalValue(int64_t{ 1 }), InternalValue(int64_t{ 2 }) }, IteratorKind::Set);
-    const auto copy = set;
+    const auto set = ListAdapter::CreateIterator(InternalValueList{ InternalValue(std::int64_t{ 1 }), InternalValue(std::int64_t{ 2 }) }, IteratorKind::Set);
+    const ListAdapter copy(set); // NOLINT(performance-unnecessary-copy-initialization): the copy is what the test is about
     const auto before = SetIndexesMade();
     auto* index = copy.GetSetIndex();
     ASSERT_NE(nullptr, index);
@@ -233,24 +237,27 @@ TEST(SetIndexLazyTest, AdapterCopiesShareTheIndexMadeLater)
     EXPECT_EQ(index, set.GetSetIndex());
     EXPECT_EQ(before + 1, SetIndexesMade());
     // A list has none
-    const auto list = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(int64_t{ 1 }) });
+    const auto list = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(std::int64_t{ 1 }) });
     EXPECT_EQ(nullptr, list.GetSetIndex());
 }
 
 // A cloned walk fails at the size the walk began with, not the size at the clone (docs/tasks/0593)
 TEST(SetIndexLazyTest, ClonedWalkKeepsItsStartSize)
 {
-    const auto set = ListAdapter::CreateIterator(InternalValueList{ InternalValue(int64_t{ 1 }), InternalValue(int64_t{ 2 }), InternalValue(int64_t{ 3 }) }, IteratorKind::Set);
+    const auto set = ListAdapter::CreateIterator(InternalValueList{ InternalValue(std::int64_t{ 1 }), InternalValue(std::int64_t{ 2 }), InternalValue(std::int64_t{ 3 }) }, IteratorKind::Set);
     auto walk = set.GetEnumerator();
     ASSERT_TRUE(walk.has_value());
-    ASSERT_TRUE((*walk)->MoveNext());
+    auto& walker = **walk; // NOLINT(bugprone-unchecked-optional-access): checked above
+    ASSERT_TRUE(walker.MoveNext());
     // The set grows under the walk, then the walk is cloned
-    set.GetMutableItems()->push_back(InternalValue(int64_t{ 4 }));
-    auto clone = (*walk)->Clone();
+    set.GetMutableItems()->emplace_back(std::int64_t{ 4 });
+    auto clone = walker.Clone();
     ASSERT_TRUE(clone.has_value());
-    EXPECT_THROW((*walk)->MoveNext(), TemplateRuntimeError);
-    EXPECT_THROW((*clone)->MoveNext(), TemplateRuntimeError);
+    auto& cloned = **clone; // NOLINT(bugprone-unchecked-optional-access): checked above
+    EXPECT_THROW(walker.MoveNext(), TemplateRuntimeError);
+    EXPECT_THROW(cloned.MoveNext(), TemplateRuntimeError);
 }
+#endif
 
 // A one-item argument in a loop (docs/tasks/0593): the work of a call is what its argument holds, and the receiver is
 // walked only for what leaves it
