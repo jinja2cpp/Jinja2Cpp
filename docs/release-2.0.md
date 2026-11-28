@@ -147,7 +147,7 @@ cannot happen before a tag exists, or it has no end state a release could wait f
 | Publishing wheels to PyPI | publication part of 0248 | Like the other registries, it follows the tag. The drop-in module itself, its wheels built in CI and its test-suite pass rate are in scope (0248) |
 | Parity cases found after the freeze | — | The corpus keeps growing; new divergences found during the RC window are filed for 2.x unless they are crashes, leaks or silent wrong values, which block (G8) |
 
-**Deliberate divergences** stay documented, not bugs. The corpus has 22 `deliberate:` lines, plus
+**Deliberate divergences** stay documented, not bugs. The corpus has 28 `deliberate:` lines, plus
 4 `@nobigint` build lines:
 - integer overflow raises in the default build (0015; big integers are opt-in through 0178's
   backend, hence the 4 `@nobigint` lines), and `range` bounds are int64 (0178, 1 line);
@@ -176,7 +176,7 @@ Outside the corpus:
 - `{% debug %}` (`jinja2.ext.debug`) is not implemented: it prints a `pprint` of Python's builtin filter and test tables, which
   a C++ engine cannot match and no corpus case can pin (0589).
 
-Corpus on master `fb833ad`: 3941 cases, 3902 match; besides the deliberate and build-conditional lines, 8 are real (0555 ×3 and 0556, strict undefined folds that Jinja2's optimizer runs at compile time; 0563, dictsort/items pair tuple methods; 0564 ×3, int constants past 4300 digits). The upstream pallets/jinja suite through
+Corpus on master `784eab1`: 3959 cases, 3925 match; besides the deliberate and build-conditional lines, 3 are real (0571 ×3: `index` with a `None` or huge bound on a tuple, and a bound method's `__name__`). 0555, 0556, 0563 and 0564 (#987, #988) are fixed. The upstream pallets/jinja suite through
 the Python module (0355) passes 645 of 856 (#895 closed five more for 0415; 0431-0434 are done).
 Its remaining divergence is filed as 0412 (0415, 0435, 0433, 0434, 0436, 0456, 0457, 0458, 0476, 0477, 0479, 0505, 0509, 0510 and 0511 are done).
 
