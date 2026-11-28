@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 depends: [0586]
-touches: [src/statements.cpp#WithStatement::Render]
+touches: [src/statements.cpp#WithStatement::Render, src/statements.cpp#ClosesOverOnFailure, src/statements.cpp#ForStatement, src/render_context.h]
 shares: [test/template_module_test.cpp]
 ---
 # A failure inside a module's top-level `with` drops the names its stored closure reads
@@ -18,3 +18,7 @@ for a block body (0531).
 
 **Done when** the row prints `51` on each later call, narrow and wide, in test/template_module_test.cpp next to
 `ClosureInATopLevelWithKeepsTheModuleNames`.
+
+**Progress (batch 15 A).** ClosesOverOnFailure also holds in a context RenderContext::InEndingModule finds, and the
+loops' failure paths ask it. Rows `FailureInATopLevelBodyKeepsTheClosureNames` (with, filter, loop, loop with a filter,
+second pass, `else`, `with` in a loop, block, scoped block), narrow and wide. The same in a macro body: 0608.

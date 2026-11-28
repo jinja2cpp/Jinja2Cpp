@@ -3397,8 +3397,9 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             // Stored past an include, it sees what the block saw there, as a macro defined in the block does
             // (0373); elsewhere the frames it sees end with the render, and nothing is kept
             std::shared_ptr<const void> capture;
-            // So too in the derived context of a scoped block in a loop, whose frames end before the render (0596)
-            const bool inDerivedFrames = values.InDerivedBlock() && values.DerivedDepth() > frame->baseDepth;
+            // So too in the derived context of a scoped block in a loop, whose frames end before the render, when the
+            // body names `super` (0596)
+            const bool inDerivedFrames = m_readsSuper && values.InDerivedBlock() && values.DerivedDepth() > frame->baseDepth;
             if ((values.EndsBeforeRender() || inDerivedFrames) && site.OutlivesItsFrames(values))
             {
                 capture = site.CaptureOnEnd(values, {}, true);

@@ -20,3 +20,7 @@ the loop by the rule of HideIncludingLoop; an import with context passes none. P
 Jinja2 for a body that does not name `loop` and for a module cached across passes.
 
 **Done when.** The corpus case matches and its divergence line is gone, narrow and wide.
+
+**Progress (batch 15 A).** ImporterNames adds the `loop` LoopSeenWithContextOf finds (HideIncludingLoop's rule). 8
+corpus cases: from-import, a body that does not name `loop`, an inner loop, a scoped block, a macro stored past the loop
+(the module's copy of `loop` keeps the frame out of the pool), a top-level `set loop`, the module's top level.

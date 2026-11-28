@@ -23225,6 +23225,126 @@
    "output": "|<11>"
   },
   {
+   "id": "statements.stored_macro_calling_self_block_of_scoped_block_after_loop",
+   "template": "{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% block x scoped %}{% macro m() %}{{ self.y() }}{% endmacro %}{% set ns.f = m %}{% block y %}[{{ i }}]{% endblock %}{% endblock %}{% endfor %}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1][2]|[2]"
+  },
+  {
+   "id": "statements.stored_self_of_unscoped_block_in_scoped_block_after_loop",
+   "template": "{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% block x scoped %}{% block y %}{% set ns.f = self.z %}{% block z %}[{{ i }}]{% endblock %}{% endblock %}{% endblock %}{% endfor %}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1][2]|[2]"
+  },
+  {
+   "id": "statements.stored_self_of_top_level_scoped_block_top_level_set_later",
+   "template": "{% set ns = namespace(f=none) %}{% set t = 1 %}{% block x scoped %}{% set ns.f = self.y %}{% block y %}[9{{ t }}]{% endblock %}{% endblock %}{% set t = 2 %}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[91]|[91]"
+  },
+  {
    "id": "statements.import_with_context_in_loop_sees_loop",
    "template": "{% for i in [1] %}{{ loop.index }}{% import \"a\" as m with context %}{{ m.f() }}{% endfor %}",
    "context": {
